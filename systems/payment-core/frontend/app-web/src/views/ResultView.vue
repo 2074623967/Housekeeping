@@ -79,6 +79,7 @@ const lastAction = ref("");
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
 const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
+const actionRunning = computed(() => detailLoading.value || queryLoading.value || closeLoading.value);
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
@@ -244,6 +245,9 @@ function migrateLegacyAccessToken() {
 }
 
 async function queryResult() {
+  if (actionRunning.value) {
+    return;
+  }
   if (!canQueryPayment.value) {
     feedbackMessage.value = "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
@@ -262,6 +266,9 @@ async function queryResult() {
 }
 
 async function closePayment() {
+  if (actionRunning.value) {
+    return;
+  }
   closeLoading.value = true;
   try {
     paymentDetail.value = await paymentApi.close({ paymentOrderId: route.params.paymentOrderId });
@@ -448,16 +455,16 @@ function resolveBizType() {
         </div>
 
         <div class="terminal-actions">
-          <button class="action-button primary" :disabled="queryLoading || detailLoading || !canQueryPayment" @click="queryResult">
+          <button class="action-button primary" :disabled="actionRunning || !canQueryPayment" @click="queryResult">
             {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
           </button>
-          <button class="action-button secondary" @click="backToBusinessEntry">
+          <button class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
             返回业务入口
           </button>
-          <button class="action-button ghost" :disabled="closeLoading || !canClosePayment" @click="closePayment">
+          <button class="action-button ghost" :disabled="actionRunning || !canClosePayment" @click="closePayment">
             {{ closeLoading ? "关闭中..." : terminalCopy.closeLabel }}
           </button>
-          <button class="action-button secondary" :disabled="!route.query.prepayOrderNo" @click="backToCashier">
+          <button class="action-button secondary" :disabled="actionRunning || !route.query.prepayOrderNo" @click="backToCashier">
             {{ terminalCopy.homeLabel }}
           </button>
         </div>

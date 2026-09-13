@@ -4,6 +4,12 @@ export const PAYMENT_METHOD_CHANNEL_MAP = {
   银行卡: "BANK_CARD"
 };
 
+export const PAYMENT_METHOD_MERCHANT_MAP = {
+  微信支付: "MCH_WX_10001",
+  支付宝: "MCH_ALI_20001",
+  银行卡: "BANK_OFFLINE_30001"
+};
+
 export const PAYMENT_RESULT_STATE_META = {
   success: {
     title: "支付成功",
@@ -41,6 +47,10 @@ export const PAYMENT_RESULT_STATE_META = {
 
 export function resolvePaymentChannelCode(paymentMethod) {
   return PAYMENT_METHOD_CHANNEL_MAP[paymentMethod] || "BANK_CARD";
+}
+
+export function resolvePaymentMerchantNo(paymentMethod) {
+  return PAYMENT_METHOD_MERCHANT_MAP[paymentMethod] || "BANK_OFFLINE_30001";
 }
 
 export function resolvePaymentResultState(paymentStatus) {

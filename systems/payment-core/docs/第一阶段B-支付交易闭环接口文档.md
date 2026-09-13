@@ -533,12 +533,14 @@
   "paymentMethod": "微信支付",
   "channelCode": "WX_H5",
   "sourceAppId": "housekeeping-app-web",
-  "merchantNo": "MCH_HOME_APP",
+  "merchantNo": "MCH_WX_10001",
   "accessToken": "runtime-injected-token",
   "terminal": "APP_WEB",
   "idempotencyKey": "PRE1752912345678|微信支付|WX_H5"
 }
 ```
+
+`merchantNo` 使用实际渠道商户号，并与 `paymentMethod / channelCode` 保持一致：微信支付使用 `MCH_WX_10001`，支付宝使用 `MCH_ALI_20001`，银行卡使用 `BANK_OFFLINE_30001`。来源应用权限由 `sourceAppId` 对应的控制策略独立校验，不再把来源应用标识误作渠道商户号。
 
 `clientIp` 请求字段仅为兼容保留，HTTP 入口不会信任该值，而是始终按 14.46 节的连接与可信代理规则覆盖。
 

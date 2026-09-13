@@ -4,8 +4,15 @@ import {
   canClosePaymentLocally,
   canQueryPaymentChannel,
   isPaymentSubmissionPending,
-  PAYMENT_RESULT_STATE_META
+  PAYMENT_RESULT_STATE_META,
+  resolvePaymentMerchantNo
 } from "./payment.js";
+
+test("uses the merchant configured for each payment channel", () => {
+  assert.equal(resolvePaymentMerchantNo("微信支付"), "MCH_WX_10001");
+  assert.equal(resolvePaymentMerchantNo("支付宝"), "MCH_ALI_20001");
+  assert.equal(resolvePaymentMerchantNo("银行卡"), "BANK_OFFLINE_30001");
+});
 
 test("only queries the channel for terminal payments or submitted pending payments", () => {
   assert.equal(canQueryPaymentChannel("SUCCESS", null), true);

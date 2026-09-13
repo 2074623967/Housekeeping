@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
+import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
@@ -39,6 +40,7 @@ class PaymentDemoProfileIntegrationTest {
                 assertNotNull(context.getBean(PaymentMonitorService.class).overview().getTrends());
                 assertNotNull(context.getBean(PaymentTaskCenterService.class).overview());
                 verifyPaymentSubmit(context.getBean(PaymentService.class));
+                verifyPcAlipaySubmit(context.getBean(PaymentService.class));
             }
         } finally {
             rootLogger.setLevel(originalRootLevel);
@@ -71,5 +73,36 @@ class PaymentDemoProfileIntegrationTest {
         PrepayOrderDTO submitted = paymentService.submit(submitRequest);
         assertEquals("支付中", submitted.getCashierStatus());
         assertEquals("WAIT_CALLBACK", paymentService.detail(submitted.getPaymentOrderId()).getStatus());
+    }
+
+    private void verifyPcAlipaySubmit(PaymentService paymentService) {
+        PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+        prepayRequest.setOrderNo("DEMO-INTEGRATION-PC-ALIPAY-001");
+        prepayRequest.setPayScene("BALANCE_PAY_PC");
+        prepayRequest.setCustomerName("demo pc integration");
+        prepayRequest.setAmount(new BigDecimal("68.00"));
+        prepayRequest.setCashierTitle("pc payment");
+        PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+
+        PaymentSubmitRequestDTO submitRequest = new PaymentSubmitRequestDTO();
+        submitRequest.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        submitRequest.setPaymentMethod("支付宝");
+        submitRequest.setChannelCode("alipay_h5");
+        submitRequest.setSourceAppId("housekeeping-pc-web");
+        submitRequest.setMerchantNo("MCH_ALI_20001");
+        submitRequest.setAccessToken("token-housekeeping-pc-web");
+        submitRequest.setTerminal("PC");
+        submitRequest.setClientIp("127.0.0.1");
+        submitRequest.setClientDeviceId("demo-pc-integration");
+        submitRequest.setPayerPhone("13800000001");
+        submitRequest.setIdempotencyKey("DEMO-INTEGRATION-PC-ALIPAY-001");
+
+        PrepayOrderDTO submitted = paymentService.submit(submitRequest);
+        PaymentDetailDTO detail = paymentService.detail(submitted.getPaymentOrderId());
+        assertEquals("WAIT_CALLBACK", detail.getStatus());
+        assertEquals("WAIT_BUYER_PAY", detail.getChannelReturnCode());
+        assertEquals("PAYMENT-CHANNEL-2001", detail.getStandardizedCode());
+        assertEquals("是", detail.getRetryable());
+        assertEquals("否", detail.getManualInterventionRequired());
     }
 }

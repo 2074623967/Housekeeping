@@ -27,8 +27,9 @@ INSERT INTO t_payment_protocol_version (protocol_code, version_no, protocol_name
 INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, manual_intervention_required, mapping_version, archive_status, archive_status_type, status, status_type, priority, updated_at) VALUES
 ('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
 ('wx_h5', 'AUTH_CODE_INVALID', 'PAYMENT-CHANNEL-1002', '付款码无效或已过期', '提示用户刷新付款码后重试', '否', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
-('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', '否', 'v2026.07.2', 'ACTIVE', 'success', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
-('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', '是', 'v2026.06.archive', 'ARCHIVED', 'warn', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
+('alipay_h5', 'WAIT_BUYER_PAY', 'PAYMENT-CHANNEL-2001', '等待买家完成支付', '展示处理中并等待回调或主动查单', '是', '否', 'v2026.07.2', 'ACTIVE', 'success', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
+('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2002', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', '否', 'v2026.07.2', 'ACTIVE', 'success', 'ENABLED', 'success', 4, '2026-07-20 22:40:00'),
+('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', '是', 'v2026.06.archive', 'ARCHIVED', 'warn', 'DISABLED', 'danger', 5, '2026-07-20 22:40:00');
 
 INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, channel_scope, environment_scope, api_base_url, protocol_type, sign_algorithm, certificate_alias, certificate_status, certificate_status_type, release_stage, gray_strategy, callback_whitelist, adapter_registry, timeout_ms, retry_policy, status, status_type, priority, updated_at) VALUES
 ('GATEWAY_WX_ACQ', '微信收单网关', '直连', 'wx_h5', '生产+预发+沙箱', 'https://gateway.housekeeping.local/wx/acquire', 'HTTP+JSON', 'HMAC-SHA256', 'wx-mch-cert-v2026.07', 'VALID', 'success', '灰度 30%', '按商户分组灰度至核心城市订单', '101.1.0.0/16,101.2.0.0/16', 'submit=wechat-h5,query=wechat-query,refund=wechat-refund', 3000, '失败重试2次+超时查单', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
@@ -50,10 +51,10 @@ SELECT gateway_code, 1, gateway_name, access_mode, channel_scope, environment_sc
 FROM t_payment_gateway_config;
 
 INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos, minute_submit_limit, interface_minute_submit_limit, token_auth_required, access_token_value, strict_mode, self_check_status, self_check_status_type, self_check_message, status, status_type, updated_at) VALUES
-('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_DEFAULT,MCH_HOME_APP,MCH_HOME_PC', 120, 90, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_HOME_PC', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
+('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_WX_10001,MCH_ALI_20001,BANK_OFFLINE_30001', 120, 90, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_ALI_20001,BANK_OFFLINE_30001', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'PASS', 'success', '支付方式、渠道和网关接入均已通过自检', 'ENABLED', 'success', '2026-07-21 09:00:00');
 
 INSERT INTO t_payment_alert_provider_config (provider_code, provider_name, channel_code, endpoint_alias, template_code, template_body, route_rule, route_priority, retry_policy, rate_limit_policy, status, status_type, updated_at) VALUES
 ('ALERT_IM_WECOM_P1', '企业微信告警机器人-P1', 'IM', 'wecom-bot-alerts', 'TPL_PAYMENT_ISSUE_IM_P1_V1', '[{{severity}}] {{issueType}}\\n异常单号：{{issueNo}}\\n支付单号：{{paymentOrderId}}\\n责任组：{{responsibilityGroup}}\\n接收人：{{receiver}}\\n班次：{{scheduleTag}}\\n说明：{{alertContent}}', 'severity=P1', 10, '失败重试2次/间隔5分钟', '每分钟 60 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),

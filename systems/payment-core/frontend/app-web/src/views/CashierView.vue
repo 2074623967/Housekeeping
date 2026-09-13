@@ -6,7 +6,8 @@ import {
   canClosePaymentLocally,
   canQueryPaymentChannel,
   isPaymentSubmissionPending,
-  resolvePaymentChannelCode
+  resolvePaymentChannelCode,
+  resolvePaymentMerchantNo
 } from "../constants/payment";
 import {
   persistPaymentAccessToken,
@@ -27,6 +28,7 @@ const TERMINAL_META = {
     heroLabel: "家政服务 App 收银台",
     heroHint: "适用于家政用户在 App 内完成订单支付、补款和状态确认。",
     terminalCode: "APP_WEB",
+    paymentMethods: ["微信支付", "支付宝"],
     actionLabel: "确认支付",
     refreshLabel: "刷新收银台",
     closeLabel: "关闭本次支付"
@@ -35,6 +37,7 @@ const TERMINAL_META = {
     heroLabel: "家政服务 H5 收银台",
     heroHint: "适用于活动落地页、短信唤起和服务预约页中的轻量支付场景。",
     terminalCode: "H5_WEB",
+    paymentMethods: ["微信支付", "支付宝"],
     actionLabel: "立即支付",
     refreshLabel: "刷新会话",
     closeLabel: "结束当前会话"
@@ -43,6 +46,7 @@ const TERMINAL_META = {
     heroLabel: "家政服务 PC 收银台",
     heroHint: "适用于官网、运营后台代客支付和桌面浏览器场景，强调桌面端信息确认、扫码支付和失败补救动作。",
     terminalCode: "PC_WEB",
+    paymentMethods: ["支付宝", "银行卡"],
     actionLabel: "确认并发起支付",
     refreshLabel: "刷新桌面收银台",
     closeLabel: "关闭当前支付单"
@@ -105,7 +109,7 @@ const router = useRouter();
 const cashier = ref(null);
 const loading = ref(true);
 const message = ref("");
-const selectedPaymentMethod = ref("微信支付");
+const selectedPaymentMethod = ref("");
 const submitLoading = ref(false);
 const refreshLoading = ref(false);
 const closeLoading = ref(false);
@@ -170,9 +174,8 @@ async function loadCashier() {
     if (!idempotencyKey.value) {
       idempotencyKey.value = generateIdempotencyKey();
     }
-    if (cashier.value?.channels?.length > 0) {
-      selectedPaymentMethod.value = cashier.value.channels[0];
-    }
+    selectedPaymentMethod.value = (cashier.value?.channels || [])
+      .find((paymentMethod) => terminalMeta.value.paymentMethods.includes(paymentMethod)) || "";
     startCountdown(cashier.value?.expiresAt);
   } catch (error) {
     message.value = error.message;
@@ -195,15 +198,16 @@ const sourceAppId = computed(() => {
   }
   return "housekeeping-app-web";
 });
-const merchantNo = computed(() => {
-  if (props.terminalVariant === "pc") {
-    return "MCH_HOME_PC";
-  }
-  return "MCH_HOME_APP";
-});
+const merchantNo = computed(() => resolvePaymentMerchantNo(selectedPaymentMethod.value));
 const accessTokenAvailable = ref(false);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
-const channels = computed(() => cashier.value?.channels || []);
+const actionRunning = computed(() => loading.value
+  || submitLoading.value
+  || refreshLoading.value
+  || closeLoading.value
+  || queryLoading.value);
+const channels = computed(() => (cashier.value?.channels || [])
+  .filter((paymentMethod) => terminalMeta.value.paymentMethods.includes(paymentMethod)));
 const hasChannels = computed(() => channels.value.length > 0);
 const selectedChannelMeta = computed(() => CHANNEL_META[selectedPaymentMethod.value] || null);
 const selectedChannelCode = computed(() => resolvePaymentChannelCode(selectedPaymentMethod.value));
@@ -339,6 +343,9 @@ const paymentMethodComparisonRows = computed(() => {
 });
 
 async function refreshCashier() {
+  if (actionRunning.value) {
+    return;
+  }
   refreshLoading.value = true;
   try {
     await loadCashier();
@@ -348,6 +355,9 @@ async function refreshCashier() {
 }
 
 async function queryCurrentPayment() {
+  if (actionRunning.value) {
+    return;
+  }
   if (!cashier.value?.paymentOrderId) {
     message.value = "当前支付单尚未生成，请先发起支付后再执行主动查单。";
     return;
@@ -379,6 +389,9 @@ async function queryCurrentPayment() {
 }
 
 async function pay() {
+  if (actionRunning.value) {
+    return;
+  }
   if (!cashier.value || !hasChannels.value) {
     message.value = "当前暂无可用支付方式，请稍后重试。";
     return;
@@ -421,7 +434,7 @@ async function pay() {
 }
 
 async function closeCurrentPayment() {
-  if (!cashier.value?.paymentOrderId) {
+  if (actionRunning.value || !cashier.value?.paymentOrderId) {
     return;
   }
   closeLoading.value = true;
@@ -438,6 +451,9 @@ async function closeCurrentPayment() {
 }
 
 function regenerateIdempotencyKey() {
+  if (actionRunning.value) {
+    return;
+  }
   if (submissionPending.value) {
     message.value = "支付结果尚未确认，不能重置幂等键。";
     return;
@@ -522,7 +538,7 @@ watch(selectedPaymentMethod, () => {
             type="button"
             class="channel-card"
             :class="{ active: selectedPaymentMethod === item }"
-            :disabled="submissionPending"
+            :disabled="actionRunning || submissionPending"
             @click="selectedPaymentMethod = item"
           >
             <div class="channel-icon">{{ CHANNEL_META[item]?.icon || "PAY" }}</div>
@@ -554,22 +570,22 @@ watch(selectedPaymentMethod, () => {
         </div>
 
         <div class="terminal-actions">
-          <button class="action-button primary" :disabled="submitLoading || !canSubmit" @click="pay">
+          <button class="action-button primary" :disabled="actionRunning || !canSubmit" @click="pay">
             {{ submitLoading ? "支付提交流转中..." : terminalMeta.actionLabel }}
           </button>
-          <button class="action-button secondary" @click="backToBusinessEntry">
+          <button class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
             返回业务入口
           </button>
-          <button class="action-button secondary" :disabled="refreshLoading" @click="refreshCashier">
+          <button class="action-button secondary" :disabled="actionRunning" @click="refreshCashier">
             {{ refreshLoading ? "刷新中..." : terminalMeta.refreshLabel }}
           </button>
-          <button class="action-button secondary" :disabled="queryLoading || !cashier?.paymentOrderId || !canQueryPayment" @click="queryCurrentPayment">
+          <button class="action-button secondary" :disabled="actionRunning || !cashier?.paymentOrderId || !canQueryPayment" @click="queryCurrentPayment">
             {{ queryLoading ? "查单中..." : "主动查单" }}
           </button>
-          <button class="action-button ghost" :disabled="closeLoading || !canClose" @click="closeCurrentPayment">
+          <button class="action-button ghost" :disabled="actionRunning || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
           </button>
-          <button class="action-button secondary" :disabled="submissionPending" @click="regenerateIdempotencyKey">
+          <button class="action-button secondary" :disabled="actionRunning || submissionPending" @click="regenerateIdempotencyKey">
             重置幂等键
           </button>
         </div>
