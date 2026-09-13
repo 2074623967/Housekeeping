@@ -1,26 +1,43 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentIssuesRoute, paymentLogsRoute } from "../router/listRoutes";
 import { paymentIssueAlertListFiltersFromQuery } from "../utils/paymentIssueAlertListFilters";
 
 const route = useRoute();
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const isLoading = ref(true);
 const hasLoadedData = ref(false);
 const activeAlertNo = ref("");
 const activeReceiptQueryAlertNo = ref("");
 const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
 const actionErrorMessage = ref("");
 const successMessage = ref("");
 const ackOperator = ref("");
 const filters = ref(paymentIssueAlertListFiltersFromQuery(route.query));
+let latestLoadRequestId = 0;
+
+const isActionRunning = computed(() => Boolean(
+  activeAlertNo.value || activeReceiptQueryAlertNo.value
+));
+const isInteractionLocked = computed(() => isLoading.value || isActionRunning.value);
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const canUseSnapshot = computed(() => hasLoadedData.value
+  && !isInteractionLocked.value
+  && !isSnapshotStale.value);
+const canExport = computed(() => canUseSnapshot.value && total.value > 0 && Boolean(loadedQuery.value));
 
 const metricCards = computed(() => [
   {
@@ -75,6 +92,9 @@ const alertSuggestions = computed(() => {
 });
 
 function resetFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   filters.value = {
     alertNo: "",
     issueNo: "",
@@ -90,12 +110,32 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   pageNo.value = 1;
   loadAlertLogs();
 }
 
 function exportAlertLogs() {
+  if (!canExport.value || !loadedQuery.value) {
+    return;
+  }
   const exportUrl = paymentIssueApi.buildAlertExportUrl({
+    alertNo: loadedQuery.value.alertNo,
+    issueNo: loadedQuery.value.issueNo,
+    paymentOrderId: loadedQuery.value.paymentOrderId,
+    alertChannel: loadedQuery.value.alertChannel,
+    alertStatus: loadedQuery.value.alertStatus,
+    ackStatus: loadedQuery.value.ackStatus,
+    providerDeliveryStatus: loadedQuery.value.providerDeliveryStatus,
+    receiptQueryState: loadedQuery.value.receiptQueryState
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
+function buildQuery() {
+  return {
     alertNo: filters.value.alertNo,
     issueNo: filters.value.issueNo,
     paymentOrderId: filters.value.paymentOrderId,
@@ -103,42 +143,67 @@ function exportAlertLogs() {
     alertStatus: filters.value.alertStatus,
     ackStatus: filters.value.ackStatus,
     providerDeliveryStatus: filters.value.providerDeliveryStatus,
-    receiptQueryState: filters.value.receiptQueryState
-  });
-  window.open(exportUrl, "_blank", "noopener,noreferrer");
+    receiptQueryState: filters.value.receiptQueryState,
+    pageNo: pageNo.value,
+    pageSize
+  };
 }
 
-async function loadAlertLogs(preferredAlertNo = selectedItem.value?.alertNo) {
+async function loadAlertLogs(
+  preferredAlertNo = selectedItem.value?.alertNo,
+  query = buildQuery(),
+  afterAction = false
+) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   loadErrorMessage.value = "";
-  actionErrorMessage.value = "";
+  actionRefreshErrorMessage.value = "";
+  if (!afterAction) {
+    actionErrorMessage.value = "";
+    successMessage.value = "";
+  }
   try {
-    const result = await paymentIssueApi.getAlertLogs({
-      alertNo: filters.value.alertNo,
-      issueNo: filters.value.issueNo,
-      paymentOrderId: filters.value.paymentOrderId,
-      alertChannel: filters.value.alertChannel,
-      alertStatus: filters.value.alertStatus,
-      ackStatus: filters.value.ackStatus,
-      providerDeliveryStatus: filters.value.providerDeliveryStatus,
-      receiptQueryState: filters.value.receiptQueryState,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await paymentIssueApi.getAlertLogs(query);
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items.find((item) => item.alertNo === preferredAlertNo)
       || result.items[0]
       || null;
+    pageNo.value = query.pageNo;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
+    return true;
   } catch (error) {
-    loadErrorMessage.value = error.message;
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+    }
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
+    return false;
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 async function acknowledgeAlert(alertNo) {
+  const currentItem = items.value.find((item) => item.alertNo === alertNo);
+  if (!canUseSnapshot.value || !loadedQuery.value || currentItem?.ackStatus !== "待确认") {
+    actionErrorMessage.value = "当前告警快照不可确认，请刷新成功后重试";
+    successMessage.value = "";
+    return;
+  }
   if (!ackOperator.value.trim()) {
     actionErrorMessage.value = "请先输入确认人";
     return;
@@ -146,12 +211,16 @@ async function acknowledgeAlert(alertNo) {
   activeAlertNo.value = alertNo;
   actionErrorMessage.value = "";
   successMessage.value = "";
+  const query = { ...loadedQuery.value };
+  const snapshotRequestId = latestLoadRequestId;
   try {
     await paymentIssueApi.acknowledgeAlert(alertNo, {
       operator: ackOperator.value.trim()
     });
-    await loadAlertLogs(alertNo);
     successMessage.value = `告警 ${alertNo} 已确认回执`;
+    if (snapshotRequestId === latestLoadRequestId) {
+      await loadAlertLogs(alertNo, query, true);
+    }
   } catch (error) {
     actionErrorMessage.value = `确认回执失败：${error.message}`;
   } finally {
@@ -160,6 +229,13 @@ async function acknowledgeAlert(alertNo) {
 }
 
 async function reconcileAlertReceipt(alertNo) {
+  const currentItem = items.value.find((item) => item.alertNo === alertNo);
+  if (!canUseSnapshot.value || !loadedQuery.value || currentItem?.ackStatus !== "待确认"
+      || !currentItem.receiptQueryState || currentItem.receiptQueryState === "QUERYING") {
+    actionErrorMessage.value = "当前告警快照不可回查，请刷新成功后重试";
+    successMessage.value = "";
+    return;
+  }
   if (!ackOperator.value.trim()) {
     actionErrorMessage.value = "请先输入操作人";
     return;
@@ -167,16 +243,20 @@ async function reconcileAlertReceipt(alertNo) {
   activeReceiptQueryAlertNo.value = alertNo;
   actionErrorMessage.value = "";
   successMessage.value = "";
+  const query = { ...loadedQuery.value };
+  const snapshotRequestId = latestLoadRequestId;
   try {
     const result = await paymentIssueApi.reconcileAlertReceipt(alertNo, {
       operator: ackOperator.value.trim()
     });
     const summary = result.summaryComment || `告警 ${alertNo} 回执回查已执行`;
-    await loadAlertLogs(alertNo);
     if (result.failCount > 0) {
       actionErrorMessage.value = summary;
     } else {
       successMessage.value = summary;
+    }
+    if (snapshotRequestId === latestLoadRequestId) {
+      await loadAlertLogs(alertNo, query, true);
     }
   } catch (error) {
     actionErrorMessage.value = `回执回查失败：${error.message}`;
@@ -186,15 +266,27 @@ async function reconcileAlertReceipt(alertNo) {
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadAlertLogs();
+  loadAlertLogs(undefined, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 function pickItem(item) {
-  selectedItem.value = item;
+  const currentItem = items.value.find((candidate) => candidate.alertNo === item.alertNo);
+  if (!canUseSnapshot.value || !currentItem) {
+    return;
+  }
+  selectedItem.value = currentItem;
+}
+
+function openSnapshotRoute(target) {
+  if (!canUseSnapshot.value || !target) {
+    return;
+  }
+  router.push(target);
 }
 
 function receiptQueryStateLabel(state) {
@@ -239,8 +331,8 @@ watch(
         <p>统一联查 outbox、外部通知通道、供应商投递回执和人工确认状态，方便运营、研发与测试核对异常触达闭环</p>
       </div>
       <div class="list-actions">
-        <button class="button primary" @click="exportAlertLogs">导出 CSV</button>
-        <button class="button secondary" @click="loadAlertLogs">刷新</button>
+        <button class="button primary" :disabled="!canExport" @click="exportAlertLogs">导出 CSV</button>
+        <button class="button secondary" :disabled="isInteractionLocked" @click="loadAlertLogs()">刷新</button>
       </div>
     </div>
 
@@ -249,6 +341,9 @@ watch(
         {{ hasLoadedData ? "异常告警明细刷新失败，当前展示上次成功快照：" : "异常告警明细加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">{{ actionErrorMessage }}</div>
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        人工动作结果已确认，但告警列表刷新失败，当前展示上次成功快照：{{ actionRefreshErrorMessage }}
+      </div>
       <div v-if="successMessage" class="success-banner">
         {{ successMessage }}
       </div>
@@ -264,19 +359,19 @@ watch(
       <div class="toolbar">
         <div class="field">
           <label>告警编号</label>
-          <input v-model="filters.alertNo" placeholder="请输入告警编号" />
+          <input v-model="filters.alertNo" placeholder="请输入告警编号" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>异常编号</label>
-          <input v-model="filters.issueNo" placeholder="请输入异常编号" />
+          <input v-model="filters.issueNo" placeholder="请输入异常编号" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>告警通道</label>
-          <select v-model="filters.alertChannel">
+          <select v-model="filters.alertChannel" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>IN_APP_OUTBOX</option>
             <option>IM</option>
@@ -286,7 +381,7 @@ watch(
         </div>
         <div class="field">
           <label>告警状态</label>
-          <select v-model="filters.alertStatus">
+          <select v-model="filters.alertStatus" :disabled="isInteractionLocked">
             <option>全部</option>
             <option value="PENDING_DISPATCH">待派发（已生成 / 部分失败 / 派发失败）</option>
             <option>已生成</option>
@@ -297,7 +392,7 @@ watch(
         </div>
         <div class="field">
           <label>回执状态</label>
-          <select v-model="filters.ackStatus">
+          <select v-model="filters.ackStatus" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>待确认</option>
             <option>已确认</option>
@@ -306,7 +401,7 @@ watch(
         </div>
         <div class="field">
           <label>供应商投递状态</label>
-          <select v-model="filters.providerDeliveryStatus">
+          <select v-model="filters.providerDeliveryStatus" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>ACCEPTED</option>
             <option>DELIVERED</option>
@@ -317,7 +412,7 @@ watch(
         </div>
         <div class="field">
           <label>回查队列状态</label>
-          <select v-model="filters.receiptQueryState">
+          <select v-model="filters.receiptQueryState" :disabled="isInteractionLocked">
             <option value="全部">全部</option>
             <option value="PENDING_RECEIPT">待回查（全部）</option>
             <option value="INITIAL_WAIT">首次等待</option>
@@ -329,11 +424,11 @@ watch(
         </div>
         <div class="field">
           <label>操作人</label>
-          <input v-model="ackOperator" maxlength="64" placeholder="请输入操作人" />
+          <input v-model="ackOperator" maxlength="64" placeholder="请输入操作人" :disabled="isInteractionLocked" />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isInteractionLocked" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isInteractionLocked" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -365,13 +460,13 @@ watch(
             <tbody>
               <tr v-for="item in items" :key="item.alertNo">
                 <td>
-                  <button class="table-link" @click="pickItem(item)">{{ item.alertNo }}</button>
+                  <button class="table-link" :disabled="!canUseSnapshot" @click="pickItem(item)">{{ item.alertNo }}</button>
                 </td>
                 <td>{{ item.issueNo }}</td>
                 <td>
-                  <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentDetailRoute(item.paymentOrderId))">
                     {{ item.paymentOrderId }}
-                  </RouterLink>
+                  </button>
                 </td>
                 <td>{{ item.issueType }}</td>
                 <td>{{ item.severity }}</td>
@@ -402,14 +497,14 @@ watch(
                     <button
                       v-if="item.receiptQueryState && item.receiptQueryState !== 'QUERYING'"
                       class="button secondary"
-                      :disabled="Boolean(activeReceiptQueryAlertNo || activeAlertNo) || Boolean(loadErrorMessage) || !hasLoadedData"
+                      :disabled="!canUseSnapshot"
                       @click="reconcileAlertReceipt(item.alertNo)"
                     >
                       {{ activeReceiptQueryAlertNo === item.alertNo ? "回查中..." : "人工回查" }}
                     </button>
                     <button
                       class="button secondary"
-                      :disabled="Boolean(activeAlertNo || activeReceiptQueryAlertNo) || Boolean(loadErrorMessage) || !hasLoadedData"
+                      :disabled="!canUseSnapshot"
                       @click="acknowledgeAlert(item.alertNo)"
                     >
                       {{ activeAlertNo === item.alertNo ? "确认中..." : "确认回执" }}
@@ -441,9 +536,9 @@ watch(
             <div class="ops-card">
               <div class="ops-title">联查入口</div>
               <div class="list-actions">
-                <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-                <RouterLink class="link-button" :to="paymentIssuesRoute({ issueNo: selectedItem.issueNo })">查看异常中心</RouterLink>
-                <RouterLink class="link-button" :to="paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看处理日志</RouterLink>
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentIssuesRoute({ issueNo: selectedItem.issueNo }))">查看异常中心</button>
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看处理日志</button>
               </div>
             </div>
             <div class="ops-card">
@@ -476,9 +571,9 @@ watch(
       <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条异常告警明细</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1 || Boolean(loadErrorMessage)" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || Boolean(loadErrorMessage)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>
