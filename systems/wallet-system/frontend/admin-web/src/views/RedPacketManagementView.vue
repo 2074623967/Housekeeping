@@ -64,6 +64,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody>
+              <tr v-if="rows.length === 0"><td colspan="7" class="empty-cell">暂无红包批次。</td></tr>
               <tr v-for="row in rows" :key="row.redPacketNo">
                 <td>{{ row.redPacketNo }}</td>
                 <td>{{ row.accountNo }}</td>

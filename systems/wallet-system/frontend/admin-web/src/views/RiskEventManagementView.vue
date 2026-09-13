@@ -63,6 +63,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody>
+              <tr v-if="rows.length === 0"><td colspan="8" class="empty-cell">暂无钱包风控审批事件。</td></tr>
               <tr v-for="row in rows" :key="row.eventNo">
                 <td>{{ row.eventNo }}</td>
                 <td>{{ row.bizType }}</td>

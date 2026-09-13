@@ -19,6 +19,7 @@ button, input { font: inherit; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap; }
 th { background: #f8fafc; color: #64748b; }
+.empty-cell { padding: 28px 16px; color: #64748b; text-align: center; }
 .badge { padding: 4px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; }
 .detail-grid { display: grid; gap: 12px; }
 .detail-card { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 14px; padding: 12px; }

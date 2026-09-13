@@ -37,29 +37,39 @@ const transferForm = ref({
 async function load() {
   loading.value = true;
   message.value = "";
-  rows.value = await walletApi.getAccounts();
-  balanceSnapshots.value = await walletApi.getBalanceSnapshots();
-  detail.value = rows.value[0] ? await walletApi.getDetail(rows.value[0].accountNo) : null;
-  if (!rechargeForm.value.accountNo && rows.value[0]) {
-    rechargeForm.value.accountNo = rows.value[0].accountNo;
+  try {
+    rows.value = await walletApi.getAccounts();
+    balanceSnapshots.value = await walletApi.getBalanceSnapshots();
+    detail.value = rows.value[0] ? await walletApi.getDetail(rows.value[0].accountNo) : null;
+    if (!rechargeForm.value.accountNo && rows.value[0]) {
+      rechargeForm.value.accountNo = rows.value[0].accountNo;
+    }
+    if (!balancePaymentForm.value.accountNo && rows.value[0]) {
+      balancePaymentForm.value.accountNo = rows.value[0].accountNo;
+    }
+    if (!withdrawForm.value.accountNo && rows.value[0]) {
+      withdrawForm.value.accountNo = rows.value[0].accountNo;
+    }
+    if (!transferForm.value.sourceAccountNo && rows.value[0]) {
+      transferForm.value.sourceAccountNo = rows.value[0].accountNo;
+    }
+    if (!transferForm.value.targetAccountNo && rows.value[1]) {
+      transferForm.value.targetAccountNo = rows.value[1].accountNo;
+    }
+  } catch (error) {
+    message.value = `钱包账户加载失败：${error.message}`;
+  } finally {
+    loading.value = false;
   }
-  if (!balancePaymentForm.value.accountNo && rows.value[0]) {
-    balancePaymentForm.value.accountNo = rows.value[0].accountNo;
-  }
-  if (!withdrawForm.value.accountNo && rows.value[0]) {
-    withdrawForm.value.accountNo = rows.value[0].accountNo;
-  }
-  if (!transferForm.value.sourceAccountNo && rows.value[0]) {
-    transferForm.value.sourceAccountNo = rows.value[0].accountNo;
-  }
-  if (!transferForm.value.targetAccountNo && rows.value[1]) {
-    transferForm.value.targetAccountNo = rows.value[1].accountNo;
-  }
-  loading.value = false;
 }
 
 async function openDetail(accountNo) {
-  detail.value = await walletApi.getDetail(accountNo);
+  message.value = "";
+  try {
+    detail.value = await walletApi.getDetail(accountNo);
+  } catch (error) {
+    message.value = `账户详情加载失败：${error.message}`;
+  }
 }
 
 async function recharge() {
@@ -138,6 +148,7 @@ onMounted(load);
               <tr><th>账户号</th><th>用户</th><th>总余额</th><th>可用</th><th>冻结</th><th>冻结占比</th><th>关注标签</th></tr>
             </thead>
             <tbody>
+              <tr v-if="balanceSnapshots.length === 0"><td colspan="7" class="empty-cell">暂无钱包余额快照。</td></tr>
               <tr v-for="snapshot in balanceSnapshots" :key="`${snapshot.accountNo}-snapshot`">
                 <td>{{ snapshot.accountNo }}</td>
                 <td>{{ snapshot.ownerName }}</td>
@@ -154,6 +165,7 @@ onMounted(load);
               <tr><th>账户号</th><th>用户</th><th>类型</th><th>状态</th><th>可用</th><th>冻结</th></tr>
             </thead>
             <tbody>
+              <tr v-if="rows.length === 0"><td colspan="6" class="empty-cell">暂无钱包账户。</td></tr>
               <tr v-for="row in rows" :key="row.accountNo" @click="openDetail(row.accountNo)" style="cursor:pointer">
                 <td>{{ row.accountNo }}</td>
                 <td>{{ row.ownerName }}</td>

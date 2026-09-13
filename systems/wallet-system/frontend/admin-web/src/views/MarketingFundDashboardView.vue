@@ -51,6 +51,7 @@ onMounted(load);
                   <tr><th>批次号</th><th>活动名称</th><th>金额</th><th>状态</th></tr>
                 </thead>
                 <tbody>
+                  <tr v-if="dashboard.redPackets.length === 0"><td colspan="4" class="empty-cell">暂无红包批次台账。</td></tr>
                   <tr v-for="row in dashboard.redPackets" :key="row.redPacketNo">
                     <td>{{ row.redPacketNo }}</td>
                     <td>{{ row.campaignName }}</td>
@@ -69,6 +70,7 @@ onMounted(load);
                   <tr><th>事件号</th><th>业务单号</th><th>状态</th><th>处理人</th></tr>
                 </thead>
                 <tbody>
+                  <tr v-if="dashboard.riskEvents.length === 0"><td colspan="4" class="empty-cell">暂无风控审批台账。</td></tr>
                   <tr v-for="row in dashboard.riskEvents" :key="row.eventNo">
                     <td>{{ row.eventNo }}</td>
                     <td>{{ row.bizNo }}</td>
@@ -89,6 +91,7 @@ onMounted(load);
                 <tr><th>流水号</th><th>业务类型</th><th>业务单号</th><th>金额</th><th>时间</th></tr>
               </thead>
               <tbody>
+                <tr v-if="dashboard.outLedgers.length === 0"><td colspan="5" class="empty-cell">暂无营销资金支出流水。</td></tr>
                 <tr v-for="row in dashboard.outLedgers" :key="row.ledgerNo">
                   <td>{{ row.ledgerNo }}</td>
                   <td>{{ row.bizType }}</td>

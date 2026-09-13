@@ -74,6 +74,7 @@ onMounted(load);
             </tr>
           </thead>
           <tbody>
+            <tr v-if="rows.length === 0"><td colspan="7" class="empty-cell">当前筛选条件下暂无钱包流水。</td></tr>
             <tr v-for="row in rows" :key="row.ledgerNo">
               <td>{{ row.ledgerNo }}</td>
               <td>{{ row.accountNo }}</td>
