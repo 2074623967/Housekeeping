@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { paymentDayEndApi } from "../api/client";
 import { isClosedShanghaiBusinessDate, previousShanghaiBusinessDate } from "../utils/businessDate";
 
+const router = useRouter();
 const overview = ref({
   totalBatchCount: 0,
   completedBatchCount: 0,
@@ -29,7 +31,13 @@ const actionResultMessage = ref("");
 const actionErrorMessage = ref("");
 const activeAction = ref("");
 const actionRunning = computed(() => isLoading.value || Boolean(activeAction.value));
-const canExport = computed(() => hasLoadedData.value && overview.value.totalBatchCount > 0);
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value
+  && overview.value.totalBatchCount > 0
+  && !isSnapshotStale.value);
+const canDrillDown = computed(() => hasLoadedData.value
+  && !actionRunning.value
+  && !isSnapshotStale.value);
 
 const latestClosedBusinessDate = previousShanghaiBusinessDate();
 const runForm = ref({
@@ -56,6 +64,11 @@ async function loadOverview() {
 
 async function runBatch() {
   if (actionRunning.value) {
+    return;
+  }
+  if (!hasLoadedData.value || isSnapshotStale.value) {
+    actionErrorMessage.value = "当前日终快照不可操作，请刷新成功后再触发跑批。";
+    actionResultMessage.value = "";
     return;
   }
   if (!isClosedShanghaiBusinessDate(runForm.value.bizDate)) {
@@ -89,6 +102,13 @@ function exportBatches() {
   }
   const exportUrl = paymentDayEndApi.buildExportUrl();
   window.open(exportUrl, "_blank", "noopener");
+}
+
+function openDrillDown(route) {
+  if (!canDrillDown.value || !route) {
+    return;
+  }
+  router.push(route);
 }
 
 onMounted(loadOverview);
@@ -204,37 +224,37 @@ onMounted(loadOverview);
               <div class="detail-label">待收口支付</div>
               <div class="detail-value">{{ overview.openPendingPaymentCount ?? "未采集" }}</div>
               <div class="detail-hint">金额 {{ overview.latestPendingPaymentAmount || "未采集" }}</div>
-              <RouterLink class="link-button" to="/payments?status=DAY_END_PENDING">查看支付单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/payments?status=DAY_END_PENDING')">查看支付单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">支付成功时间缺失</div>
               <div class="detail-value">{{ overview.openMissingPaymentSuccessTimeCount ?? "未采集" }}</div>
               <div class="detail-hint">缺少可信账期归属，必须先核查</div>
-              <RouterLink class="link-button" to="/payments?status=SUCCESS_TIME_MISSING">查看支付单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/payments?status=SUCCESS_TIME_MISSING')">查看支付单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">支付成功事实不一致</div>
               <div class="detail-value">{{ overview.openPaymentSuccessFactMismatchCount ?? "未采集" }}</div>
               <div class="detail-hint">支付单与最新支付尝试未形成一致成功终态</div>
-              <RouterLink class="link-button" to="/payments?status=SUCCESS_FACT_MISMATCH">查看支付单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/payments?status=SUCCESS_FACT_MISMATCH')">查看支付单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">退款失败</div>
               <div class="detail-value">{{ overview.openRefundFailCount ?? "未采集" }}</div>
               <div class="detail-hint">金额 {{ overview.latestRefundFailAmount || "未采集" }}</div>
-              <RouterLink class="link-button" to="/refunds?refundStatus=FAIL">查看退款单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/refunds?refundStatus=FAIL')">查看退款单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">退款成功时间缺失</div>
               <div class="detail-value">{{ overview.openMissingRefundSuccessTimeCount ?? "未采集" }}</div>
               <div class="detail-hint">逆向资金账期无法可信归属，必须先核查</div>
-              <RouterLink class="link-button" to="/refunds?refundStatus=SUCCESS_TIME_MISSING">查看退款单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/refunds?refundStatus=SUCCESS_TIME_MISSING')">查看退款单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">退款终态事实不一致</div>
               <div class="detail-value">{{ overview.openRefundTerminalFactMismatchCount ?? "未采集" }}</div>
               <div class="detail-hint">退款单与最新渠道尝试未形成一致终态</div>
-              <RouterLink class="link-button" to="/refunds?refundStatus=TERMINAL_FACT_MISMATCH">查看退款单</RouterLink>
+              <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown('/refunds?refundStatus=TERMINAL_FACT_MISMATCH')">查看退款单</button>
             </div>
             <div class="detail-card">
               <div class="detail-label">待收口退款金额</div>
@@ -251,7 +271,7 @@ onMounted(loadOverview);
             <div class="detail-value">{{ alert.affectedCount }}</div>
             <div class="detail-hint">{{ alert.alertMessage }}</div>
             <div class="detail-hint">{{ alert.suggestedAction }}</div>
-            <RouterLink class="link-button" :to="alert.actionRoute">查看</RouterLink>
+            <button class="link-button" :disabled="!canDrillDown" @click="openDrillDown(alert.actionRoute)">查看</button>
           </div>
         </div>
 
