@@ -7,6 +7,7 @@ import {
   normalizePaymentRecordType,
   orderDetailRoute,
   paymentDetailRoute,
+  paymentRequestDetailRoute,
   paymentRecordDetailRoute,
   refundDetailRoute
 } from "./detailRoutes.js";
@@ -18,6 +19,7 @@ function createTestRouter() {
       { path: "/orders/:orderNo", name: "order-detail", component: {} },
       { path: "/bills/:billNo", name: "bill-detail", component: {} },
       { path: "/cashier-sessions/:sessionNo", name: "cashier-session-detail", component: {} },
+      { path: "/payment-requests/:requestNo", name: "payment-request-detail", component: {} },
       { path: "/payments/:paymentOrderId", name: "payment-detail", component: {} },
       { path: "/payment-records/:paymentOrderId", name: "payment-record-detail", component: {} },
       { path: "/refunds/:refundOrderId", name: "refund-detail", component: {} }
@@ -35,6 +37,10 @@ test("resolves admin detail identifiers as encoded route parameters", () => {
     "/cashier-sessions/PRE%2F1%3F%23%25"
   );
   assert.equal(router.resolve(paymentDetailRoute("PAY/1?#%")).href, "/payments/PAY%2F1%3F%23%25");
+  assert.equal(
+    router.resolve(paymentRequestDetailRoute("REQ/1?#%")).href,
+    "/payment-requests/REQ%2F1%3F%23%25"
+  );
   assert.equal(
     router.resolve(paymentRecordDetailRoute("PAY/1?#%", "BANK_CARD")).href,
     "/payment-records/PAY%2F1%3F%23%25?recordType=BANK_CARD"

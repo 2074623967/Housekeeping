@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 支付请求 Mapper，负责支付尝试和路由结果查询。
  */
 public interface PaymentRequestMapper {
+
+    /**
+     * 按支付尝试号精确查询唯一支付请求详情。
+     */
+    PaymentRequestDetailDTO findDetail(@Param("requestNo") String requestNo);
 
     /**
      * 查询支付请求列表。

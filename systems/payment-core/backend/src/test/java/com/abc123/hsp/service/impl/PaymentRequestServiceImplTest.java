@@ -7,6 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
@@ -25,6 +28,56 @@ class PaymentRequestServiceImplTest {
 
     @Mock
     private PaymentRequestMapper paymentRequestMapper;
+
+    @Test
+    void shouldNormalizeAndMaskPaymentRequestDetailWithoutChangingMapperDto() {
+        PaymentRequestDetailDTO mapperDetail = new PaymentRequestDetailDTO();
+        mapperDetail.setRequestNo("REQ-001");
+        mapperDetail.setClientIp("10.20.30.40");
+        mapperDetail.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        mapperDetail.setRequestPayload("{\"clientIp\":\"10.20.30.40\",\"customerName\":\"张三\"}");
+        mapperDetail.setResponsePayload("{\"mobile\":\"13800138000\"}");
+        when(paymentRequestMapper.findDetail("REQ-001")).thenReturn(mapperDetail);
+
+        PaymentRequestDetailDTO result =
+                new PaymentRequestServiceImpl(paymentRequestMapper).detail(" REQ-001 ");
+
+        assertEquals("REQ-001", result.getRequestNo());
+        assertEquals("10.20.*.*", result.getClientIp());
+        assertEquals("ORDER-****DEFG", result.getIdempotencyKey());
+        assertTrue(result.getRequestPayload().contains("张*"));
+        assertTrue(result.getResponsePayload().contains("138****8000"));
+        assertEquals("10.20.30.40", mapperDetail.getClientIp());
+        assertTrue(mapperDetail.getRequestPayload().contains("张三"));
+        verify(paymentRequestMapper).findDetail("REQ-001");
+    }
+
+    @Test
+    void shouldRejectInvalidPaymentRequestDetailIdentifierBeforeMapperAccess() {
+        PaymentRequestServiceImpl service = new PaymentRequestServiceImpl(paymentRequestMapper);
+
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(
+                BusinessException.class, () -> service.detail("REQ-001\n"));
+        BusinessException oversized = assertThrows(
+                BusinessException.class, () -> service.detail(repeat("R", 65)));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        verifyNoInteractions(paymentRequestMapper);
+    }
+
+    @Test
+    void shouldReportMissingPaymentRequestDetail() {
+        when(paymentRequestMapper.findDetail("REQ-MISSING")).thenReturn(null);
+
+        BusinessException missing = assertThrows(BusinessException.class,
+                () -> new PaymentRequestServiceImpl(paymentRequestMapper).detail("REQ-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_NOT_FOUND, missing.getCode());
+        assertEquals("支付请求不存在", missing.getMessage());
+    }
 
     @Test
     void shouldNormalizeAndForwardPagingQuery() {

@@ -1,20 +1,23 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
-import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.mapper.PaymentRequestMapper;
+import com.abc123.hsp.service.PaymentRequestService;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import com.abc123.hsp.mapper.PaymentRequestMapper;
-import com.abc123.hsp.service.PaymentRequestService;
-import com.abc123.hsp.service.support.CsvExportSanitizer;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -46,6 +49,23 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
 
     PaymentRequestServiceImpl(PaymentRequestMapper paymentRequestMapper) {
         this(paymentRequestMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public PaymentRequestDetailDTO detail(String requestNo) {
+        String normalizedRequestNo = normalizeRequiredRequestNo(requestNo);
+        PaymentRequestDetailDTO detail = paymentRequestMapper.findDetail(normalizedRequestNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_NOT_FOUND, "支付请求不存在");
+        }
+        PaymentRequestDetailDTO outwardDetail = new PaymentRequestDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setClientIp(sensitiveDataMasker.maskClientIp(detail.getClientIp()));
+        outwardDetail.setIdempotencyKey(
+                sensitiveDataMasker.maskIdempotencyKey(detail.getIdempotencyKey()));
+        outwardDetail.setRequestPayload(sensitiveDataMasker.maskPayload(detail.getRequestPayload()));
+        outwardDetail.setResponsePayload(sensitiveDataMasker.maskPayload(detail.getResponsePayload()));
+        return outwardDetail;
     }
 
     @Override
@@ -187,6 +207,24 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         }
         String normalizedStatus = requestStatus.trim();
         return REQUEST_STATUS_ALIASES.getOrDefault(normalizedStatus, normalizedStatus);
+    }
+
+    private String normalizeRequiredRequestNo(String requestNo) {
+        if (!StringUtils.hasText(requestNo)) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "支付请求编号不能为空");
+        }
+        for (int index = 0; index < requestNo.length(); index++) {
+            if (Character.isISOControl(requestNo.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_REQUEST_INVALID, "支付请求编号不能包含控制字符");
+            }
+        }
+        String normalized = requestNo.trim();
+        if (normalized.length() > REQUEST_NO_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "支付请求编号长度不能超过 64 个字符");
+        }
+        return normalized;
     }
 
     private static Map<String, String> buildRequestStatusAliases() {

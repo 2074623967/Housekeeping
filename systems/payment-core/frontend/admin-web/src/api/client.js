@@ -636,6 +636,7 @@ export const cashierSessionApi = {
 };
 
 export const paymentRequestApi = {
+  getDetail: (requestNo) => request(`/api/payment-requests/${encodeURIComponent(requestNo)}`),
   getOverview: ({
     requestNo = "",
     paymentOrderId = "",

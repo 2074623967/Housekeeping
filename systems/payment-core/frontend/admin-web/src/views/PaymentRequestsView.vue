@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentRequestApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentRequestDetailRoute } from "../router/detailRoutes";
 import {
   cashierSessionsRoute,
   paymentFlowsRoute,
@@ -12,6 +12,7 @@ import {
 import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
 const route = useRoute();
+const router = useRouter();
 const overview = ref({
   totalRequestCount: 0,
   successRequestCount: 0,
@@ -65,6 +66,7 @@ const metrics = computed(() => ({
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 
 function buildQuery() {
   return {
@@ -94,11 +96,24 @@ function resetFilters() {
 }
 
 function togglePayload(requestNo) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   expandedRequestNo.value = expandedRequestNo.value === requestNo ? "" : requestNo;
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
+}
+
+function openRoute(targetRoute) {
+  if (!canUseSnapshot.value || !targetRoute) {
+    return;
+  }
+  router.push(targetRoute);
 }
 
 async function loadPaymentRequests(query = buildQuery()) {
@@ -357,9 +372,9 @@ watch(
                 <tr>
                   <td>{{ item.requestNo }}</td>
                   <td>
-                    <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentDetailRoute(item.paymentOrderId))">
                       {{ item.paymentOrderId }}
-                    </RouterLink>
+                    </button>
                   </td>
                   <td>{{ item.prepayOrderNo }}</td>
                   <td>{{ item.orderNo }}</td>
@@ -372,8 +387,9 @@ watch(
                   <td><span :class="['badge', item.requestStatusType]">{{ item.requestStatus }}</span></td>
                   <td>{{ item.createdAt }}</td>
                   <td>
-                    <button class="link-button" @click="pickItem(item)">查看详情</button>
-                    <button class="link-button" @click="togglePayload(item.requestNo)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRequestDetailRoute(item.requestNo))">唯一详情</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">选中快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="togglePayload(item.requestNo)">
                       {{ expandedRequestNo === item.requestNo ? "收起报文" : "查看报文" }}
                     </button>
                   </td>
@@ -422,11 +438,12 @@ watch(
               <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
-              <RouterLink class="link-button" :to="cashierSessionsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看会话</RouterLink>
-              <RouterLink class="link-button" :to="paymentRoutesRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看路由结果</RouterLink>
-              <RouterLink class="link-button" :to="paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看处理日志</RouterLink>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRequestDetailRoute(selectedItem.requestNo))">查看唯一详情</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(cashierSessionsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看会话</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRoutesRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看路由结果</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看处理日志</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付请求后，可在这里查看详情与联查建议。</div>

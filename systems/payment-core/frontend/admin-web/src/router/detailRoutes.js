@@ -19,6 +19,13 @@ export function cashierSessionDetailRoute(sessionNo) {
   };
 }
 
+export function paymentRequestDetailRoute(requestNo) {
+  return {
+    name: "payment-request-detail",
+    params: { requestNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

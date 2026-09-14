@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
@@ -31,6 +33,20 @@ class PaymentRequestControllerTest {
 
     @Mock
     private PaymentRequestService paymentRequestService;
+
+    @Test
+    void shouldReturnPaymentRequestDetail() {
+        PaymentRequestController controller = new PaymentRequestController(paymentRequestService);
+        PaymentRequestDetailDTO detailDTO = new PaymentRequestDetailDTO();
+        detailDTO.setRequestNo("REQ-001");
+        when(paymentRequestService.detail("REQ-001")).thenReturn(detailDTO);
+
+        ApiResponse<PaymentRequestDetailDTO> response = controller.detail("REQ-001");
+
+        assertEquals("0", response.getCode());
+        assertEquals("REQ-001", response.getData().getRequestNo());
+        verify(paymentRequestService).detail("REQ-001");
+    }
 
     @Test
     void shouldListPaymentRequests() {

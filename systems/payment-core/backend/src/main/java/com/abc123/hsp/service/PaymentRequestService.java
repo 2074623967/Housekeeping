@@ -1,14 +1,20 @@
 package com.abc123.hsp.service;
 
+import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
-import com.abc123.hsp.dto.PageResultDTO;
 
 /**
  * 支付请求 Service，面向联调和排障提供支付报文查询。
  */
 public interface PaymentRequestService {
+
+    /**
+     * 查询唯一支付请求详情。
+     */
+    PaymentRequestDetailDTO detail(String requestNo);
 
     /**
      * 查询支付请求列表。

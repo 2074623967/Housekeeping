@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,14 @@ public class PaymentRequestController {
 
     public PaymentRequestController(PaymentRequestService paymentRequestService) {
         this.paymentRequestService = paymentRequestService;
+    }
+
+    /**
+     * 查询一次支付尝试及其精确关联的路由事实。
+     */
+    @GetMapping("/{requestNo}")
+    public ApiResponse<PaymentRequestDetailDTO> detail(@PathVariable String requestNo) {
+        return ApiResponse.success(paymentRequestService.detail(requestNo));
     }
 
     /**
