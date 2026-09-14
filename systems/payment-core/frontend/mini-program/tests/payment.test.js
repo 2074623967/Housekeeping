@@ -7,9 +7,11 @@ const {
   createIdempotencyKey,
   createOrderNo,
   normalizeAmount,
+  resolvePaymentDetailRefreshDelay,
   resolveRemainingSeconds,
   resolveScene,
-  resultMeta
+  resultMeta,
+  shouldAutoRefreshPaymentDetail
 } = require("../utils/payment");
 
 test("normalizes valid mini program payment amounts", () => {
@@ -60,4 +62,25 @@ test("maps payment terminal states without inventing success", () => {
   assert.equal(resultMeta("CLOSED").tone, "danger");
   assert.equal(resultMeta("WAIT_CALLBACK").title, "支付处理中");
   assert.equal(resultMeta("UNKNOWN").title, "支付处理中");
+});
+
+test("auto refreshes only asynchronously advancing payment states", () => {
+  assert.equal(shouldAutoRefreshPaymentDetail("WAIT_CALLBACK"), true);
+  assert.equal(shouldAutoRefreshPaymentDetail(" paying "), true);
+  assert.equal(shouldAutoRefreshPaymentDetail("risk_review"), true);
+  assert.equal(shouldAutoRefreshPaymentDetail("PREPAY_CREATED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("RISK_BLOCKED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("RISK_REJECTED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("SUCCESS"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("CLOSED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail(null), false);
+});
+
+test("limits automatic payment detail refresh to five minutes", () => {
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 0), 5000);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 59), 5000);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 60), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("SUCCESS", 0), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", -1), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 1.5), null);
 });

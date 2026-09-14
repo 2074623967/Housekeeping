@@ -4,6 +4,8 @@ const PAYMENT_METHOD = "微信支付";
 const CHANNEL_CODE = "WX_H5";
 const MERCHANT_NO = "MCH_WX_10001";
 const TERMINAL = "MINI_PROGRAM";
+const PAYMENT_DETAIL_REFRESH_INTERVAL_MS = 5000;
+const PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS = 60;
 
 const SCENES = {
   recharge: {
@@ -115,6 +117,23 @@ function canClosePayment(status, channelTransactionNo, latestAttemptStatus) {
     && (!attemptStatus || attemptStatus === "-");
 }
 
+function shouldAutoRefreshPaymentDetail(status) {
+  if (typeof status !== "string") {
+    return false;
+  }
+  return ["WAIT_CALLBACK", "PAYING", "RISK_REVIEW"].includes(status.trim().toUpperCase());
+}
+
+function resolvePaymentDetailRefreshDelay(status, completedAttempts) {
+  if (!Number.isInteger(completedAttempts)
+      || completedAttempts < 0
+      || completedAttempts >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS
+      || !shouldAutoRefreshPaymentDetail(status)) {
+    return null;
+  }
+  return PAYMENT_DETAIL_REFRESH_INTERVAL_MS;
+}
+
 function resultMeta(status) {
   if (status === "SUCCESS") {
     return { title: "支付成功", tone: "success", hint: "支付结果已经收口，可返回业务入口。" };
@@ -138,6 +157,8 @@ module.exports = {
   CHANNEL_CODE,
   DEMO_ACCESS_TOKEN,
   MERCHANT_NO,
+  PAYMENT_DETAIL_REFRESH_INTERVAL_MS,
+  PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS,
   PAYMENT_METHOD,
   SCENES,
   SOURCE_APP_ID,
@@ -148,7 +169,9 @@ module.exports = {
   createIdempotencyKey,
   createOrderNo,
   normalizeAmount,
+  resolvePaymentDetailRefreshDelay,
   resolveRemainingSeconds,
   resolveScene,
-  resultMeta
+  resultMeta,
+  shouldAutoRefreshPaymentDetail
 };
