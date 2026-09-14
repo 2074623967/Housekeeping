@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import java.util.List;
@@ -9,6 +10,11 @@ import org.apache.ibatis.annotations.Param;
  * 订单中心 Mapper，负责订单运营列表查询。
  */
 public interface OrderMapper {
+
+    /**
+     * 按订单号查询支付联查详情。
+     */
+    OrderDetailDTO findDetail(@Param("orderNo") String orderNo);
 
     /**
      * 查询订单中心分页列表。

@@ -239,7 +239,8 @@ export const orderApi = {
       orderStatus
     });
     return `/api/orders/export?${params.toString()}`;
-  }
+  },
+  getDetail: (orderNo) => request(`/api/orders/${encodeURIComponent(orderNo)}`)
 };
 
 export const billApi = {

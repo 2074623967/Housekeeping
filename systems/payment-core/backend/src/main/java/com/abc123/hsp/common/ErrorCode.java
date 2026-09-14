@@ -65,4 +65,5 @@ public final class ErrorCode {
     public static final String REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID = "PAYMENT-1052";
     public static final String REFUND_APPLICATION_IDEMPOTENCY_CONFLICT = "PAYMENT-1053";
     public static final String PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING = "PAYMENT-1054";
+    public static final String ORDER_NOT_FOUND = "PAYMENT-1055";
 }

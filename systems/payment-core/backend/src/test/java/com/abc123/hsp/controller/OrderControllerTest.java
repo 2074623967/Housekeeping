@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.OrderQueryDTO;
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.service.OrderService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,18 @@ class OrderControllerTest {
 
     @Mock
     private OrderService orderService;
+
+    @Test
+    void shouldGetOrderDetail() {
+        OrderDetailDTO detail = new OrderDetailDTO();
+        detail.setOrderNo("ORD-001");
+        when(orderService.detail("ORD-001")).thenReturn(detail);
+
+        OrderController controller = new OrderController(orderService);
+
+        Assertions.assertEquals(detail, controller.detail("ORD-001").getData());
+        verify(orderService).detail("ORD-001");
+    }
 
     @Test
     void shouldListOrders() {

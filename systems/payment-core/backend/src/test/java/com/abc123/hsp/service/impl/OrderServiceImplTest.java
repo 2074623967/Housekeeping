@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.abc123.hsp.dto.OrderQueryDTO;
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderListItemDTO;
+import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import java.util.Collections;
@@ -27,6 +31,44 @@ class OrderServiceImplTest {
     private OrderMapper orderMapper;
 
     @Test
+    void shouldReturnMaskedOrderDetailWithoutChangingMapperDto() {
+        OrderDetailDTO detail = new OrderDetailDTO();
+        detail.setOrderNo("ORDER-001");
+        detail.setCustomerName("王阿姨");
+        detail.setWorkerName("李师傅");
+        detail.setLatestPaymentOrderId("PAY-001");
+        when(orderMapper.findDetail("ORDER-001")).thenReturn(detail);
+
+        OrderDetailDTO result = new OrderServiceImpl(orderMapper).detail(" ORDER-001 ");
+
+        assertEquals("ORDER-001", result.getOrderNo());
+        assertEquals("王*", result.getCustomerName());
+        assertEquals("李*", result.getWorkerName());
+        assertEquals("PAY-001", result.getLatestPaymentOrderId());
+        assertEquals("王阿姨", detail.getCustomerName());
+        assertEquals("李师傅", detail.getWorkerName());
+    }
+
+    @Test
+    void shouldRejectInvalidOrMissingOrderDetail() {
+        OrderServiceImpl service = new OrderServiceImpl(orderMapper);
+
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(
+                BusinessException.class, () -> service.detail("ORDER-001\n"));
+        BusinessException oversized = assertThrows(
+                BusinessException.class, () -> service.detail(repeat("O", 65)));
+        when(orderMapper.findDetail("ORDER-MISSING")).thenReturn(null);
+        BusinessException missing = assertThrows(
+                BusinessException.class, () -> service.detail("ORDER-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        assertEquals(ErrorCode.ORDER_NOT_FOUND, missing.getCode());
+    }
+
+    @Test
     void shouldNormalizeAndForwardOrderPagingQuery() {
         OrderQueryDTO query = new OrderQueryDTO();
         query.setOrderNo(" ORD-001 ");
@@ -35,8 +77,8 @@ class OrderServiceImplTest {
         query.setPageNo(0);
         query.setPageSize(500);
 
-        org.mockito.Mockito.when(orderMapper.findAll(query)).thenReturn(Collections.emptyList());
-        org.mockito.Mockito.when(orderMapper.count(query)).thenReturn(0L);
+        when(orderMapper.findAll(query)).thenReturn(Collections.emptyList());
+        when(orderMapper.count(query)).thenReturn(0L);
 
         new OrderServiceImpl(orderMapper).list(query);
 
@@ -85,8 +127,8 @@ class OrderServiceImplTest {
         OrderListItemDTO item = new OrderListItemDTO();
         item.setCustomerName("王阿姨");
         item.setWorkerName("李师傅");
-        org.mockito.Mockito.when(orderMapper.findAll(query)).thenReturn(Collections.singletonList(item));
-        org.mockito.Mockito.when(orderMapper.count(query)).thenReturn(1L);
+        when(orderMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(orderMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<OrderListItemDTO> result = new OrderServiceImpl(orderMapper).list(query);
 
@@ -116,7 +158,7 @@ class OrderServiceImplTest {
         item.setLatestCashierStatus("未生成");
         item.setCreatedAt("2026-08-07 10:00:00");
 
-        org.mockito.Mockito.when(orderMapper.findForExport(query)).thenReturn(Collections.singletonList(item));
+        when(orderMapper.findForExport(query)).thenReturn(Collections.singletonList(item));
 
         String csv = new OrderServiceImpl(orderMapper).exportCsv(query);
 

@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.OrderListItemDTO;
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import java.io.InputStream;
 import java.sql.Statement;
@@ -77,6 +78,26 @@ class OrderListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldReturnOrderDetailWithStableLatestFacts() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            OrderDetailDTO detail = session.getMapper(OrderMapper.class).findDetail("ORDER-STABLE-001");
+
+            assertEquals("ORDER-STABLE-001", detail.getOrderNo());
+            assertEquals("¥100.00", detail.getOrderAmount());
+            assertEquals("¥0.00", detail.getPaidAmount());
+            assertEquals("¥100.00", detail.getOutstandingAmount());
+            assertEquals("BILL-STABLE-NEW", detail.getBillNo());
+            assertEquals("待支付", detail.getBillStatus());
+            assertEquals("PAY-STABLE-NEW", detail.getLatestPaymentOrderId());
+            assertEquals("微信支付", detail.getLatestPaymentMethod());
+            assertEquals("WX_H5", detail.getLatestPaymentChannel());
+            assertEquals("PRE-STABLE-NEW", detail.getLatestPrepayOrderNo());
+            assertEquals("HOME_CLEAN", detail.getLatestPayScene());
+            assertEquals("支付完成", detail.getLatestCashierStatus());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -97,13 +118,16 @@ class OrderListMapperIntegrationTest {
                     + "fulfillment_status VARCHAR(32), fulfillment_status_type VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_bill ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64), order_no VARCHAR(64), "
-                    + "created_at DATETIME)");
+                    + "bill_amount DECIMAL(18,2), paid_amount DECIMAL(18,2), bill_status VARCHAR(32), "
+                    + "bill_status_type VARCHAR(32), due_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), order_no VARCHAR(64), "
-                    + "status VARCHAR(32), status_type VARCHAR(32), created_at DATETIME)");
+                    + "amount DECIMAL(18,2), payment_method VARCHAR(32), channel_code VARCHAR(64), "
+                    + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), order_no VARCHAR(64), "
-                    + "cashier_status VARCHAR(32), cashier_status_type VARCHAR(32), created_at DATETIME)");
+                    + "amount DECIMAL(18,2), pay_scene VARCHAR(32), cashier_status VARCHAR(32), "
+                    + "cashier_status_type VARCHAR(32), expires_at DATETIME, created_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_order "
                     + "(order_no, customer_name, service_type, worker_name, order_amount, paid_amount, "
                     + "order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) "
@@ -114,17 +138,26 @@ class OrderListMapperIntegrationTest {
                     + "'待支付', 'warning', '待履约', 'info', '2026-09-12 12:00:00'), "
                     + "('ORDER-STABLE-003', '客户三', '深度保洁', '服务者三', 100.00, 0.00, "
                     + "'待支付', 'warning', '待履约', 'info', '2026-09-12 12:00:00')");
-            statement.executeUpdate("INSERT INTO t_bill (bill_no, order_no, created_at) VALUES "
-                    + "('BILL-STABLE-OLD', 'ORDER-STABLE-001', '2026-09-12 12:30:00'), "
-                    + "('BILL-STABLE-NEW', 'ORDER-STABLE-001', '2026-09-12 12:30:00')");
+            statement.executeUpdate("INSERT INTO t_bill "
+                    + "(bill_no, order_no, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at) VALUES "
+                    + "('BILL-STABLE-OLD', 'ORDER-STABLE-001', 100.00, 0.00, '待支付', 'warning', "
+                    + "'2026-09-13 12:30:00', '2026-09-12 12:30:00'), "
+                    + "('BILL-STABLE-NEW', 'ORDER-STABLE-001', 100.00, 0.00, '待支付', 'warning', "
+                    + "'2026-09-14 12:30:00', '2026-09-12 12:30:00')");
             statement.executeUpdate("INSERT INTO t_payment_order "
-                    + "(payment_order_id, order_no, status, status_type, created_at) VALUES "
-                    + "('PAY-STABLE-OLD', 'ORDER-STABLE-001', '支付中', 'warning', '2026-09-12 12:30:00'), "
-                    + "('PAY-STABLE-NEW', 'ORDER-STABLE-001', '支付成功', 'success', '2026-09-12 12:30:00')");
+                    + "(payment_order_id, order_no, amount, payment_method, channel_code, status, status_type, "
+                    + "success_at, created_at) VALUES "
+                    + "('PAY-STABLE-OLD', 'ORDER-STABLE-001', 100.00, '支付宝', 'ALIPAY_H5', "
+                    + "'支付中', 'warning', NULL, '2026-09-12 12:30:00'), "
+                    + "('PAY-STABLE-NEW', 'ORDER-STABLE-001', 100.00, '微信支付', 'WX_H5', "
+                    + "'支付成功', 'success', '2026-09-12 12:40:00', '2026-09-12 12:30:00')");
             statement.executeUpdate("INSERT INTO t_prepay_order "
-                    + "(prepay_order_no, order_no, cashier_status, cashier_status_type, created_at) VALUES "
-                    + "('PRE-STABLE-OLD', 'ORDER-STABLE-001', '待支付', 'warning', '2026-09-12 12:30:00'), "
-                    + "('PRE-STABLE-NEW', 'ORDER-STABLE-001', '支付完成', 'success', '2026-09-12 12:30:00')");
+                    + "(prepay_order_no, order_no, amount, pay_scene, cashier_status, cashier_status_type, "
+                    + "expires_at, created_at) VALUES "
+                    + "('PRE-STABLE-OLD', 'ORDER-STABLE-001', 100.00, 'HOME_CLEAN', "
+                    + "'待支付', 'warning', '2026-09-12 13:30:00', '2026-09-12 12:30:00'), "
+                    + "('PRE-STABLE-NEW', 'ORDER-STABLE-001', 100.00, 'HOME_CLEAN', "
+                    + "'支付完成', 'success', '2026-09-12 13:30:00', '2026-09-12 12:30:00')");
             session.commit();
         }
     }

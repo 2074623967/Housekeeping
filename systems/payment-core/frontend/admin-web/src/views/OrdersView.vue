@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { orderApi, paymentApi } from "../api/client";
-import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
+import { orderDetailRoute, paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute } from "../router/listRoutes";
 
@@ -335,6 +335,9 @@ onMounted(loadOrders);
                 <div class="list-actions">
                   <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
                   <span>{{ item.billNo ? `账单 ${item.billNo}` : "尚未生成账单" }}</span>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(item, orderDetailRoute(item.orderNo))">
+                    查看订单详情
+                  </button>
                   <button v-if="item.latestPaymentOrderId" class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(item, paymentDetailRoute(item.latestPaymentOrderId))">
                     查看支付单
                   </button>

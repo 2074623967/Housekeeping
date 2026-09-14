@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.OrderListItemDTO;
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.service.OrderService;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,6 +24,14 @@ public class OrderController {
 
     public OrderController(OrderService orderService) {
         this.orderService = orderService;
+    }
+
+    /**
+     * 查询标准订单及其最近账单、支付单和收银台关联事实。
+     */
+    @GetMapping("/{orderNo}")
+    public ApiResponse<OrderDetailDTO> detail(@PathVariable String orderNo) {
+        return ApiResponse.success(orderService.detail(orderNo));
     }
 
     /**

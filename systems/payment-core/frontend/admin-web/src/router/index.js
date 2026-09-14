@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import MainLayout from "../views/MainLayout.vue";
 import DashboardView from "../views/DashboardView.vue";
 import OrdersView from "../views/OrdersView.vue";
+import OrderDetailView from "../views/OrderDetailView.vue";
 import BillsView from "../views/BillsView.vue";
 import PaymentFlowsView from "../views/PaymentFlowsView.vue";
 import PaymentRoutesView from "../views/PaymentRoutesView.vue";
@@ -32,6 +33,7 @@ const routes = [
       { path: "", redirect: "/dashboard" },
       { path: "dashboard", component: DashboardView },
       { path: "orders", name: "orders", component: OrdersView },
+      { path: "orders/:orderNo", name: "order-detail", component: OrderDetailView },
       { path: "bills", name: "bills", component: BillsView },
       { path: "payment-flows", name: "payment-flows", component: PaymentFlowsView },
       { path: "payment-routes", name: "payment-routes", component: PaymentRoutesView },

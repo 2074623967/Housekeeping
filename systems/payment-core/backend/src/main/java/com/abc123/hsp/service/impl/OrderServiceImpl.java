@@ -1,5 +1,8 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
@@ -15,6 +18,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -34,6 +38,20 @@ public class OrderServiceImpl implements OrderService {
 
     OrderServiceImpl(OrderMapper orderMapper) {
         this(orderMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public OrderDetailDTO detail(String orderNo) {
+        String normalizedOrderNo = normalizeRequiredOrderNo(orderNo);
+        OrderDetailDTO detail = orderMapper.findDetail(normalizedOrderNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND, "订单不存在");
+        }
+        OrderDetailDTO outwardDetail = new OrderDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        outwardDetail.setWorkerName(sensitiveDataMasker.maskName(detail.getWorkerName()));
+        return outwardDetail;
     }
 
     @Override
@@ -120,6 +138,24 @@ public class OrderServiceImpl implements OrderService {
         }
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredOrderNo(String orderNo) {
+        if (!StringUtils.hasText(orderNo)) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "订单号不能为空");
+        }
+        for (int index = 0; index < orderNo.length(); index++) {
+            if (Character.isISOControl(orderNo.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_REQUEST_INVALID, "订单号不能包含控制字符");
+            }
+        }
+        String normalized = orderNo.trim();
+        if (normalized.length() > ORDER_NO_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "订单号长度不能超过 64 个字符");
         }
         return normalized;
     }

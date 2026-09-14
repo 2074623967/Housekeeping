@@ -1,3 +1,10 @@
+export function orderDetailRoute(orderNo) {
+  return {
+    name: "order-detail",
+    params: { orderNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

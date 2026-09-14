@@ -4,6 +4,64 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.OrderMapper">
 
+    <select id="findDetail" resultType="com.abc123.hsp.dto.OrderDetailDTO">
+        SELECT o.order_no AS orderNo,
+               o.customer_name AS customerName,
+               o.service_type AS serviceType,
+               o.worker_name AS workerName,
+               CONCAT('¥', FORMAT(o.order_amount, 2)) AS orderAmount,
+               CONCAT('¥', FORMAT(o.paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(GREATEST(o.order_amount - o.paid_amount, 0), 2)) AS outstandingAmount,
+               o.order_status AS orderStatus,
+               o.order_status_type AS orderStatusType,
+               o.fulfillment_status AS fulfillmentStatus,
+               o.fulfillment_status_type AS fulfillmentStatusType,
+               DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               latest_bill.bill_no AS billNo,
+               CONCAT('¥', FORMAT(latest_bill.bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(latest_bill.paid_amount, 2)) AS billPaidAmount,
+               latest_bill.bill_status AS billStatus,
+               latest_bill.bill_status_type AS billStatusType,
+               DATE_FORMAT(latest_bill.due_at, '%Y-%m-%d %H:%i:%s') AS billDueAt,
+               latest_payment.payment_order_id AS latestPaymentOrderId,
+               CONCAT('¥', FORMAT(latest_payment.amount, 2)) AS latestPaymentAmount,
+               latest_payment.payment_method AS latestPaymentMethod,
+               latest_payment.channel_code AS latestPaymentChannel,
+               latest_payment.status AS latestPaymentStatus,
+               latest_payment.status_type AS latestPaymentStatusType,
+               DATE_FORMAT(latest_payment.success_at, '%Y-%m-%d %H:%i:%s') AS latestPaymentSuccessAt,
+               latest_prepay.prepay_order_no AS latestPrepayOrderNo,
+               CONCAT('¥', FORMAT(latest_prepay.amount, 2)) AS latestPrepayAmount,
+               latest_prepay.pay_scene AS latestPayScene,
+               latest_prepay.cashier_status AS latestCashierStatus,
+               latest_prepay.cashier_status_type AS latestCashierStatusType,
+               DATE_FORMAT(latest_prepay.expires_at, '%Y-%m-%d %H:%i:%s') AS latestPrepayExpiresAt
+        FROM t_order o
+                 LEFT JOIN t_bill latest_bill ON latest_bill.id = (
+                    SELECT latest_b.id
+                    FROM t_bill latest_b
+                    WHERE latest_b.order_no = o.order_no
+                    ORDER BY latest_b.created_at DESC, latest_b.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_order latest_payment ON latest_payment.id = (
+                    SELECT latest_po.id
+                    FROM t_payment_order latest_po
+                    WHERE latest_po.order_no = o.order_no
+                    ORDER BY latest_po.created_at DESC, latest_po.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_prepay_order latest_prepay ON latest_prepay.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.order_no = o.order_no
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
+        WHERE o.order_no = #{orderNo}
+        LIMIT 1
+    </select>
+
     <sql id="orderListOrder">
         ORDER BY o.created_at DESC, o.id DESC
     </sql>
