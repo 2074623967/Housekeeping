@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import {
@@ -9,6 +9,7 @@ import {
   resolvePaymentResultState
 } from "../constants/payment";
 import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
+import { matchesPaymentOrder, matchesPaymentSnapshot } from "../constants/paymentEntity";
 import { buildCashierRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
@@ -75,8 +76,18 @@ const detailLoading = ref(true);
 const queryLoading = ref(false);
 const closeLoading = ref(false);
 const lastAction = ref("");
+const loadedPaymentOrderId = ref("");
+let latestLoadRequestId = 0;
+let currentEntityVersion = 0;
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
+const currentPaymentOrderId = computed(() => typeof route.params.paymentOrderId === "string"
+  ? route.params.paymentOrderId.trim()
+  : "");
+const hasValidPaymentSnapshot = computed(() => Boolean(
+  loadedPaymentOrderId.value === currentPaymentOrderId.value
+  && matchesPaymentOrder(currentPaymentOrderId.value, paymentDetail.value)
+));
 const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const actionRunning = computed(() => detailLoading.value || queryLoading.value || closeLoading.value);
@@ -84,13 +95,13 @@ const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
 const canClosePayment = computed(() => {
-  return canClosePaymentLocally(
+  return hasValidPaymentSnapshot.value && canClosePaymentLocally(
     paymentDetail.value?.status,
     paymentDetail.value?.channelTransactionNo,
     paymentDetail.value?.latestAttemptStatus
   );
 });
-const canQueryPayment = computed(() => canQueryPaymentChannel(
+const canQueryPayment = computed(() => hasValidPaymentSnapshot.value && canQueryPaymentChannel(
   paymentDetail.value?.status,
   paymentDetail.value?.latestAttemptStatus
 ));
@@ -213,22 +224,35 @@ function syncStatusByDetail() {
   resultState.value = resolvePaymentResultState(paymentDetail.value.status);
 }
 
-async function loadDetail() {
+async function loadDetail(paymentOrderId = currentPaymentOrderId.value) {
+  const requestId = ++latestLoadRequestId;
   detailLoading.value = true;
   feedbackMessage.value = "";
   try {
-    paymentDetail.value = await paymentApi.getDetail(route.params.paymentOrderId);
+    const detail = await paymentApi.getDetail(paymentOrderId);
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
+    if (!matchesPaymentOrder(paymentOrderId, detail)) {
+      throw new Error("支付详情响应为空或与当前支付单不一致");
+    }
+    paymentDetail.value = detail;
+    loadedPaymentOrderId.value = paymentOrderId;
     syncStatusByDetail();
   } catch (error) {
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     feedbackMessage.value = error.message;
   } finally {
-    detailLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      detailLoading.value = false;
+    }
   }
 }
 
 onMounted(() => {
   migrateLegacyAccessToken();
-  loadDetail();
 });
 
 function migrateLegacyAccessToken() {
@@ -248,20 +272,38 @@ async function queryResult() {
   if (actionRunning.value) {
     return;
   }
+  if (!hasValidPaymentSnapshot.value) {
+    feedbackMessage.value = "当前支付详情尚未成功加载，不能执行主动查单。";
+    return;
+  }
   if (!canQueryPayment.value) {
     feedbackMessage.value = "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
   }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
   queryLoading.value = true;
   try {
-    paymentDetail.value = await paymentApi.query({ paymentOrderId: route.params.paymentOrderId });
+    const detail = await paymentApi.query({ paymentOrderId: snapshot.paymentOrderId });
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, detail)) {
+      throw new Error("查单响应为空或与当前支付单不一致");
+    }
+    paymentDetail.value = detail;
     syncStatusByDetail();
-    feedbackMessage.value = `已查询支付单 ${route.params.paymentOrderId} 的最新状态。`;
+    feedbackMessage.value = `已查询支付单 ${snapshot.paymentOrderId} 的最新状态。`;
     lastAction.value = "主动查单";
   } catch (error) {
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
     feedbackMessage.value = error.message;
   } finally {
-    queryLoading.value = false;
+    if (entityVersion === currentEntityVersion) {
+      queryLoading.value = false;
+    }
   }
 }
 
@@ -269,24 +311,42 @@ async function closePayment() {
   if (actionRunning.value) {
     return;
   }
+  if (!hasValidPaymentSnapshot.value || !canClosePayment.value) {
+    feedbackMessage.value = "当前支付单不满足本地关闭条件。";
+    return;
+  }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
   closeLoading.value = true;
   try {
-    paymentDetail.value = await paymentApi.close({ paymentOrderId: route.params.paymentOrderId });
+    const detail = await paymentApi.close({ paymentOrderId: snapshot.paymentOrderId });
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, detail)) {
+      throw new Error("关单响应为空或与当前支付单不一致");
+    }
+    paymentDetail.value = detail;
     syncStatusByDetail();
-    feedbackMessage.value = `支付单 ${route.params.paymentOrderId} 已执行关闭动作。`;
+    feedbackMessage.value = `支付单 ${snapshot.paymentOrderId} 已执行关闭动作。`;
     lastAction.value = "关闭支付单";
   } catch (error) {
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
     feedbackMessage.value = error.message;
   } finally {
-    closeLoading.value = false;
+    if (entityVersion === currentEntityVersion) {
+      closeLoading.value = false;
+    }
   }
 }
 
 function backToCashier() {
-  const prepayOrderNo = route.query.prepayOrderNo;
-  if (!prepayOrderNo) {
+  if (!hasValidPaymentSnapshot.value || !paymentDetail.value?.prepayOrderNo) {
     return;
   }
+  const prepayOrderNo = paymentDetail.value.prepayOrderNo;
   const cashierRouteQuery = {};
   if (typeof route.query.terminalVariant === "string" && route.query.terminalVariant.trim()) {
     cashierRouteQuery.terminalVariant = route.query.terminalVariant.trim();
@@ -295,6 +355,19 @@ function backToCashier() {
     cashierRouteQuery.bizType = route.query.bizType.trim();
   }
   router.push(buildCashierRoute(prepayOrderNo, cashierRouteQuery));
+}
+
+function buildCurrentPaymentSnapshot() {
+  return {
+    prepayOrderNo: paymentDetail.value?.prepayOrderNo || "",
+    paymentOrderId: loadedPaymentOrderId.value
+  };
+}
+
+function isCurrentPaymentSnapshot(snapshot, entityVersion) {
+  return entityVersion === currentEntityVersion
+    && hasValidPaymentSnapshot.value
+    && matchesPaymentSnapshot(snapshot, paymentDetail.value);
 }
 
 function backToBusinessEntry() {
@@ -307,6 +380,19 @@ function resolveBizType() {
   }
   return "balance-pay";
 }
+
+watch(currentPaymentOrderId, (paymentOrderId) => {
+  currentEntityVersion += 1;
+  latestLoadRequestId += 1;
+  paymentDetail.value = null;
+  loadedPaymentOrderId.value = "";
+  resultState.value = "pending";
+  feedbackMessage.value = "";
+  lastAction.value = "";
+  queryLoading.value = false;
+  closeLoading.value = false;
+  loadDetail(paymentOrderId);
+}, { immediate: true });
 </script>
 
 <template>
@@ -464,7 +550,7 @@ function resolveBizType() {
           <button class="action-button ghost" :disabled="actionRunning || !canClosePayment" @click="closePayment">
             {{ closeLoading ? "关闭中..." : terminalCopy.closeLabel }}
           </button>
-          <button class="action-button secondary" :disabled="actionRunning || !route.query.prepayOrderNo" @click="backToCashier">
+          <button class="action-button secondary" :disabled="actionRunning || !hasValidPaymentSnapshot || !paymentDetail?.prepayOrderNo" @click="backToCashier">
             {{ terminalCopy.homeLabel }}
           </button>
         </div>

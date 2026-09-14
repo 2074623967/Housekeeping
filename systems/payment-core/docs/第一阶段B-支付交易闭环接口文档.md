@@ -4744,6 +4744,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 收银台列表项新增独立 `payScene`，`terminal` 表示最近一次支付尝试的规范终端；无支付尝试时 `terminal` 回退为 `payScene`，保证待提交会话仍可读取但不伪造渠道尝试。
 4. 响应继续执行客户、IP、幂等键和报文脱敏。运营查询命中只证明本地事实可追踪，不表示渠道支付成功、真实身份认证或资金一致。
 
+### 14.353 App/H5/PC 用户端实体一致性契约
+
+1. `GET /api/payments/cashier/{prepayOrderNo}` 的响应必须包含与路径参数一致的 `prepayOrderNo`；`GET /api/payments/{paymentOrderId}` 的响应必须包含与路径参数一致的 `paymentOrderId`。空响应或单号不一致时客户端不得建立可操作页面快照。
+2. `POST /api/payments/submit`、`POST /api/payments/query` 与 `POST /api/payments/close` 的成功响应必须同时匹配请求发起时的 `prepayOrderNo` 和 `paymentOrderId`；响应不完整、串单或路由已变化时不得更新页面或跳转。
+3. App/H5/PC 动态路由参数变化不新增 API 调用形态，但客户端必须清除上一实体并重新读取。并发 GET 按客户端递增请求号裁决，只有当前路由的最新响应可写入。
+4. 支付提交失败后的收银台刷新仍需匹配原预付单和支付单，不能把另一张会话用于解释原请求结果；支付不确定结果继续按既有状态机提示主动查单，不得推导为成功。
+5. 结果页返回收银台使用详情响应中的关联预付单号，URL 中的 `prepayOrderNo` 查询参数不作为支付归属依据。本轮不修改服务端 DTO、端点、状态码或状态机。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

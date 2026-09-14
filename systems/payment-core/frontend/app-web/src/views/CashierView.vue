@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import {
@@ -14,6 +14,10 @@ import {
   readPaymentAccessToken,
   withoutAccessToken
 } from "../constants/paymentSession";
+import {
+  matchesPaymentSnapshot,
+  matchesPrepayOrder
+} from "../constants/paymentEntity";
 import { buildPaymentResultRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
@@ -117,8 +121,11 @@ const queryLoading = ref(false);
 const idempotencyKey = ref("");
 const countdownSeconds = ref(0);
 const latestQueriedDetail = ref(null);
+const loadedPrepayOrderNo = ref("");
 
 let countdownTimer = null;
+let latestLoadRequestId = 0;
+let currentEntityVersion = 0;
 
 function buildResultRouteQuery(prepayOrderNo, paymentMethod) {
   const routeQuery = {
@@ -165,12 +172,21 @@ function startCountdown(expiresAt) {
   countdownTimer = setInterval(updateCountdown, 1000);
 }
 
-async function loadCashier() {
+async function loadCashier(prepayOrderNo = currentPrepayOrderNo.value) {
+  const requestId = ++latestLoadRequestId;
   loading.value = true;
   message.value = "";
   try {
     syncAccessToken();
-    cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
+    const cashierPage = await paymentApi.getCashier(prepayOrderNo);
+    if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
+      return;
+    }
+    if (!matchesPrepayOrder(prepayOrderNo, cashierPage)) {
+      throw new Error("收银台响应为空或与当前预付单不一致");
+    }
+    cashier.value = cashierPage;
+    loadedPrepayOrderNo.value = prepayOrderNo;
     if (!idempotencyKey.value) {
       idempotencyKey.value = generateIdempotencyKey();
     }
@@ -178,16 +194,27 @@ async function loadCashier() {
       .find((paymentMethod) => terminalMeta.value.paymentMethods.includes(paymentMethod)) || "";
     startCountdown(cashier.value?.expiresAt);
   } catch (error) {
+    if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
+      return;
+    }
     message.value = error.message;
   } finally {
-    loading.value = false;
+    if (requestId === latestLoadRequestId) {
+      loading.value = false;
+    }
   }
 }
 
-onMounted(loadCashier);
 onBeforeUnmount(stopCountdown);
 
 const terminalMeta = computed(() => TERMINAL_META[props.terminalVariant] || TERMINAL_META.app);
+const currentPrepayOrderNo = computed(() => typeof route.params.prepayOrderNo === "string"
+  ? route.params.prepayOrderNo.trim()
+  : "");
+const hasValidCashierSnapshot = computed(() => Boolean(
+  loadedPrepayOrderNo.value === currentPrepayOrderNo.value
+  && matchesPrepayOrder(currentPrepayOrderNo.value, cashier.value)
+));
 const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const sourceAppId = computed(() => {
   if (props.terminalVariant === "pc") {
@@ -217,7 +244,7 @@ const submissionPending = computed(() => {
     latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   );
 });
-const canQueryPayment = computed(() => canQueryPaymentChannel(
+const canQueryPayment = computed(() => hasValidCashierSnapshot.value && canQueryPaymentChannel(
   latestQueriedDetail.value?.status || cashier.value?.paymentStatus,
   latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
 ));
@@ -227,7 +254,8 @@ const statusClass = computed(() => {
 });
 const canSubmit = computed(() => {
   const status = cashier.value?.status;
-  return hasChannels.value
+  return hasValidCashierSnapshot.value
+    && hasChannels.value
     && !submissionPending.value
     && status !== "待风控复核"
     && status !== "支付成功"
@@ -278,7 +306,8 @@ const countdownLabel = computed(() => {
   const seconds = String(countdownSeconds.value % 60).padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
 });
-const canClose = computed(() => Boolean(cashier.value?.paymentOrderId)
+const canClose = computed(() => hasValidCashierSnapshot.value
+  && Boolean(cashier.value?.paymentOrderId)
   && canClosePaymentLocally(
     cashier.value?.status,
     latestQueriedDetail.value?.channelTransactionNo,
@@ -348,7 +377,7 @@ async function refreshCashier() {
   }
   refreshLoading.value = true;
   try {
-    await loadCashier();
+    await loadCashier(currentPrepayOrderNo.value);
   } finally {
     refreshLoading.value = false;
   }
@@ -358,7 +387,7 @@ async function queryCurrentPayment() {
   if (actionRunning.value) {
     return;
   }
-  if (!cashier.value?.paymentOrderId) {
+  if (!hasValidCashierSnapshot.value || !cashier.value?.paymentOrderId) {
     message.value = "当前支付单尚未生成，请先发起支付后再执行主动查单。";
     return;
   }
@@ -366,25 +395,38 @@ async function queryCurrentPayment() {
     message.value = "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
   }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
   queryLoading.value = true;
   message.value = "";
   try {
-    const detail = await paymentApi.query({ paymentOrderId: cashier.value.paymentOrderId });
+    const detail = await paymentApi.query({ paymentOrderId: snapshot.paymentOrderId });
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, detail)) {
+      throw new Error("查单响应为空或与当前支付单不一致");
+    }
     latestQueriedDetail.value = detail;
-    message.value = `已查询支付单 ${cashier.value.paymentOrderId} 的最新状态：${detail.status}。`;
+    message.value = `已查询支付单 ${snapshot.paymentOrderId} 的最新状态：${detail.status}。`;
     if (detail.status === "SUCCESS" || detail.status === "CLOSED") {
       router.push(buildPaymentResultRoute(
         detail.paymentOrderId,
         buildResultRouteQuery(
-          detail.prepayOrderNo || cashier.value.prepayOrderNo,
+          detail.prepayOrderNo,
           detail.paymentMethod || selectedPaymentMethod.value
         )
       ));
     }
   } catch (error) {
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
     message.value = error.message;
   } finally {
-    queryLoading.value = false;
+    if (entityVersion === currentEntityVersion) {
+      queryLoading.value = false;
+    }
   }
 }
 
@@ -392,7 +434,7 @@ async function pay() {
   if (actionRunning.value) {
     return;
   }
-  if (!cashier.value || !hasChannels.value) {
+  if (!hasValidCashierSnapshot.value || !cashier.value || !hasChannels.value) {
     message.value = "当前暂无可用支付方式，请稍后重试。";
     return;
   }
@@ -400,54 +442,108 @@ async function pay() {
     message.value = submitBlockedHint.value || "当前状态暂不允许继续提交支付。";
     return;
   }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
+  const paymentMethod = selectedPaymentMethod.value;
   submitLoading.value = true;
   message.value = "";
   try {
     const submitResult = await paymentApi.submit({
-      prepayOrderNo: cashier.value.prepayOrderNo,
-      paymentMethod: selectedPaymentMethod.value,
-      channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value),
+      prepayOrderNo: snapshot.prepayOrderNo,
+      paymentMethod,
+      channelCode: resolvePaymentChannelCode(paymentMethod),
       sourceAppId: sourceAppId.value,
       merchantNo: merchantNo.value,
       accessToken: resolveAccessToken(),
       terminal: terminalMeta.value.terminalCode,
       idempotencyKey: idempotencyKey.value
     });
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, submitResult)) {
+      throw new Error("支付提交响应为空或与当前支付单不一致");
+    }
     router.push(buildPaymentResultRoute(
-      submitResult?.paymentOrderId,
-      buildResultRouteQuery(submitResult?.prepayOrderNo, selectedPaymentMethod.value)
+      submitResult.paymentOrderId,
+      buildResultRouteQuery(submitResult.prepayOrderNo, paymentMethod)
     ));
   } catch (error) {
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
     try {
-      cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
-      startCountdown(cashier.value?.expiresAt);
+      const cashierPage = await paymentApi.getCashier(snapshot.prepayOrderNo);
+      if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+        return;
+      }
+      if (!matchesPrepayOrder(snapshot.prepayOrderNo, cashierPage)
+          || cashierPage.paymentOrderId !== snapshot.paymentOrderId) {
+        throw new Error("收银台刷新响应为空或与当前支付单不一致");
+      }
+      cashier.value = cashierPage;
+      startCountdown(cashierPage.expiresAt);
     } catch (refreshError) {
-      message.value = error.message;
+      if (isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+        message.value = refreshError.message || error.message;
+      }
       return;
     }
     message.value = submissionPending.value
       ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
       : error.message;
   } finally {
-    submitLoading.value = false;
+    if (entityVersion === currentEntityVersion) {
+      submitLoading.value = false;
+    }
   }
 }
 
 async function closeCurrentPayment() {
-  if (actionRunning.value || !cashier.value?.paymentOrderId) {
+  if (actionRunning.value) {
     return;
   }
+  if (!hasValidCashierSnapshot.value || !cashier.value?.paymentOrderId || !canClose.value) {
+    message.value = "当前支付单不满足本地关闭条件。";
+    return;
+  }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
   closeLoading.value = true;
   message.value = "";
   try {
-    await paymentApi.close({ paymentOrderId: cashier.value.paymentOrderId });
+    const detail = await paymentApi.close({ paymentOrderId: snapshot.paymentOrderId });
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, detail)) {
+      throw new Error("关单响应为空或与当前支付单不一致");
+    }
     message.value = "当前支付单已关闭，可回到订单中心重新发起支付。";
-    await loadCashier();
+    await loadCashier(snapshot.prepayOrderNo);
   } catch (error) {
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
     message.value = error.message;
   } finally {
-    closeLoading.value = false;
+    if (entityVersion === currentEntityVersion) {
+      closeLoading.value = false;
+    }
   }
+}
+
+function buildCurrentPaymentSnapshot() {
+  return {
+    prepayOrderNo: loadedPrepayOrderNo.value,
+    paymentOrderId: cashier.value?.paymentOrderId || ""
+  };
+}
+
+function isCurrentPaymentSnapshot(snapshot, entityVersion) {
+  return entityVersion === currentEntityVersion
+    && hasValidCashierSnapshot.value
+    && matchesPaymentSnapshot(snapshot, cashier.value);
 }
 
 function regenerateIdempotencyKey() {
@@ -496,6 +592,24 @@ watch(selectedPaymentMethod, () => {
     idempotencyKey.value = generateIdempotencyKey();
   }
 });
+
+watch(currentPrepayOrderNo, (prepayOrderNo) => {
+  currentEntityVersion += 1;
+  latestLoadRequestId += 1;
+  stopCountdown();
+  cashier.value = null;
+  loadedPrepayOrderNo.value = "";
+  latestQueriedDetail.value = null;
+  selectedPaymentMethod.value = "";
+  idempotencyKey.value = "";
+  countdownSeconds.value = 0;
+  message.value = "";
+  submitLoading.value = false;
+  refreshLoading.value = false;
+  closeLoading.value = false;
+  queryLoading.value = false;
+  loadCashier(prepayOrderNo);
+}, { immediate: true });
 </script>
 
 <template>
