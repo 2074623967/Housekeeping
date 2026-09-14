@@ -10,6 +10,9 @@ export const PAYMENT_METHOD_MERCHANT_MAP = {
   银行卡: "BANK_OFFLINE_30001"
 };
 
+export const PAYMENT_DETAIL_REFRESH_INTERVAL_MS = 5000;
+export const PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS = 60;
+
 export const PAYMENT_RESULT_STATE_META = {
   success: {
     title: "支付成功",
@@ -76,6 +79,23 @@ export function resolvePaymentResultState(paymentStatus) {
     return "prepay_created";
   }
   return "pending";
+}
+
+export function shouldAutoRefreshPaymentDetail(paymentStatus) {
+  if (typeof paymentStatus !== "string") {
+    return false;
+  }
+  return ["WAIT_CALLBACK", "PAYING", "RISK_REVIEW"].includes(paymentStatus.trim().toUpperCase());
+}
+
+export function resolvePaymentDetailRefreshDelay(paymentStatus, completedAttempts) {
+  if (!Number.isInteger(completedAttempts)
+      || completedAttempts < 0
+      || completedAttempts >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS
+      || !shouldAutoRefreshPaymentDetail(paymentStatus)) {
+    return null;
+  }
+  return PAYMENT_DETAIL_REFRESH_INTERVAL_MS;
 }
 
 export function isPaymentSubmissionPending(cashierStatus, attemptStatus) {

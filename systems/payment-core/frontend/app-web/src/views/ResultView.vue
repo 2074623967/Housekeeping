@@ -1,11 +1,12 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import {
   canClosePaymentLocally,
   canQueryPaymentChannel,
   PAYMENT_RESULT_STATE_META,
+  resolvePaymentDetailRefreshDelay,
   resolvePaymentResultState
 } from "../constants/payment";
 import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
@@ -79,6 +80,8 @@ const lastAction = ref("");
 const loadedPaymentOrderId = ref("");
 let latestLoadRequestId = 0;
 let currentEntityVersion = 0;
+let autoRefreshTimer = null;
+let autoRefreshAttempts = 0;
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
 const currentPaymentOrderId = computed(() => typeof route.params.paymentOrderId === "string"
@@ -224,6 +227,64 @@ function syncStatusByDetail() {
   resultState.value = resolvePaymentResultState(paymentDetail.value.status);
 }
 
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearTimeout(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function scheduleAutoRefresh() {
+  stopAutoRefresh();
+  if (!hasValidPaymentSnapshot.value) {
+    return;
+  }
+  const refreshDelay = resolvePaymentDetailRefreshDelay(
+    paymentDetail.value?.status,
+    autoRefreshAttempts
+  );
+  if (refreshDelay == null) {
+    return;
+  }
+  autoRefreshTimer = setTimeout(refreshDetailInBackground, refreshDelay);
+}
+
+async function refreshDetailInBackground() {
+  autoRefreshTimer = null;
+  if (actionRunning.value) {
+    scheduleAutoRefresh();
+    return;
+  }
+  if (!hasValidPaymentSnapshot.value
+      || resolvePaymentDetailRefreshDelay(
+        paymentDetail.value?.status,
+        autoRefreshAttempts
+      ) == null) {
+    return;
+  }
+  const snapshot = buildCurrentPaymentSnapshot();
+  const entityVersion = currentEntityVersion;
+  const requestId = ++latestLoadRequestId;
+  autoRefreshAttempts += 1;
+  try {
+    const detail = await paymentApi.getDetail(snapshot.paymentOrderId);
+    if (requestId !== latestLoadRequestId || !isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, detail)) {
+      return;
+    }
+    paymentDetail.value = detail;
+    syncStatusByDetail();
+  } catch {
+    // Automatic refresh is read-only and silent; manual query remains available for recovery.
+  } finally {
+    if (requestId === latestLoadRequestId && entityVersion === currentEntityVersion) {
+      scheduleAutoRefresh();
+    }
+  }
+}
+
 async function loadDetail(paymentOrderId = currentPaymentOrderId.value) {
   const requestId = ++latestLoadRequestId;
   detailLoading.value = true;
@@ -239,6 +300,7 @@ async function loadDetail(paymentOrderId = currentPaymentOrderId.value) {
     paymentDetail.value = detail;
     loadedPaymentOrderId.value = paymentOrderId;
     syncStatusByDetail();
+    scheduleAutoRefresh();
   } catch (error) {
     if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
       return;
@@ -254,6 +316,7 @@ async function loadDetail(paymentOrderId = currentPaymentOrderId.value) {
 onMounted(() => {
   migrateLegacyAccessToken();
 });
+onBeforeUnmount(stopAutoRefresh);
 
 function migrateLegacyAccessToken() {
   if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
@@ -282,6 +345,8 @@ async function queryResult() {
   }
   const snapshot = buildCurrentPaymentSnapshot();
   const entityVersion = currentEntityVersion;
+  stopAutoRefresh();
+  latestLoadRequestId += 1;
   queryLoading.value = true;
   try {
     const detail = await paymentApi.query({ paymentOrderId: snapshot.paymentOrderId });
@@ -303,6 +368,7 @@ async function queryResult() {
   } finally {
     if (entityVersion === currentEntityVersion) {
       queryLoading.value = false;
+      scheduleAutoRefresh();
     }
   }
 }
@@ -317,6 +383,8 @@ async function closePayment() {
   }
   const snapshot = buildCurrentPaymentSnapshot();
   const entityVersion = currentEntityVersion;
+  stopAutoRefresh();
+  latestLoadRequestId += 1;
   closeLoading.value = true;
   try {
     const detail = await paymentApi.close({ paymentOrderId: snapshot.paymentOrderId });
@@ -338,6 +406,7 @@ async function closePayment() {
   } finally {
     if (entityVersion === currentEntityVersion) {
       closeLoading.value = false;
+      scheduleAutoRefresh();
     }
   }
 }
@@ -384,6 +453,8 @@ function resolveBizType() {
 watch(currentPaymentOrderId, (paymentOrderId) => {
   currentEntityVersion += 1;
   latestLoadRequestId += 1;
+  stopAutoRefresh();
+  autoRefreshAttempts = 0;
   paymentDetail.value = null;
   loadedPaymentOrderId.value = "";
   resultState.value = "pending";

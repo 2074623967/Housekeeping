@@ -5,7 +5,9 @@ import {
   canQueryPaymentChannel,
   isPaymentSubmissionPending,
   PAYMENT_RESULT_STATE_META,
-  resolvePaymentMerchantNo
+  resolvePaymentMerchantNo,
+  resolvePaymentDetailRefreshDelay,
+  shouldAutoRefreshPaymentDetail
 } from "./payment.js";
 
 test("uses the merchant configured for each payment channel", () => {
@@ -51,4 +53,26 @@ test("only allows local close before channel submission", () => {
 test("pending result directs users to trusted payment facts", () => {
   assert.match(PAYMENT_RESULT_STATE_META.pending.hint, /主动查单/);
   assert.doesNotMatch(PAYMENT_RESULT_STATE_META.pending.hint, /模拟回调/);
+});
+
+test("only auto refreshes payment states that can advance asynchronously", () => {
+  assert.equal(shouldAutoRefreshPaymentDetail("WAIT_CALLBACK"), true);
+  assert.equal(shouldAutoRefreshPaymentDetail(" paying "), true);
+  assert.equal(shouldAutoRefreshPaymentDetail("risk_review"), true);
+  assert.equal(shouldAutoRefreshPaymentDetail("PREPAY_CREATED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("RISK_BLOCKED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("RISK_REJECTED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("SUCCESS"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("CLOSED"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail([]), false);
+  assert.equal(shouldAutoRefreshPaymentDetail(null), false);
+});
+
+test("limits automatic payment detail refresh to five minutes", () => {
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 0), 5000);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 59), 5000);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 60), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("SUCCESS", 0), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", -1), null);
+  assert.equal(resolvePaymentDetailRefreshDelay("WAIT_CALLBACK", 1.5), null);
 });
