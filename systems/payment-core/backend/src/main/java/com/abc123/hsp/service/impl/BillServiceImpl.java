@@ -1,5 +1,8 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
@@ -16,6 +19,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 账单中心业务实现，仅承接交易账单查询，不负责账务分录处理。
@@ -39,6 +43,19 @@ public class BillServiceImpl implements BillService {
 
     BillServiceImpl(BillMapper billMapper) {
         this(billMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public BillDetailDTO detail(String billNo) {
+        String normalizedBillNo = normalizeRequiredBillNo(billNo);
+        BillDetailDTO detail = billMapper.findDetail(normalizedBillNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.BILL_NOT_FOUND, "账单不存在");
+        }
+        BillDetailDTO outwardDetail = new BillDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        return outwardDetail;
     }
 
     @Override
@@ -152,6 +169,24 @@ public class BillServiceImpl implements BillService {
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredBillNo(String billNo) {
+        if (!StringUtils.hasText(billNo)) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "账单号不能为空");
+        }
+        for (int index = 0; index < billNo.length(); index++) {
+            if (Character.isISOControl(billNo.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_REQUEST_INVALID, "账单号不能包含控制字符");
+            }
+        }
+        String normalized = billNo.trim();
+        if (normalized.length() > BILL_NO_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "账单号长度不能超过 64 个字符");
         }
         return normalized;
     }

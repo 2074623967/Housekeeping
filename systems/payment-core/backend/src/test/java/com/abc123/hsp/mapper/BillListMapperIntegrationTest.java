@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import java.io.InputStream;
@@ -80,6 +81,25 @@ class BillListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldReturnBillDetailWithStableExactLinkedFacts() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            BillDetailDTO detail = session.getMapper(BillMapper.class).findDetail("BILL-STABLE-001");
+
+            assertEquals("BILL-STABLE-001", detail.getBillNo());
+            assertEquals("ORD-001", detail.getStandardOrderNo());
+            assertEquals("¥100.00", detail.getBillAmount());
+            assertEquals("¥20.00", detail.getPaidAmount());
+            assertEquals("¥80.00", detail.getUnpaidAmount());
+            assertEquals("PRE-BILL-NEW", detail.getLatestPrepayOrderNo());
+            assertEquals("支付中", detail.getLatestCashierStatus());
+            assertEquals("PAY-BILL-NEW", detail.getLatestPaymentOrderId());
+            assertEquals("PRE-BILL-NEW", detail.getLatestPaymentPrepayOrderNo());
+            assertEquals("支付宝", detail.getLatestPaymentMethod());
+            assertEquals("ALIPAY_H5", detail.getLatestPaymentChannel());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -90,12 +110,27 @@ class BillListMapperIntegrationTest {
                     + PaymentReturnCodeSnapshotMapperIntegrationTest.class.getName()
                     + ".format\"");
             statement.execute("DROP TABLE IF EXISTS t_bill");
+            statement.execute("DROP TABLE IF EXISTS t_prepay_order");
+            statement.execute("DROP TABLE IF EXISTS t_payment_order");
+            statement.execute("DROP TABLE IF EXISTS t_order");
+            statement.execute("CREATE TABLE t_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE)");
             statement.execute("CREATE TABLE t_bill ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64) NOT NULL, "
                     + "order_no VARCHAR(64) NOT NULL, customer_name VARCHAR(128) NOT NULL, "
                     + "bill_amount DECIMAL(18, 2) NOT NULL, paid_amount DECIMAL(18, 2) NOT NULL, "
                     + "bill_status VARCHAR(32) NOT NULL, bill_status_type VARCHAR(32) NOT NULL, "
                     + "due_at DATETIME NOT NULL, created_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_prepay_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64) NOT NULL, "
+                    + "bill_no VARCHAR(64) NOT NULL, order_no VARCHAR(64) NOT NULL, amount DECIMAL(18,2), "
+                    + "pay_scene VARCHAR(32), cashier_status VARCHAR(32), cashier_status_type VARCHAR(32), "
+                    + "payment_order_id VARCHAR(64), expires_at DATETIME, created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64) NOT NULL, "
+                    + "amount DECIMAL(18,2), payment_method VARCHAR(32), channel_code VARCHAR(64), "
+                    + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
+            statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");
             statement.executeUpdate("INSERT INTO t_bill "
                     + "(bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, "
                     + "bill_status_type, due_at, created_at) VALUES "
@@ -105,6 +140,24 @@ class BillListMapperIntegrationTest {
                     + "'2026-09-15 12:00:00', '2026-09-12 12:00:00'), "
                     + "('BILL-STABLE-003', 'ORD-003', '客户三', 100.00, 20.00, '部分支付', 'warning', "
                     + "'2026-09-15 12:00:00', '2026-09-12 12:00:00')");
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, order_no, amount, pay_scene, cashier_status, "
+                    + "cashier_status_type, payment_order_id, expires_at, created_at) VALUES "
+                    + "('PRE-BILL-OLD', 'BILL-STABLE-001', 'ORD-001', 80.00, 'APP', '已失效', "
+                    + "'info', 'PAY-BILL-OLD', '2026-09-13 13:00:00', '2026-09-12 13:00:00'), "
+                    + "('PRE-BILL-NEW', 'BILL-STABLE-001', 'ORD-001', 80.00, 'H5', '支付中', "
+                    + "'warning', 'PAY-BILL-NEW', '2026-09-13 14:00:00', '2026-09-12 13:00:00'), "
+                    + "('PRE-OTHER', 'BILL-STABLE-002', 'ORD-002', 80.00, 'PC', '支付完成', "
+                    + "'success', 'PAY-OTHER', '2026-09-13 15:00:00', '2026-09-12 15:00:00')");
+            statement.executeUpdate("INSERT INTO t_payment_order "
+                    + "(payment_order_id, amount, payment_method, channel_code, status, status_type, "
+                    + "success_at, created_at) VALUES "
+                    + "('PAY-BILL-OLD', 80.00, '微信支付', 'WX_H5', 'CLOSED', 'info', NULL, "
+                    + "'2026-09-12 14:00:00'), "
+                    + "('PAY-BILL-NEW', 80.00, '支付宝', 'ALIPAY_H5', 'WAIT_CALLBACK', 'warning', NULL, "
+                    + "'2026-09-12 14:00:00'), "
+                    + "('PAY-OTHER', 80.00, '银行卡', 'BANK_CARD', 'SUCCESS', 'success', "
+                    + "'2026-09-12 16:00:00', '2026-09-12 15:00:00')");
             session.commit();
         }
     }

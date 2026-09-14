@@ -1,6 +1,7 @@
 package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,14 @@ public class BillController {
 
     public BillController(BillService billService) {
         this.billService = billService;
+    }
+
+    /**
+     * 查询唯一账单及其最近预付和支付关联事实。
+     */
+    @GetMapping("/{billNo}")
+    public ApiResponse<BillDetailDTO> detail(@PathVariable String billNo) {
+        return ApiResponse.success(billService.detail(billNo));
     }
 
     /**

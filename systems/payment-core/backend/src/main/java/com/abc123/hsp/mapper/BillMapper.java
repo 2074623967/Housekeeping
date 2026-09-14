@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 账单中心 Mapper，负责账单列表查询。
  */
 public interface BillMapper {
+
+    /**
+     * 按账单号查询支付联查详情。
+     */
+    BillDetailDTO findDetail(@Param("billNo") String billNo);
 
     /**
      * 查询账单中心列表。

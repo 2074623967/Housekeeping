@@ -2,9 +2,9 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { orderApi } from "../api/client";
-import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
+import { billDetailRoute, paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
-import { billsRoute, ordersRoute } from "../router/listRoutes";
+import { ordersRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -31,7 +31,7 @@ const paymentRecordRoute = computed(() => detail.value?.latestPaymentOrderId
   ? paymentRecordDetailRoute(detail.value.latestPaymentOrderId)
   : null);
 const billRoute = computed(() => detail.value?.billNo
-  ? billsRoute({ billNo: detail.value.billNo, orderNo: detail.value.orderNo })
+  ? billDetailRoute(detail.value.billNo)
   : null);
 const cashierUrl = computed(() => detail.value?.latestPrepayOrderNo
   ? buildAppWebCashierUrl(detail.value.latestPrepayOrderNo)

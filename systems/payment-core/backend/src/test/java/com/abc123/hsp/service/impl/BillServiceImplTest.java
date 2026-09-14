@@ -8,6 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
@@ -27,6 +30,41 @@ class BillServiceImplTest {
 
     @Mock
     private BillMapper billMapper;
+
+    @Test
+    void shouldReturnMaskedBillDetailWithoutChangingMapperDto() {
+        BillDetailDTO detail = new BillDetailDTO();
+        detail.setBillNo("BILL-001");
+        detail.setCustomerName("王女士");
+        detail.setLatestPaymentOrderId("PAY-001");
+        when(billMapper.findDetail("BILL-001")).thenReturn(detail);
+
+        BillDetailDTO result = new BillServiceImpl(billMapper).detail(" BILL-001 ");
+
+        assertEquals("BILL-001", result.getBillNo());
+        assertEquals("王*", result.getCustomerName());
+        assertEquals("PAY-001", result.getLatestPaymentOrderId());
+        assertEquals("王女士", detail.getCustomerName());
+    }
+
+    @Test
+    void shouldRejectInvalidOrMissingBillDetail() {
+        BillServiceImpl service = new BillServiceImpl(billMapper);
+
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(
+                BusinessException.class, () -> service.detail("BILL-001\n"));
+        BusinessException oversized = assertThrows(
+                BusinessException.class, () -> service.detail(repeat("B", 65)));
+        when(billMapper.findDetail("BILL-MISSING")).thenReturn(null);
+        BusinessException missing = assertThrows(
+                BusinessException.class, () -> service.detail("BILL-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        assertEquals(ErrorCode.BILL_NOT_FOUND, missing.getCode());
+    }
 
     @Test
     void shouldNormalizeAndForwardBillPagingQuery() {

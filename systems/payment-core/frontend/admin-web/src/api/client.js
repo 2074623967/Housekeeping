@@ -301,7 +301,8 @@ export const billApi = {
       sortOrder
     });
     return `/api/bills/export?${params.toString()}`;
-  }
+  },
+  getDetail: (billNo) => request(`/api/bills/${encodeURIComponent(billNo)}`)
 };
 
 export const paymentFlowApi = {

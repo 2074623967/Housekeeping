@@ -1,5 +1,6 @@
 package com.abc123.hsp.service;
 
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
@@ -9,6 +10,11 @@ import com.abc123.hsp.dto.PageResultDTO;
  * 账单中心 Service，提供交易账单视角查询能力。
  */
 public interface BillService {
+
+    /**
+     * 查询唯一账单及其最近支付链路详情。
+     */
+    BillDetailDTO detail(String billNo);
 
     /**
      * 查询账单中心列表。

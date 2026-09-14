@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { billApi } from "../api/client";
+import { billDetailRoute } from "../router/detailRoutes";
 import { ordersRoute, paymentsRoute } from "../router/listRoutes";
 
 const route = useRoute();
@@ -48,6 +49,7 @@ const metrics = computed(() => ({
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 
 function buildQuery() {
   return {
@@ -140,7 +142,17 @@ function goToPage(nextPage) {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
+}
+
+function openBillDetail(item) {
+  if (!canUseSnapshot.value || !items.value.some((candidate) => candidate.billNo === item.billNo)) {
+    return;
+  }
+  router.push(billDetailRoute(item.billNo));
 }
 
 function exportBills() {
@@ -152,10 +164,16 @@ function exportBills() {
 }
 
 function openOrders(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(ordersRoute({ orderNo: item.orderNo }));
 }
 
 function openPayments(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(paymentsRoute({ orderNo: item.orderNo }));
 }
 
@@ -335,7 +353,8 @@ watch(
                 <td>{{ item.dueAt }}</td>
                 <td>{{ item.createdAt }}</td>
                 <td>
-                  <button class="link-button" @click="pickItem(item)">查看快照</button>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openBillDetail(item)">查看详情</button>
                 </td>
               </tr>
             </tbody>
@@ -366,8 +385,9 @@ watch(
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.overdueTotal }} 笔逾期，{{ metrics.partialPaidTotal }} 笔部分支付</span></div>
             </div>
             <div class="table-inline-actions">
-              <button class="link-button" @click="openOrders(selectedItem)">查看订单</button>
-              <button class="link-button" @click="openPayments(selectedItem)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openBillDetail(selectedItem)">查看账单详情</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openOrders(selectedItem)">查看订单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPayments(selectedItem)">查看支付单</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧账单后，可在这里查看账单快照与运营建议。</div>

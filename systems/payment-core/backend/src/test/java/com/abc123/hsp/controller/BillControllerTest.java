@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.service.BillService;
@@ -28,6 +29,18 @@ class BillControllerTest {
 
     @Mock
     private BillService billService;
+
+    @Test
+    void shouldGetBillDetail() {
+        BillDetailDTO detail = new BillDetailDTO();
+        detail.setBillNo("BILL-001");
+        when(billService.detail("BILL-001")).thenReturn(detail);
+
+        BillController controller = new BillController(billService);
+
+        assertEquals(detail, controller.detail("BILL-001").getData());
+        verify(billService).detail("BILL-001");
+    }
 
     @Test
     void shouldExportBills() {

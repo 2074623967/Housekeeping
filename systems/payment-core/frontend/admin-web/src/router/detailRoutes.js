@@ -5,6 +5,13 @@ export function orderDetailRoute(orderNo) {
   };
 }
 
+export function billDetailRoute(billNo) {
+  return {
+    name: "bill-detail",
+    params: { billNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",
