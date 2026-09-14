@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 收银台会话 Mapper，负责预付单会话查询。
  */
 public interface CashierSessionMapper {
+
+    /**
+     * 按会话号精确查询唯一收银台会话详情。
+     */
+    CashierSessionDetailDTO findDetail(@Param("sessionNo") String sessionNo);
 
     /**
      * 查询收银台会话列表。

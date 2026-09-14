@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
+import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.service.CashierSessionService;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +29,18 @@ class CashierSessionControllerTest {
 
     @Mock
     private CashierSessionService cashierSessionService;
+
+    @Test
+    void shouldGetCashierSessionDetail() {
+        CashierSessionDetailDTO detail = new CashierSessionDetailDTO();
+        detail.setSessionNo("PRE-001");
+        when(cashierSessionService.detail("PRE-001")).thenReturn(detail);
+
+        CashierSessionController controller = new CashierSessionController(cashierSessionService);
+
+        assertEquals(detail, controller.detail("PRE-001").getData());
+        verify(cashierSessionService).detail("PRE-001");
+    }
 
     @Test
     void shouldExportCashierSessions() {

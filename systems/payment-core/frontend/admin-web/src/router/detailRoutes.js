@@ -12,6 +12,13 @@ export function billDetailRoute(billNo) {
   };
 }
 
+export function cashierSessionDetailRoute(sessionNo) {
+  return {
+    name: "cashier-session-detail",
+    params: { sessionNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

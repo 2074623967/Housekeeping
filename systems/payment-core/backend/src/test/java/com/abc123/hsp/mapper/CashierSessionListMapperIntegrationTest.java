@@ -1,7 +1,9 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
@@ -102,6 +104,25 @@ class CashierSessionListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFindExactCashierSessionDetailWithStableAttemptAndStandardOrderIdentity() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            CashierSessionMapper mapper = session.getMapper(CashierSessionMapper.class);
+
+            CashierSessionDetailDTO standard = mapper.findDetail("PRE-STABLE-001");
+            assertEquals("PRE-STABLE-001", standard.getSessionNo());
+            assertEquals("ORD-001", standard.getStandardOrderNo());
+            assertEquals("H5", standard.getPayScene());
+            assertEquals("API", standard.getTerminal());
+
+            CashierSessionDetailDTO virtual = mapper.findDetail("PRE-STABLE-003");
+            assertEquals("ORD-003", virtual.getOrderNo());
+            assertNull(virtual.getStandardOrderNo());
+            assertEquals("H5", virtual.getTerminal());
+            assertNull(mapper.findDetail("PRE-MISSING"));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -113,6 +134,7 @@ class CashierSessionListMapperIntegrationTest {
                     + ".format\"");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
+            statement.execute("DROP TABLE IF EXISTS t_order");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64) NOT NULL, "
                     + "payment_order_id VARCHAR(64), order_no VARCHAR(64) NOT NULL, bill_no VARCHAR(64) NOT NULL, "
@@ -123,6 +145,9 @@ class CashierSessionListMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, attempt_no VARCHAR(64) NOT NULL, "
                     + "payment_order_id VARCHAR(64) NOT NULL, terminal VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL)");
+            statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");
             statement.executeUpdate("INSERT INTO t_prepay_order "
                     + "(prepay_order_no, payment_order_id, order_no, bill_no, customer_name, cashier_title, "
                     + "pay_scene, amount, cashier_status, cashier_status_type, created_at, expires_at) VALUES "

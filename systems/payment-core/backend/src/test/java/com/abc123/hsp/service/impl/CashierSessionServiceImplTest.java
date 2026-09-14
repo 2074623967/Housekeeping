@@ -8,6 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
@@ -27,6 +30,49 @@ class CashierSessionServiceImplTest {
 
     @Mock
     private CashierSessionMapper cashierSessionMapper;
+
+    @Test
+    void shouldNormalizeAndMaskCashierSessionDetailWithoutChangingMapperDto() {
+        CashierSessionDetailDTO mapperDetail = new CashierSessionDetailDTO();
+        mapperDetail.setSessionNo("PRE-001");
+        mapperDetail.setCustomerName("王先生");
+        when(cashierSessionMapper.findDetail("PRE-001")).thenReturn(mapperDetail);
+
+        CashierSessionDetailDTO result =
+                new CashierSessionServiceImpl(cashierSessionMapper).detail(" PRE-001 ");
+
+        assertEquals("PRE-001", result.getSessionNo());
+        assertEquals("王*", result.getCustomerName());
+        assertEquals("王先生", mapperDetail.getCustomerName());
+        verify(cashierSessionMapper).findDetail("PRE-001");
+    }
+
+    @Test
+    void shouldRejectInvalidCashierSessionDetailIdentifierBeforeMapperAccess() {
+        CashierSessionServiceImpl service = new CashierSessionServiceImpl(cashierSessionMapper);
+
+        BusinessException empty = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(
+                BusinessException.class, () -> service.detail("PRE-001\n"));
+        BusinessException oversized = assertThrows(
+                BusinessException.class, () -> service.detail(repeat("S", 65)));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, empty.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        verifyNoInteractions(cashierSessionMapper);
+    }
+
+    @Test
+    void shouldReportMissingCashierSessionDetail() {
+        when(cashierSessionMapper.findDetail("PRE-MISSING")).thenReturn(null);
+
+        BusinessException missing = assertThrows(BusinessException.class,
+                () -> new CashierSessionServiceImpl(cashierSessionMapper).detail("PRE-MISSING"));
+
+        assertEquals(ErrorCode.CASHIER_SESSION_NOT_FOUND, missing.getCode());
+        assertEquals("收银台会话不存在", missing.getMessage());
+    }
 
     @Test
     void shouldNormalizeAndForwardCashierSessionPagingQuery() {

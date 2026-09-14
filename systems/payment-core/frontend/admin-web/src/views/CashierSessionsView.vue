@@ -1,13 +1,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { cashierSessionApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { cashierSessionDetailRoute, paymentDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
 import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
 const route = useRoute();
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -61,6 +62,9 @@ const metrics = computed(() => ({
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSelectedSnapshot = computed(() => Boolean(
+  hasLoadedData.value && selectedItem.value && !isLoading.value && !isSnapshotStale.value
+));
 
 function buildQuery() {
   return {
@@ -104,7 +108,36 @@ function refreshCashierSessions() {
 }
 
 function pickItem(item) {
+  if (isLoading.value || isSnapshotStale.value) {
+    return;
+  }
   selectedItem.value = item;
+}
+
+function openItemDetail(item) {
+  if (isLoading.value || isSnapshotStale.value
+      || !items.value.some((currentItem) => currentItem.sessionNo === item.sessionNo)) {
+    return;
+  }
+  router.push(cashierSessionDetailRoute(item.sessionNo));
+}
+
+function openSelectedRoute(targetRoute) {
+  if (!canUseSelectedSnapshot.value || !targetRoute) {
+    return;
+  }
+  router.push(targetRoute);
+}
+
+function openSelectedCashier() {
+  if (!canUseSelectedSnapshot.value || !selectedItem.value?.prepayOrderNo) {
+    return;
+  }
+  window.open(
+    buildAppWebCashierUrl(selectedItem.value.prepayOrderNo),
+    "_blank",
+    "noopener,noreferrer"
+  );
 }
 
 async function loadCashierSessions(query = buildQuery()) {
@@ -347,7 +380,12 @@ watch(
                 <td><span :class="['badge', item.sessionStatusType]">{{ item.sessionStatus }}</span></td>
                 <td>{{ item.createdAt }}</td>
                 <td>{{ item.expiresAt }}</td>
-                <td><button class="link-button" @click="pickItem(item)">查看详情</button></td>
+                <td>
+                  <div class="table-inline-actions">
+                    <button class="link-button" :disabled="isSnapshotStale" @click="pickItem(item)">查看快照</button>
+                    <button class="link-button" :disabled="isSnapshotStale" @click="openItemDetail(item)">唯一详情</button>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -379,17 +417,11 @@ watch(
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.expiringSoonCount }} 条即将失效，{{ metrics.expiredTotal }} 条已失效</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="ordersRoute({ orderNo: selectedItem.orderNo })">查看订单</RouterLink>
-              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
-              <a
-                class="link-button"
-                :href="buildAppWebCashierUrl(selectedItem.prepayOrderNo)"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                打开收银台
-              </a>
+              <button class="link-button" :disabled="!canUseSelectedSnapshot" @click="openSelectedRoute(cashierSessionDetailRoute(selectedItem.sessionNo))">唯一详情</button>
+              <button class="link-button" :disabled="!canUseSelectedSnapshot" @click="openSelectedRoute(ordersRoute({ orderNo: selectedItem.orderNo }))">查看订单</button>
+              <button class="link-button" :disabled="!canUseSelectedSnapshot || !selectedItem.paymentOrderId" @click="openSelectedRoute(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSelectedSnapshot || !selectedItem.paymentOrderId" @click="openSelectedRoute(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>
+              <button class="link-button" :disabled="!canUseSelectedSnapshot" @click="openSelectedCashier">打开收银台</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧会话后，可在这里查看详情与排查建议。</div>

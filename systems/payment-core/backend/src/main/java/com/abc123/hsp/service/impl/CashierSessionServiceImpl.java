@@ -1,5 +1,8 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
@@ -16,6 +19,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 收银台会话业务实现。
@@ -42,6 +46,19 @@ public class CashierSessionServiceImpl implements CashierSessionService {
 
     CashierSessionServiceImpl(CashierSessionMapper cashierSessionMapper) {
         this(cashierSessionMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public CashierSessionDetailDTO detail(String sessionNo) {
+        String normalizedSessionNo = normalizeRequiredSessionNo(sessionNo);
+        CashierSessionDetailDTO detail = cashierSessionMapper.findDetail(normalizedSessionNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.CASHIER_SESSION_NOT_FOUND, "收银台会话不存在");
+        }
+        CashierSessionDetailDTO outwardDetail = new CashierSessionDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        return outwardDetail;
     }
 
     @Override
@@ -162,6 +179,24 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredSessionNo(String sessionNo) {
+        if (!StringUtils.hasText(sessionNo)) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "会话号不能为空");
+        }
+        for (int index = 0; index < sessionNo.length(); index++) {
+            if (Character.isISOControl(sessionNo.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_REQUEST_INVALID, "会话号不能包含控制字符");
+            }
+        }
+        String normalized = sessionNo.trim();
+        if (normalized.length() > SESSION_NO_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "会话号长度不能超过 64 个字符");
         }
         return normalized;
     }

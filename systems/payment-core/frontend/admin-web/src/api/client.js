@@ -562,6 +562,7 @@ export const paymentDeadLetterTaskApi = {
 };
 
 export const cashierSessionApi = {
+  getDetail: (sessionNo) => request(`/api/cashier-sessions/${encodeURIComponent(sessionNo)}`),
   getOverview: ({
     sessionNo = "",
     paymentOrderId = "",
