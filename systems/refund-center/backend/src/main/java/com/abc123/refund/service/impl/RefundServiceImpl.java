@@ -24,6 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -122,7 +124,7 @@ public class RefundServiceImpl implements RefundService {
         detail.setChannelRefundId(item.getChannelRefundId());
         detail.setAppliedAt(item.getAppliedAt());
         detail.setSuccessAt(item.getSuccessAt());
-        detail.setOperationLogs(refundDao.findLogs(id));
+        detail.setOperationLogs(safeList(refundDao.findLogs(id)));
         return detail;
     }
 
@@ -428,9 +430,13 @@ public class RefundServiceImpl implements RefundService {
         query.setEventId(eventId);
         query.setPageNo(1);
         query.setPageSize(1);
-        return refundDao.findOutboxList(query).stream()
+        return safeList(refundDao.findOutboxList(query)).stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("退款成功事件不存在"));
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private String required(String value, String message) {

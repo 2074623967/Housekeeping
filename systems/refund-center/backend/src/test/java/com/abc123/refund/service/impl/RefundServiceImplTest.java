@@ -2,6 +2,7 @@ package com.abc123.refund.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,8 @@ import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
 import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
 import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundQueryDTO;
+import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
 import java.math.BigDecimal;
@@ -56,6 +59,24 @@ class RefundServiceImplTest {
         when(refundDao.findPaymentSource("PAY-1")).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> service.apply(request));
+    }
+
+    @Test
+    void shouldNormalizeNullListsAtRefundBoundaries() {
+        when(refundDao.findList(any(RefundQueryDTO.class))).thenReturn(null);
+        when(refundDao.count(any(RefundQueryDTO.class))).thenReturn(0L);
+        PageResultDTO<RefundListItemDTO> page = service.list(new RefundQueryDTO());
+
+        assertEquals(Collections.emptyList(), page.getItems());
+
+        RefundListItemDTO item = new RefundListItemDTO();
+        item.setRefundOrderId("REF-EMPTY");
+        when(refundDao.findByRefundOrderId("REF-EMPTY")).thenReturn(item);
+        when(refundDao.findLogs("REF-EMPTY")).thenReturn(null);
+        when(refundDao.findOutboxList(any())).thenReturn(null);
+
+        byte[] snapshot = service.exportDetailSnapshot("REF-EMPTY");
+        assertTrue(new String(snapshot, java.nio.charset.StandardCharsets.UTF_8).contains("操作日志"));
     }
 
     @Test

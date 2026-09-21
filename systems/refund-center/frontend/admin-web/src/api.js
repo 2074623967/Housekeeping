@@ -19,7 +19,7 @@ export const getRefunds = (query) => {
       params.set(key, value);
     }
   });
-  return jsonRequest(`/api/refunds?${params.toString()}`);
+  return jsonRequest(`/api/refunds?${params.toString()}`).then(normalizePage);
 };
 
 export const getRefundDetail = (refundOrderId) =>
@@ -46,8 +46,13 @@ export const getRefundOutbox = (query) => {
       params.set(key, value);
     }
   });
-  return jsonRequest(`/api/refunds/outbox?${params.toString()}`);
+  return jsonRequest(`/api/refunds/outbox?${params.toString()}`).then(normalizePage);
 };
+
+const normalizePage = (page) => ({
+  ...page,
+  items: Array.isArray(page?.items) ? page.items : []
+});
 
 export const dispatchRefundOutbox = (eventId, payload = {}) =>
   jsonRequest(`/api/refunds/outbox/${encodeURIComponent(eventId)}/dispatch`, {

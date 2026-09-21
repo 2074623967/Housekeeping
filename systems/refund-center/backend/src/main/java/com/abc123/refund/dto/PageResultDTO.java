@@ -1,6 +1,7 @@
 package com.abc123.refund.dto;
 
 import java.util.List;
+import java.util.Collections;
 import lombok.Data;
 
 /**
@@ -21,10 +22,9 @@ public class PageResultDTO<T> {
     private int pageSize;
 
     public PageResultDTO(List<T> items, long total, int pageNo, int pageSize) {
-        this.items = items;
+        this.items = items == null ? Collections.emptyList() : items;
         this.total = total;
         this.pageNo = pageNo;
         this.pageSize = pageSize;
     }
 }
-
