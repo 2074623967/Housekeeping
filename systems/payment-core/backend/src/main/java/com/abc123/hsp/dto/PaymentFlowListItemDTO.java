@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class PaymentFlowListItemDTO {
 
+    /** 流水来源：PAYMENT_ATTEMPT/CHANNEL_NOTIFY/ROUTE_RECORD/BUSINESS_EVENT。 */
+    private String flowSource;
     /** 流水编号。 */
     private String flowNo;
     /** 关联支付单号。 */

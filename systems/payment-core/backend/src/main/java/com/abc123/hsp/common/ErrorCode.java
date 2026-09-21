@@ -69,4 +69,5 @@ public final class ErrorCode {
     public static final String BILL_NOT_FOUND = "PAYMENT-1056";
     public static final String CASHIER_SESSION_NOT_FOUND = "PAYMENT-1057";
     public static final String PAYMENT_REQUEST_NOT_FOUND = "PAYMENT-1058";
+    public static final String PAYMENT_FLOW_NOT_FOUND = "PAYMENT-1059";
 }

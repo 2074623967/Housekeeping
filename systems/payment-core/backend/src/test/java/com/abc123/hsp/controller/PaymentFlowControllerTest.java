@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
+import com.abc123.hsp.dto.PaymentFlowDetailDTO;
 import com.abc123.hsp.service.PaymentFlowService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,17 @@ class PaymentFlowControllerTest {
         controller.list(null, null, "全部", null, "全部", null, null, "createdAt", "desc", 1, 20);
 
         verify(paymentFlowService).list(any(PaymentFlowQueryDTO.class));
+    }
+
+    @Test
+    void shouldDelegateCompositeFlowDetailIdentifiersWithoutChangingThem() {
+        PaymentFlowController controller = new PaymentFlowController(paymentFlowService);
+        PaymentFlowDetailDTO detail = new PaymentFlowDetailDTO();
+        detail.setFlowSource("ROUTE_RECORD");
+        detail.setFlowNo("FLOW/001");
+        when(paymentFlowService.detail("route/source", "FLOW/001")).thenReturn(detail);
+
+        assertEquals(detail, controller.detail("route/source", "FLOW/001").getData());
+        verify(paymentFlowService).detail("route/source", "FLOW/001");
     }
 }

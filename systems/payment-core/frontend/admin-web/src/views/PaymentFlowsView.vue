@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentFlowApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentFlowDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
@@ -89,6 +89,9 @@ function toggleExpanded(flowNo) {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
@@ -133,15 +136,23 @@ function goToPage(nextPage) {
 }
 
 function openPaymentDetail(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
   router.push(paymentDetailRoute(paymentOrderId));
 }
 
 function openPaymentRequests(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
   router.push(paymentRequestsRoute({ paymentOrderId }));
 }
 
 function openPaymentLogs(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
   router.push(paymentLogsRoute({ paymentOrderId }));
+}
+
+function openFlowDetail(item) {
+  if (!canUseSnapshot.value || !item?.flowSource || !item?.flowNo) return;
+  router.push(paymentFlowDetailRoute(item.flowSource, item.flowNo));
 }
 
 function formatValue(value) {
@@ -325,7 +336,7 @@ watch(
               </tr>
             </thead>
             <tbody>
-              <template v-for="item in items" :key="item.flowNo">
+              <template v-for="item in items" :key="`${item.flowSource}:${item.flowNo}`">
                 <tr>
                   <td>{{ item.flowNo }}</td>
                   <td>
@@ -341,8 +352,9 @@ watch(
                   <td class="flow-summary-cell">{{ item.summary }}</td>
                   <td>{{ item.createdAt }}</td>
                   <td>
-                    <button class="link-button" @click="pickItem(item)">查看快照</button>
-                    <button class="link-button" @click="toggleExpanded(item.flowNo)">
+                    <button class="link-button" :disabled="isSnapshotStale" @click="openFlowDetail(item)">查看详情</button>
+                    <button class="link-button" :disabled="isSnapshotStale" @click="pickItem(item)">查看快照</button>
+                    <button class="link-button" :disabled="isSnapshotStale" @click="toggleExpanded(item.flowNo)">
                       {{ expandedFlowNo === item.flowNo ? "收起报文" : "查看报文" }}
                     </button>
                   </td>

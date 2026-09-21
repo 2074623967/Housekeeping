@@ -357,7 +357,10 @@ export const paymentFlowApi = {
       sortOrder
     });
     return `/api/payment-flows/export?${params.toString()}`;
-  }
+  },
+  getDetail: (flowSource, flowNo) => request(
+    `/api/payment-flows/${encodeURIComponent(flowSource)}/${encodeURIComponent(flowNo)}`
+  )
 };
 
 export const paymentRouteApi = {

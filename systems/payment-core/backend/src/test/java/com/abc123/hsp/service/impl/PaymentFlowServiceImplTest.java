@@ -8,7 +8,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
+import com.abc123.hsp.dto.PaymentFlowDetailDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -141,7 +144,7 @@ class PaymentFlowServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         assertEquals(3, query.getPageNo());
         assertEquals(100, query.getPageSize());
-        assertTrue(csv.startsWith("\uFEFF流水编号,支付单号,订单号,预付单号,流水类型,类型标签"));
+        assertTrue(csv.startsWith("\uFEFF流水来源,流水编号,支付单号,订单号,预付单号,流水类型,类型标签"));
         assertTrue(csv.contains("\"FLOW-001\""));
         assertTrue(csv.contains("\"首笔\"\"摘要\""));
         assertTrue(csv.contains("\"info\""));
@@ -169,6 +172,43 @@ class PaymentFlowServiceImplTest {
         assertTrue(result.getRequestPayload().contains("DEVI****5678"));
         assertEquals("127.0.0.1", item.getClientIp());
         assertTrue(item.getRequestPayload().contains("13800138000"));
+    }
+
+    @Test
+    void shouldNormalizeFlowSourceAndMaskDetailCopyWithoutMutatingMapperFact() {
+        PaymentFlowDetailDTO fact = new PaymentFlowDetailDTO();
+        fact.setFlowSource("PAYMENT_ATTEMPT");
+        fact.setFlowNo("FLOW-001");
+        fact.setClientIp("127.0.0.1");
+        fact.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        fact.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
+        when(paymentFlowMapper.findDetail("PAYMENT_ATTEMPT", "FLOW-001")).thenReturn(fact);
+
+        PaymentFlowDetailDTO result = new PaymentFlowServiceImpl(paymentFlowMapper)
+                .detail(" payment_attempt ", " FLOW-001 ");
+
+        assertEquals("PAYMENT_ATTEMPT", result.getFlowSource());
+        assertEquals("127.0.*.*", result.getClientIp());
+        assertEquals("ORDER-****DEFG", result.getIdempotencyKey());
+        assertTrue(result.getRequestPayload().contains("138****8000"));
+        assertEquals("127.0.0.1", fact.getClientIp());
+        verify(paymentFlowMapper).findDetail("PAYMENT_ATTEMPT", "FLOW-001");
+    }
+
+    @Test
+    void shouldRejectInvalidFlowDetailInputsAndReturnStableNotFoundCode() {
+        PaymentFlowServiceImpl service = new PaymentFlowServiceImpl(paymentFlowMapper);
+        assertThrows(BusinessException.class, () -> service.detail(null, "FLOW-001"));
+        assertThrows(BusinessException.class, () -> service.detail("UNKNOWN", "FLOW-001"));
+        assertThrows(BusinessException.class, () -> service.detail("PAYMENT_ATTEMPT", "FLOW-001\n"));
+        assertThrows(BusinessException.class, () -> service.detail("PAYMENT_ATTEMPT", repeat("F", 65)));
+
+        when(paymentFlowMapper.findDetail("BUSINESS_EVENT", "MISSING")).thenReturn(null);
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.detail("business_event", "MISSING"));
+        assertEquals(ErrorCode.PAYMENT_FLOW_NOT_FOUND, exception.getCode());
+        verify(paymentFlowMapper).findDetail("BUSINESS_EVENT", "MISSING");
     }
 
     private PaymentFlowListItemDTO buildItem(String flowNo, String summary, Integer retryCount) {

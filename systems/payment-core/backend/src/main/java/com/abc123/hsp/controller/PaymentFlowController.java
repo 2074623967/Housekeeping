@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentFlowDetailDTO;
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.service.PaymentFlowService;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +27,16 @@ public class PaymentFlowController {
 
     public PaymentFlowController(PaymentFlowService paymentFlowService) {
         this.paymentFlowService = paymentFlowService;
+    }
+
+    /**
+     * 按来源类型和来源编号查询唯一支付过程流水。
+     */
+    @GetMapping("/{flowSource}/{flowNo}")
+    public ApiResponse<PaymentFlowDetailDTO> detail(
+            @PathVariable String flowSource,
+            @PathVariable String flowNo) {
+        return ApiResponse.success(paymentFlowService.detail(flowSource, flowNo));
     }
 
     /**

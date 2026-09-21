@@ -4803,6 +4803,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 路由编号、规则、结果和快照只通过 `route.attempt_no = attempt.attempt_no` 选择最近一条；列表与导出使用相同关联。历史空尝试号路由保持未关联，不按支付单猜测。
 5. IP、幂等键、请求与响应报文由服务层复制后脱敏，不修改数据库事实或 Mapper DTO；接口只读，不产生渠道、状态或资金变化。
 
+### 14.360 支付流水详情契约
+
+1. `GET /api/payment-flows/{flowSource}/{flowNo}` 按来源类型和来源编号返回唯一支付过程事实；来源支持 `PAYMENT_ATTEMPT`、`CHANNEL_NOTIFY`、`ROUTE_RECORD`、`BUSINESS_EVENT`。
+2. `flowSource` 必填、去空白并转大写后执行白名单校验；`flowNo` 必填、去空白、最长 `64` 个字符且不得含控制字符；非法请求沿用 `PAYMENT-1036`，不存在返回 `PAYMENT-1059 / 支付流水不存在`。
+3. 支付尝试直接关联预付单和请求；路由仅按 `attempt_no` 精确关联请求；回调和业务事件不按同支付单最近预付单推断归属。
+4. 响应可返回确定存在的订单、标准订单、账单、支付单、预付单、请求、渠道、终端、回调、路由和事件字段；IP、幂等键和报文由服务层脱敏。
+5. 接口只读，不代表账务、资金、清分、结算、对账、真实渠道或生产放行事实。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

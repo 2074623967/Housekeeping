@@ -33,6 +33,13 @@ export function paymentDetailRoute(paymentOrderId) {
   };
 }
 
+export function paymentFlowDetailRoute(flowSource, flowNo) {
+  return {
+    name: "payment-flow-detail",
+    params: { flowSource, flowNo }
+  };
+}
+
 export function normalizePaymentRecordType(recordType) {
   return ["ALL", "WECHAT", "BANK_CARD"].includes(recordType) ? recordType : "ALL";
 }

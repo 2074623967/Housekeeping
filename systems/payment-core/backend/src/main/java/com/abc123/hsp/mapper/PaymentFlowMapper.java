@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentFlowDetailDTO;
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import java.util.List;
@@ -9,6 +10,13 @@ import org.apache.ibatis.annotations.Param;
  * 支付流水中心 Mapper，负责聚合主链路中的多类过程流水。
  */
 public interface PaymentFlowMapper {
+
+    /**
+     * 按来源类型和来源编号查询唯一支付过程流水。
+     */
+    PaymentFlowDetailDTO findDetail(
+            @Param("flowSource") String flowSource,
+            @Param("flowNo") String flowNo);
 
     /**
      * 查询支付流水列表。

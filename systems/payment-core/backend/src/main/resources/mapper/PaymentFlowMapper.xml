@@ -4,191 +4,69 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentFlowMapper">
 
-    <sql id="paymentFlowOrder">
-        <choose>
-            <when test="query.sortField == 'retryCount'">
-                ORDER BY retry_count
-            </when>
-            <when test="query.sortField == 'flowType'">
-                ORDER BY flow_type
-            </when>
-            <otherwise>
-                ORDER BY created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC, flow_source_rank ASC, flow_source_id ASC
-            </when>
-            <otherwise>
-                DESC, flow_source_rank DESC, flow_source_id DESC
-            </otherwise>
-        </choose>
+    <sql id="paymentFlowUnion">
+        SELECT 'PAYMENT_ATTEMPT' AS flow_source, pa.attempt_no AS flow_no,
+               pa.payment_order_id, po.order_no, pa.prepay_order_no,
+               '支付尝试' AS flow_type, 'info' AS flow_type_tag, pa.channel_code,
+               pa.terminal, pa.client_ip, pa.idempotency_key,
+               pa.attempt_status AS business_status, pa.attempt_status_type AS business_status_type,
+               NULL AS notify_type, NULL AS route_rule, NULL AS downstream_system,
+               NULL AS event_topic, NULL AS publish_status, NULL AS retry_count,
+               pa.request_payload, pa.response_payload,
+               CONCAT('方式=', pa.payment_method, ' / 状态=', pa.attempt_status) AS summary,
+               DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               1 AS flow_source_rank, pa.id AS flow_source_id
+        FROM t_payment_attempt pa
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+        UNION ALL
+        SELECT 'CHANNEL_NOTIFY' AS flow_source, pnl.notify_no AS flow_no,
+               pnl.payment_order_id, po.order_no, NULL AS prepay_order_no,
+               '渠道回调' AS flow_type, 'warn' AS flow_type_tag, pnl.channel_code,
+               NULL AS terminal, NULL AS client_ip, NULL AS idempotency_key,
+               pnl.notify_status AS business_status, pnl.notify_status_type AS business_status_type,
+               pnl.notify_type, NULL AS route_rule, NULL AS downstream_system,
+               NULL AS event_topic, NULL AS publish_status, NULL AS retry_count,
+               pnl.notify_payload AS request_payload, pnl.notify_result AS response_payload,
+               CONCAT('类型=', pnl.notify_type, ' / 状态=', pnl.notify_status) AS summary,
+               DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               2 AS flow_source_rank, pnl.id AS flow_source_id
+        FROM t_payment_notify_log pnl
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+        UNION ALL
+        SELECT 'ROUTE_RECORD' AS flow_source, prr.route_no AS flow_no,
+               prr.payment_order_id, po.order_no, pa.prepay_order_no,
+               '路由记录' AS flow_type, 'info' AS flow_type_tag, prr.channel_code,
+               pa.terminal, pa.client_ip, pa.idempotency_key,
+               prr.route_result AS business_status, 'info' AS business_status_type,
+               NULL AS notify_type, prr.route_rule, NULL AS downstream_system,
+               NULL AS event_topic, NULL AS publish_status, NULL AS retry_count,
+               NULL AS request_payload, NULL AS response_payload,
+               CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               3 AS flow_source_rank, prr.id AS flow_source_id
+        FROM t_payment_route_record prr
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                 LEFT JOIN t_payment_attempt pa ON pa.attempt_no = prr.attempt_no
+        UNION ALL
+        SELECT 'BUSINESS_EVENT' AS flow_source, pe.event_no AS flow_no,
+               pe.payment_order_id, pe.biz_no AS order_no, NULL AS prepay_order_no,
+               '业务事件' AS flow_type, 'success' AS flow_type_tag, po.channel_code,
+               NULL AS terminal, NULL AS client_ip, NULL AS idempotency_key,
+               pe.event_type AS business_status,
+               CASE WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
+                    WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
+                    ELSE 'info' END AS business_status_type,
+               NULL AS notify_type, NULL AS route_rule, pe.downstream_system,
+               pe.event_topic, pe.publish_status, pe.retry_count,
+               pe.event_payload AS request_payload, NULL AS response_payload,
+               CONCAT('事件=', pe.event_type, ' / 发布=', pe.publish_status) AS summary,
+               DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               4 AS flow_source_rank, pe.id AS flow_source_id
+        FROM t_payment_event pe
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
     </sql>
 
-    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentFlowListItemDTO">
-        SELECT flow_no AS flowNo,
-               payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               prepay_order_no AS prepayOrderNo,
-               flow_type AS flowType,
-               flow_type_tag AS flowTypeTag,
-               channel_code AS channelCode,
-               terminal,
-               client_ip AS clientIp,
-               idempotency_key AS idempotencyKey,
-               business_status AS businessStatus,
-               business_status_type AS businessStatusType,
-               notify_type AS notifyType,
-               route_rule AS routeRule,
-               downstream_system AS downstreamSystem,
-               event_topic AS eventTopic,
-               publish_status AS publishStatus,
-               retry_count AS retryCount,
-               request_payload AS requestPayload,
-               response_payload AS responsePayload,
-               summary,
-               created_at AS createdAt
-        FROM (
-            SELECT attempt_no AS flow_no,
-                   pa.payment_order_id,
-                   po.order_no,
-                   pa.prepay_order_no,
-                   '支付尝试' AS flow_type,
-                   'info' AS flow_type_tag,
-                   pa.channel_code,
-                   pa.terminal,
-                   pa.client_ip,
-                   pa.idempotency_key,
-                   pa.attempt_status AS business_status,
-                   pa.attempt_status_type AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pa.request_payload,
-                   pa.response_payload,
-                   CONCAT('方式=', pa.payment_method, ' / 状态=', pa.attempt_status) AS summary,
-                   DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   1 AS flow_source_rank,
-                   pa.id AS flow_source_id
-            FROM t_payment_attempt pa
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
-
-            UNION ALL
-
-            SELECT notify_no AS flow_no,
-                   pnl.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '渠道回调' AS flow_type,
-                   'warn' AS flow_type_tag,
-                   pnl.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pnl.notify_status AS business_status,
-                   pnl.notify_status_type AS business_status_type,
-                   pnl.notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pnl.notify_payload AS request_payload,
-                   pnl.notify_result AS response_payload,
-                   CONCAT('类型=', pnl.notify_type, ' / 状态=', pnl.notify_status) AS summary,
-                   DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   2 AS flow_source_rank,
-                   pnl.id AS flow_source_id
-            FROM t_payment_notify_log pnl
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pnl.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT route_no AS flow_no,
-                   prr.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '路由记录' AS flow_type,
-                   'info' AS flow_type_tag,
-                   prr.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   prr.route_result AS business_status,
-                   'info' AS business_status_type,
-                   NULL AS notify_type,
-                   prr.route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   NULL AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
-                   DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   3 AS flow_source_rank,
-                   prr.id AS flow_source_id
-            FROM t_payment_route_record prr
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = prr.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT event_no AS flow_no,
-                   pe.payment_order_id,
-                   pe.biz_no AS order_no,
-                   latest_pr.prepay_order_no,
-                   '业务事件' AS flow_type,
-                   'success' AS flow_type_tag,
-                   po.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pe.event_type AS business_status,
-                   CASE
-                       WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
-                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
-                       ELSE 'info'
-                   END AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   pe.downstream_system,
-                   pe.event_topic,
-                   pe.publish_status,
-                   pe.retry_count,
-                   pe.event_payload AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('事件=', pe.event_type, ' / 发布=', pe.publish_status) AS summary,
-                   DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   4 AS flow_source_rank,
-                   pe.id AS flow_source_id
-            FROM t_payment_event pe
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pe.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-        ) payment_flow_union
+    <sql id="paymentFlowWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -209,371 +87,160 @@
                 AND business_status = #{query.businessStatus}
             </if>
             <if test="query.keyword != null and query.keyword != ''">
-                AND (
-                    summary LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR response_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                )
+                AND (summary LIKE CONCAT('%', #{query.keyword}, '%')
+                     OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
+                     OR response_payload LIKE CONCAT('%', #{query.keyword}, '%'))
             </if>
         </where>
+    </sql>
+
+    <sql id="paymentFlowOrder">
+        <choose>
+            <when test="query.sortField == 'retryCount'">ORDER BY retry_count</when>
+            <when test="query.sortField == 'flowType'">ORDER BY flow_type</when>
+            <otherwise>ORDER BY created_at</otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">ASC, flow_source_rank ASC, flow_source_id ASC</when>
+            <otherwise>DESC, flow_source_rank DESC, flow_source_id DESC</otherwise>
+        </choose>
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentFlowListItemDTO">
+        SELECT flow_source AS flowSource, flow_no AS flowNo, payment_order_id AS paymentOrderId,
+               order_no AS orderNo, prepay_order_no AS prepayOrderNo, flow_type AS flowType,
+               flow_type_tag AS flowTypeTag, channel_code AS channelCode, terminal,
+               client_ip AS clientIp, idempotency_key AS idempotencyKey,
+               business_status AS businessStatus, business_status_type AS businessStatusType,
+               notify_type AS notifyType, route_rule AS routeRule, downstream_system AS downstreamSystem,
+               event_topic AS eventTopic, publish_status AS publishStatus, retry_count AS retryCount,
+               request_payload AS requestPayload, response_payload AS responsePayload,
+               summary, created_at AS createdAt
+        FROM (<include refid="paymentFlowUnion"/>) payment_flow_union
+        <include refid="paymentFlowWhere"/>
         <include refid="paymentFlowOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
-        FROM (
-            SELECT attempt_no AS flow_no,
-                   pa.payment_order_id,
-                   po.order_no,
-                   pa.prepay_order_no,
-                   '支付尝试' AS flow_type,
-                   'info' AS flow_type_tag,
-                   pa.channel_code,
-                   pa.terminal,
-                   pa.client_ip,
-                   pa.idempotency_key,
-                   pa.attempt_status AS business_status,
-                   pa.attempt_status_type AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pa.request_payload,
-                   pa.response_payload,
-                   CONCAT('方式=', pa.payment_method, ' / 状态=', pa.attempt_status) AS summary,
-                   DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-            FROM t_payment_attempt pa
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
-
-            UNION ALL
-
-            SELECT notify_no AS flow_no,
-                   pnl.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '渠道回调' AS flow_type,
-                   'warn' AS flow_type_tag,
-                   pnl.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pnl.notify_status AS business_status,
-                   pnl.notify_status_type AS business_status_type,
-                   pnl.notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pnl.notify_payload AS request_payload,
-                   pnl.notify_result AS response_payload,
-                   CONCAT('类型=', pnl.notify_type, ' / 状态=', pnl.notify_status) AS summary,
-                   DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-            FROM t_payment_notify_log pnl
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pnl.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT route_no AS flow_no,
-                   prr.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '路由记录' AS flow_type,
-                   'info' AS flow_type_tag,
-                   prr.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   prr.route_result AS business_status,
-                   'info' AS business_status_type,
-                   NULL AS notify_type,
-                   prr.route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   NULL AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
-                   DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-            FROM t_payment_route_record prr
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = prr.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT event_no AS flow_no,
-                   pe.payment_order_id,
-                   pe.biz_no AS order_no,
-                   latest_pr.prepay_order_no,
-                   '业务事件' AS flow_type,
-                   'success' AS flow_type_tag,
-                   po.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pe.event_type AS business_status,
-                   CASE
-                       WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
-                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
-                       ELSE 'info'
-                   END AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   pe.downstream_system,
-                   pe.event_topic,
-                   pe.publish_status,
-                   pe.retry_count,
-                   pe.event_payload AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('事件=', pe.event_type, ' / 发布=', pe.publish_status) AS summary,
-                   DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-            FROM t_payment_event pe
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pe.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-        ) payment_flow_union
-        <where>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
-                AND flow_type = #{query.flowType}
-            </if>
-            <if test="query.channelCode != null and query.channelCode != ''">
-                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND terminal = #{query.terminal}
-            </if>
-            <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
-                AND business_status = #{query.businessStatus}
-            </if>
-            <if test="query.keyword != null and query.keyword != ''">
-                AND (
-                    summary LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR response_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                )
-            </if>
-        </where>
+        FROM (<include refid="paymentFlowUnion"/>) payment_flow_union
+        <include refid="paymentFlowWhere"/>
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentFlowListItemDTO">
-        SELECT flow_no AS flowNo,
-               payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               prepay_order_no AS prepayOrderNo,
-               flow_type AS flowType,
-               flow_type_tag AS flowTypeTag,
-               channel_code AS channelCode,
-               terminal,
-               client_ip AS clientIp,
-               idempotency_key AS idempotencyKey,
-               business_status AS businessStatus,
-               business_status_type AS businessStatusType,
-               notify_type AS notifyType,
-               route_rule AS routeRule,
-               downstream_system AS downstreamSystem,
-               event_topic AS eventTopic,
-               publish_status AS publishStatus,
-               retry_count AS retryCount,
-               request_payload AS requestPayload,
-               response_payload AS responsePayload,
-               summary,
-               created_at AS createdAt
-        FROM (
-            SELECT attempt_no AS flow_no,
-                   pa.payment_order_id,
-                   po.order_no,
-                   pa.prepay_order_no,
-                   '支付尝试' AS flow_type,
-                   'info' AS flow_type_tag,
-                   pa.channel_code,
-                   pa.terminal,
-                   pa.client_ip,
-                   pa.idempotency_key,
-                   pa.attempt_status AS business_status,
-                   pa.attempt_status_type AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pa.request_payload,
-                   pa.response_payload,
-                   CONCAT('方式=', pa.payment_method, ' / 状态=', pa.attempt_status) AS summary,
-                   DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   1 AS flow_source_rank,
-                   pa.id AS flow_source_id
-            FROM t_payment_attempt pa
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
-
-            UNION ALL
-
-            SELECT notify_no AS flow_no,
-                   pnl.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '渠道回调' AS flow_type,
-                   'warn' AS flow_type_tag,
-                   pnl.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pnl.notify_status AS business_status,
-                   pnl.notify_status_type AS business_status_type,
-                   pnl.notify_type,
-                   NULL AS route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   pnl.notify_payload AS request_payload,
-                   pnl.notify_result AS response_payload,
-                   CONCAT('类型=', pnl.notify_type, ' / 状态=', pnl.notify_status) AS summary,
-                   DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   2 AS flow_source_rank,
-                   pnl.id AS flow_source_id
-            FROM t_payment_notify_log pnl
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pnl.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT route_no AS flow_no,
-                   prr.payment_order_id,
-                   po.order_no,
-                   latest_pr.prepay_order_no,
-                   '路由记录' AS flow_type,
-                   'info' AS flow_type_tag,
-                   prr.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   prr.route_result AS business_status,
-                   'info' AS business_status_type,
-                   NULL AS notify_type,
-                   prr.route_rule,
-                   NULL AS downstream_system,
-                   NULL AS event_topic,
-                   NULL AS publish_status,
-                   NULL AS retry_count,
-                   NULL AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
-                   DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   3 AS flow_source_rank,
-                   prr.id AS flow_source_id
-            FROM t_payment_route_record prr
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = prr.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-
-            UNION ALL
-
-            SELECT event_no AS flow_no,
-                   pe.payment_order_id,
-                   pe.biz_no AS order_no,
-                   latest_pr.prepay_order_no,
-                   '业务事件' AS flow_type,
-                   'success' AS flow_type_tag,
-                   po.channel_code,
-                   NULL AS terminal,
-                   NULL AS client_ip,
-                   NULL AS idempotency_key,
-                   pe.event_type AS business_status,
-                   CASE
-                       WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
-                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
-                       ELSE 'info'
-                   END AS business_status_type,
-                   NULL AS notify_type,
-                   NULL AS route_rule,
-                   pe.downstream_system,
-                   pe.event_topic,
-                   pe.publish_status,
-                   pe.retry_count,
-                   pe.event_payload AS request_payload,
-                   NULL AS response_payload,
-                   CONCAT('事件=', pe.event_type, ' / 发布=', pe.publish_status) AS summary,
-                   DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-                   4 AS flow_source_rank,
-                   pe.id AS flow_source_id
-            FROM t_payment_event pe
-                     LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
-                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
-                        SELECT pr.id
-                        FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = pe.payment_order_id
-                        ORDER BY pr.created_at DESC, pr.id DESC
-                        LIMIT 1
-                    )
-        ) payment_flow_union
-        <where>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
-                AND flow_type = #{query.flowType}
-            </if>
-            <if test="query.channelCode != null and query.channelCode != ''">
-                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND terminal = #{query.terminal}
-            </if>
-            <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
-                AND business_status = #{query.businessStatus}
-            </if>
-            <if test="query.keyword != null and query.keyword != ''">
-                AND (
-                    summary LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR response_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                )
-            </if>
-        </where>
+        SELECT flow_source AS flowSource, flow_no AS flowNo, payment_order_id AS paymentOrderId,
+               order_no AS orderNo, prepay_order_no AS prepayOrderNo, flow_type AS flowType,
+               flow_type_tag AS flowTypeTag, channel_code AS channelCode, terminal,
+               client_ip AS clientIp, idempotency_key AS idempotencyKey,
+               business_status AS businessStatus, business_status_type AS businessStatusType,
+               notify_type AS notifyType, route_rule AS routeRule, downstream_system AS downstreamSystem,
+               event_topic AS eventTopic, publish_status AS publishStatus, retry_count AS retryCount,
+               request_payload AS requestPayload, response_payload AS responsePayload,
+               summary, created_at AS createdAt
+        FROM (<include refid="paymentFlowUnion"/>) payment_flow_union
+        <include refid="paymentFlowWhere"/>
         <include refid="paymentFlowOrder"/>
         LIMIT 1001
+    </select>
+
+    <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentFlowDetailDTO">
+        <choose>
+            <when test="flowSource == 'PAYMENT_ATTEMPT'">
+                SELECT 'PAYMENT_ATTEMPT' AS flowSource, pa.attempt_no AS flowNo,
+                       pa.payment_order_id AS paymentOrderId, po.order_no AS orderNo,
+                       standard_order.order_no AS standardOrderNo, pa.prepay_order_no AS prepayOrderNo,
+                       pr.bill_no AS billNo, pa.attempt_no AS paymentRequestNo,
+                       attempt_route.route_no AS routeNo, attempt_route.route_result AS routeResult,
+                       '支付尝试' AS flowType, 'info' AS flowTypeTag,
+                       pa.payment_method AS paymentMethod, pa.source_app_id AS sourceAppId,
+                       pa.channel_code AS channelCode, pa.terminal, pa.client_ip AS clientIp,
+                       pa.idempotency_key AS idempotencyKey, pa.attempt_status AS businessStatus,
+                       pa.attempt_status_type AS businessStatusType, NULL AS notifyType,
+                       attempt_route.route_rule AS routeRule, NULL AS downstreamSystem,
+                       NULL AS eventTopic, NULL AS publishStatus, NULL AS retryCount,
+                       pa.ops_config_snapshot_version AS opsConfigSnapshotVersion,
+                       pa.request_payload AS requestPayload, pa.response_payload AS responsePayload,
+                       CONCAT('方式=', pa.payment_method, ' / 状态=', pa.attempt_status) AS summary,
+                       DATE_FORMAT(pa.completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt,
+                       DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+                FROM t_payment_attempt pa
+                         LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+                         LEFT JOIN t_order standard_order ON standard_order.order_no = po.order_no
+                         LEFT JOIN t_prepay_order pr ON pr.prepay_order_no = pa.prepay_order_no
+                         LEFT JOIN t_payment_route_record attempt_route ON attempt_route.id = (
+                            SELECT prr.id FROM t_payment_route_record prr
+                            WHERE prr.attempt_no = pa.attempt_no
+                            ORDER BY prr.created_at DESC, prr.id DESC LIMIT 1)
+                WHERE pa.attempt_no = #{flowNo} LIMIT 1
+            </when>
+            <when test="flowSource == 'CHANNEL_NOTIFY'">
+                SELECT 'CHANNEL_NOTIFY' AS flowSource, pnl.notify_no AS flowNo,
+                       pnl.payment_order_id AS paymentOrderId, po.order_no AS orderNo,
+                       standard_order.order_no AS standardOrderNo, NULL AS prepayOrderNo,
+                       NULL AS billNo, NULL AS paymentRequestNo, NULL AS routeNo,
+                       NULL AS routeResult, '渠道回调' AS flowType, 'warn' AS flowTypeTag,
+                       po.payment_method AS paymentMethod, NULL AS sourceAppId,
+                       pnl.channel_code AS channelCode, NULL AS terminal, NULL AS clientIp,
+                       NULL AS idempotencyKey, pnl.notify_status AS businessStatus,
+                       pnl.notify_status_type AS businessStatusType, pnl.notify_type AS notifyType,
+                       NULL AS routeRule, NULL AS downstreamSystem, NULL AS eventTopic,
+                       NULL AS publishStatus, NULL AS retryCount, NULL AS opsConfigSnapshotVersion,
+                       pnl.notify_payload AS requestPayload, pnl.notify_result AS responsePayload,
+                       CONCAT('类型=', pnl.notify_type, ' / 状态=', pnl.notify_status) AS summary,
+                       NULL AS completedAt, DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+                FROM t_payment_notify_log pnl
+                         LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+                         LEFT JOIN t_order standard_order ON standard_order.order_no = po.order_no
+                WHERE pnl.notify_no = #{flowNo} LIMIT 1
+            </when>
+            <when test="flowSource == 'ROUTE_RECORD'">
+                SELECT 'ROUTE_RECORD' AS flowSource, prr.route_no AS flowNo,
+                       prr.payment_order_id AS paymentOrderId, po.order_no AS orderNo,
+                       standard_order.order_no AS standardOrderNo, pa.prepay_order_no AS prepayOrderNo,
+                       pr.bill_no AS billNo, prr.attempt_no AS paymentRequestNo,
+                       prr.route_no AS routeNo, prr.route_result AS routeResult,
+                       '路由记录' AS flowType, 'info' AS flowTypeTag,
+                       po.payment_method AS paymentMethod, pa.source_app_id AS sourceAppId,
+                       prr.channel_code AS channelCode, pa.terminal, pa.client_ip AS clientIp,
+                       pa.idempotency_key AS idempotencyKey, prr.route_result AS businessStatus,
+                       'info' AS businessStatusType, NULL AS notifyType, prr.route_rule AS routeRule,
+                       NULL AS downstreamSystem, NULL AS eventTopic, NULL AS publishStatus,
+                       NULL AS retryCount, prr.ops_config_snapshot_version AS opsConfigSnapshotVersion,
+                       NULL AS requestPayload, NULL AS responsePayload,
+                       CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
+                       NULL AS completedAt, DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+                FROM t_payment_route_record prr
+                         LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                         LEFT JOIN t_payment_attempt pa ON pa.attempt_no = prr.attempt_no
+                         LEFT JOIN t_prepay_order pr ON pr.prepay_order_no = pa.prepay_order_no
+                         LEFT JOIN t_order standard_order ON standard_order.order_no = po.order_no
+                WHERE prr.route_no = #{flowNo} LIMIT 1
+            </when>
+            <when test="flowSource == 'BUSINESS_EVENT'">
+                SELECT 'BUSINESS_EVENT' AS flowSource, pe.event_no AS flowNo,
+                       pe.payment_order_id AS paymentOrderId, pe.biz_no AS orderNo,
+                       standard_order.order_no AS standardOrderNo, NULL AS prepayOrderNo,
+                       NULL AS billNo, NULL AS paymentRequestNo, NULL AS routeNo,
+                       NULL AS routeResult, '业务事件' AS flowType, 'success' AS flowTypeTag,
+                       po.payment_method AS paymentMethod, NULL AS sourceAppId,
+                       po.channel_code AS channelCode, NULL AS terminal, NULL AS clientIp,
+                       NULL AS idempotencyKey, pe.event_type AS businessStatus,
+                       CASE WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
+                            WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
+                            ELSE 'info' END AS businessStatusType,
+                       NULL AS notifyType, NULL AS routeRule,
+                       pe.downstream_system AS downstreamSystem, pe.event_topic AS eventTopic,
+                       pe.publish_status AS publishStatus, pe.retry_count AS retryCount,
+                       NULL AS opsConfigSnapshotVersion, pe.event_payload AS requestPayload,
+                       NULL AS responsePayload,
+                       CONCAT('事件=', pe.event_type, ' / 发布=', pe.publish_status) AS summary,
+                       NULL AS completedAt, DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+                FROM t_payment_event pe
+                         LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+                         LEFT JOIN t_order standard_order ON standard_order.order_no = pe.biz_no
+                WHERE pe.event_no = #{flowNo} LIMIT 1
+            </when>
+        </choose>
     </select>
 </mapper>
