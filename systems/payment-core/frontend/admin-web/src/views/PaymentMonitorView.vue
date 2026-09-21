@@ -215,6 +215,13 @@ function openFailedRefunds() {
   router.push(refundsRoute({ refundStatus: "FAIL" }));
 }
 
+function openDisabledChannels() {
+  if (!canDrillDown.value || !(overview.value.summary?.disabledChannelCount > 0)) {
+    return;
+  }
+  router.push({ path: "/payment-config", query: { channelStatus: "DISABLED" } });
+}
+
 function pickAlert(alert) {
   selectedAlert.value = alert;
 }
@@ -294,6 +301,14 @@ onMounted(loadOverview);
               <span>用于快速定位需要运营复核、重试或线下处理的退款单。</span>
               <button class="link-button" :disabled="!canDrillDown || !(overview.summary.failedRefundCount > 0)" @click="openFailedRefunds">
                 查看失败退款
+              </button>
+            </article>
+            <article class="overview-card danger">
+              <p class="overview-title">停用渠道</p>
+              <strong>{{ overview.summary.disabledChannelCount ?? 0 }}</strong>
+              <span>用于快速定位当前不应继续承接支付请求的渠道配置。</span>
+              <button class="link-button" :disabled="!canDrillDown || !(overview.summary.disabledChannelCount > 0)" @click="openDisabledChannels">
+                查看停用渠道
               </button>
             </article>
           </div>
