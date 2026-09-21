@@ -15379,3 +15379,17 @@
 | --- | --- |
 | 分页契约与关联服务定向测试 | `PageResultDTOTest`、`PaymentEventServiceImplTest`、`RefundServiceImplTest`、`PaymentTaskCenterServiceImplTest` 通过 |
 | 证据边界 | 分页空列表兜底只证明 payment-core 响应契约健壮性，不替代生产数据完整性、真实渠道或 release 放行事实 |
+
+## 571. 2026-09-21 任务中心空任务日志列表边界修复 V1.21 验证
+
+### 571.1 本轮补强
+
+1. 任务中心总览和任务执行日志列表在 mapper 返回 `null` 时统一使用空数组，避免空库或无匹配筛选触发日志增强遍历异常。
+2. 保留任务总览、分页总数和告警推导口径，不把空列表当作任务成功事实。
+
+### 571.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 任务中心后端定向测试 | `PaymentTaskCenterServiceImplTest` 通过 |
+| 证据边界 | 空日志列表兜底只证明 payment-core 任务查询健壮性，不替代调度租约、自动任务执行或真实外部网关事实 |

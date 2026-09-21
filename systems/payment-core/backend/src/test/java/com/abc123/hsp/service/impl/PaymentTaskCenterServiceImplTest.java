@@ -113,6 +113,18 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldReturnEmptyTaskRunsWhenMapperListsReturnNull() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(null);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(null);
+        when(paymentTaskCenterMapper.countTaskRunLogs(org.mockito.ArgumentMatchers.any())).thenReturn(0L);
+        when(paymentTaskCenterMapper.findTaskRunLogs(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+
+        PaymentTaskCenterServiceImpl service = buildQueryTaskCenterService();
+        Assertions.assertTrue(service.overview().getRecentTaskRuns().isEmpty());
+        Assertions.assertTrue(service.listTaskRuns(new PaymentTaskRunLogQueryDTO()).getItems().isEmpty());
+    }
+
+    @Test
     void shouldExposeRetryableAndBlockedFailedRefundsAsImmediateP1Alert() {
         PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
         summary.setFailedRefundCount(5);

@@ -390,7 +390,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 pendingIssueAlertGenerationCount + pendingIssueAlertEscalationCount);
         overview.setQueryTrends(queryTrends);
         overview.setFocusAlerts(buildFocusAlerts(overview));
-        overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
+        overview.setRecentTaskRuns(enrichTaskRuns(safeList(paymentTaskCenterMapper.findRecentTaskRuns())));
         return overview;
     }
 
@@ -398,7 +398,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     public PageResultDTO<PaymentTaskRunLogItemDTO> listTaskRuns(PaymentTaskRunLogQueryDTO query) {
         PaymentTaskRunLogQueryDTO normalizedQuery = normalizeQuery(query);
         long total = paymentTaskCenterMapper.countTaskRunLogs(normalizedQuery);
-        List<PaymentTaskRunLogItemDTO> items = enrichTaskRuns(paymentTaskCenterMapper.findTaskRunLogs(normalizedQuery));
+        List<PaymentTaskRunLogItemDTO> items = enrichTaskRuns(
+                safeList(paymentTaskCenterMapper.findTaskRunLogs(normalizedQuery)));
         return new PageResultDTO<>(items, total, normalizedQuery.getPageNo(), normalizedQuery.getPageSize());
     }
 
@@ -1979,6 +1980,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             item.setRecommendedRoute(resolveRecommendedRoute(item.getTaskCode()));
         }
         return items;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private String csvCell(String value) {
