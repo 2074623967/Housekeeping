@@ -15365,3 +15365,17 @@
 | --- | --- |
 | 日终后端定向测试 | `PaymentDayEndServiceImplTest`、`PaymentDayEndControllerTest` 通过 |
 | 证据边界 | 空批次列表兜底只证明 payment-core 日终查询健壮性，不替代真实跑批、对账、财务核验或 release 放行事实 |
+
+## 570. 2026-09-21 统一分页空列表边界修复 V1.1 验证
+
+### 570.1 本轮补强
+
+1. `PageResultDTO` 在构造时将 mapper 返回的 `null` 列表统一归一为空数组，覆盖所有后台分页列表的共同响应契约。
+2. 不改变总条数、页码、页大小和已有列表内容；空结果仍由 `total=0` 表示。
+
+### 570.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 分页契约与关联服务定向测试 | `PageResultDTOTest`、`PaymentEventServiceImplTest`、`RefundServiceImplTest`、`PaymentTaskCenterServiceImplTest` 通过 |
+| 证据边界 | 分页空列表兜底只证明 payment-core 响应契约健壮性，不替代生产数据完整性、真实渠道或 release 放行事实 |
