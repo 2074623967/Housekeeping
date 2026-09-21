@@ -15244,3 +15244,22 @@
 | 静态检查 | `git diff --check` 与 `xmllint --noout PaymentIssueMapper.xml` 通过 |
 | 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-issues?pageNo=1&pageSize=1` 返回 `ISSUE-NOTIFY-NTF202607190002`，`GET /api/payment-issues/ISSUE-NOTIFY-NTF202607190002` 返回异常详情，`/payment-issues/ISSUE-NOTIFY-NTF202607190002` 管理端路由返回 `200` |
 | 证据边界 | 当前证据不替代目标 MySQL 执行计划、告警真实送达、渠道事实、资金一致、完整浏览器交互走查或 release 放行 |
+
+## 562. 2026-09-21 支付监控快照导出 V1.1 验证
+
+### 562.1 本轮补强
+
+1. 新增 `GET /api/payment-monitor/export`，导出与当前总览相同来源的摘要、趋势、渠道和告警 CSV 快照。
+2. 导出统一经过 CSV 公式注入防护；空列表和空字段保持为空，不补造监控事实。
+3. 管理端支付监控页新增“导出快照”入口，仅在最新总览加载成功且快照未过期时可用。
+
+### 562.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付监控后端定向测试 | `PaymentMonitorControllerTest`、`PaymentMonitorServiceImplTest` 通过 |
+| 后端全量测试 | Maven `-q test` 退出码 `0` |
+| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端构建 | `npm run build` 通过，Vite `108` 个模块 |
+| 静态检查 | `git diff --check` 与 `xmllint --noout PaymentMonitorMapper.xml` 通过 |
+| 证据边界 | CSV 快照只反映 payment-core 当前查询结果，不替代真实渠道、生产监控、资金一致或 release 放行事实 |
