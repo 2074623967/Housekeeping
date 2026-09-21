@@ -46,4 +46,21 @@ class PaymentMonitorServiceImplTest {
         verify(paymentMonitorMapper).findChannelMetrics();
         verify(paymentMonitorMapper).findAlerts();
     }
+
+    @Test
+    void shouldExportCurrentMonitorSnapshotWithoutFormulaValues() {
+        PaymentMonitorSummaryDTO summary = new PaymentMonitorSummaryDTO();
+        summary.setTotalCount(3);
+        summary.setSuccessRate("=1+1");
+        when(paymentMonitorMapper.findSummary()).thenReturn(summary);
+        when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
+        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
+        when(paymentMonitorMapper.findAlerts()).thenReturn(Collections.<PaymentAlertItemDTO>emptyList());
+
+        String csv = new PaymentMonitorServiceImpl(paymentMonitorMapper).exportCsv();
+
+        assertEquals(true, csv.startsWith("section,metric,value,detail\n"));
+        assertEquals(true, csv.contains("\"successRate\",\"'=1+1\""));
+        verify(paymentMonitorMapper).findSummary();
+    }
 }

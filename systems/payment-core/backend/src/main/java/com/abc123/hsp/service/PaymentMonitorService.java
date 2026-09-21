@@ -11,4 +11,9 @@ public interface PaymentMonitorService {
      * 查询支付监控分析总览。
      */
     PaymentMonitorOverviewDTO overview();
+
+    /**
+     * 导出当前支付监控快照。
+     */
+    String exportCsv();
 }

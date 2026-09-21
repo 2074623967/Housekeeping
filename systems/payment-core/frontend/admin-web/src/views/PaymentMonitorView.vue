@@ -29,6 +29,7 @@ const errorMessage = ref("");
 let latestLoadRequestId = 0;
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canDrillDown = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
+const canExport = computed(() => canDrillDown.value);
 
 const monitorCards = computed(() => {
   const summary = overview.value.summary || {};
@@ -178,6 +179,13 @@ function openAlertRoute(actionRoute) {
   router.push(actionRoute);
 }
 
+function exportSnapshot() {
+  if (!canExport.value) {
+    return;
+  }
+  window.open(paymentMonitorApi.buildExportUrl(), "_blank", "noopener,noreferrer");
+}
+
 function openChannelDrillDown(item) {
   if (!canDrillDown.value) {
     return;
@@ -211,9 +219,12 @@ onMounted(loadOverview);
         <h2>支付监控分析</h2>
         <p>查看最近支付趋势、渠道表现和待处理异常</p>
       </div>
-      <button class="button secondary" :disabled="isLoading" @click="loadOverview">
-        {{ isLoading ? "刷新中..." : "刷新" }}
-      </button>
+      <div class="table-inline-actions">
+        <button class="button secondary" :disabled="isLoading" @click="loadOverview">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button secondary" :disabled="!canExport" @click="exportSnapshot">导出快照</button>
+      </div>
     </div>
 
     <section class="panel">

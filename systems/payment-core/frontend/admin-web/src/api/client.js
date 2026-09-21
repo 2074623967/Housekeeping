@@ -52,7 +52,8 @@ export const paymentMetricsApi = {
 };
 
 export const paymentMonitorApi = {
-  getOverview: () => request("/api/payment-monitor/overview")
+  getOverview: () => request("/api/payment-monitor/overview"),
+  buildExportUrl: () => "/api/payment-monitor/export"
 };
 
 export const paymentIssueApi = {

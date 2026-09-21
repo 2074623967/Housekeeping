@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import java.nio.charset.StandardCharsets;
 
 /**
  * 支付监控分析控制器测试。
@@ -29,5 +30,16 @@ class PaymentMonitorControllerTest {
 
         assertEquals(overview, controller.overview().getData());
         verify(paymentMonitorService).overview();
+    }
+
+    @Test
+    void shouldExportSnapshot() {
+        when(paymentMonitorService.exportCsv()).thenReturn("section,metric,value,detail\n");
+
+        PaymentMonitorController controller = new PaymentMonitorController(paymentMonitorService);
+
+        assertEquals("section,metric,value,detail\n",
+                new String(controller.export().getBody(), StandardCharsets.UTF_8));
+        verify(paymentMonitorService).exportCsv();
     }
 }
