@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { billsRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
+import { billsRoute, cashierSessionsRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
 
 function createTestRouter() {
   return createRouter({
@@ -10,6 +10,7 @@ function createTestRouter() {
       { path: "/bills", name: "bills", component: {} },
       { path: "/payment-logs", name: "payment-logs", component: {} },
       { path: "/payment-requests", name: "payment-requests", component: {} },
+      { path: "/cashier-sessions", name: "cashier-sessions", component: {} },
       { path: "/payments", name: "payments", component: {} },
       { path: "/refunds", name: "refunds", component: {} }
     ]
@@ -63,6 +64,15 @@ test("keeps payment request status drilldowns in the request list route", () => 
 
   assert.deepEqual(resolved.query, { requestStatus: "等待回调" });
   assert.equal(resolved.href, "/payment-requests?requestStatus=%E7%AD%89%E5%BE%85%E5%9B%9E%E8%B0%83");
+});
+
+test("keeps expired cashier session drilldowns in the session list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(cashierSessionsRoute({ sessionStatus: "已失效" }));
+
+  assert.deepEqual(resolved.query, { sessionStatus: "已失效" });
+  assert.equal(resolved.href, "/cashier-sessions?sessionStatus=%E5%B7%B2%E5%A4%B1%E6%95%88");
 });
 
 test("keeps the day-end pending payment status group in the payment list route", () => {

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { cashierSessionApi } from "../api/client";
 import { cashierSessionDetailRoute, paymentDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
-import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
+import { cashierSessionsRoute, ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
 import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
 const route = useRoute();
@@ -62,6 +62,7 @@ const metrics = computed(() => ({
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 const canUseSelectedSnapshot = computed(() => Boolean(
   hasLoadedData.value && selectedItem.value && !isLoading.value && !isSnapshotStale.value
 ));
@@ -138,6 +139,13 @@ function openSelectedCashier() {
     "_blank",
     "noopener,noreferrer"
   );
+}
+
+function openExpiredSessions() {
+  if (!canUseSnapshot.value || !(metrics.value.expiredTotal > 0)) {
+    return;
+  }
+  router.push(cashierSessionsRoute({ sessionStatus: "已失效" }));
 }
 
 async function loadCashierSessions(query = buildQuery()) {
@@ -265,6 +273,9 @@ watch(
           <p class="overview-title">已失效会话</p>
           <strong>{{ metrics.expiredTotal }}</strong>
           <span>重点联查预付单、支付单和终端来源，确认是否存在重复拉起和超时未支付问题。</span>
+          <button class="link-button" :disabled="!canUseSnapshot || !(metrics.expiredTotal > 0)" @click="openExpiredSessions">
+            查看已失效会话
+          </button>
         </article>
         <article class="overview-card info">
           <p class="overview-title">会话金额合计</p>
