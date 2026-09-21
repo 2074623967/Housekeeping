@@ -1182,6 +1182,19 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeNullReviewListsForConfigurationPages() {
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(null);
+        when(paymentConfigMapper.findProtocolReviews()).thenReturn(null);
+        when(paymentConfigMapper.findGatewayReviews()).thenReturn(null);
+
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        org.junit.jupiter.api.Assertions.assertTrue(service.listChannelReviews().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(service.listProtocolReviews().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(service.listGatewayReviews().isEmpty());
+    }
+
+    @Test
     void shouldReturnEmptyCollectionsWhenOverviewQueriesReturnNull() {
         PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper).overview();
 

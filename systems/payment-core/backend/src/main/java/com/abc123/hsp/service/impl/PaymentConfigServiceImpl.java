@@ -310,7 +310,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentChannelReviewDTO> listChannelReviews() {
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -389,7 +389,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findChannelByCode(normalizedChannelCode) == null) {
             throw new IllegalArgumentException("支付渠道配置不存在");
         }
-        return paymentConfigMapper.findChannelVersions(normalizedChannelCode);
+        return safeList(paymentConfigMapper.findChannelVersions(normalizedChannelCode));
     }
 
     @Override
@@ -709,7 +709,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findRouteRuleByCode(normalizedRuleCode) == null) {
             throw new IllegalArgumentException("支付路由规则不存在");
         }
-        return paymentConfigMapper.findRouteRuleVersions(normalizedRuleCode);
+        return safeList(paymentConfigMapper.findRouteRuleVersions(normalizedRuleCode));
     }
 
     @Override
@@ -779,7 +779,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentProtocolReviewDTO> listProtocolReviews() {
-        return paymentConfigMapper.findProtocolReviews();
+        return safeList(paymentConfigMapper.findProtocolReviews());
     }
 
     @Override
@@ -881,7 +881,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findProtocolByCode(normalizedProtocolCode) == null) {
             throw new IllegalArgumentException("支付协议配置不存在");
         }
-        return paymentConfigMapper.findProtocolVersions(normalizedProtocolCode);
+        return safeList(paymentConfigMapper.findProtocolVersions(normalizedProtocolCode));
     }
 
     @Override
@@ -925,7 +925,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentIssueDutyRosterReviewDTO> listIssueDutyRosterReviews() {
-        return paymentConfigMapper.findIssueDutyRosterReviews();
+        return safeList(paymentConfigMapper.findIssueDutyRosterReviews());
     }
 
     @Override
@@ -1047,7 +1047,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentReturnCodeReviewDTO> listReturnCodeReviews() {
-        return paymentConfigMapper.findReturnCodeReviews();
+        return safeList(paymentConfigMapper.findReturnCodeReviews());
     }
 
     @Override
@@ -1103,7 +1103,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentReturnCodeImportReviewDTO> listReturnCodeImportReviews() {
-        return paymentConfigMapper.findReturnCodeImportReviews();
+        return safeList(paymentConfigMapper.findReturnCodeImportReviews());
     }
 
     @Override
@@ -1309,7 +1309,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentGatewayReviewDTO> listGatewayReviews() {
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1396,7 +1396,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findGatewayByCode(normalizedGatewayCode) == null) {
             throw new IllegalArgumentException("支付网关接入配置不存在");
         }
-        return paymentConfigMapper.findGatewayVersions(normalizedGatewayCode);
+        return safeList(paymentConfigMapper.findGatewayVersions(normalizedGatewayCode));
     }
 
     @Override
@@ -1522,7 +1522,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentControlPolicyReviewDTO> listControlPolicyReviews() {
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1613,7 +1613,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findControlPolicyBySourceAppId(normalizedSourceAppId) == null) {
             throw new IllegalArgumentException("支付控制策略配置不存在");
         }
-        return paymentConfigMapper.findControlPolicyVersions(normalizedSourceAppId);
+        return safeList(paymentConfigMapper.findControlPolicyVersions(normalizedSourceAppId));
     }
 
     @Override
@@ -1714,7 +1714,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentAlertProviderReviewDTO> listAlertProviderReviews() {
-        return paymentConfigMapper.findAlertProviderReviews();
+        return safeList(paymentConfigMapper.findAlertProviderReviews());
     }
 
     @Override
