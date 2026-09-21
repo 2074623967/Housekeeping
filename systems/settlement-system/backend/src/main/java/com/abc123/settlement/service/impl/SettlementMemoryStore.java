@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
@@ -65,7 +66,7 @@ public class SettlementMemoryStore {
     }
 
     public List<SettlementBatchEntity> batches() {
-        List<SettlementBatchEntity> items = new ArrayList<>(settlementDataMapper.findBatches());
+        List<SettlementBatchEntity> items = new ArrayList<>(safeList(settlementDataMapper.findBatches()));
         items.sort(Comparator.comparing(SettlementBatchEntity::getCreatedAt).reversed());
         return items;
     }
@@ -100,7 +101,7 @@ public class SettlementMemoryStore {
     }
 
     public List<SettlementOrderEntity> orders() {
-        List<SettlementOrderEntity> items = new ArrayList<>(settlementDataMapper.findOrders());
+        List<SettlementOrderEntity> items = new ArrayList<>(safeList(settlementDataMapper.findOrders()));
         items.sort(Comparator.comparing(SettlementOrderEntity::getCreatedAt).reversed());
         return items;
     }
@@ -144,7 +145,7 @@ public class SettlementMemoryStore {
     }
 
     public List<SettlementItemEntity> itemsBySettlementNo(String settlementNo) {
-        return settlementDataMapper.findItemsBySettlementNo(settlementNo);
+        return safeList(settlementDataMapper.findItemsBySettlementNo(settlementNo));
     }
 
     @Transactional
@@ -161,7 +162,7 @@ public class SettlementMemoryStore {
     }
 
     public List<SettlementAuditLogEntity> auditLogsBySettlementNo(String settlementNo) {
-        return settlementDataMapper.findAuditLogsBySettlementNo(settlementNo);
+        return safeList(settlementDataMapper.findAuditLogsBySettlementNo(settlementNo));
     }
 
     @Transactional
@@ -184,7 +185,7 @@ public class SettlementMemoryStore {
     }
 
     public List<PayoutBatchEntity> payoutBatches() {
-        List<PayoutBatchEntity> items = new ArrayList<>(settlementDataMapper.findPayoutBatches());
+        List<PayoutBatchEntity> items = new ArrayList<>(safeList(settlementDataMapper.findPayoutBatches()));
         items.sort(Comparator.comparing(PayoutBatchEntity::getCreatedAt).reversed());
         return items;
     }
@@ -218,7 +219,7 @@ public class SettlementMemoryStore {
     }
 
     public List<PayoutRecordEntity> payoutRecordsByBatchNo(String payoutBatchNo) {
-        return settlementDataMapper.findPayoutRecordsByBatchNo(payoutBatchNo);
+        return safeList(settlementDataMapper.findPayoutRecordsByBatchNo(payoutBatchNo));
     }
 
     public PayoutRecordEntity findPayoutRecordBySettlementNo(String settlementNo) {
@@ -311,9 +312,13 @@ public class SettlementMemoryStore {
     }
 
     public List<SettlementEventEntity> events() {
-        List<SettlementEventEntity> items = new ArrayList<>(settlementDataMapper.findEvents());
+        List<SettlementEventEntity> items = new ArrayList<>(safeList(settlementDataMapper.findEvents()));
         items.sort(Comparator.comparing(SettlementEventEntity::getCreatedAt).reversed());
         return items;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     public SettlementOrderEntity findOrderByClearingTarget(String clearingNo, String targetType, String targetNo) {
