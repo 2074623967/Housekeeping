@@ -15259,7 +15259,7 @@
 | --- | --- |
 | 支付监控后端定向测试 | `PaymentMonitorControllerTest`、`PaymentMonitorServiceImplTest` 通过 |
 | 后端全量测试 | Maven `-q test` 退出码 `0` |
-| 管理端自动化 | `npm test` 共 `42/42` 通过 |
+| 管理端自动化 | `npm test` 共 `43/43` 通过 |
 | 管理端构建 | `npm run build` 通过，Vite `108` 个模块 |
 | 静态检查 | `git diff --check` 与 `xmllint --noout PaymentMonitorMapper.xml` 通过 |
 | 证据边界 | CSV 快照只反映 payment-core 当前查询结果，不替代真实渠道、生产监控、资金一致或 release 放行事实 |
