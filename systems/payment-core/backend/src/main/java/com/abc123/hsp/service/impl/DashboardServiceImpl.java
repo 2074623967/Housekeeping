@@ -1,8 +1,11 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.DashboardSummaryDTO;
+import com.abc123.hsp.dto.DashboardCardDTO;
 import com.abc123.hsp.mapper.DashboardMapper;
 import com.abc123.hsp.service.DashboardService;
+import java.util.Collections;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,6 +19,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardSummaryDTO getSummary() {
-        return new DashboardSummaryDTO(dashboardMapper.findCards());
+        List<DashboardCardDTO> cards = dashboardMapper.findCards();
+        return new DashboardSummaryDTO(cards == null ? Collections.emptyList() : cards);
     }
 }
