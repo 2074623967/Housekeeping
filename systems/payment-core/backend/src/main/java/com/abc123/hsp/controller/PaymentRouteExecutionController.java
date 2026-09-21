@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,14 @@ public class PaymentRouteExecutionController {
 
     public PaymentRouteExecutionController(PaymentRouteExecutionService paymentRouteExecutionService) {
         this.paymentRouteExecutionService = paymentRouteExecutionService;
+    }
+
+    /**
+     * 查询支付路由执行详情。
+     */
+    @GetMapping("/{routeNo}")
+    public ApiResponse<PaymentRouteExecutionDetailDTO> detail(@PathVariable String routeNo) {
+        return ApiResponse.success(paymentRouteExecutionService.detail(routeNo));
     }
 
     /**

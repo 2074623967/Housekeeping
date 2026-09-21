@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRouteApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentRouteDetailRoute } from "../router/detailRoutes";
 import { paymentFlowsRoute, paymentRequestsRoute } from "../router/listRoutes";
 import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
@@ -189,6 +189,13 @@ function openPaymentDetail(paymentOrderId) {
     return;
   }
   router.push(paymentDetailRoute(paymentOrderId));
+}
+
+function openRouteDetail(routeNo) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(paymentRouteDetailRoute(routeNo));
 }
 
 function openPaymentFlows(paymentOrderId) {
@@ -425,6 +432,7 @@ watch(
                   <td>{{ formatValue(item.opsConfigSnapshotVersion) }}</td>
                   <td>{{ item.createdAt }}</td>
                   <td>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRouteDetail(item.routeNo)">查看详情</button>
                     <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
                     <button class="link-button" :disabled="!canUseSnapshot" @click="toggleExpanded(item.routeNo)">
                       {{ expandedRouteNo === item.routeNo ? "收起报文" : "查看报文" }}
@@ -477,6 +485,7 @@ watch(
               <div class="ops-row"><span>当前总览</span><span>最近路由 {{ metrics.latestRouteAt }} / 线下 {{ metrics.offlineRouteCount }} / 微信 {{ metrics.wechatRouteCount }} / 支付宝 {{ metrics.alipayRouteCount }}</span></div>
             </div>
             <div class="table-inline-actions">
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openRouteDetail(selectedItem.routeNo)">查看唯一详情</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看路由流水</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>

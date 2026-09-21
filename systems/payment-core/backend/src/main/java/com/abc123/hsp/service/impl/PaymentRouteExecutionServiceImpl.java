@@ -1,6 +1,9 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -24,6 +27,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionService {
 
+    private static final int ROUTE_NO_MAX_LENGTH = 64;
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
     private static final int ORDER_NO_MAX_LENGTH = 64;
     private static final int ROUTE_RULE_MAX_LENGTH = 128;
@@ -65,6 +69,16 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
     PaymentRouteExecutionServiceImpl(PaymentRouteExecutionMapper paymentRouteExecutionMapper) {
         this(paymentRouteExecutionMapper, false, 24, 5, 30, 10,
                 new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public PaymentRouteExecutionDetailDTO detail(String routeNo) {
+        String normalizedRouteNo = normalizeRequiredRouteNo(routeNo);
+        PaymentRouteExecutionDetailDTO detail = paymentRouteExecutionMapper.findDetail(normalizedRouteNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ROUTE_NOT_FOUND, "支付路由记录不存在");
+        }
+        return maskedDetail(detail);
     }
 
     @Override
@@ -127,6 +141,17 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         copy.setIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(item.getIdempotencyKey()));
         copy.setRequestPayload(sensitiveDataMasker.maskPayload(item.getRequestPayload()));
         copy.setResponsePayload(sensitiveDataMasker.maskPayload(item.getResponsePayload()));
+        return copy;
+    }
+
+    private PaymentRouteExecutionDetailDTO maskedDetail(PaymentRouteExecutionDetailDTO detail) {
+        PaymentRouteExecutionDetailDTO copy = new PaymentRouteExecutionDetailDTO();
+        BeanUtils.copyProperties(detail, copy);
+        copy.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        copy.setClientIp(sensitiveDataMasker.maskClientIp(detail.getClientIp()));
+        copy.setIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(detail.getIdempotencyKey()));
+        copy.setRequestPayload(sensitiveDataMasker.maskPayload(detail.getRequestPayload()));
+        copy.setResponsePayload(sensitiveDataMasker.maskPayload(detail.getResponsePayload()));
         return copy;
     }
 
@@ -200,6 +225,22 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredRouteNo(String routeNo) {
+        if (routeNo == null || routeNo.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "路由记录号不能为空");
+        }
+        for (int index = 0; index < routeNo.length(); index++) {
+            if (Character.isISOControl(routeNo.charAt(index))) {
+                throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "路由记录号不能包含控制字符");
+            }
+        }
+        String normalized = routeNo.trim();
+        if (normalized.length() > ROUTE_NO_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "路由记录号不能超过64个字符");
         }
         return normalized;
     }

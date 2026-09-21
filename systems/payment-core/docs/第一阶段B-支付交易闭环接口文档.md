@@ -34,6 +34,7 @@
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-routes/overview` | `GET` | 查询支付路由执行结果总览指标 |
 | `/api/payment-routes/export` | `GET` | 导出当前筛选条件下的支付路由执行结果 CSV |
+| `/api/payment-routes/{routeNo}` | `GET` | 查询单条支付路由执行详情 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
@@ -278,6 +279,14 @@
 2. 导出文件名固定为 `payment-routes.csv`，使用 UTF-8 BOM；查询直接返回全部匹配记录，不通过分页循环拼接。
 3. 导出列覆盖路由记录号、支付单号、订单号、预付单号、客户名称、支付金额、支付方式、命中渠道、路由规则、路由结果、配置快照版本、终端、客户端 IP、幂等键、请求报文、响应报文和创建时间。
 4. 客户名称、客户端 IP、幂等键及 JSON 报文使用与列表相同的脱敏规则，文本按 CSV 双引号规则转义；生产仍需补导出权限、审批、水印和下载审计。
+
+详情接口：`GET /api/payment-routes/{routeNo}`
+
+1. `routeNo` 按单一路径段编码，服务端去除首尾空白后校验必填、最长 `64` 个字符且不得包含控制字符；非法请求沿用 `PAYMENT-1036`，不存在返回 `PAYMENT-1062 / 支付路由记录不存在`。
+2. 响应包含 `routeNo / requestNo / paymentOrderId / orderNo / prepayOrderNo / customerName / amount / paymentMethod / channelCode / routeRule / routeResult / routeResultType / opsConfigSnapshotVersion / terminal / clientIp / idempotencyKey / requestPayload / responsePayload / createdAt`。
+3. 详情以 `t_payment_route_record.route_no` 唯一定位，并只按 `route.attempt_no = attempt.attempt_no` 补齐支付请求上下文；历史 `attempt_no IS NULL` 路由不按同支付单最近请求猜测归属。
+4. 客户名称、客户端 IP、幂等键和请求/响应报文由服务层输出脱敏副本，不改写 Mapper 原始 DTO 或数据库事实。
+5. 接口只读，不修改路由规则、不重试支付、不更新支付状态，也不代表真实渠道受理、账务、清分、结算、对账或生产放行事实。
 
 ## 5. 支付请求管理查询
 
@@ -4828,6 +4837,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `standardOrderNo` 仅当事件业务单号命中 `t_order.order_no` 时返回；接口不把虚拟业务号、退款申请号或外部单号伪装成标准订单。
 5. `eventPayload` 由服务层输出脱敏副本，不改写 Mapper 原始 DTO 或数据库事实；事件详情接口只读，不执行重发、不更新发布状态。
 6. 接口返回的是 payment-core 出站事件事实，不证明下游系统真实消费、账务入账、清分结算、资金一致或生产放行。
+
+### 14.363 支付路由执行详情契约
+
+1. `GET /api/payment-routes/{routeNo}` 按唯一路由记录号返回单条路由执行详情；路径参数按单一路径段编码。
+2. `routeNo` 必填、去除首尾空白、最长 `64` 个字符且不得包含控制字符；非法请求沿用 `PAYMENT-1036`，不存在返回 `PAYMENT-1062 / 支付路由记录不存在`。
+3. 响应包含路由记录号、支付请求号、支付单号、业务订单号、预付单号、客户、金额、支付方式、渠道、路由规则、路由结果、配置快照、终端、IP、幂等键、请求/响应报文和创建时间。
+4. 支付请求上下文只通过 `route.attempt_no = attempt.attempt_no` 精确关联；历史空尝试号路由保持请求上下文为空，不按支付单最近请求推断。
+5. 客户名称、IP、幂等键和请求/响应报文由服务层输出脱敏副本，不改写 Mapper 原始 DTO 或数据库事实；接口只读，不代表真实渠道、资金或生产放行。
 
 ## 15. 结论
 

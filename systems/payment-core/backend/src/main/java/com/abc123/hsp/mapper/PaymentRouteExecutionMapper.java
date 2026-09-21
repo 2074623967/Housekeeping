@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 支付路由执行结果 Mapper。
  */
 public interface PaymentRouteExecutionMapper {
+
+    /**
+     * 按路由记录号查询支付路由执行详情。
+     */
+    PaymentRouteExecutionDetailDTO findDetail(@Param("routeNo") String routeNo);
 
     /**
      * 查询支付路由执行结果列表。

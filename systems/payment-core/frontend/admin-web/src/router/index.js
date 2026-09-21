@@ -8,6 +8,7 @@ import BillDetailView from "../views/BillDetailView.vue";
 import PaymentFlowsView from "../views/PaymentFlowsView.vue";
 import PaymentFlowDetailView from "../views/PaymentFlowDetailView.vue";
 import PaymentRoutesView from "../views/PaymentRoutesView.vue";
+import PaymentRouteDetailView from "../views/PaymentRouteDetailView.vue";
 import PaymentEventsView from "../views/PaymentEventsView.vue";
 import PaymentEventDetailView from "../views/PaymentEventDetailView.vue";
 import PaymentIssuesView from "../views/PaymentIssuesView.vue";
@@ -49,6 +50,7 @@ const routes = [
         component: PaymentFlowDetailView
       },
       { path: "payment-routes", name: "payment-routes", component: PaymentRoutesView },
+      { path: "payment-routes/:routeNo", name: "payment-route-detail", component: PaymentRouteDetailView },
       { path: "payment-events", name: "payment-events", component: PaymentEventsView },
       { path: "payment-events/:eventNo", name: "payment-event-detail", component: PaymentEventDetailView },
       { path: "payment-issues", name: "payment-issues", component: PaymentIssuesView },

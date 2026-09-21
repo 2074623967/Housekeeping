@@ -72,4 +72,5 @@ public final class ErrorCode {
     public static final String PAYMENT_FLOW_NOT_FOUND = "PAYMENT-1059";
     public static final String PAYMENT_LOG_NOT_FOUND = "PAYMENT-1060";
     public static final String PAYMENT_EVENT_NOT_FOUND = "PAYMENT-1061";
+    public static final String PAYMENT_ROUTE_NOT_FOUND = "PAYMENT-1062";
 }

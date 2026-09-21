@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
@@ -27,6 +29,19 @@ class PaymentRouteExecutionControllerTest {
 
     @Mock
     private PaymentRouteExecutionService paymentRouteExecutionService;
+
+    @Test
+    void shouldReturnPaymentRouteExecutionDetail() {
+        PaymentRouteExecutionController controller = new PaymentRouteExecutionController(paymentRouteExecutionService);
+        PaymentRouteExecutionDetailDTO detail = new PaymentRouteExecutionDetailDTO();
+        detail.setRouteNo("ROUTE-001");
+        when(paymentRouteExecutionService.detail("ROUTE-001")).thenReturn(detail);
+
+        ApiResponse<PaymentRouteExecutionDetailDTO> response = controller.detail("ROUTE-001");
+
+        assertEquals("ROUTE-001", response.getData().getRouteNo());
+        verify(paymentRouteExecutionService).detail("ROUTE-001");
+    }
 
     @Test
     void shouldListPaymentRouteExecutions() {

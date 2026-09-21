@@ -15198,3 +15198,26 @@
 | Mapper 集成 | `findDetail` 验证事件号唯一查询、标准订单命中、投递/重试字段和不存在返回空 |
 | 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-events?pageNo=1&pageSize=1` 返回 `EVT202607190002`，`GET /api/payment-events/EVT202607190002` 返回事件详情，`/payment-events/EVT202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/BUSINESS_EVENT/EVT202607190002` 返回同一事件流水详情 |
 | 证据边界 | 当前证据不替代下游真实消费、账务入账、清分结算、目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |
+
+## 560. 2026-09-21 支付路由执行唯一详情与可信联查 V1.0 验证
+
+### 560.1 本轮补强
+
+1. 新增 `GET /api/payment-routes/{routeNo}` 和管理端 `/payment-routes/:routeNo`，以路由记录号唯一定位单条路由执行事实。
+2. 后端详情返回路由、支付单、订单、预付单、请求号、支付方式、渠道、配置快照、终端、IP、幂等键和请求/响应报文。
+3. 服务层对路由号执行去空白、必填、控制字符和 `64` 字符边界校验；不存在返回 `PAYMENT-1062`，敏感字段以脱敏副本输出。
+4. 详情 SQL 只按 `attempt_no` 精确补齐支付请求上下文；历史空尝试号路由不按支付单最近请求猜测归属。
+5. 前端详情页校验响应路由号与动态路由一致；首次失败不建快照，刷新失败保留阅读快照但关闭联查；列表和侧栏新增唯一详情入口。
+
+### 560.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付路由后端定向测试 | `PaymentRouteExecutionControllerTest`、`PaymentRouteExecutionServiceImplTest`、`PaymentRouteExecutionMapperIntegrationTest` 共 `15/15` 通过 |
+| 后端全量测试 | Maven `-q test` 退出码 `0`，Surefire 汇总 `1149/1149` 通过 |
+| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端构建 | `npm run build` 通过，Vite `100` 个模块 |
+| Mapper 集成 | 验证详情按路由号唯一查询、精确尝试号关联、历史空 `attempt_no` 不猜测请求归属 |
+| 静态检查 | `git diff --check` 与 `xmllint --noout PaymentRouteExecutionMapper.xml` 通过 |
+| 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-routes?pageNo=1&pageSize=1` 返回 `RTR202607190002`，`GET /api/payment-routes/RTR202607190002` 返回路由详情，`/payment-routes/RTR202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/ROUTE_RECORD/RTR202607190002` 返回同一路由流水详情 |
+| 证据边界 | 当前证据不替代目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |

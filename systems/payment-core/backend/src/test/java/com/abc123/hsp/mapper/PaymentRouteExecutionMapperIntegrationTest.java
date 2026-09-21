@@ -1,7 +1,9 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import java.io.InputStream;
@@ -69,6 +71,34 @@ class PaymentRouteExecutionMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFindRouteDetailByRouteNoWithoutGuessingMissingAttempt() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentRouteExecutionMapper mapper = session.getMapper(PaymentRouteExecutionMapper.class);
+
+            PaymentRouteExecutionDetailDTO detail = mapper.findDetail("ROUTE-API");
+            PaymentRouteExecutionDetailDTO legacy = mapper.findDetail("ROUTE-LEGACY");
+
+            assertEquals("ROUTE-API", detail.getRouteNo());
+            assertEquals("ATT-API", detail.getRequestNo());
+            assertEquals("PAY-SAME-SECOND", detail.getPaymentOrderId());
+            assertEquals("ORD-SAME-SECOND", detail.getOrderNo());
+            assertEquals("PRE-SAME-SECOND", detail.getPrepayOrderNo());
+            assertEquals("支付宝", detail.getPaymentMethod());
+            assertEquals("API", detail.getTerminal());
+            assertEquals("alipay_h5", detail.getChannelCode());
+            assertEquals("terminal=API", detail.getRouteRule());
+            assertEquals("支付宝H5", detail.getRouteResult());
+            assertEquals("2026-09-14 10:00:01", detail.getCreatedAt());
+
+            assertEquals("ROUTE-LEGACY", legacy.getRouteNo());
+            assertNull(legacy.getRequestNo());
+            assertNull(legacy.getPaymentMethod());
+            assertNull(legacy.getTerminal());
+            assertNull(mapper.findDetail("ROUTE-MISSING"));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -87,8 +117,8 @@ class PaymentRouteExecutionMapperIntegrationTest {
             statement.execute("CREATE TABLE t_prepay_order (id BIGINT AUTO_INCREMENT PRIMARY KEY, "
                     + "prepay_order_no VARCHAR(64), payment_order_id VARCHAR(64), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt (id BIGINT AUTO_INCREMENT PRIMARY KEY, "
-                    + "attempt_no VARCHAR(64), payment_order_id VARCHAR(64), payment_method VARCHAR(32), "
-                    + "terminal VARCHAR(32), client_ip VARCHAR(64), idempotency_key VARCHAR(128), "
+                    + "attempt_no VARCHAR(64), prepay_order_no VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "payment_method VARCHAR(32), terminal VARCHAR(32), client_ip VARCHAR(64), idempotency_key VARCHAR(128), "
                     + "request_payload VARCHAR(2048), response_payload VARCHAR(2048), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_record (id BIGINT AUTO_INCREMENT PRIMARY KEY, "
                     + "route_no VARCHAR(64), attempt_no VARCHAR(64), payment_order_id VARCHAR(64), "
@@ -100,18 +130,20 @@ class PaymentRouteExecutionMapperIntegrationTest {
                     + "(prepay_order_no, payment_order_id, created_at) VALUES "
                     + "('PRE-SAME-SECOND', 'PAY-SAME-SECOND', '2026-09-14 10:00:00')");
             statement.executeUpdate("INSERT INTO t_payment_attempt "
-                    + "(attempt_no, payment_order_id, payment_method, terminal, client_ip, idempotency_key, "
+                    + "(attempt_no, prepay_order_no, payment_order_id, payment_method, terminal, client_ip, idempotency_key, "
                     + "request_payload, created_at) VALUES "
-                    + "('ATT-API', 'PAY-SAME-SECOND', '支付宝', 'API', '127.0.0.1', 'KEY-API', '{}', "
+                    + "('ATT-API', 'PRE-SAME-SECOND', 'PAY-SAME-SECOND', '支付宝', 'API', '127.0.0.1', 'KEY-API', '{}', "
                     + "'2026-09-14 10:00:01'), "
-                    + "('ATT-MINI', 'PAY-SAME-SECOND', '微信', 'MINI_PROGRAM', '127.0.0.2', 'KEY-MINI', '{}', "
+                    + "('ATT-MINI', 'PRE-SAME-SECOND', 'PAY-SAME-SECOND', '微信', 'MINI_PROGRAM', '127.0.0.2', 'KEY-MINI', '{}', "
                     + "'2026-09-14 10:00:01')");
             statement.executeUpdate("INSERT INTO t_payment_route_record "
                     + "(route_no, attempt_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES "
                     + "('ROUTE-API', 'ATT-API', 'PAY-SAME-SECOND', 'alipay_h5', 'terminal=API', '支付宝H5', "
                     + "'2026-09-14 10:00:01'), "
                     + "('ROUTE-MINI', 'ATT-MINI', 'PAY-SAME-SECOND', 'wx_h5', 'terminal=MINI_PROGRAM', '微信H5', "
-                    + "'2026-09-14 10:00:01')");
+                    + "'2026-09-14 10:00:01'), "
+                    + "('ROUTE-LEGACY', NULL, 'PAY-SAME-SECOND', 'offline_bank', 'legacy', '历史空尝试号', "
+                    + "'2026-09-14 09:59:59')");
             session.commit();
         }
     }

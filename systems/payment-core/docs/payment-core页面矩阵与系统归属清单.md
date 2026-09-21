@@ -36,7 +36,7 @@
 
 截至 `2026-07-25`，`payment-core/frontend` 不是单一后台，而是已经存在四套实际工程：
 
-1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-flows/:flowSource/:flowNo`、`/payment-routes`、`/payment-events`、`/payment-issues`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-requests/:requestNo`、`/payment-logs`、`/payment-logs/:logNo`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
+1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-flows/:flowSource/:flowNo`、`/payment-routes`、`/payment-routes/:routeNo`、`/payment-events`、`/payment-issues`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-requests/:requestNo`、`/payment-logs`、`/payment-logs/:logNo`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
 2. `app-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 3. `h5-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 4. `pc-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
@@ -55,7 +55,7 @@
 | 支付单管理 | PC 后台 | `payment-core` | 已实现 | 支付单列表、状态、渠道、金额、业务单关联 |
 | 支付单详情 | PC 后台 | `payment-core` | 已实现 | 订单信息、支付信息、通知信息、渠道信息聚合展示 |
 | 支付流水查询 | PC 后台 | `payment-core` | 已实现 | 已完成聚合支付尝试、回调日志、路由记录、业务事件的统一列表查询，支持支付单号、订单号、流水类型、终端、关键字后端筛选、分页和排序 |
-| 支付路由执行结果 | PC 后台 | `payment-core` | 已实现 | 已完成支付路由记录独立查询页，支持按支付单号、订单号、路由规则、渠道编码、支付方式、终端、路由结果筛选与排序，并可展开查看请求上下文与联查动作 |
+| 支付路由执行结果 | PC 后台 | `payment-core` | 已实现 | 已完成支付路由记录独立查询页和唯一路由详情，支持按支付单号、订单号、路由规则、渠道编码、支付方式、终端、路由结果筛选与排序，并可按路由号精确查看请求上下文与联查动作 |
 | 收银台会话管理 | PC 后台 | `payment-core` | 已实现 | 已完成预付单会话列表、唯一会话详情、终端场景、支付关联和失效查询，支持后端筛选、分页、排序及订单、账单、支付记录和流水联查 |
 | 支付请求管理 | PC 后台 | `payment-core` | 已实现 | 已完成支付尝试列表与唯一请求详情，支持请求/响应报文、请求级精确路由、订单/账单/支付/会话/流水/日志联查，以及筛选、分页、排序和导出 |
 | 支付处理日志 | PC 后台 | `payment-core` | 已实现 | 当前已完成支付提交、路由、回调、业务事件四类处理日志查询和唯一日志详情，支持来源、关键字筛选、排序、分页及支付单、请求、流水可信联查 |
@@ -218,6 +218,13 @@
 3. 回调、事件没有确定预付单/请求归属时保持空值；路由仅在 `attempt_no` 可精确匹配时开放请求联查。
 4. 页面只提供订单、账单、支付单、请求、同支付单流水和处理日志等只读联查，不承接账务、清分、结算、对账或资金作业。
 
+### 5.6 支付路由执行唯一详情
+
+1. 管理端路由 `/payment-routes/:routeNo` 对应 `GET /api/payment-routes/{routeNo}`，以路由记录号作为唯一实体标识。
+2. 详情展示路由记录号、支付请求号、支付单、业务订单、预付单、客户、金额、支付方式、渠道、规则、结果、配置快照、终端、IP、幂等键和请求/响应报文。
+3. 请求上下文仅按 `attempt_no` 精确关联；历史空尝试号路由不猜测归属，只保留路由事实。
+4. 页面提供支付单、支付请求、路由流水、同支付单流水和处理日志联查；首次失败或刷新失败陈旧快照均禁止继续导航。
+
 ## 6. 系统建设顺序建议
 
 ### 5.49 2026-09-21 支付处理日志详情页归属补充
@@ -233,6 +240,13 @@
 2. 页面只读展示事件类型、支付单、业务单、标准订单、事件主题、下游系统、发布状态、HTTP 投递阶段、重试和重发审计，不在详情页执行重发或修改发布状态。
 3. 页面可联查标准订单、支付单、事件流水、同支付单流水、处理日志和死信补偿任务；事件流水固定使用 `BUSINESS_EVENT + eventNo`。
 4. 该页面属于支付核心出站排障入口，不承接账务、清分、结算、对账或下游消费确认职责。
+
+### 5.51 2026-09-21 支付路由执行详情页归属补充
+
+1. `admin-web` 新增 `/payment-routes/:routeNo`，归属 `payment-core`，用于按路由记录号查看单条支付路由执行事实。
+2. 页面只读展示路由命中、配置快照、请求上下文和脱敏报文，不提供修改路由、重试支付或改写资金状态入口。
+3. 页面可联查支付单、支付请求、路由流水、同支付单流水和处理日志；请求归属只在 `attempt_no` 精确存在时开放。
+4. 该页面属于正向支付链路排障骨架，不承接账务、清分、结算、退款、对账、钱包或保证金职责。
 
 基于本矩阵，后续应按以下顺序推进，而不是继续把全部页面堆在 `payment-core`：
 

@@ -7,6 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
@@ -26,6 +29,58 @@ class PaymentRouteExecutionServiceImplTest {
 
     @Mock
     private PaymentRouteExecutionMapper paymentRouteExecutionMapper;
+
+    @Test
+    void shouldNormalizeAndReturnMaskedRouteExecutionDetail() {
+        PaymentRouteExecutionDetailDTO detail = new PaymentRouteExecutionDetailDTO();
+        detail.setRouteNo("ROUTE-001");
+        detail.setCustomerName("张三");
+        detail.setClientIp("10.20.30.40");
+        detail.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        detail.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
+        detail.setResponsePayload("{\"cardNo\":\"6222021234567890123\"}");
+        when(paymentRouteExecutionMapper.findDetail("ROUTE-001")).thenReturn(detail);
+
+        PaymentRouteExecutionDetailDTO result = new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper)
+                .detail(" ROUTE-001 ");
+
+        assertEquals("ROUTE-001", result.getRouteNo());
+        assertEquals("张*", result.getCustomerName());
+        assertEquals("10.20.*.*", result.getClientIp());
+        assertEquals("ORDER-****DEFG", result.getIdempotencyKey());
+        assertTrue(result.getRequestPayload().contains("138****8000"));
+        assertTrue(result.getResponsePayload().contains("622202******0123"));
+        assertEquals("张三", detail.getCustomerName());
+        verify(paymentRouteExecutionMapper).findDetail("ROUTE-001");
+    }
+
+    @Test
+    void shouldRejectInvalidRouteNoBeforeMapperAccess() {
+        PaymentRouteExecutionServiceImpl service =
+                new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper);
+
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(BusinessException.class, () -> service.detail("ROUTE-001\n"));
+        BusinessException oversized = assertThrows(BusinessException.class,
+                () -> service.detail(repeat("R", 65)));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        verifyNoInteractions(paymentRouteExecutionMapper);
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenRouteDetailMissing() {
+        when(paymentRouteExecutionMapper.findDetail("ROUTE-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper)
+                        .detail("ROUTE-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_ROUTE_NOT_FOUND, exception.getCode());
+        verify(paymentRouteExecutionMapper).findDetail("ROUTE-MISSING");
+    }
 
     @Test
     void shouldNormalizeAndForwardRouteExecutionPagingQuery() {

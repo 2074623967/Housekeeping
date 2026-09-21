@@ -40,6 +40,13 @@ export function paymentEventDetailRoute(eventNo) {
   };
 }
 
+export function paymentRouteDetailRoute(routeNo) {
+  return {
+    name: "payment-route-detail",
+    params: { routeNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

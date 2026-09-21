@@ -439,7 +439,8 @@ export const paymentRouteApi = {
       sortOrder
     });
     return `/api/payment-routes/export?${params.toString()}`;
-  }
+  },
+  getDetail: (routeNo) => request(`/api/payment-routes/${encodeURIComponent(routeNo)}`)
 };
 
 export const paymentEventApi = {

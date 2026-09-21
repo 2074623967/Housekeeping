@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -9,6 +10,11 @@ import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
  * 支付路由执行结果服务。
  */
 public interface PaymentRouteExecutionService {
+
+    /**
+     * 查询支付路由执行详情。
+     */
+    PaymentRouteExecutionDetailDTO detail(String routeNo);
 
     /**
      * 查询支付路由执行结果列表。
