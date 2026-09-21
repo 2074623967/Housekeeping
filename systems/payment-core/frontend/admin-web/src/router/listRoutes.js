@@ -13,3 +13,4 @@ export const cashierSessionsRoute = (query) => listRoute("cashier-sessions", que
 export const paymentRequestsRoute = (query) => listRoute("payment-requests", query);
 export const paymentLogsRoute = (query) => listRoute("payment-logs", query);
 export const paymentsRoute = (query) => listRoute("payments", query);
+export const refundsRoute = (query) => listRoute("refunds", query);

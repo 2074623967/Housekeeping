@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentMonitorApi } from "../api/client";
-import { paymentFlowsRoute, paymentsRoute } from "../router/listRoutes";
+import { paymentFlowsRoute, paymentsRoute, refundsRoute } from "../router/listRoutes";
 
 const router = useRouter();
 const selectedAlert = ref(null);
@@ -201,6 +201,13 @@ function openChannelDrillDown(item) {
   router.push(paymentFlowsRoute({ channelCode: item.channelCode }));
 }
 
+function openProcessingRefunds() {
+  if (!canDrillDown.value || !(overview.value.summary?.processingRefundCount > 0)) {
+    return;
+  }
+  router.push(refundsRoute({ refundStatus: "PROCESSING" }));
+}
+
 function pickAlert(alert) {
   selectedAlert.value = alert;
 }
@@ -270,6 +277,9 @@ onMounted(loadOverview);
               <p class="overview-title">处理中退款</p>
               <strong>{{ overview.summary.processingRefundCount ?? 0 }}</strong>
               <span>用于快速定位仍等待渠道结果或主动查单收口的退款单。</span>
+              <button class="link-button" :disabled="!canDrillDown || !(overview.summary.processingRefundCount > 0)" @click="openProcessingRefunds">
+                查看处理中退款
+              </button>
             </article>
           </div>
         </section>

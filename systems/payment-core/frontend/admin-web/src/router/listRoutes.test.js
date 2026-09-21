@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { billsRoute, paymentLogsRoute, paymentsRoute } from "./listRoutes.js";
+import { billsRoute, paymentLogsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
 
 function createTestRouter() {
   return createRouter({
@@ -9,7 +9,8 @@ function createTestRouter() {
     routes: [
       { path: "/bills", name: "bills", component: {} },
       { path: "/payment-logs", name: "payment-logs", component: {} },
-      { path: "/payments", name: "payments", component: {} }
+      { path: "/payments", name: "payments", component: {} },
+      { path: "/refunds", name: "refunds", component: {} }
     ]
   });
 }
@@ -34,6 +35,15 @@ test("keeps admin list filters in structured query fields", () => {
     paymentMethod: "微信支付",
     status: "WAIT_CALLBACK"
   });
+});
+
+test("keeps the processing refund status group in the refund list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(refundsRoute({ refundStatus: "PROCESSING" }));
+
+  assert.deepEqual(resolved.query, { refundStatus: "PROCESSING" });
+  assert.equal(resolved.href, "/refunds?refundStatus=PROCESSING");
 });
 
 test("keeps the day-end pending payment status group in the payment list route", () => {
