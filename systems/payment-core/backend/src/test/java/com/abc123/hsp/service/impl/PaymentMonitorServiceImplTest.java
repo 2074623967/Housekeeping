@@ -31,6 +31,7 @@ class PaymentMonitorServiceImplTest {
     void shouldLoadMonitorOverview() {
         PaymentMonitorSummaryDTO summary = new PaymentMonitorSummaryDTO();
         summary.setAlertCount(99);
+        summary.setProcessingRefundCount(4);
         when(paymentMonitorMapper.findSummary()).thenReturn(summary);
         when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
         when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
@@ -41,6 +42,7 @@ class PaymentMonitorServiceImplTest {
         PaymentMonitorOverviewDTO overview = new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
 
         assertEquals(Integer.valueOf(2), overview.getSummary().getAlertCount());
+        assertEquals(Integer.valueOf(4), overview.getSummary().getProcessingRefundCount());
         verify(paymentMonitorMapper).findSummary();
         verify(paymentMonitorMapper).findRecentTrends();
         verify(paymentMonitorMapper).findChannelMetrics();
@@ -74,6 +76,7 @@ class PaymentMonitorServiceImplTest {
         PaymentMonitorOverviewDTO overview = new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
 
         assertEquals(Integer.valueOf(0), overview.getSummary().getAlertCount());
+        assertEquals(Integer.valueOf(0), overview.getSummary().getProcessingRefundCount());
         assertEquals(0, overview.getTrends().size());
         assertEquals(0, overview.getChannelMetrics().size());
         assertEquals(0, overview.getAlerts().size());

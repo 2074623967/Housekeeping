@@ -57,7 +57,7 @@ const monitorCards = computed(() => {
     {
       title: "异常告警数",
       value: summary.alertCount ?? 0,
-      hint: `退款失败 ${summary.failedRefundCount ?? 0} / 停用渠道 ${summary.disabledChannelCount ?? 0}`
+      hint: `处理中退款 ${summary.processingRefundCount ?? 0} / 退款失败 ${summary.failedRefundCount ?? 0}`
     }
   ];
 });
@@ -265,6 +265,11 @@ onMounted(loadOverview);
               <p class="overview-title">高风险渠道数</p>
               <strong>{{ riskSummary.highRiskChannelCount }}</strong>
               <span>用于快速判断是否需要回到配置中心复核商户参数、网关状态和路由规则。</span>
+            </article>
+            <article class="overview-card warn">
+              <p class="overview-title">处理中退款</p>
+              <strong>{{ overview.summary.processingRefundCount ?? 0 }}</strong>
+              <span>用于快速定位仍等待渠道结果或主动查单收口的退款单。</span>
             </article>
           </div>
         </section>

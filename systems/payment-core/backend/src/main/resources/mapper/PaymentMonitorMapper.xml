@@ -12,6 +12,7 @@
                payment_summary.pending_payment_count AS pendingPaymentCount,
                payment_summary.closed_payment_count AS closedPaymentCount,
                COALESCE(refund_summary.failed_refund_count, 0) AS failedRefundCount,
+               COALESCE(refund_summary.processing_refund_count, 0) AS processingRefundCount,
                COALESCE(channel_summary.disabled_channel_count, 0) AS disabledChannelCount,
                (
                    CASE WHEN payment_summary.wait_callback_count &gt; 0 THEN 1 ELSE 0 END +
@@ -58,6 +59,7 @@
         ) payment_success_fact_summary
                  CROSS JOIN (
             SELECT COALESCE(SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END), 0) AS failed_refund_count,
+                   COALESCE(SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END), 0) AS processing_refund_count,
                    COALESCE(SUM(CASE WHEN status = 'SUCCESS' AND success_at IS NULL THEN 1 ELSE 0 END), 0)
                        AS missing_success_time_count
             FROM t_refund_order

@@ -30,6 +30,9 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
         if (summary == null) {
             summary = new PaymentMonitorSummaryDTO();
         }
+        if (summary.getProcessingRefundCount() == null) {
+            summary.setProcessingRefundCount(0);
+        }
         overview.setTrends(safeList(paymentMonitorMapper.findRecentTrends()));
         overview.setChannelMetrics(safeList(paymentMonitorMapper.findChannelMetrics()));
         overview.setAlerts(safeList(paymentMonitorMapper.findAlerts()));
@@ -51,6 +54,7 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
         appendRow(csv, "summary", "pendingPaymentCount", summary.getPendingPaymentCount(), "");
         appendRow(csv, "summary", "closedPaymentCount", summary.getClosedPaymentCount(), "");
         appendRow(csv, "summary", "failedRefundCount", summary.getFailedRefundCount(), "");
+        appendRow(csv, "summary", "processingRefundCount", summary.getProcessingRefundCount(), "");
         appendRow(csv, "summary", "disabledChannelCount", summary.getDisabledChannelCount(), "");
         appendRow(csv, "summary", "alertCount", summary.getAlertCount(), "");
         for (PaymentTrendPointDTO trend : safeList(overview.getTrends())) {

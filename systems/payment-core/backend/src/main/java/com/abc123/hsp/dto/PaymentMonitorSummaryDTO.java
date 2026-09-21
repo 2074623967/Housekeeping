@@ -22,6 +22,8 @@ public class PaymentMonitorSummaryDTO {
     private Integer closedPaymentCount;
     /** 失败退款单量。 */
     private Integer failedRefundCount;
+    /** 处理中退款单量。 */
+    private Integer processingRefundCount;
     /** 已停用渠道数。 */
     private Integer disabledChannelCount;
     /** 当前异常告警数。 */
