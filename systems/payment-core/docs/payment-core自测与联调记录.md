@@ -15251,7 +15251,7 @@
 
 1. 新增 `GET /api/payment-monitor/export`，导出与当前总览相同来源的摘要、趋势、渠道和告警 CSV 快照。
 2. 导出统一经过 CSV 公式注入防护；空列表和空字段保持为空，不补造监控事实。
-3. 管理端支付监控页新增“导出快照”入口，仅在最新总览加载成功且快照未过期时可用；摘要新增处理中退款数量，便于识别退款查单积压。
+3. 管理端支付监控页新增“导出快照”入口，仅在最新总览加载成功且快照未过期时可用；摘要新增处理中退款数量，并可下钻到退款列表的 `PROCESSING` 筛选。
 
 ### 562.2 验证结果
 
@@ -15259,7 +15259,7 @@
 | --- | --- |
 | 支付监控后端定向测试 | `PaymentMonitorControllerTest`、`PaymentMonitorServiceImplTest` 通过 |
 | 后端全量测试 | Maven `-q test` 退出码 `0` |
-| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端自动化 | `npm test` 共 `42/42` 通过 |
 | 管理端构建 | `npm run build` 通过，Vite `108` 个模块 |
 | 静态检查 | `git diff --check` 与 `xmllint --noout PaymentMonitorMapper.xml` 通过 |
 | 证据边界 | CSV 快照只反映 payment-core 当前查询结果，不替代真实渠道、生产监控、资金一致或 release 放行事实 |
