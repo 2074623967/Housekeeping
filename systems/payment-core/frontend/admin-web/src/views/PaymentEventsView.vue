@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentEventApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentEventDetailRoute } from "../router/detailRoutes";
 import { paymentFlowsRoute, paymentLogsRoute } from "../router/listRoutes";
 import {
   paymentEventRecommendedAction,
@@ -115,7 +115,17 @@ function applyFilters() {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
+}
+
+function openEventDetail(eventNo) {
+  if (!canUseSnapshot.value || !eventNo) {
+    return;
+  }
+  router.push(paymentEventDetailRoute(eventNo));
 }
 
 async function loadEvents(query = buildQuery()) {
@@ -435,7 +445,8 @@ onMounted(loadEvents);
                 <td class="flow-summary-cell">{{ item.eventPayload }}</td>
                 <td>{{ item.createdAt }}</td>
                 <td>
-                  <button class="link-button" @click="pickItem(item)">快照</button>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openEventDetail(item.eventNo)">详情</button>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">快照</button>
                   <button
                     class="link-button"
                     :disabled="!canUseSnapshot || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
@@ -480,6 +491,7 @@ onMounted(loadEvents);
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信，{{ metrics.unknownTotal }} 条结果未知</span></div>
             </div>
             <div class="table-inline-actions">
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openEventDetail(selectedItem.eventNo)">查看事件详情</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付日志</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>

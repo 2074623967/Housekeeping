@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +31,14 @@ public class PaymentEventController {
 
     public PaymentEventController(PaymentEventService paymentEventService) {
         this.paymentEventService = paymentEventService;
+    }
+
+    /**
+     * 查询支付事件出站详情。
+     */
+    @GetMapping("/{eventNo}")
+    public ApiResponse<PaymentEventDetailDTO> detail(@PathVariable String eventNo) {
+        return ApiResponse.success(paymentEventService.detail(eventNo));
     }
 
     /**

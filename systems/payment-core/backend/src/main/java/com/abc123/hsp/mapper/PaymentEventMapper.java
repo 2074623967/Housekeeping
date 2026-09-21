@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 支付事件出站 Mapper。
  */
 public interface PaymentEventMapper {
+
+    /**
+     * 按事件号查询支付事件详情。
+     */
+    PaymentEventDetailDTO findDetail(@Param("eventNo") String eventNo);
 
     /**
      * 查询支付事件出站列表。

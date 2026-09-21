@@ -4820,6 +4820,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. `sourceType + sourceNo` 仅作为来源事实标识返回；是否可跳支付流水由前端按已知来源做失败关闭，其中日志来源 `PAYMENT_EVENT` 可安全映射为流水来源 `BUSINESS_EVENT`，其他未知来源不猜测归属。
 6. 接口只读，不更新日志、支付单、订单、请求、流水或资金事实，也不代表真实渠道、账务、清分、结算或对账一致。
 
+### 14.362 支付事件详情契约
+
+1. `GET /api/payment-events/{eventNo}` 按唯一事件号返回单条支付出站事件详情；路径参数按单一路径段编码。
+2. `eventNo` 必填、去除首尾空白、最长 `64` 个字符且不得包含控制字符；非法请求沿用事件服务既有参数校验，事件不存在返回 `PAYMENT-1061 / 支付事件不存在`。
+3. 响应包含 `eventNo / eventType / paymentOrderId / bizNo / standardOrderNo / eventTopic / downstreamSystem / publishStatus / publishStatusType / paymentSuccessHttpStage / retryCount / lastPublishedAt / nextRetryAt / lastRepublishOperator / lastRepublishedAt / eventPayload / createdAt`。
+4. `standardOrderNo` 仅当事件业务单号命中 `t_order.order_no` 时返回；接口不把虚拟业务号、退款申请号或外部单号伪装成标准订单。
+5. `eventPayload` 由服务层输出脱敏副本，不改写 Mapper 原始 DTO 或数据库事实；事件详情接口只读，不执行重发、不更新发布状态。
+6. 接口返回的是 payment-core 出站事件事实，不证明下游系统真实消费、账务入账、清分结算、资金一致或生产放行。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

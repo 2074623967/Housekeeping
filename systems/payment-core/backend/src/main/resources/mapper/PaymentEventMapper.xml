@@ -84,6 +84,30 @@
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
+    <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentEventDetailDTO">
+        SELECT pe.event_no AS eventNo,
+               pe.event_type AS eventType,
+               pe.payment_order_id AS paymentOrderId,
+               pe.biz_no AS bizNo,
+               standard_order.order_no AS standardOrderNo,
+               pe.event_topic AS eventTopic,
+               pe.downstream_system AS downstreamSystem,
+               pe.publish_status AS publishStatus,
+               pe.publish_status_type AS publishStatusType,
+               pe.payment_success_http_stage AS paymentSuccessHttpStage,
+               pe.retry_count AS retryCount,
+               DATE_FORMAT(pe.last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
+               DATE_FORMAT(pe.next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               pe.last_republish_operator AS lastRepublishOperator,
+               DATE_FORMAT(pe.last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
+               pe.event_payload AS eventPayload,
+               DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_event pe
+                 LEFT JOIN t_order standard_order ON standard_order.order_no = pe.biz_no
+        WHERE pe.event_no = #{eventNo}
+        LIMIT 1
+    </select>
+
     <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentEventOverviewDTO">
         SELECT COUNT(1) AS totalEventCount,
                SUM(CASE WHEN publish_status = 'SUCCESS' THEN 1 ELSE 0 END) AS successEventCount,

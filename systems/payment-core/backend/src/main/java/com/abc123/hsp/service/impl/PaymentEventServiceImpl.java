@@ -1,6 +1,9 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
@@ -66,6 +69,19 @@ public class PaymentEventServiceImpl implements PaymentEventService {
                 return paymentEventMapper.markRepublished(eventNo) > 0;
             }
         }, new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    @Override
+    public PaymentEventDetailDTO detail(String eventNo) {
+        String normalizedEventNo = normalizeRequiredField(eventNo, EVENT_NO_MAX_LENGTH, "事件号");
+        PaymentEventDetailDTO detail = paymentEventMapper.findDetail(normalizedEventNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_EVENT_NOT_FOUND, "支付事件不存在");
+        }
+        PaymentEventDetailDTO outwardDetail = new PaymentEventDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setEventPayload(sensitiveDataMasker.maskPayload(detail.getEventPayload()));
+        return outwardDetail;
     }
 
     @Override

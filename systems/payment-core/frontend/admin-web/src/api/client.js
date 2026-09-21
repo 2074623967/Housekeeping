@@ -443,6 +443,7 @@ export const paymentRouteApi = {
 };
 
 export const paymentEventApi = {
+  getDetail: (eventNo) => request(`/api/payment-events/${encodeURIComponent(eventNo)}`),
   getOverview: ({
     paymentOrderId = "",
     eventType = "全部",

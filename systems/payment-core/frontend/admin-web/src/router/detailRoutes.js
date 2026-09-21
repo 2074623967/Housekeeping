@@ -33,6 +33,13 @@ export function paymentLogDetailRoute(logNo) {
   };
 }
 
+export function paymentEventDetailRoute(eventNo) {
+  return {
+    name: "payment-event-detail",
+    params: { eventNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

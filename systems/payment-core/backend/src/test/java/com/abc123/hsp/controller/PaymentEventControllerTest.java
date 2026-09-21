@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
@@ -26,6 +28,19 @@ class PaymentEventControllerTest {
 
     @Mock
     private PaymentEventService paymentEventService;
+
+    @Test
+    void shouldReturnPaymentEventDetail() {
+        PaymentEventController controller = new PaymentEventController(paymentEventService);
+        PaymentEventDetailDTO detail = new PaymentEventDetailDTO();
+        detail.setEventNo("EVT-001");
+        when(paymentEventService.detail("EVT-001")).thenReturn(detail);
+
+        ApiResponse<PaymentEventDetailDTO> response = controller.detail("EVT-001");
+
+        assertEquals("EVT-001", response.getData().getEventNo());
+        verify(paymentEventService).detail("EVT-001");
+    }
 
     @Test
     void shouldExportPaymentEvents() {

@@ -2,8 +2,10 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
@@ -205,13 +207,41 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFindPaymentEventDetailByUniqueEventNo() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            PaymentEventDetailDTO detail = mapper.findDetail("EVT-AUDIT-001");
+
+            assertEquals("EVT-AUDIT-001", detail.getEventNo());
+            assertEquals("PAYMENT_SUCCESS", detail.getEventType());
+            assertEquals("PAY-001", detail.getPaymentOrderId());
+            assertEquals("ORD-001", detail.getBizNo());
+            assertEquals("ORD-001", detail.getStandardOrderNo());
+            assertEquals("payment.trade.succeeded.v1", detail.getEventTopic());
+            assertEquals("accounting-system", detail.getDownstreamSystem());
+            assertEquals("FAILED", detail.getPublishStatus());
+            assertEquals("danger", detail.getPublishStatusType());
+            assertEquals("PENDING", detail.getPaymentSuccessHttpStage());
+            assertEquals(1, detail.getRetryCount());
+            assertEquals("{}", detail.getEventPayload());
+            assertNotNull(detail.getCreatedAt());
+            assertNull(mapper.findDetail("EVT-MISSING"));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR \""
                     + PaymentConfigProtocolVersionMapperIntegrationTest.class.getName()
                     + ".dateFormat\"");
+            statement.execute("DROP TABLE IF EXISTS t_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
+            statement.execute("CREATE TABLE t_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE)");
+            statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");
             statement.execute("CREATE TABLE t_payment_event ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR(64) NOT NULL, "
                     + "event_type VARCHAR(64) NOT NULL, payment_order_id VARCHAR(64) NOT NULL, "

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentEventDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
@@ -33,6 +34,45 @@ class PaymentEventServiceImplTest {
     private PaymentEventMapper paymentEventMapper;
     @Mock
     private PaymentEventDispatchService paymentEventDispatchService;
+
+    @Test
+    void shouldNormalizeAndReturnMaskedPaymentEventDetail() {
+        PaymentEventDetailDTO detail = new PaymentEventDetailDTO();
+        detail.setEventNo("EVT-001");
+        detail.setEventPayload("{\"customerName\":\"张女士\",\"phone\":\"13800138000\"}");
+        when(paymentEventMapper.findDetail("EVT-001")).thenReturn(detail);
+
+        PaymentEventDetailDTO result = new PaymentEventServiceImpl(paymentEventMapper).detail(" EVT-001 ");
+
+        assertEquals("EVT-001", result.getEventNo());
+        assertTrue(result.getEventPayload().contains("张*"));
+        assertTrue(result.getEventPayload().contains("138****8000"));
+        assertTrue(detail.getEventPayload().contains("13800138000"));
+        verify(paymentEventMapper).findDetail("EVT-001");
+    }
+
+    @Test
+    void shouldRejectInvalidEventDetailNoBeforeMapperAccess() {
+        PaymentEventServiceImpl service = new PaymentEventServiceImpl(paymentEventMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.detail("  "));
+        assertThrows(IllegalArgumentException.class, () -> service.detail("EVT-001\n"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.detail(String.join("", Collections.nCopies(65, "E"))));
+
+        verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenPaymentEventDetailMissing() {
+        when(paymentEventMapper.findDetail("EVT-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentEventServiceImpl(paymentEventMapper).detail("EVT-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_EVENT_NOT_FOUND, exception.getCode());
+        verify(paymentEventMapper).findDetail("EVT-MISSING");
+    }
 
     @Test
     void shouldListPaymentEvents() {

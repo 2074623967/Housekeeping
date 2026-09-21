@@ -15176,3 +15176,25 @@
 | Mapper 集成 | `findDetail` 验证日志号唯一查询、标准订单命中、来源类型/编号和不存在返回空 |
 | 运行态验证 | 提权启动 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-logs?pageNo=1&pageSize=1` 返回 `EVT202607190002`，`GET /api/payment-logs/EVT202607190002` 返回日志详情，`/payment-logs/EVT202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/BUSINESS_EVENT/EVT202607190002` 返回同一事件流水详情 |
 | 证据边界 | 当前证据不替代目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |
+
+## 559. 2026-09-21 支付事件唯一详情与出站排障 V1.0 验证
+
+### 559.1 本轮补强
+
+1. 新增 `GET /api/payment-events/{eventNo}` 和管理端 `/payment-events/:eventNo`，以事件号唯一定位单条支付出站事件。
+2. 后端详情返回支付单、业务单、标准订单、事件主题、下游系统、发布状态、HTTP 投递阶段、重试、最近重发审计、事件载荷和创建时间。
+3. 服务层对事件号执行去空白、必填、控制字符和 `64` 字符边界校验；不存在返回 `PAYMENT-1061`，事件载荷以脱敏副本输出。
+4. 前端详情页校验响应事件号与动态路由一致；首次失败不建快照，刷新失败保留阅读快照但关闭联查；事件流水固定使用 `BUSINESS_EVENT + eventNo`。
+5. 支付事件列表将“详情”升级为唯一详情入口，列表和侧栏快照在刷新失败或交互锁定后均禁止继续下钻。
+
+### 559.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付事件后端定向测试 | `PaymentEventControllerTest`、`PaymentEventServiceImplTest`、`PaymentEventRepublishAuditMapperIntegrationTest` 共 `27/27` 通过 |
+| 后端全量测试 | Maven `-q test` 退出码 `0`，Surefire 汇总 `1144/1144` 通过 |
+| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端构建 | `npm run build` 通过，Vite `98` 个模块 |
+| Mapper 集成 | `findDetail` 验证事件号唯一查询、标准订单命中、投递/重试字段和不存在返回空 |
+| 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-events?pageNo=1&pageSize=1` 返回 `EVT202607190002`，`GET /api/payment-events/EVT202607190002` 返回事件详情，`/payment-events/EVT202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/BUSINESS_EVENT/EVT202607190002` 返回同一事件流水详情 |
+| 证据边界 | 当前证据不替代下游真实消费、账务入账、清分结算、目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |
