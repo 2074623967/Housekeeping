@@ -27,9 +27,12 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
     public PaymentMonitorOverviewDTO overview() {
         PaymentMonitorOverviewDTO overview = new PaymentMonitorOverviewDTO();
         PaymentMonitorSummaryDTO summary = paymentMonitorMapper.findSummary();
-        overview.setTrends(paymentMonitorMapper.findRecentTrends());
-        overview.setChannelMetrics(paymentMonitorMapper.findChannelMetrics());
-        overview.setAlerts(paymentMonitorMapper.findAlerts());
+        if (summary == null) {
+            summary = new PaymentMonitorSummaryDTO();
+        }
+        overview.setTrends(safeList(paymentMonitorMapper.findRecentTrends()));
+        overview.setChannelMetrics(safeList(paymentMonitorMapper.findChannelMetrics()));
+        overview.setAlerts(safeList(paymentMonitorMapper.findAlerts()));
         summary.setAlertCount(overview.getAlerts().size());
         overview.setSummary(summary);
         return overview;

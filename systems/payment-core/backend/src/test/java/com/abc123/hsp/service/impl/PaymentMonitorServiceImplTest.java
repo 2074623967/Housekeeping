@@ -63,4 +63,19 @@ class PaymentMonitorServiceImplTest {
         assertEquals(true, csv.contains("\"successRate\",\"'=1+1\""));
         verify(paymentMonitorMapper).findSummary();
     }
+
+    @Test
+    void shouldReturnEmptyCollectionsWhenMonitorSourcesHaveNoRows() {
+        when(paymentMonitorMapper.findSummary()).thenReturn(null);
+        when(paymentMonitorMapper.findRecentTrends()).thenReturn(null);
+        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(null);
+        when(paymentMonitorMapper.findAlerts()).thenReturn(null);
+
+        PaymentMonitorOverviewDTO overview = new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
+
+        assertEquals(Integer.valueOf(0), overview.getSummary().getAlertCount());
+        assertEquals(0, overview.getTrends().size());
+        assertEquals(0, overview.getChannelMetrics().size());
+        assertEquals(0, overview.getAlerts().size());
+    }
 }
