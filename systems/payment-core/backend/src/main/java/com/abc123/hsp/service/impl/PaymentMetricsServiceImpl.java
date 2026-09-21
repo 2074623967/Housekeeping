@@ -19,6 +19,14 @@ public class PaymentMetricsServiceImpl implements PaymentMetricsService {
 
     @Override
     public PaymentMetricsDTO summary() {
-        return paymentMetricsMapper.findSummary();
+        PaymentMetricsDTO summary = paymentMetricsMapper.findSummary();
+        if (summary != null) {
+            return summary;
+        }
+
+        PaymentMetricsDTO emptySummary = new PaymentMetricsDTO();
+        emptySummary.setSuccessAmount("¥0.00");
+        emptySummary.setSuccessRate("0.00%");
+        return emptySummary;
     }
 }
