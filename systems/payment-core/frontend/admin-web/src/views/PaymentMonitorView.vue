@@ -208,6 +208,13 @@ function openProcessingRefunds() {
   router.push(refundsRoute({ refundStatus: "PROCESSING" }));
 }
 
+function openFailedRefunds() {
+  if (!canDrillDown.value || !(overview.value.summary?.failedRefundCount > 0)) {
+    return;
+  }
+  router.push(refundsRoute({ refundStatus: "FAIL" }));
+}
+
 function pickAlert(alert) {
   selectedAlert.value = alert;
 }
@@ -279,6 +286,14 @@ onMounted(loadOverview);
               <span>用于快速定位仍等待渠道结果或主动查单收口的退款单。</span>
               <button class="link-button" :disabled="!canDrillDown || !(overview.summary.processingRefundCount > 0)" @click="openProcessingRefunds">
                 查看处理中退款
+              </button>
+            </article>
+            <article class="overview-card danger">
+              <p class="overview-title">失败退款</p>
+              <strong>{{ overview.summary.failedRefundCount ?? 0 }}</strong>
+              <span>用于快速定位需要运营复核、重试或线下处理的退款单。</span>
+              <button class="link-button" :disabled="!canDrillDown || !(overview.summary.failedRefundCount > 0)" @click="openFailedRefunds">
+                查看失败退款
               </button>
             </article>
           </div>
