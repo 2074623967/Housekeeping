@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
 import com.abc123.hsp.entity.PaymentDeadLetterTaskEntity;
@@ -124,6 +126,30 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放")));
+    }
+
+    @Test
+    void shouldReturnMaskedDetailByTaskNo() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        task.setPayloadSnapshot("{\"token\":\"secret\"}");
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+
+        PaymentDeadLetterTaskEntity detail = service().getDetail(" DLQ-001 ");
+
+        assertEquals("DLQ-001", detail.getTaskNo());
+        org.junit.jupiter.api.Assertions.assertFalse(detail.getPayloadSnapshot().contains("secret"));
+        verify(paymentDeadLetterTaskMapper).findByTaskNo("DLQ-001");
+    }
+
+    @Test
+    void shouldUseStableErrorCodeWhenDetailMissing() {
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-404")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service().getDetail("DLQ-404"));
+
+        assertEquals(ErrorCode.PAYMENT_DEAD_LETTER_TASK_NOT_FOUND, exception.getCode());
+        assertEquals("死信任务不存在", exception.getMessage());
     }
 
     @Test

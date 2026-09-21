@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { paymentDeadLetterTaskApi } from "../api/client";
 
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const total = ref(0);
@@ -85,6 +87,10 @@ function applyFilters() {
 
 function pickItem(item) {
   selectedItem.value = item;
+}
+
+function openDetail(item) {
+  router.push(`/payment-dead-letter-tasks/${encodeURIComponent(item.taskNo)}`);
 }
 
 function buildQuery() {
@@ -312,6 +318,10 @@ onMounted(loadTasks);
                 <td>{{ item.createdAt }}</td>
                 <td>
                   <div class="list-actions">
+                    <button
+                      class="link-button"
+                      @click="openDetail(item)"
+                    >详情</button>
                     <button
                       v-if="canReview(item)"
                       class="link-button"

@@ -537,6 +537,7 @@ export const paymentEventApi = {
 };
 
 export const paymentDeadLetterTaskApi = {
+  getDetail: (taskNo) => request(`/api/payment-dead-letter-tasks/${encodeURIComponent(taskNo)}`),
   getList: ({
     taskStatus = "",
     targetSystem = "",

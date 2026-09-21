@@ -33,6 +33,8 @@ public interface PaymentDeadLetterTaskService {
 
     PageResultDTO<PaymentDeadLetterTaskEntity> list(PaymentDeadLetterTaskQueryDTO query);
 
+    PaymentDeadLetterTaskEntity getDetail(String taskNo);
+
     PaymentDeadLetterTaskEntity markReadyToReplay(String taskNo, PaymentDeadLetterTaskActionRequestDTO request);
 
     PaymentDeadLetterTaskEntity markManuallyResolved(String taskNo, PaymentDeadLetterTaskActionRequestDTO request);

@@ -26,6 +26,13 @@ class PaymentDeadLetterTaskControllerTest {
     }
 
     @Test
+    void shouldGetDeadLetterTaskDetail() {
+        new PaymentDeadLetterTaskController(paymentDeadLetterTaskService).detail("DLQ-001");
+
+        verify(paymentDeadLetterTaskService).getDetail("DLQ-001");
+    }
+
+    @Test
     void shouldReplayByTaskNo() {
         PaymentDeadLetterTaskActionRequestDTO request = new PaymentDeadLetterTaskActionRequestDTO();
 

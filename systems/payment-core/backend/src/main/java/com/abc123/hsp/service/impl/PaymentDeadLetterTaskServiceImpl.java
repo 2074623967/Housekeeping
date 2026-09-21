@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
@@ -119,6 +121,11 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     }
 
     @Override
+    public PaymentDeadLetterTaskEntity getDetail(String taskNo) {
+        return maskedTaskCopy(findRequiredTask(taskNo));
+    }
+
+    @Override
     public PaymentDeadLetterTaskEntity markReadyToReplay(String taskNo, PaymentDeadLetterTaskActionRequestDTO request) {
         PaymentDeadLetterTaskActionRequestDTO normalizedRequest = requireAction(request);
         if (paymentDeadLetterTaskMapper.markReadyToReplay(normalizeTaskNo(taskNo), normalizedRequest.getOperator(),
@@ -192,7 +199,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private PaymentDeadLetterTaskEntity findRequiredTask(String taskNo) {
         PaymentDeadLetterTaskEntity task = paymentDeadLetterTaskMapper.findByTaskNo(normalizeTaskNo(taskNo));
         if (task == null) {
-            throw new IllegalArgumentException("死信任务不存在");
+            throw new BusinessException(ErrorCode.PAYMENT_DEAD_LETTER_TASK_NOT_FOUND, "死信任务不存在");
         }
         return task;
     }

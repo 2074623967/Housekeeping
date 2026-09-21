@@ -41,6 +41,11 @@ public class PaymentDeadLetterTaskController {
         return ApiResponse.success(paymentDeadLetterTaskService.list(query));
     }
 
+    @GetMapping("/{taskNo}")
+    public ApiResponse<PaymentDeadLetterTaskEntity> detail(@PathVariable String taskNo) {
+        return ApiResponse.success(paymentDeadLetterTaskService.getDetail(taskNo));
+    }
+
     @PostMapping("/{taskNo}/ready-to-replay")
     public ApiResponse<PaymentDeadLetterTaskEntity> markReadyToReplay(
             @PathVariable String taskNo,
