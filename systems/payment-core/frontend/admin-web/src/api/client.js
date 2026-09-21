@@ -17,6 +17,15 @@ async function parseResponsePayload(response) {
   }
 }
 
+export function normalizePagePayload(data) {
+  if (data && typeof data === "object"
+      && Object.prototype.hasOwnProperty.call(data, "items")
+      && !Array.isArray(data.items)) {
+    return { ...data, items: [] };
+  }
+  return data;
+}
+
 async function request(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -29,7 +38,7 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return payload.data;
+  return normalizePagePayload(payload.data);
 }
 
 function buildJsonRequestOptions(method, payload) {
