@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,11 +18,13 @@ import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -151,6 +154,17 @@ class PaymentIssueServiceImplTest {
         assertEquals("跟进中", result.getHandlingStatus());
         assertEquals("张女士", row.getCustomerName());
         verify(paymentIssueMapper).findByIssueNo("ISSUE-001");
+    }
+
+    @Test
+    void shouldReturnEmptyResponsibilitySummaryWhenMapperReturnsNull() {
+        when(paymentIssueMapper.responsibilitySummary(any(PaymentIssueQueryDTO.class))).thenReturn(null);
+
+        List<PaymentIssueResponsibilitySummaryDTO> result =
+                new PaymentIssueServiceImpl(paymentIssueMapper).responsibilitySummary(new PaymentIssueQueryDTO());
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     @Test

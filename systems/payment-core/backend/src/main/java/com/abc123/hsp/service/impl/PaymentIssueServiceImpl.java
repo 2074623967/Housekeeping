@@ -121,7 +121,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
 
     @Override
     public List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(PaymentIssueQueryDTO query) {
-        return paymentIssueMapper.responsibilitySummary(normalizeQuery(query));
+        List<PaymentIssueResponsibilitySummaryDTO> summaries =
+                paymentIssueMapper.responsibilitySummary(normalizeQuery(query));
+        return summaries == null ? Collections.emptyList() : summaries;
     }
 
     @Override
