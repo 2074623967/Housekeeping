@@ -36,7 +36,7 @@
 
 截至 `2026-07-25`，`payment-core/frontend` 不是单一后台，而是已经存在四套实际工程：
 
-1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-flows/:flowSource/:flowNo`、`/payment-routes`、`/payment-routes/:routeNo`、`/payment-events`、`/payment-issues`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-requests/:requestNo`、`/payment-logs`、`/payment-logs/:logNo`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
+1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-flows/:flowSource/:flowNo`、`/payment-routes`、`/payment-routes/:routeNo`、`/payment-events`、`/payment-issues`、`/payment-issues/:issueNo`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-requests/:requestNo`、`/payment-logs`、`/payment-logs/:logNo`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
 2. `app-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 3. `h5-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 4. `pc-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
@@ -60,7 +60,7 @@
 | 支付请求管理 | PC 后台 | `payment-core` | 已实现 | 已完成支付尝试列表与唯一请求详情，支持请求/响应报文、请求级精确路由、订单/账单/支付/会话/流水/日志联查，以及筛选、分页、排序和导出 |
 | 支付处理日志 | PC 后台 | `payment-core` | 已实现 | 当前已完成支付提交、路由、回调、业务事件四类处理日志查询和唯一日志详情，支持来源、关键字筛选、排序、分页及支付单、请求、流水可信联查 |
 | 支付事件出站 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成支付事件出站台账、唯一事件详情、下游系统、事件主题、发布状态、排序和手动重发入口 |
-| 支付交易异常中心 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成待回调未收口、回调待处理、下游事件失败和命中停用渠道四类异常聚合与跳转，并已补齐告警派发明细、供应商回执快照和人工确认回执 |
+| 支付交易异常中心 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成待回调未收口、回调待处理、下游事件失败和命中停用渠道等异常聚合、唯一异常详情、告警派发明细、供应商回执快照和人工确认回执 |
 | 支付监控分析 | PC 后台 | `payment-core` | 已实现 V1 | 当前已提供支付趋势、渠道表现和异常告警独立页面与 `/api/payment-monitor/overview` 接口 |
 | 支付任务中心 | PC 后台 | `payment-core` | 已实现 V1.16 | 当前已提供待回调主动查单、人工立即补跑、自动指数退避、单轮渠道配额、积压/到期指标、共享数据库窗口限流、查单失败小时趋势、限流拒绝独立审计与可配置阈值告警、超时关单、失败事件重发、失败退款重试、自动/手动来源留痕、任务日志筛选分页和带租约自动补偿调度统一处理台 |
 | 支付日终处理 | PC 后台 | `payment-core` | 已实现 V1.6 | 当前已提供日终批次总览、手动触发、批次留痕、成功事实快照和差异告警卡片，不承接财务对账主流程 |
@@ -225,6 +225,13 @@
 3. 请求上下文仅按 `attempt_no` 精确关联；历史空尝试号路由不猜测归属，只保留路由事实。
 4. 页面提供支付单、支付请求、路由流水、同支付单流水和处理日志联查；首次失败或刷新失败陈旧快照均禁止继续导航。
 
+### 5.7 支付交易异常唯一详情
+
+1. 管理端路由 `/payment-issues/:issueNo` 对应 `GET /api/payment-issues/{issueNo}`，以异常编号作为唯一实体标识。
+2. 详情展示异常事实、责任组、处理状态、SLA、升级建议、告警派发摘要、供应商投递摘要和最近处理动作。
+3. 页面提供支付单、处理日志、支付流水、支付事件、告警明细和推荐入口联查；业务订单号仅作为异常事实展示，不直接推导标准订单详情，缺少关联或快照陈旧时失败关闭。
+4. 详情页只读，不执行批量处理、确认回执、重发事件或修改支付状态。
+
 ## 6. 系统建设顺序建议
 
 ### 5.49 2026-09-21 支付处理日志详情页归属补充
@@ -247,6 +254,13 @@
 2. 页面只读展示路由命中、配置快照、请求上下文和脱敏报文，不提供修改路由、重试支付或改写资金状态入口。
 3. 页面可联查支付单、支付请求、路由流水、同支付单流水和处理日志；请求归属只在 `attempt_no` 精确存在时开放。
 4. 该页面属于正向支付链路排障骨架，不承接账务、清分、结算、退款、对账、钱包或保证金职责。
+
+### 5.52 2026-09-21 支付交易异常详情页归属补充
+
+1. `admin-web` 新增 `/payment-issues/:issueNo`，归属 `payment-core`，用于按异常编号查看单条支付交易异常事实。
+2. 页面只读展示异常、责任组、SLA、升级、告警派发和最近处理动作，不提供批量处置、回执确认、事件重发或资金处理入口。
+3. 页面可联查支付单、处理日志、支付流水、支付事件和异常告警明细；业务订单号仅作为异常事实展示，不直接推导标准订单详情，推荐入口仍由服务端返回的 `recommendedRoute` 驱动。
+4. 该页面属于支付核心运营排障入口，不承接账务、清分、结算、退款、对账、钱包或保证金职责。
 
 基于本矩阵，后续应按以下顺序推进，而不是继续把全部页面堆在 `payment-core`：
 

@@ -21,6 +21,11 @@ public interface PaymentIssueService {
     PageResultDTO<PaymentIssueRowDTO> list(PaymentIssueQueryDTO query);
 
     /**
+     * 查询单条支付交易异常详情。
+     */
+    PaymentIssueRowDTO detail(String issueNo);
+
+    /**
      * 查询当前筛选条件下的责任组全量统计。
      */
     List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(PaymentIssueQueryDTO query);

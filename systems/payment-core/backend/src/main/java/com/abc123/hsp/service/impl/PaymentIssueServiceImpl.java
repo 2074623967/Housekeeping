@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
@@ -88,6 +90,16 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize()
         );
+    }
+
+    @Override
+    public PaymentIssueRowDTO detail(String issueNo) {
+        String normalizedIssueNo = normalizeText(issueNo, "异常编号", ISSUE_NO_MAX_LENGTH, false);
+        PaymentIssueRowDTO detail = paymentIssueMapper.findByIssueNo(normalizedIssueNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ISSUE_NOT_FOUND, "支付交易异常不存在");
+        }
+        return maskedCopy(detail);
     }
 
     private List<PaymentIssueRowDTO> maskItems(List<PaymentIssueRowDTO> items) {

@@ -12,6 +12,7 @@ import PaymentRouteDetailView from "../views/PaymentRouteDetailView.vue";
 import PaymentEventsView from "../views/PaymentEventsView.vue";
 import PaymentEventDetailView from "../views/PaymentEventDetailView.vue";
 import PaymentIssuesView from "../views/PaymentIssuesView.vue";
+import PaymentIssueDetailView from "../views/PaymentIssueDetailView.vue";
 import PaymentIssueAlertsView from "../views/PaymentIssueAlertsView.vue";
 import CashierSessionsView from "../views/CashierSessionsView.vue";
 import CashierSessionDetailView from "../views/CashierSessionDetailView.vue";
@@ -54,6 +55,7 @@ const routes = [
       { path: "payment-events", name: "payment-events", component: PaymentEventsView },
       { path: "payment-events/:eventNo", name: "payment-event-detail", component: PaymentEventDetailView },
       { path: "payment-issues", name: "payment-issues", component: PaymentIssuesView },
+      { path: "payment-issues/:issueNo", name: "payment-issue-detail", component: PaymentIssueDetailView },
       { path: "payment-issue-alerts", name: "payment-issue-alerts", component: PaymentIssueAlertsView },
       { path: "cashier-sessions", name: "cashier-sessions", component: CashierSessionsView },
       {

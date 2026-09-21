@@ -180,6 +180,8 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + ".parseDate'");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
+            statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_issue_action_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
@@ -206,6 +208,21 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "last_published_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "channel_code VARCHAR(64), status VARCHAR(32))");
+            statement.execute("CREATE TABLE t_payment_issue_action_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, action_no VARCHAR(64), "
+                    + "issue_no VARCHAR(128), payment_order_id VARCHAR(64), issue_type VARCHAR(64), "
+                    + "action_type VARCHAR(32), assignee VARCHAR(64), handling_status VARCHAR(32), "
+                    + "handling_status_type VARCHAR(32), action_remark VARCHAR(255), "
+                    + "operator VARCHAR(64), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_issue_alert_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), "
+                    + "issue_no VARCHAR(128), payment_order_id VARCHAR(64), issue_type VARCHAR(64), "
+                    + "severity VARCHAR(32), responsibility_group VARCHAR(64), "
+                    + "alert_channel VARCHAR(32), receiver VARCHAR(64), alert_status VARCHAR(32), "
+                    + "alert_status_type VARCHAR(32), ack_status VARCHAR(32), ack_status_type VARCHAR(32), "
+                    + "provider_code VARCHAR(64), provider_name VARCHAR(128), template_code VARCHAR(128), "
+                    + "provider_receipt_no VARCHAR(128), provider_delivery_status VARCHAR(64), "
+                    + "provider_delivery_message VARCHAR(255), created_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_order(order_no, order_amount) VALUES "
                     + "('ORD-SPLIT', 100.00), ('ORD-OVERPAID', 100.00)");
             statement.executeUpdate("INSERT INTO t_payment_channel_config(channel_code, status) "

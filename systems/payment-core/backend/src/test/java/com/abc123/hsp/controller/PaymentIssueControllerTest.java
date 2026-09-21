@@ -24,6 +24,15 @@ class PaymentIssueControllerTest {
     private PaymentIssueService paymentIssueService;
 
     @Test
+    void shouldReturnPaymentIssueDetail() {
+        PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
+
+        controller.detail("ISSUE-001");
+
+        verify(paymentIssueService).detail("ISSUE-001");
+    }
+
+    @Test
     void shouldListPaymentIssues() {
         PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
 

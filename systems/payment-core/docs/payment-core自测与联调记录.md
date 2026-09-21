@@ -15221,3 +15221,26 @@
 | 静态检查 | `git diff --check` 与 `xmllint --noout PaymentRouteExecutionMapper.xml` 通过 |
 | 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-routes?pageNo=1&pageSize=1` 返回 `RTR202607190002`，`GET /api/payment-routes/RTR202607190002` 返回路由详情，`/payment-routes/RTR202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/ROUTE_RECORD/RTR202607190002` 返回同一路由流水详情 |
 | 证据边界 | 当前证据不替代目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |
+
+## 561. 2026-09-21 支付交易异常唯一详情与处置骨架 V1.0 验证
+
+### 561.1 本轮补强
+
+1. 新增 `GET /api/payment-issues/{issueNo}` 和管理端 `/payment-issues/:issueNo`，以异常编号唯一定位单条支付交易异常。
+2. 后端详情复用异常列表处置口径，返回责任组、处理状态、SLA、升级建议、告警派发摘要、供应商投递摘要和最近处理动作。
+3. 服务层对异常编号执行去空白、必填、控制字符和 `128` 字符边界校验；不存在返回 `PAYMENT-1063`，客户名称以脱敏副本输出。
+4. 前端详情页校验响应异常编号与动态路由一致；首次失败不建快照，刷新失败保留阅读快照但关闭联查。
+5. 支付交易异常列表新增“查看详情”入口，原“立即排查”继续作为推荐路径入口；陈旧快照不能驱动详情、推荐入口或跨页联查。
+
+### 561.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付异常后端定向测试 | `PaymentIssueControllerTest`、`PaymentIssueServiceImplTest`、`PaymentIssueMapperRouteContractTest` 共 `37/37` 通过 |
+| 后端全量测试 | Maven `-q test` 退出码 `0`，Surefire 汇总 `1153/1153` 通过 |
+| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端构建 | `npm run build` 通过，Vite `102` 个模块 |
+| Mapper 契约 | `findByIssueNo` 与列表保持推荐路由契约，停用渠道异常继续指向 `channelStatus=DISABLED`；最小 H2 集成 fixture 已补齐异常动作/告警表，验证旧异常检测路径不会被详情宽表拖倒 |
+| 静态检查 | `git diff --check` 与 `xmllint --noout PaymentIssueMapper.xml` 通过 |
+| 运行态验证 | 前台托管 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-issues?pageNo=1&pageSize=1` 返回 `ISSUE-NOTIFY-NTF202607190002`，`GET /api/payment-issues/ISSUE-NOTIFY-NTF202607190002` 返回异常详情，`/payment-issues/ISSUE-NOTIFY-NTF202607190002` 管理端路由返回 `200` |
+| 证据边界 | 当前证据不替代目标 MySQL 执行计划、告警真实送达、渠道事实、资金一致、完整浏览器交互走查或 release 放行 |

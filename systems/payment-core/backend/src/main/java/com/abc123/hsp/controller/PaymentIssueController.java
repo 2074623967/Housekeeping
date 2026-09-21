@@ -62,6 +62,14 @@ public class PaymentIssueController {
     }
 
     /**
+     * 查询单条支付交易异常详情。
+     */
+    @GetMapping("/{issueNo}")
+    public ApiResponse<PaymentIssueRowDTO> detail(@PathVariable String issueNo) {
+        return ApiResponse.success(paymentIssueService.detail(issueNo));
+    }
+
+    /**
      * 查询当前筛选条件下的责任组全量统计，供运营判断异常处理归口。
      */
     @GetMapping("/responsibility-summary")

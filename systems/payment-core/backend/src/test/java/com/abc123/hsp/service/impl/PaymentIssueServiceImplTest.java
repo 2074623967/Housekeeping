@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
@@ -131,6 +133,45 @@ class PaymentIssueServiceImplTest {
 
         assertEquals("张*", result.getItems().get(0).getCustomerName());
         assertEquals("张女士", row.getCustomerName());
+    }
+
+    @Test
+    void shouldNormalizeAndReturnMaskedPaymentIssueDetail() {
+        PaymentIssueRowDTO row = new PaymentIssueRowDTO();
+        row.setIssueNo("ISSUE-001");
+        row.setCustomerName("张女士");
+        row.setHandlingStatus("跟进中");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-001")).thenReturn(row);
+
+        PaymentIssueRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .detail(" ISSUE-001 ");
+
+        assertEquals("ISSUE-001", result.getIssueNo());
+        assertEquals("张*", result.getCustomerName());
+        assertEquals("跟进中", result.getHandlingStatus());
+        assertEquals("张女士", row.getCustomerName());
+        verify(paymentIssueMapper).findByIssueNo("ISSUE-001");
+    }
+
+    @Test
+    void shouldRejectInvalidPaymentIssueNoBeforeMapperAccess() {
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.detail(" "));
+        assertThrows(IllegalArgumentException.class, () -> service.detail("ISSUE-001\n"));
+        assertThrows(IllegalArgumentException.class, () -> service.detail(repeat("I", 129)));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenPaymentIssueDetailMissing() {
+        when(paymentIssueMapper.findByIssueNo("ISSUE-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).detail("ISSUE-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_ISSUE_NOT_FOUND, exception.getCode());
+        verify(paymentIssueMapper).findByIssueNo("ISSUE-MISSING");
     }
 
     @Test

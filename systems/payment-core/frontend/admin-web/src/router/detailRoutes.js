@@ -47,6 +47,13 @@ export function paymentRouteDetailRoute(routeNo) {
   };
 }
 
+export function paymentIssueDetailRoute(issueNo) {
+  return {
+    name: "payment-issue-detail",
+    params: { issueNo }
+  };
+}
+
 export function paymentDetailRoute(paymentOrderId) {
   return {
     name: "payment-detail",

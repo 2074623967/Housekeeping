@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentIssueDetailRoute } from "../router/detailRoutes";
 import { paymentIssueAlertsRoute } from "../router/listRoutes";
 import { paymentIssueListFiltersFromQuery } from "../utils/paymentIssueListFilters";
 
@@ -169,6 +169,13 @@ function openIssue(item) {
     return;
   }
   router.push(paymentDetailRoute(currentItem.paymentOrderId));
+}
+
+function openIssueDetail(issueNo) {
+  if (!canUseSnapshot.value || !items.value.some((item) => item.issueNo === issueNo)) {
+    return;
+  }
+  router.push(paymentIssueDetailRoute(issueNo));
 }
 
 function openSnapshotRoute(target) {
@@ -502,6 +509,7 @@ watch(
               <td class="flow-summary-cell">{{ item.latestActionSummary }}</td>
               <td>{{ item.createdAt }}</td>
               <td>
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openIssueDetail(item.issueNo)">查看详情</button>
                 <button class="link-button" :disabled="!canUseSnapshot" @click="openIssue(item)">立即排查</button>
               </td>
             </tr>
