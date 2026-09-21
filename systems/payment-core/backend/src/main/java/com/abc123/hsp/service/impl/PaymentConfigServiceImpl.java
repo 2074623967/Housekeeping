@@ -272,7 +272,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付渠道已有待复核申请");
         }
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -305,7 +305,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertChannelReview(review);
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -367,7 +367,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         recordChannelVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeChannelReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -379,7 +379,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeChannelReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -432,7 +432,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertChannelReview(review);
-        return paymentConfigMapper.findChannelReviews();
+        return safeList(paymentConfigMapper.findChannelReviews());
     }
 
     @Override
@@ -808,7 +808,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentProtocolReviewEntity review = buildProtocolReview(
                 candidateEntity, requester, reason, operationType, baseVersionNo, null);
         insertProtocolReview(review);
-        return paymentConfigMapper.findProtocolReviews();
+        return safeList(paymentConfigMapper.findProtocolReviews());
     }
 
     @Override
@@ -860,7 +860,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         recordProtocolVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeProtocolReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findProtocolReviews();
+        return safeList(paymentConfigMapper.findProtocolReviews());
     }
 
     @Override
@@ -872,7 +872,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeProtocolReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findProtocolReviews();
+        return safeList(paymentConfigMapper.findProtocolReviews());
     }
 
     @Override
@@ -976,7 +976,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         completeIssueDutyRosterReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findIssueDutyRosterReviews();
+        return safeList(paymentConfigMapper.findIssueDutyRosterReviews());
     }
 
     @Override
@@ -989,7 +989,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeIssueDutyRosterReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findIssueDutyRosterReviews();
+        return safeList(paymentConfigMapper.findIssueDutyRosterReviews());
     }
 
     @Override
@@ -1042,7 +1042,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该渠道返回码已有待复核申请");
         }
-        return paymentConfigMapper.findReturnCodeReviews();
+        return safeList(paymentConfigMapper.findReturnCodeReviews());
     }
 
     @Override
@@ -1077,7 +1077,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         completeReturnCodeReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findReturnCodeReviews();
+        return safeList(paymentConfigMapper.findReturnCodeReviews());
     }
 
     @Override
@@ -1090,7 +1090,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeReturnCodeReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findReturnCodeReviews();
+        return safeList(paymentConfigMapper.findReturnCodeReviews());
     }
 
     @Override
@@ -1151,7 +1151,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("已有待复核的返回码导入申请");
         }
-        return paymentConfigMapper.findReturnCodeImportReviews();
+        return safeList(paymentConfigMapper.findReturnCodeImportReviews());
     }
 
     @Override
@@ -1212,7 +1212,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 appliedCount == 0 ? "info" : "success");
         completeReturnCodeImportReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment, batchNo);
-        return paymentConfigMapper.findReturnCodeImportReviews();
+        return safeList(paymentConfigMapper.findReturnCodeImportReviews());
     }
 
     @Override
@@ -1225,7 +1225,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeReturnCodeImportReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null);
-        return paymentConfigMapper.findReturnCodeImportReviews();
+        return safeList(paymentConfigMapper.findReturnCodeImportReviews());
     }
 
     @Override
@@ -1270,7 +1270,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付网关已有待复核申请");
         }
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1304,7 +1304,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertGatewayReview(review);
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1374,7 +1374,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         recordGatewayVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeGatewayReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1386,7 +1386,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeGatewayReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1438,7 +1438,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertGatewayReview(review);
-        return paymentConfigMapper.findGatewayReviews();
+        return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
     @Override
@@ -1480,7 +1480,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertControlPolicyReview(review);
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1517,7 +1517,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertControlPolicyReview(review);
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1590,7 +1590,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         recordControlPolicyVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeControlPolicyReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1603,7 +1603,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeControlPolicyReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1655,7 +1655,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertControlPolicyReview(review);
-        return paymentConfigMapper.findControlPolicyReviews();
+        return safeList(paymentConfigMapper.findControlPolicyReviews());
     }
 
     @Override
@@ -1709,7 +1709,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertAlertProviderReview(review);
-        return paymentConfigMapper.findAlertProviderReviews();
+        return safeList(paymentConfigMapper.findAlertProviderReviews());
     }
 
     @Override
@@ -1764,7 +1764,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         completeAlertProviderReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
-        return paymentConfigMapper.findAlertProviderReviews();
+        return safeList(paymentConfigMapper.findAlertProviderReviews());
     }
 
     @Override
@@ -1777,7 +1777,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeAlertProviderReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
-        return paymentConfigMapper.findAlertProviderReviews();
+        return safeList(paymentConfigMapper.findAlertProviderReviews());
     }
 
     @Override
@@ -1835,7 +1835,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertIssueDutyRosterReview(review);
-        return paymentConfigMapper.findIssueDutyRosterReviews();
+        return safeList(paymentConfigMapper.findIssueDutyRosterReviews());
     }
 
     @Override
@@ -2374,7 +2374,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentProtocolReviewEntity review = buildProtocolReview(
                 candidate, requester, reason, operationType, baseVersionNo, sourceVersionNo);
         insertProtocolReview(review);
-        return paymentConfigMapper.findProtocolReviews();
+        return safeList(paymentConfigMapper.findProtocolReviews());
     }
 
     private void insertProtocolReview(PaymentProtocolReviewEntity review) {
@@ -3184,7 +3184,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertAlertProviderReview(review);
-        return paymentConfigMapper.findAlertProviderReviews();
+        return safeList(paymentConfigMapper.findAlertProviderReviews());
     }
 
     private PaymentAlertProviderReviewEntity requirePendingAlertProviderReview(String requestNo) {
@@ -3347,7 +3347,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         insertIssueDutyRosterReview(review);
-        return paymentConfigMapper.findIssueDutyRosterReviews();
+        return safeList(paymentConfigMapper.findIssueDutyRosterReviews());
     }
 
     private PaymentIssueDutyRosterReviewEntity requirePendingIssueDutyRosterReview(String requestNo) {
