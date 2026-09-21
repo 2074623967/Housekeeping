@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentLogApi } from "../api/client";
 import { paymentDetailRoute, paymentLogDetailRoute } from "../router/detailRoutes";
-import { paymentEventsRoute, paymentFlowsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { paymentEventsRoute, paymentFlowsRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -139,6 +139,21 @@ function openPaymentEvents(paymentOrderId) {
   router.push(paymentEventsRoute({ paymentOrderId }));
 }
 
+function openCallbackErrorLogs() {
+  if (!canUseSnapshot.value || !(metrics.value.callbackErrorCount > 0)) return;
+  router.push(paymentLogsRoute({ processStage: "渠道回调", logLevel: "ERROR" }));
+}
+
+function openEventWarnLogs() {
+  if (!canUseSnapshot.value || !(metrics.value.eventWarnCount > 0)) return;
+  router.push(paymentLogsRoute({ processStage: "业务事件", logLevel: "WARN" }));
+}
+
+function openCallbackKeywordLogs() {
+  if (!canUseSnapshot.value || !(metrics.value.callbackKeywordCount > 0)) return;
+  router.push(paymentLogsRoute({ keyword: "回调" }));
+}
+
 async function loadPaymentLogs(query = buildQuery()) {
   const requestId = ++latestLoadRequestId;
   isLoading.value = true;
@@ -271,16 +286,25 @@ watch(
           <p class="overview-title">回调异常优先排查</p>
           <strong>{{ metrics.callbackErrorCount }}</strong>
           <span>聚焦渠道回调阶段 ERROR 日志，优先核对签名、幂等和状态机推进。</span>
+          <button class="link-button" :disabled="!canUseSnapshot || !(metrics.callbackErrorCount > 0)" @click="openCallbackErrorLogs">
+            查看回调错误
+          </button>
         </article>
         <article class="overview-card warn">
           <p class="overview-title">业务事件告警</p>
           <strong>{{ metrics.eventWarnCount }}</strong>
           <span>重点检查 `PAYMENT_CLOSED` 等业务事件是否与真实订单状态一致。</span>
+          <button class="link-button" :disabled="!canUseSnapshot || !(metrics.eventWarnCount > 0)" @click="openEventWarnLogs">
+            查看事件告警
+          </button>
         </article>
         <article class="overview-card info">
           <p class="overview-title">关键字命中</p>
           <strong>{{ metrics.callbackKeywordCount }}</strong>
           <span>当前筛选条件下命中“回调”关键字的日志量，可快速圈定通知链路问题面。</span>
+          <button class="link-button" :disabled="!canUseSnapshot || !(metrics.callbackKeywordCount > 0)" @click="openCallbackKeywordLogs">
+            查看回调日志
+          </button>
         </article>
       </div>
     </section>

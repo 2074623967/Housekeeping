@@ -46,6 +46,15 @@ test("keeps the processing refund status group in the refund list route", () => 
   assert.equal(resolved.href, "/refunds?refundStatus=PROCESSING");
 });
 
+test("keeps structured payment log risk filters in the log list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(paymentLogsRoute({ processStage: "渠道回调", logLevel: "ERROR" }));
+
+  assert.deepEqual(resolved.query, { processStage: "渠道回调", logLevel: "ERROR" });
+  assert.equal(resolved.href, "/payment-logs?processStage=%E6%B8%A0%E9%81%93%E5%9B%9E%E8%B0%83&logLevel=ERROR");
+});
+
 test("keeps the day-end pending payment status group in the payment list route", () => {
   const router = createTestRouter();
 
