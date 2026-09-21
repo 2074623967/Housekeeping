@@ -116,6 +116,13 @@ function openRoute(targetRoute) {
   router.push(targetRoute);
 }
 
+function openRequestStatus(requestStatus, count) {
+  if (!canUseSnapshot.value || !(count > 0)) {
+    return;
+  }
+  router.push({ name: "payment-requests", query: { requestStatus } });
+}
+
 async function loadPaymentRequests(query = buildQuery()) {
   const requestId = ++latestLoadRequestId;
   isLoading.value = true;
@@ -237,11 +244,25 @@ watch(
           <div class="detail-label">处理中请求</div>
           <div class="detail-value">{{ overview.processingRequestCount }}</div>
           <div class="detail-hint">已发起但尚未拿到最终结果的请求</div>
+          <button class="link-button" :disabled="!canUseSnapshot || !(overview.processingRequestCount > 0)" @click="openRequestStatus('处理中', overview.processingRequestCount)">
+            查看处理中请求
+          </button>
         </div>
         <div class="detail-card">
           <div class="detail-label">等待回调</div>
           <div class="detail-value">{{ overview.waitingCallbackRequestCount }}</div>
           <div class="detail-hint">建议联查主动查单、回调日志与支付单状态</div>
+          <button class="link-button" :disabled="!canUseSnapshot || !(overview.waitingCallbackRequestCount > 0)" @click="openRequestStatus('等待回调', overview.waitingCallbackRequestCount)">
+            查看等待回调
+          </button>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">失败请求</div>
+          <div class="detail-value">{{ overview.failedRequestCount }}</div>
+          <div class="detail-hint">用于复核渠道拒绝、超时或请求参数错误</div>
+          <button class="link-button" :disabled="!canUseSnapshot || !(overview.failedRequestCount > 0)" @click="openRequestStatus('失败', overview.failedRequestCount)">
+            查看失败请求
+          </button>
         </div>
         <div class="detail-card">
           <div class="detail-label">重复支付单请求</div>

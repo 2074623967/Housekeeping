@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { billsRoute, paymentLogsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
+import { billsRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
 
 function createTestRouter() {
   return createRouter({
@@ -9,6 +9,7 @@ function createTestRouter() {
     routes: [
       { path: "/bills", name: "bills", component: {} },
       { path: "/payment-logs", name: "payment-logs", component: {} },
+      { path: "/payment-requests", name: "payment-requests", component: {} },
       { path: "/payments", name: "payments", component: {} },
       { path: "/refunds", name: "refunds", component: {} }
     ]
@@ -53,6 +54,15 @@ test("keeps structured payment log risk filters in the log list route", () => {
 
   assert.deepEqual(resolved.query, { processStage: "渠道回调", logLevel: "ERROR" });
   assert.equal(resolved.href, "/payment-logs?processStage=%E6%B8%A0%E9%81%93%E5%9B%9E%E8%B0%83&logLevel=ERROR");
+});
+
+test("keeps payment request status drilldowns in the request list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(paymentRequestsRoute({ requestStatus: "等待回调" }));
+
+  assert.deepEqual(resolved.query, { requestStatus: "等待回调" });
+  assert.equal(resolved.href, "/payment-requests?requestStatus=%E7%AD%89%E5%BE%85%E5%9B%9E%E8%B0%83");
 });
 
 test("keeps the day-end pending payment status group in the payment list route", () => {
