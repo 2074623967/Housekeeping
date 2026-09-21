@@ -15337,3 +15337,17 @@
 | --- | --- |
 | 支付指标后端定向测试 | `PaymentMetricsServiceImplTest`、`PaymentMetricsControllerTest` 通过 |
 | 证据边界 | 空摘要兜底只证明 payment-core 指标查询层健壮性，不替代生产数据库、渠道事实、资金一致或 release 放行事实 |
+
+## 568. 2026-09-21 配置中心空列表边界修复 V1.1 验证
+
+### 568.1 本轮补强
+
+1. 配置中心总览的渠道、路由规则、协议、协议类型、返回码、网关、控制策略、告警供应商和值班配置列表统一将底层 `null` 归一为空数组。
+2. 保留已有查询结果和配置字段，不改变配置治理、复核或版本流程。
+
+### 568.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 配置中心后端定向测试 | `PaymentConfigServiceImplTest`、`PaymentConfigControllerTest` 通过 |
+| 证据边界 | 空列表兜底只证明 payment-core 配置总览查询健壮性，不替代可信身份权限、真实密钥托管、生产配置或 release 放行事实 |

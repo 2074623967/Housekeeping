@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
@@ -1167,6 +1168,22 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("300s", actualChannel.getNotifySignWindow());
         org.junit.jupiter.api.Assertions.assertEquals("180天", actualChannel.getRefundWindow());
         org.junit.jupiter.api.Assertions.assertTrue(actualChannel.getRiskControlTag().contains("实名校验"));
+    }
+
+    @Test
+    void shouldReturnEmptyCollectionsWhenOverviewQueriesReturnNull() {
+        PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper).overview();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getChannels());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getRouteRules());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getProtocols());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getProtocolTypeOptions());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getReturnCodeMappings());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getGateways());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getControlPolicies());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getAlertProviders());
+        org.junit.jupiter.api.Assertions.assertNotNull(overview.getIssueDutyRosters());
+        org.junit.jupiter.api.Assertions.assertTrue(overview.getChannels().isEmpty());
     }
 
     @Test

@@ -172,16 +172,20 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Override
     public PaymentConfigOverviewDTO overview() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        overview.setChannels(paymentConfigMapper.findChannels());
-        overview.setRouteRules(paymentConfigMapper.findRouteRules());
-        overview.setProtocols(paymentConfigMapper.findProtocols());
-        overview.setProtocolTypeOptions(paymentConfigMapper.findProtocolTypeOptions());
-        overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
-        overview.setGateways(paymentConfigMapper.findGateways());
-        overview.setControlPolicies(paymentConfigMapper.findControlPolicies());
-        overview.setAlertProviders(paymentConfigMapper.findAlertProviders());
-        overview.setIssueDutyRosters(paymentConfigMapper.findIssueDutyRosters());
+        overview.setChannels(safeList(paymentConfigMapper.findChannels()));
+        overview.setRouteRules(safeList(paymentConfigMapper.findRouteRules()));
+        overview.setProtocols(safeList(paymentConfigMapper.findProtocols()));
+        overview.setProtocolTypeOptions(safeList(paymentConfigMapper.findProtocolTypeOptions()));
+        overview.setReturnCodeMappings(safeList(paymentConfigMapper.findReturnCodeMappings()));
+        overview.setGateways(safeList(paymentConfigMapper.findGateways()));
+        overview.setControlPolicies(safeList(paymentConfigMapper.findControlPolicies()));
+        overview.setAlertProviders(safeList(paymentConfigMapper.findAlertProviders()));
+        overview.setIssueDutyRosters(safeList(paymentConfigMapper.findIssueDutyRosters()));
         return overview;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     @Override
