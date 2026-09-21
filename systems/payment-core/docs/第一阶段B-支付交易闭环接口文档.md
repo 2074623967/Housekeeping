@@ -4811,6 +4811,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 响应可返回确定存在的订单、标准订单、账单、支付单、预付单、请求、渠道、终端、回调、路由和事件字段；IP、幂等键和报文由服务层脱敏。
 5. 接口只读，不代表账务、资金、清分、结算、对账、真实渠道或生产放行事实。
 
+### 14.361 支付处理日志详情契约
+
+1. `GET /api/payment-logs/{logNo}` 按唯一日志号返回单条支付处理日志详情；路径参数按单一路径段编码。
+2. `logNo` 必填、去除首尾空白、最长 `64` 个字符且不得包含控制字符；非法请求沿用 `PAYMENT-1036`，不存在返回 `PAYMENT-1060 / 支付处理日志不存在`。
+3. 响应包含 `logNo / paymentOrderId / orderNo / standardOrderNo / requestNo / sourceType / sourceNo / processStage / logLevel / logLevelType / message / source / createdAt`。
+4. `standardOrderNo` 仅当日志业务订单号命中 `t_order.order_no` 时返回；接口不把虚拟业务号或外部单号伪装成标准订单。
+5. `sourceType + sourceNo` 仅作为来源事实标识返回；是否可跳支付流水由前端按已知来源做失败关闭，其中日志来源 `PAYMENT_EVENT` 可安全映射为流水来源 `BUSINESS_EVENT`，其他未知来源不猜测归属。
+6. 接口只读，不更新日志、支付单、订单、请求、流水或资金事实，也不代表真实渠道、账务、清分、结算或对账一致。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

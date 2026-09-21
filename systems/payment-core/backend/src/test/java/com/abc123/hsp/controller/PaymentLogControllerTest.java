@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.service.PaymentLogService;
@@ -25,6 +27,19 @@ class PaymentLogControllerTest {
 
     @Mock
     private PaymentLogService paymentLogService;
+
+    @Test
+    void shouldReturnPaymentLogDetail() {
+        PaymentLogController controller = new PaymentLogController(paymentLogService);
+        PaymentLogDetailDTO detail = new PaymentLogDetailDTO();
+        detail.setLogNo("LOG-001");
+        when(paymentLogService.detail("LOG-001")).thenReturn(detail);
+
+        ApiResponse<PaymentLogDetailDTO> response = controller.detail("LOG-001");
+
+        assertEquals("LOG-001", response.getData().getLogNo());
+        verify(paymentLogService).detail("LOG-001");
+    }
 
     @Test
     void shouldExportPaymentLogs() {

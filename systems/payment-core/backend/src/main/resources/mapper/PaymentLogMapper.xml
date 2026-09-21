@@ -39,6 +39,26 @@
         DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
     </sql>
 
+    <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentLogDetailDTO">
+        SELECT ppl.log_no AS logNo,
+               ppl.payment_order_id AS paymentOrderId,
+               ppl.order_no AS orderNo,
+               standard_order.order_no AS standardOrderNo,
+               ppl.request_no AS requestNo,
+               ppl.source_type AS sourceType,
+               ppl.source_no AS sourceNo,
+               ppl.process_stage AS processStage,
+               ppl.log_level AS logLevel,
+               ppl.log_level_type AS logLevelType,
+               ppl.message,
+               ppl.source,
+               DATE_FORMAT(ppl.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_process_log ppl
+                 LEFT JOIN t_order standard_order ON standard_order.order_no = ppl.order_no
+        WHERE ppl.log_no = #{logNo}
+        LIMIT 1
+    </select>
+
     <sql id="paymentLogOrder">
         <choose>
             <when test="query.sortField == 'logLevel'">

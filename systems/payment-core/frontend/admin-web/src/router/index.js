@@ -16,6 +16,7 @@ import CashierSessionDetailView from "../views/CashierSessionDetailView.vue";
 import PaymentRequestsView from "../views/PaymentRequestsView.vue";
 import PaymentRequestDetailView from "../views/PaymentRequestDetailView.vue";
 import PaymentLogsView from "../views/PaymentLogsView.vue";
+import PaymentLogDetailView from "../views/PaymentLogDetailView.vue";
 import PaymentRecordsView from "../views/PaymentRecordsView.vue";
 import PaymentRecordDetailView from "../views/PaymentRecordDetailView.vue";
 import PaymentsView from "../views/PaymentsView.vue";
@@ -63,6 +64,7 @@ const routes = [
         component: PaymentRequestDetailView
       },
       { path: "payment-logs", name: "payment-logs", component: PaymentLogsView },
+      { path: "payment-logs/:logNo", name: "payment-log-detail", component: PaymentLogDetailView },
       {
         path: "payment-records",
         component: PaymentRecordsView,

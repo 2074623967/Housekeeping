@@ -1,8 +1,10 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
@@ -138,6 +140,30 @@ public class PaymentProcessLogMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFindPaymentLogDetailByUniqueLogNo() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+
+            PaymentLogDetailDTO detail = mapper.findDetail("LOG-STABLE-001");
+
+            assertEquals("LOG-STABLE-001", detail.getLogNo());
+            assertEquals("PAY-LOG-STABLE", detail.getPaymentOrderId());
+            assertEquals("ORD-001", detail.getOrderNo());
+            assertEquals("ORD-001", detail.getStandardOrderNo());
+            assertEquals("REQ-001", detail.getRequestNo());
+            assertEquals("PAYMENT_ATTEMPT", detail.getSourceType());
+            assertEquals("ATT-001", detail.getSourceNo());
+            assertEquals("支付提交", detail.getProcessStage());
+            assertEquals("INFO", detail.getLogLevel());
+            assertEquals("info", detail.getLogLevelType());
+            assertEquals("稳定排序日志一", detail.getMessage());
+            assertEquals("payment-core", detail.getSource());
+            assertEquals("2026-09-12 12:00:00", detail.getCreatedAt());
+            assertNull(mapper.findDetail("LOG-MISSING"));
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
@@ -153,7 +179,11 @@ public class PaymentProcessLogMapperIntegrationTest {
              Statement statement = session.getConnection().createStatement()) {
             statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR \""
                     + PaymentProcessLogMapperIntegrationTest.class.getName() + ".dateFormat\"");
+            statement.execute("DROP TABLE IF EXISTS t_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_process_log");
+            statement.execute("CREATE TABLE t_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE)");
+            statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");
             statement.execute("CREATE TABLE t_payment_process_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, log_no VARCHAR(64) NOT NULL UNIQUE, "
                     + "payment_order_id VARCHAR(64) NOT NULL, order_no VARCHAR(64), request_no VARCHAR(64), "

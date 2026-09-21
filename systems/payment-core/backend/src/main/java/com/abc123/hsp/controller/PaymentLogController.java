@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,14 @@ public class PaymentLogController {
 
     public PaymentLogController(PaymentLogService paymentLogService) {
         this.paymentLogService = paymentLogService;
+    }
+
+    /**
+     * 按日志编号查询唯一支付处理日志。
+     */
+    @GetMapping("/{logNo}")
+    public ApiResponse<PaymentLogDetailDTO> detail(@PathVariable String logNo) {
+        return ApiResponse.success(paymentLogService.detail(logNo));
     }
 
     /**

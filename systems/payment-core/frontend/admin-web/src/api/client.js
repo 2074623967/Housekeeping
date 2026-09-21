@@ -719,6 +719,7 @@ export const paymentRequestApi = {
 };
 
 export const paymentLogApi = {
+  getDetail: (logNo) => request(`/api/payment-logs/${encodeURIComponent(logNo)}`),
   getOverview: ({
     paymentOrderId = "",
     orderNo = "",

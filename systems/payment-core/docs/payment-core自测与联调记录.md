@@ -15154,3 +15154,25 @@
 | 静态检查 | `git diff --check` 通过 |
 | 运行态验证 | 本轮尝试启动 `payment-core` 长驻栈时，沙箱端口绑定返回 `Operation not permitted`；提权审批服务故障，未取得真实 API 和浏览器页面证据 |
 | 证据边界 | 本地 H2、单元测试、前端自动化和构建不替代目标 MySQL、历史回填、真实渠道、资金一致、浏览器实测或 release 放行 |
+
+## 558. 2026-09-21 支付处理日志唯一详情与可信联查 V1.0 验证
+
+### 558.1 本轮补强
+
+1. 新增 `GET /api/payment-logs/{logNo}` 和管理端 `/payment-logs/:logNo`，以日志号唯一定位单条支付处理日志。
+2. 后端详情返回支付单、业务订单、标准订单、支付请求、来源类型、来源编号、处理阶段、日志级别、来源系统、消息和创建时间。
+3. 服务层对日志号执行去空白、必填、控制字符和 `64` 字符边界校验；不存在返回 `PAYMENT-1060`。
+4. 前端详情页校验响应日志号与动态路由一致；首次失败不建快照，刷新失败保留阅读快照但关闭联查；日志 `PAYMENT_EVENT` 安全映射为流水 `BUSINESS_EVENT`。
+5. 支付处理日志列表将“查看详情”升级为唯一详情入口，列表和侧栏快照在刷新失败后均禁止继续下钻。
+
+### 558.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付日志后端定向测试 | `PaymentLogControllerTest`、`PaymentLogServiceImplTest`、`PaymentProcessLogMapperIntegrationTest` 共 `16/16` 通过 |
+| 后端全量测试 | Maven `-q test` 退出码 `0`，Surefire 汇总 `1139/1139` 通过 |
+| 管理端自动化 | `npm test` 共 `41/41` 通过 |
+| 管理端构建 | `npm run build` 通过，Vite `96` 个模块 |
+| Mapper 集成 | `findDetail` 验证日志号唯一查询、标准订单命中、来源类型/编号和不存在返回空 |
+| 运行态验证 | 提权启动 `tools/dev/local-stack.sh up payment-core` 成功，`GET /api/payment-logs?pageNo=1&pageSize=1` 返回 `EVT202607190002`，`GET /api/payment-logs/EVT202607190002` 返回日志详情，`/payment-logs/EVT202607190002` 管理端路由返回 `200`，`GET /api/payment-flows/BUSINESS_EVENT/EVT202607190002` 返回同一事件流水详情 |
+| 证据边界 | 当前证据不替代目标 MySQL 执行计划、历史数据回填、真实渠道、资金一致、完整浏览器交互走查或 release 放行 |

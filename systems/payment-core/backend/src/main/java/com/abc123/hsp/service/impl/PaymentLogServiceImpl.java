@@ -1,6 +1,9 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaymentLogServiceImpl implements PaymentLogService {
 
+    private static final int LOG_NO_MAX_LENGTH = 64;
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
     private static final int ORDER_NO_MAX_LENGTH = 64;
     private static final int PROCESS_STAGE_MAX_LENGTH = 32;
@@ -27,6 +31,16 @@ public class PaymentLogServiceImpl implements PaymentLogService {
 
     public PaymentLogServiceImpl(PaymentLogMapper paymentLogMapper) {
         this.paymentLogMapper = paymentLogMapper;
+    }
+
+    @Override
+    public PaymentLogDetailDTO detail(String logNo) {
+        String normalizedLogNo = normalizeRequiredLogNo(logNo);
+        PaymentLogDetailDTO detail = paymentLogMapper.findDetail(normalizedLogNo);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_LOG_NOT_FOUND, "支付处理日志不存在");
+        }
+        return detail;
     }
 
     @Override
@@ -120,6 +134,30 @@ public class PaymentLogServiceImpl implements PaymentLogService {
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeRequiredLogNo(String logNo) {
+        if (logNo == null || logNo.trim().isEmpty()) {
+            throw invalidLog("日志编号不能为空");
+        }
+        rejectControlCharacters(logNo, "日志编号不能包含控制字符");
+        String normalized = logNo.trim();
+        if (normalized.length() > LOG_NO_MAX_LENGTH) {
+            throw invalidLog("日志编号不能超过64个字符");
+        }
+        return normalized;
+    }
+
+    private void rejectControlCharacters(String value, String message) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidLog(message);
+            }
+        }
+    }
+
+    private BusinessException invalidLog(String message) {
+        return new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, message);
     }
 
     private String normalizeOptionalQueryField(

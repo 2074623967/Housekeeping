@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentLogApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentDetailRoute, paymentLogDetailRoute } from "../router/detailRoutes";
 import { paymentEventsRoute, paymentFlowsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -62,6 +63,7 @@ const metrics = computed(() => ({
   latestLogAt: overview.value.latestLogAt || "-"
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canUseSnapshot = computed(() => Boolean(hasLoadedData.value && !isLoading.value && !isSnapshotStale.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
 
 function buildQuery() {
@@ -106,7 +108,35 @@ function refreshPaymentLogs() {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
+}
+
+function openPaymentDetail(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
+  router.push(paymentDetailRoute(paymentOrderId));
+}
+
+function openLogDetail(logNo) {
+  if (!canUseSnapshot.value || !logNo) return;
+  router.push(paymentLogDetailRoute(logNo));
+}
+
+function openPaymentFlows(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
+  router.push(paymentFlowsRoute({ paymentOrderId }));
+}
+
+function openPaymentRequests(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
+  router.push(paymentRequestsRoute({ paymentOrderId }));
+}
+
+function openPaymentEvents(paymentOrderId) {
+  if (!canUseSnapshot.value || !paymentOrderId) return;
+  router.push(paymentEventsRoute({ paymentOrderId }));
 }
 
 async function loadPaymentLogs(query = buildQuery()) {
@@ -349,9 +379,9 @@ watch(
               <tr v-for="item in items" :key="item.logNo">
                 <td>{{ item.logNo }}</td>
                 <td>
-                  <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
                     {{ item.paymentOrderId }}
-                  </RouterLink>
+                  </button>
                 </td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.processStage }}</td>
@@ -359,7 +389,10 @@ watch(
                 <td>{{ item.source }}</td>
                 <td class="flow-summary-cell">{{ item.message }}</td>
                 <td>{{ item.createdAt }}</td>
-                <td><button class="link-button" @click="pickItem(item)">查看详情</button></td>
+                <td>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="openLogDetail(item.logNo)">查看详情</button>
+                  <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -388,10 +421,11 @@ watch(
               <div class="ops-row"><span>当前过滤命中</span><span>{{ metrics.callbackKeywordCount }} 条回调相关日志</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
-              <RouterLink class="link-button" :to="paymentRequestsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付请求</RouterLink>
-              <RouterLink class="link-button" :to="paymentEventsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付事件</RouterLink>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openLogDetail(selectedItem.logNo)">查看日志详情</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看支付流水</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentEvents(selectedItem.paymentOrderId)">查看支付事件</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧日志后，可在这里查看详情与排障建议。</div>

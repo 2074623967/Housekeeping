@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
@@ -10,6 +11,11 @@ import org.apache.ibatis.annotations.Param;
  * 支付处理日志 Mapper。
  */
 public interface PaymentLogMapper {
+
+    /**
+     * 按日志编号查询唯一支付处理日志。
+     */
+    PaymentLogDetailDTO findDetail(@Param("logNo") String logNo);
 
     /**
      * 查询支付处理日志。

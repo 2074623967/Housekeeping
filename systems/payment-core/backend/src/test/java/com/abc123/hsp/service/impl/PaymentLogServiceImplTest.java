@@ -7,6 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
@@ -25,6 +28,43 @@ class PaymentLogServiceImplTest {
 
     @Mock
     private PaymentLogMapper paymentLogMapper;
+
+    @Test
+    void shouldNormalizeAndReturnDetail() {
+        PaymentLogDetailDTO detail = new PaymentLogDetailDTO();
+        detail.setLogNo("LOG-001");
+        when(paymentLogMapper.findDetail("LOG-001")).thenReturn(detail);
+
+        PaymentLogDetailDTO result = new PaymentLogServiceImpl(paymentLogMapper).detail(" LOG-001 ");
+
+        assertEquals("LOG-001", result.getLogNo());
+        verify(paymentLogMapper).findDetail("LOG-001");
+    }
+
+    @Test
+    void shouldRejectInvalidLogNoBeforeMapperAccess() {
+        PaymentLogServiceImpl service = new PaymentLogServiceImpl(paymentLogMapper);
+
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.detail("  "));
+        BusinessException control = assertThrows(BusinessException.class, () -> service.detail("LOG-001\n"));
+        BusinessException oversized = assertThrows(BusinessException.class, () -> service.detail(repeat("L", 65)));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        verifyNoInteractions(paymentLogMapper);
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenPaymentLogDetailMissing() {
+        when(paymentLogMapper.findDetail("LOG-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentLogServiceImpl(paymentLogMapper).detail("LOG-MISSING"));
+
+        assertEquals(ErrorCode.PAYMENT_LOG_NOT_FOUND, exception.getCode());
+        verify(paymentLogMapper).findDetail("LOG-MISSING");
+    }
 
     @Test
     void shouldNormalizeAndForwardPagingQuery() {
