@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,7 +95,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             overview.setLatestRefundFailAmount("¥0.00");
         }
         overview.setAlerts(buildAlerts(overview));
-        overview.setRecentBatches(enrichRecentBatches(paymentDayEndMapper.findRecentBatches()));
+        overview.setRecentBatches(enrichRecentBatches(safeList(paymentDayEndMapper.findRecentBatches())));
         applyReconciliationReadiness(overview);
         return overview;
     }
@@ -653,6 +654,10 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             batch.setReconciliationReadinessSummary("前置事实已收口，可进入正式对账。");
         }
         return batches;
+    }
+
+    private <T> java.util.List<T> safeList(java.util.List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private Integer defaultZero(Integer value) {

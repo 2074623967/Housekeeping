@@ -15351,3 +15351,17 @@
 | --- | --- |
 | 配置中心后端定向测试 | `PaymentConfigServiceImplTest`、`PaymentConfigControllerTest` 通过 |
 | 证据边界 | 空列表兜底只证明 payment-core 配置总览查询健壮性，不替代可信身份权限、真实密钥托管、生产配置或 release 放行事实 |
+
+## 569. 2026-09-21 支付日终空批次列表边界修复 V1.1 验证
+
+### 569.1 本轮补强
+
+1. 日终总览最近批次查询无数据时返回空数组，避免空库首次加载触发批次遍历异常。
+2. 保留日终空摘要的“未生成事实”阻断结论，不把空列表兜底误判为已完成对账。
+
+### 569.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 日终后端定向测试 | `PaymentDayEndServiceImplTest`、`PaymentDayEndControllerTest` 通过 |
+| 证据边界 | 空批次列表兜底只证明 payment-core 日终查询健壮性，不替代真实跑批、对账、财务核验或 release 放行事实 |

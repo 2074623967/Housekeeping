@@ -94,6 +94,18 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldReturnEmptyRecentBatchesWhenMapperReturnsNull() {
+        when(paymentDayEndMapper.findOverviewSummary()).thenReturn(null);
+        when(paymentDayEndMapper.findRecentBatches()).thenReturn(null);
+
+        PaymentDayEndOverviewDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper).overview();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getAlerts());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getRecentBatches());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getRecentBatches().isEmpty());
+    }
+
+    @Test
     void shouldReturnBatchDetailAndReadiness() {
         PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
         batch.setBatchNo("DAY-END-001");
