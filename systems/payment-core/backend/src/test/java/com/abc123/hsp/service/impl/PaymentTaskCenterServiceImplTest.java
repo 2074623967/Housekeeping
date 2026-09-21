@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -97,6 +98,18 @@ class PaymentTaskCenterServiceImplTest {
                         && alert.getAlertMessage().contains("死信人工处置 3 条")
                         && "/payment-events?publishStatus=DEAD_LETTER"
                         .equals(alert.getActionRoute())));
+    }
+
+    @Test
+    void shouldReturnTaskOverviewWhenSummaryQueryHasNoRow() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(null);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findRecentChannelQueryTrends(anyInt())).thenReturn(null);
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertNotNull(overview);
+        Assertions.assertNotNull(overview.getFocusAlerts());
     }
 
     @Test

@@ -37,6 +37,7 @@ import com.abc123.hsp.service.RefundQueryTaskService;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -307,6 +308,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     public PaymentTaskCenterOverviewDTO overview() {
         PaymentTaskCenterOverviewDTO overview = paymentTaskCenterMapper.findOverviewSummary();
+        if (overview == null) {
+            overview = new PaymentTaskCenterOverviewDTO();
+        }
         overview.setDueExpiredPaymentCount(paymentTaskCenterMapper.countDueExpiredPayments());
         overview.setBackingOffExpiredPaymentCount(paymentTaskCenterMapper.countBackingOffExpiredPayments());
         overview.setUnknownRefundSubmitEventCount(
@@ -329,6 +333,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(queryMonitorLookbackHours);
         List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentChannelQueryTrends(
                 queryMonitorLookbackHours);
+        if (queryTrends == null) {
+            queryTrends = Collections.emptyList();
+        }
         for (PaymentQueryTrendPointDTO trend : queryTrends) {
             trend.setFailureRate(formatPercentage(
                     valueOrZero(trend.getFailureCount()),
