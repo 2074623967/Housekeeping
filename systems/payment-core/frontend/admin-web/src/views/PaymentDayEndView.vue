@@ -357,7 +357,7 @@ onMounted(loadOverview);
                   <td colspan="31" class="state-box">当前暂无支付日终批次</td>
                 </tr>
                 <tr v-for="item in overview.recentBatches" :key="item.batchNo">
-                  <td>{{ item.batchNo }}</td>
+                  <td><button class="table-link" :disabled="!canDrillDown" @click="openDrillDown(`/payment-day-end/batches/${encodeURIComponent(item.batchNo)}`)">{{ item.batchNo }}</button></td>
                   <td>{{ item.bizDate }}</td>
                   <td>{{ item.runMode }}</td>
                   <td><span :class="['badge', item.batchStatusType]">{{ item.batchStatus }}</span></td>

@@ -22,6 +22,8 @@ public interface PaymentDayEndMapper {
      */
     List<PaymentDayEndBatchListItemDTO> findRecentBatches();
 
+    PaymentDayEndBatchListItemDTO findBatchByNo(@Param("batchNo") String batchNo);
+
     /**
      * 查询全部日终批次导出列表。
      */

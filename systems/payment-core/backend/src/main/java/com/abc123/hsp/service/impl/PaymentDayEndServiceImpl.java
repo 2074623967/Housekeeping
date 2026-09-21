@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
@@ -95,6 +97,22 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         overview.setRecentBatches(enrichRecentBatches(paymentDayEndMapper.findRecentBatches()));
         applyReconciliationReadiness(overview);
         return overview;
+    }
+
+    @Override
+    public PaymentDayEndBatchListItemDTO detail(String batchNo) {
+        if (!StringUtils.hasText(batchNo) || batchNo.trim().length() > 64
+                || batchNo.indexOf('\n') >= 0 || batchNo.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException("批次号非法");
+        }
+        PaymentDayEndBatchListItemDTO batch = paymentDayEndMapper.findBatchByNo(batchNo.trim());
+        if (batch == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_DAY_END_BATCH_NOT_FOUND, "支付日终批次不存在");
+        }
+        ArrayList<PaymentDayEndBatchListItemDTO> batches = new ArrayList<>();
+        batches.add(batch);
+        enrichRecentBatches(batches);
+        return batch;
     }
 
     @Override

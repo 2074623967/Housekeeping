@@ -31,6 +31,7 @@ import WorkerSettlementsView from "../views/WorkerSettlementsView.vue";
 import PaymentConfigView from "../views/PaymentConfigView.vue";
 import PaymentMonitorView from "../views/PaymentMonitorView.vue";
 import PaymentDayEndView from "../views/PaymentDayEndView.vue";
+import PaymentDayEndDetailView from "../views/PaymentDayEndDetailView.vue";
 import PaymentTaskCenterView from "../views/PaymentTaskCenterView.vue";
 import PaymentDeadLetterTasksView from "../views/PaymentDeadLetterTasksView.vue";
 import PaymentDeadLetterTaskDetailView from "../views/PaymentDeadLetterTaskDetailView.vue";
@@ -117,6 +118,7 @@ const routes = [
         component: PaymentDeadLetterTaskDetailView
       },
       { path: "payment-day-end", component: PaymentDayEndView },
+      { path: "payment-day-end/batches/:batchNo", name: "payment-day-end-detail", component: PaymentDayEndDetailView },
       { path: "worker-settlements", component: WorkerSettlementsView }
     ]
   }

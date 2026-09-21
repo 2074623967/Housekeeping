@@ -159,6 +159,7 @@ export const paymentIssueApi = {
 
 export const paymentDayEndApi = {
   getOverview: () => request("/api/payment-day-end/overview"),
+  getDetail: (batchNo) => request(`/api/payment-day-end/batches/${encodeURIComponent(batchNo)}`),
   runBatch: (payload) => postJson("/api/payment-day-end/run", payload),
   buildExportUrl: () => "/api/payment-day-end/export"
 };

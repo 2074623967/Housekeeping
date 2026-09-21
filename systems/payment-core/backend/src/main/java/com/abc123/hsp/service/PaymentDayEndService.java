@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
+import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 
 /**
  * 支付日终处理服务。
@@ -14,6 +15,8 @@ public interface PaymentDayEndService {
      * 查询支付日终处理总览。
      */
     PaymentDayEndOverviewDTO overview();
+
+    PaymentDayEndBatchListItemDTO detail(String batchNo);
 
     /**
      * 触发支付日终处理。

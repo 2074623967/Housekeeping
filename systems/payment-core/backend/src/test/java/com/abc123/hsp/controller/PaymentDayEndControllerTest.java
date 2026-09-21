@@ -35,6 +35,15 @@ class PaymentDayEndControllerTest {
     }
 
     @Test
+    void shouldReturnPaymentDayEndBatchDetail() {
+        PaymentDayEndController controller = new PaymentDayEndController(paymentDayEndService);
+
+        controller.detail("DAY-END-001");
+
+        verify(paymentDayEndService).detail("DAY-END-001");
+    }
+
+    @Test
     void shouldRunPaymentDayEndBatch() {
         PaymentDayEndController controller = new PaymentDayEndController(paymentDayEndService);
         PaymentDayEndOverviewDTO overviewDTO = new PaymentDayEndOverviewDTO();

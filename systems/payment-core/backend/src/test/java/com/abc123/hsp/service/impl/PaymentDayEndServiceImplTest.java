@@ -3,6 +3,8 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
@@ -89,6 +91,39 @@ class PaymentDayEndServiceImplTest {
                 "/refunds?refundStatus=FAIL", result.getAlerts().get(8).getActionRoute());
         org.junit.jupiter.api.Assertions.assertEquals(
                 "/refunds?refundStatus=PENDING", result.getAlerts().get(9).getActionRoute());
+    }
+
+    @Test
+    void shouldReturnBatchDetailAndReadiness() {
+        PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
+        batch.setBatchNo("DAY-END-001");
+        batch.setPendingPaymentCount(0);
+        batch.setMissingPaymentSuccessTimeCount(0);
+        batch.setPaymentSuccessFactMismatchCount(0);
+        batch.setRefundFailCount(0);
+        batch.setMissingRefundSuccessTimeCount(0);
+        batch.setRefundTerminalFactMismatchCount(0);
+        batch.setPaymentSuccessGapCount(0);
+        batch.setPendingRefundCount(0);
+        batch.setChannelAbnormalCount(0);
+        batch.setInternalAbnormalCount(0);
+        when(paymentDayEndMapper.findBatchByNo("DAY-END-001")).thenReturn(batch);
+
+        PaymentDayEndBatchListItemDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper)
+                .detail(" DAY-END-001 ");
+
+        org.junit.jupiter.api.Assertions.assertEquals("READY", result.getReconciliationReadinessStatus());
+        verify(paymentDayEndMapper).findBatchByNo("DAY-END-001");
+    }
+
+    @Test
+    void shouldUseStableErrorCodeWhenBatchMissing() {
+        when(paymentDayEndMapper.findBatchByNo("DAY-END-404")).thenReturn(null);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                () -> new PaymentDayEndServiceImpl(paymentDayEndMapper).detail("DAY-END-404"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_DAY_END_BATCH_NOT_FOUND, exception.getCode());
     }
 
     @Test
