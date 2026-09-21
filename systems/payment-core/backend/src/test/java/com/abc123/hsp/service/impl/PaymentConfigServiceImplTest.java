@@ -1171,6 +1171,17 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldReturnNoRouteConflictsWhenRulesQueryReturnsNull() {
+        when(paymentConfigMapper.findRouteRules()).thenReturn(null);
+
+        List<PaymentRouteRuleConflictDTO> conflicts =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(conflicts);
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.isEmpty());
+    }
+
+    @Test
     void shouldReturnEmptyCollectionsWhenOverviewQueriesReturnNull() {
         PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper).overview();
 

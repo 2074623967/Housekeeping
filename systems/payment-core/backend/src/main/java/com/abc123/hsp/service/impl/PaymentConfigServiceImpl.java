@@ -539,7 +539,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private List<PaymentRouteRuleConflictDTO> detectRouteRuleConflicts(List<PaymentRouteRuleConfigDTO> rules) {
         List<PaymentRouteRuleConfigDTO> enabledRules = new ArrayList<PaymentRouteRuleConfigDTO>();
-        for (PaymentRouteRuleConfigDTO rule : rules) {
+        for (PaymentRouteRuleConfigDTO rule : safeList(rules)) {
             if (STATUS_ENABLED.equals(rule.getStatus()) && rolloutPercentageOf(rule) > 0) {
                 enabledRules.add(rule);
             }
