@@ -33,6 +33,7 @@ import PaymentMonitorView from "../views/PaymentMonitorView.vue";
 import PaymentDayEndView from "../views/PaymentDayEndView.vue";
 import PaymentDayEndDetailView from "../views/PaymentDayEndDetailView.vue";
 import PaymentTaskCenterView from "../views/PaymentTaskCenterView.vue";
+import PaymentTaskRunDetailView from "../views/PaymentTaskRunDetailView.vue";
 import PaymentDeadLetterTasksView from "../views/PaymentDeadLetterTasksView.vue";
 import PaymentDeadLetterTaskDetailView from "../views/PaymentDeadLetterTaskDetailView.vue";
 
@@ -111,6 +112,7 @@ const routes = [
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },
       { path: "payment-task-center", component: PaymentTaskCenterView },
+      { path: "payment-task-center/task-runs/:taskLogNo", name: "payment-task-run-detail", component: PaymentTaskRunDetailView },
       { path: "payment-dead-letter-tasks", component: PaymentDeadLetterTasksView },
       {
         path: "payment-dead-letter-tasks/:taskNo",

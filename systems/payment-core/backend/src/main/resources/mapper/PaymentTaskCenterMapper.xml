@@ -508,6 +508,34 @@
         LIMIT #{pageSize} OFFSET #{offset}
     </select>
 
+    <select id="findTaskRunByNo" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
+        SELECT task_log_no AS taskLogNo,
+               task_code AS taskCode,
+               task_name AS taskName,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               business_ref_no AS businessRefNo,
+               run_mode AS runMode,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               severity_level AS severityLevel,
+               severity_level_type AS severityLevelType,
+               escalation_status AS escalationStatus,
+               escalation_status_type AS escalationStatusType,
+               processed_count AS processedCount,
+               success_count AS successCount,
+               warning_count AS warningCount,
+               fail_count AS failCount,
+               summary_comment AS summaryComment,
+               suggested_action AS suggestedAction,
+               recommended_route AS recommendedRoute,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_task_run_log
+        WHERE task_log_no = #{taskLogNo}
+        LIMIT 1
+    </select>
+
     <select id="findTaskRunLogsForExport" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO"
             resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
         SELECT task_log_no AS taskLogNo,

@@ -1554,6 +1554,29 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldReturnTaskRunDetailWithDerivedFields() {
+        PaymentTaskRunLogItemDTO item = new PaymentTaskRunLogItemDTO();
+        item.setTaskLogNo("TASK-LOG-001");
+        item.setTaskCode("PAYMENT_EVENT_RETRY");
+        item.setProcessedCount(2);
+        item.setFailCount(1);
+        when(paymentTaskCenterMapper.findTaskRunByNo("TASK-LOG-001")).thenReturn(item);
+
+        PaymentTaskRunLogItemDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).taskRunDetail(" TASK-LOG-001 ");
+
+        Assertions.assertEquals("P2", result.getSeverityLevel());
+        Assertions.assertEquals("纳入当班跟进", result.getEscalationStatus());
+        verify(paymentTaskCenterMapper).findTaskRunByNo("TASK-LOG-001");
+    }
+
+    @Test
     void shouldEscalateImmediatelyWhenRefundRetryKeepsFailing() {
         RefundRetryResultDTO retryResult = new RefundRetryResultDTO();
         retryResult.setProcessedCount(2);

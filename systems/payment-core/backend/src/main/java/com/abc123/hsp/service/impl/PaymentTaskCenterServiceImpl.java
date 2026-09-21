@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
@@ -391,6 +393,22 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         long total = paymentTaskCenterMapper.countTaskRunLogs(normalizedQuery);
         List<PaymentTaskRunLogItemDTO> items = enrichTaskRuns(paymentTaskCenterMapper.findTaskRunLogs(normalizedQuery));
         return new PageResultDTO<>(items, total, normalizedQuery.getPageNo(), normalizedQuery.getPageSize());
+    }
+
+    @Override
+    public PaymentTaskRunLogItemDTO taskRunDetail(String taskLogNo) {
+        if (taskLogNo == null || taskLogNo.trim().isEmpty() || taskLogNo.trim().length() > 64
+                || taskLogNo.indexOf('\n') >= 0 || taskLogNo.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException("任务日志号非法");
+        }
+        PaymentTaskRunLogItemDTO item = paymentTaskCenterMapper.findTaskRunByNo(taskLogNo.trim());
+        if (item == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_TASK_RUN_NOT_FOUND, "任务执行日志不存在");
+        }
+        List<PaymentTaskRunLogItemDTO> items = new java.util.ArrayList<>();
+        items.add(item);
+        enrichTaskRuns(items);
+        return item;
     }
 
     @Override

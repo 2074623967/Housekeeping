@@ -71,6 +71,15 @@ class PaymentTaskCenterControllerTest {
     }
 
     @Test
+    void shouldReturnTaskRunDetail() {
+        PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
+
+        controller.taskRunDetail("TASK-LOG-001");
+
+        verify(paymentTaskCenterService).taskRunDetail("TASK-LOG-001");
+    }
+
+    @Test
     void shouldRunManualPaymentTasks() {
         PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
         PaymentTaskActionResultDTO resultDTO = new PaymentTaskActionResultDTO();

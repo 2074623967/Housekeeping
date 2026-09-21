@@ -21,6 +21,8 @@ public interface PaymentTaskCenterService {
      */
     PageResultDTO<PaymentTaskRunLogItemDTO> listTaskRuns(PaymentTaskRunLogQueryDTO query);
 
+    PaymentTaskRunLogItemDTO taskRunDetail(String taskLogNo);
+
     /**
      * 导出任务执行日志，供运营、财务和值班复盘留痕。
      */

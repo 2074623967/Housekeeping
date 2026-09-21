@@ -64,6 +64,11 @@ public class PaymentTaskCenterController {
         return ApiResponse.success(paymentTaskCenterService.listTaskRuns(query));
     }
 
+    @GetMapping("/task-runs/{taskLogNo}")
+    public ApiResponse<PaymentTaskRunLogItemDTO> taskRunDetail(@PathVariable String taskLogNo) {
+        return ApiResponse.success(paymentTaskCenterService.taskRunDetail(taskLogNo));
+    }
+
     /**
      * 导出支付任务执行日志。
      */

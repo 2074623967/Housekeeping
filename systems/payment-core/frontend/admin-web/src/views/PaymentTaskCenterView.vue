@@ -231,6 +231,11 @@ function exportTaskRuns() {
   window.open(exportUrl, "_blank", "noopener");
 }
 
+function openTaskRunDetail(taskLogNo) {
+  if (!canUseTaskRuns.value || !taskLogNo) return;
+  router.push(`/payment-task-center/task-runs/${encodeURIComponent(taskLogNo)}`);
+}
+
 async function runTask(taskCode, taskName, candidateCount, actionRunner) {
   if (!canUseOverview.value || !loadedTaskRunsQuery.value || candidateCount <= 0) {
     actionErrorMessage.value = `${taskName}执行失败：当前任务快照不可操作，请刷新成功后重试。`;
@@ -860,7 +865,7 @@ onMounted(loadOverview);
               </thead>
               <tbody>
                 <tr v-for="item in taskRuns" :key="item.taskLogNo">
-                  <td>{{ item.taskLogNo }}</td>
+                  <td><button class="table-link" :disabled="!canUseTaskRuns" @click="openTaskRunDetail(item.taskLogNo)">{{ item.taskLogNo }}</button></td>
                   <td>{{ item.taskCode }}</td>
                   <td>{{ item.taskName }}</td>
                   <td>{{ item.bizDate || "-" }}</td>

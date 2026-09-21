@@ -47,6 +47,8 @@ public interface PaymentTaskCenterMapper {
      */
     List<PaymentTaskRunLogItemDTO> findTaskRunLogs(PaymentTaskRunLogQueryDTO query);
 
+    PaymentTaskRunLogItemDTO findTaskRunByNo(@Param("taskLogNo") String taskLogNo);
+
     /**
      * 查询任务执行日志导出列表。
      */

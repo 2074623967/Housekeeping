@@ -166,6 +166,7 @@ export const paymentDayEndApi = {
 
 export const paymentTaskCenterApi = {
   getOverview: () => request("/api/payment-task-center/overview"),
+  getTaskRunDetail: (taskLogNo) => request(`/api/payment-task-center/task-runs/${encodeURIComponent(taskLogNo)}`),
   getTaskRuns: ({
     taskCode = "",
     bizDate = "",
