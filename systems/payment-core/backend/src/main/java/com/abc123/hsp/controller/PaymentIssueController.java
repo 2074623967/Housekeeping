@@ -119,6 +119,11 @@ public class PaymentIssueController {
         return ApiResponse.success(paymentIssueService.listAlertLogs(query));
     }
 
+    @GetMapping("/alerts/{alertNo}")
+    public ApiResponse<PaymentIssueAlertLogRowDTO> alertDetail(@PathVariable String alertNo) {
+        return ApiResponse.success(paymentIssueService.alertDetail(alertNo));
+    }
+
     /**
      * 导出支付异常告警通知明细，供运营离线排障和留痕归档。
      */

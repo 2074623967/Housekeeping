@@ -57,6 +57,7 @@ export const paymentMonitorApi = {
 
 export const paymentIssueApi = {
   getDetail: (issueNo) => request(`/api/payment-issues/${encodeURIComponent(issueNo)}`),
+  getAlertDetail: (alertNo) => request(`/api/payment-issues/alerts/${encodeURIComponent(alertNo)}`),
   getList: ({
     paymentOrderId = "",
     orderNo = "",

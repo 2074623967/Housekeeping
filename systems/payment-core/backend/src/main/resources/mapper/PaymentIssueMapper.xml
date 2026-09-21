@@ -782,6 +782,7 @@
                provider_receipt_no AS providerReceiptNo,
                provider_delivery_status AS providerDeliveryStatus,
                provider_delivery_message AS providerDeliveryMessage,
+               <include refid="receiptQueryStateExpression"/> AS receiptQueryState,
                receipt_query_count AS receiptQueryCount,
                DATE_FORMAT(last_receipt_query_at, '%Y-%m-%d %H:%i:%s') AS lastReceiptQueryAt,
                DATE_FORMAT(next_receipt_query_at, '%Y-%m-%d %H:%i:%s') AS nextReceiptQueryAt,

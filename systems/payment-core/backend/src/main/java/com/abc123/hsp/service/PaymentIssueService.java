@@ -36,6 +36,11 @@ public interface PaymentIssueService {
     PageResultDTO<PaymentIssueAlertLogRowDTO> listAlertLogs(PaymentIssueAlertLogQueryDTO query);
 
     /**
+     * 查询单条支付异常告警详情。
+     */
+    PaymentIssueAlertLogRowDTO alertDetail(String alertNo);
+
+    /**
      * 导出支付异常告警通知明细。
      */
     String exportAlertLogsCsv(PaymentIssueAlertLogQueryDTO query);

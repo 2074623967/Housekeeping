@@ -63,6 +63,15 @@ class PaymentIssueControllerTest {
     }
 
     @Test
+    void shouldReturnAlertDetail() {
+        PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
+
+        controller.alertDetail("ALERT-001");
+
+        verify(paymentIssueService).alertDetail("ALERT-001");
+    }
+
+    @Test
     void shouldExportAlertLogs() {
         PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
         when(paymentIssueService.exportAlertLogsCsv(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn("告警编号\n");

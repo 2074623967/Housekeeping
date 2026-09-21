@@ -282,6 +282,13 @@ function pickItem(item) {
   selectedItem.value = currentItem;
 }
 
+function openAlertDetail(alertNo) {
+  if (!canUseSnapshot.value || !alertNo) {
+    return;
+  }
+  router.push(`/payment-issue-alerts/${encodeURIComponent(alertNo)}`);
+}
+
 function openSnapshotRoute(target) {
   if (!canUseSnapshot.value || !target) {
     return;
@@ -460,7 +467,7 @@ watch(
             <tbody>
               <tr v-for="item in items" :key="item.alertNo">
                 <td>
-                  <button class="table-link" :disabled="!canUseSnapshot" @click="pickItem(item)">{{ item.alertNo }}</button>
+                  <button class="table-link" :disabled="!canUseSnapshot" @click="openAlertDetail(item.alertNo)">{{ item.alertNo }}</button>
                 </td>
                 <td>{{ item.issueNo }}</td>
                 <td>

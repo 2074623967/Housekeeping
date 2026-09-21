@@ -136,6 +136,16 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     }
 
     @Override
+    public PaymentIssueAlertLogRowDTO alertDetail(String alertNo) {
+        String normalizedAlertNo = normalizeText(alertNo, "告警编号", ALERT_NO_MAX_LENGTH, false);
+        PaymentIssueAlertLogRowDTO item = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
+        if (item == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ISSUE_ALERT_NOT_FOUND, "支付异常告警不存在");
+        }
+        return maskedAlertLogCopy(item);
+    }
+
+    @Override
     public String exportAlertLogsCsv(PaymentIssueAlertLogQueryDTO query) {
         PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
         normalizedQuery.setPageNo(1);

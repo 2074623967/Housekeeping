@@ -331,6 +331,32 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldReturnMaskedAlertDetail() {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-DETAIL-001");
+        row.setProviderReceiptSnapshot("{\"phone\":\"13800138000\"}");
+        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-DETAIL-001")).thenReturn(row);
+
+        PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .alertDetail(" PIA-DETAIL-001 ");
+
+        assertEquals("PIA-DETAIL-001", result.getAlertNo());
+        assertTrue(result.getProviderReceiptSnapshot().contains("138****8000"));
+        assertTrue(row.getProviderReceiptSnapshot().contains("13800138000"));
+    }
+
+    @Test
+    void shouldUseStableErrorCodeWhenAlertDetailMissing() {
+        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-404")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).alertDetail("PIA-404"));
+
+        assertEquals(ErrorCode.PAYMENT_ISSUE_ALERT_NOT_FOUND, exception.getCode());
+        assertEquals("支付异常告警不存在", exception.getMessage());
+    }
+
+    @Test
     void shouldExportAlertLogsCsv() {
         PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
         row.setAlertNo("PIA-EXPORT-001");
