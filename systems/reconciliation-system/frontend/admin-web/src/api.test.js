@@ -9,7 +9,31 @@ test("keeps the reconciliation service envelope on success", async () => {
   }), { status: 200, headers: { "Content-Type": "application/json" } });
   try {
     const { getBatchDetail } = await import(`./api.js?success=${Date.now()}`);
-    assert.deepEqual(await getBatchDetail("REC-001"), { batchNo: "REC-001" });
+    assert.deepEqual(await getBatchDetail("REC-001"), {
+      batchNo: "REC-001",
+      channelRecords: [],
+      internalRecords: [],
+      differences: []
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes null reconciliation detail collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: { batchNo: "REC-001", channelRecords: null, internalRecords: null, differences: null }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { getBatchDetail } = await import(`./api.js?detail-empty=${Date.now()}`);
+    assert.deepEqual(await getBatchDetail("REC-001"), {
+      batchNo: "REC-001",
+      channelRecords: [],
+      internalRecords: [],
+      differences: []
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

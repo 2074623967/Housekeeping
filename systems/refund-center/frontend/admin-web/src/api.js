@@ -44,7 +44,7 @@ export const getRefunds = (query) => {
 };
 
 export const getRefundDetail = (refundOrderId) =>
-  jsonRequest(`/api/refunds/${encodeURIComponent(refundOrderId)}`);
+  jsonRequest(`/api/refunds/${encodeURIComponent(refundOrderId)}`).then(normalizeRefundDetail);
 
 export const downloadRefundDetail = (refundOrderId) =>
   fetch(`/api/refunds/${encodeURIComponent(refundOrderId)}/export`).then(async (response) => {
@@ -74,6 +74,14 @@ const normalizePage = (page) => ({
   ...page,
   items: Array.isArray(page?.items) ? page.items : []
 });
+
+const normalizeRefundDetail = (detail) => {
+  if (!detail || typeof detail !== "object") return detail;
+  return {
+    ...detail,
+    operationLogs: Array.isArray(detail.operationLogs) ? detail.operationLogs : []
+  };
+};
 
 export const dispatchRefundOutbox = (eventId, payload = {}) =>
   jsonRequest(`/api/refunds/outbox/${encodeURIComponent(eventId)}/dispatch`, {

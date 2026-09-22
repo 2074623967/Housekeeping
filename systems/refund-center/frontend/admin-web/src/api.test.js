@@ -31,6 +31,23 @@ test("normalizes null refund outbox page items", async () => {
   }
 });
 
+test("normalizes null refund detail operation logs", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: { refundOrderId: "REF-001", operationLogs: null }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { getRefundDetail } = await import(`./api.js?detail-empty=${Date.now()}`);
+    assert.deepEqual(await getRefundDetail("REF-001"), {
+      refundOrderId: "REF-001",
+      operationLogs: []
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON refund responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

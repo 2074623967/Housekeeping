@@ -36,6 +36,28 @@ test("normalizes null wallet account page records", async () => {
   }
 });
 
+test("normalizes nullable wallet detail collections and batch balances", async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: call++ === 0
+      ? { account: { walletAccountNo: "WAL-001" }, recentFlows: null, statusLogs: null }
+      : null
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { fetchWalletAccountDetail, fetchWalletBalances } = await import(`./api.js?detail-empty=${Date.now()}`);
+    assert.deepEqual(await fetchWalletAccountDetail("WAL-001"), {
+      account: { walletAccountNo: "WAL-001" },
+      recentFlows: [],
+      statusLogs: []
+    });
+    assert.deepEqual(await fetchWalletBalances(["WAL-001"]), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON wallet account responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

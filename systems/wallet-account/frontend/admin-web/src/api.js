@@ -71,11 +71,20 @@ export async function fetchWalletAccounts(params) {
 }
 
 export async function fetchWalletAccountDetail(walletAccountNo) {
-  return request(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}`);
+  const detail = await request(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}`);
+  if (!detail || typeof detail !== "object") {
+    return detail;
+  }
+  return {
+    ...detail,
+    recentFlows: Array.isArray(detail.recentFlows) ? detail.recentFlows : [],
+    statusLogs: Array.isArray(detail.statusLogs) ? detail.statusLogs : []
+  };
 }
 
 export async function fetchWalletBalances(walletAccountNos) {
-  return post("/api/wallet/accounts/balances/query", walletAccountNos);
+  const balances = await post("/api/wallet/accounts/balances/query", walletAccountNos);
+  return Array.isArray(balances) ? balances : [];
 }
 
 export async function fetchWalletFlows(params) {

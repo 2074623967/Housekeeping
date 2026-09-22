@@ -37,7 +37,7 @@ export const getBatches = ({ pageNo = 1, pageSize = 20 } = {}) => {
     .then((page) => normalizePage(page, pageNo, pageSize));
 };
 export const getBatchDetail = (batchNo) =>
-  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`);
+  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`).then(normalizeBatchDetail);
 export const downloadBatchDetail = (batchNo) =>
   fetch(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/export`)
     .then(async (response) => {
@@ -58,6 +58,16 @@ const normalizePage = (page, pageNo = 1, pageSize = 20) => ({
   pageNo: Number.isInteger(Number(page?.pageNo)) ? Number(page.pageNo) : Number(pageNo) || 1,
   pageSize: Number.isInteger(Number(page?.pageSize)) ? Number(page.pageSize) : Number(pageSize) || 20
 });
+
+const normalizeBatchDetail = (detail) => {
+  if (!detail || typeof detail !== "object") return detail;
+  return {
+    ...detail,
+    channelRecords: Array.isArray(detail.channelRecords) ? detail.channelRecords : [],
+    internalRecords: Array.isArray(detail.internalRecords) ? detail.internalRecords : [],
+    differences: Array.isArray(detail.differences) ? detail.differences : []
+  };
+};
 export const runBatch = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/run`, { method: "POST" });
 export const checkBatchReadiness = (batchNo) =>
