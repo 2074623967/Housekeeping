@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { subjectApi } from "./client.js";
+import { ledgerApi, subjectApi } from "./client.js";
 
 test("keeps the accounting service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
@@ -50,6 +50,33 @@ test("reports accounting network failures with a stable client error", async () 
       subjectApi.getList(),
       (error) => error.code === "ACCOUNTING-CLIENT-NETWORK"
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("passes ledger filters and pagination to the accounting API", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return {
+      ok: true,
+      async json() {
+        return { code: "0", data: { items: [], total: 41, pageNo: 3, pageSize: 20 } };
+      }
+    };
+  };
+
+  try {
+    const result = await ledgerApi.getList({ accountNo: "ACC-1", bizNo: "PAY-1", bizType: "PAYMENT", pageNo: 3, pageSize: 20 });
+    const query = new URL(requestedUrl, "http://localhost").searchParams;
+    assert.equal(query.get("accountNo"), "ACC-1");
+    assert.equal(query.get("bizNo"), "PAY-1");
+    assert.equal(query.get("bizType"), "PAYMENT");
+    assert.equal(query.get("pageNo"), "3");
+    assert.equal(query.get("pageSize"), "20");
+    assert.deepEqual(result, { items: [], total: 41, pageNo: 3, pageSize: 20 });
   } finally {
     globalThis.fetch = originalFetch;
   }
