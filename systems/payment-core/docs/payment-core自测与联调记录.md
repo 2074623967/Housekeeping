@@ -16167,3 +16167,16 @@ node tools/dev/frontend-admin-regression.mjs
 结果：`12/12` 管理端均通过各自 `npm test && npm run build`。其中 payment-core 管理端 `49/49` 通过，accounting 管理端 `4/4` 通过；全量回归脚本最终输出 `12/12 admin apps passed test and build`。
 
 该结果证明当前代码基线的管理端测试与生产构建没有回退，不替代真实浏览器交互、现场核验、RabbitMQ/DLQ 当前批次证据或正式发布审批。
+
+## 630. 2026-09-23 payment-core 当前 HEAD 后端全量回归
+
+在当前 `test` HEAD 执行：
+
+```bash
+cd systems/payment-core/backend
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+Surefire 汇总：`1188` tests，`0` failures、`0` errors、`0` skipped。日志中出现的异常文本来自预期失败分支、事务回滚和隔离配置测试断言，未形成失败用例。
+
+本轮只证明 demo/H2 测试配置下的 payment-core 后端当前代码基线可回归；不替代真实渠道、RabbitMQ、生产数据库、资金到账或正式发布治理验证。
