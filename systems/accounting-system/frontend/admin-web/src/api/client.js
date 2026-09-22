@@ -45,7 +45,7 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return normalizePagePayload(payload.data);
+  return payload.data;
 }
 
 export function normalizePagePayload(data) {
@@ -55,6 +55,15 @@ export function normalizePagePayload(data) {
     return { ...data, items: [] };
   }
   return data;
+}
+
+function requestPage(url, options = {}) {
+  return request(url, options).then((data) => normalizePagePayload(data || {
+    items: [],
+    total: 0,
+    pageNo: 1,
+    pageSize: 20
+  }));
 }
 
 function postJson(url, payload) {
@@ -73,7 +82,7 @@ export const subjectApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/subjects?${params.toString()}`);
+    return requestPage(`/api/accounting/subjects?${params.toString()}`);
   },
   create: (payload) => postJson("/api/accounting/subjects", payload),
   getDetail: (subjectId) => request(`/api/accounting/subjects/${subjectId}`)
@@ -88,7 +97,7 @@ export const accountApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/accounts?${params.toString()}`);
+    return requestPage(`/api/accounting/accounts?${params.toString()}`);
   },
   open: (payload) => postJson("/api/accounting/accounts/open", payload),
   getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`),
@@ -117,7 +126,7 @@ export const ledgerApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/ledgers?${params.toString()}`);
+    return requestPage(`/api/accounting/ledgers?${params.toString()}`);
   },
   buildExportUrl: ({ accountNo = "", bizNo = "", bizType = "" } = {}) => {
     const params = new URLSearchParams({
@@ -137,7 +146,7 @@ export const freezeApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/freezes?${params.toString()}`);
+    return requestPage(`/api/accounting/freezes?${params.toString()}`);
   },
   create: (payload) => postJson("/api/accounting/freezes", payload),
   unfreeze: (freezeNo, payload) => postJson(`/api/accounting/freezes/${freezeNo}/unfreeze`, payload)
@@ -151,7 +160,7 @@ export const adjustmentApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/adjustments?${params.toString()}`);
+    return requestPage(`/api/accounting/adjustments?${params.toString()}`);
   },
   create: (payload) => postJson("/api/accounting/adjustments", payload),
   approve: (adjustNo, payload) => postJson(`/api/accounting/adjustments/${adjustNo}/approve`, payload)
@@ -166,7 +175,7 @@ export const eventApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/accounting/events?${params.toString()}`);
+    return requestPage(`/api/accounting/events?${params.toString()}`);
   },
   consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload),
   consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload),

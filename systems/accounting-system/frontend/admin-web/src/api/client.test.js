@@ -8,6 +8,27 @@ test("normalizes null accounting page items without changing summaries", () => {
   assert.equal(normalizePagePayload(summary), summary);
 });
 
+test("normalizes a null accounting page response for list consumers", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: null };
+    }
+  });
+
+  try {
+    assert.deepEqual(await ledgerApi.getList(), {
+      items: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("keeps the accounting service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => ({
