@@ -118,6 +118,7 @@ async function main() {
     "accounting PAYMENT_SUCCESS event was not consumed");
   assert(accountingClearingEvents.items.some((item) => item.eventType === "CLEARING_GENERATED"),
     "accounting CLEARING_GENERATED event was not consumed");
+  const accountingPaymentEvent = accountingPaymentEvents.items.find((item) => item.eventType === "PAYMENT_SUCCESS");
 
   await api(`${refundBaseUrl}/api/refunds/internal/payment-success`, {
     method: "POST",
@@ -189,6 +190,7 @@ async function main() {
     ["payment-core", "PAYMENT_SUCCESS", prepay.paymentOrderId],
     ["clearing-system", "CLEARING_GENERATED", clearingOrder.clearingNo],
     ["settlement-system", "SETTLEMENT_CREATED", settlementOrder.settlementNo],
+    ["accounting-system", "ACCOUNTING_POSTED", accountingPaymentEvent.eventNo],
     ["refund-center", "REFUND_SUCCESS", refundOutbox.eventId]
   ];
   for (const [systemCode, factType, factNo] of requiredReconciliationFacts) {

@@ -25,6 +25,9 @@ mybatis:
     map-underscore-to-camel-case: true
 
 accounting:
+  downstream:
+    reconciliation:
+      fact-url: ${HSP_ACCOUNTING_DOWNSTREAM_RECONCILIATION_FACT_URL:}
   amqp:
     enabled: ${HSP_ACCOUNTING_AMQP_ENABLED:false}
     payment-success-queue: ${HSP_ACCOUNTING_AMQP_PAYMENT_SUCCESS_QUEUE:accounting.payment-success}

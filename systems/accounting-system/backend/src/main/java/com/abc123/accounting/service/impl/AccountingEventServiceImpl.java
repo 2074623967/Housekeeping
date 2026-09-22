@@ -7,10 +7,18 @@ import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * 事件服务实现。
@@ -20,10 +28,26 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     private final AccountingMemoryStore accountingMemoryStore;
     private final AccountingMapper accountingMapper;
+    private final String reconciliationFactUrl;
+    private final RestTemplate restTemplate;
 
-    public AccountingEventServiceImpl(AccountingMemoryStore accountingMemoryStore, AccountingMapper accountingMapper) {
+    @Autowired
+    public AccountingEventServiceImpl(
+            AccountingMemoryStore accountingMemoryStore,
+            AccountingMapper accountingMapper,
+            @Value("${accounting.downstream.reconciliation.fact-url:}") String reconciliationFactUrl) {
+        this(accountingMemoryStore, accountingMapper, reconciliationFactUrl, new RestTemplate());
+    }
+
+    AccountingEventServiceImpl(
+            AccountingMemoryStore accountingMemoryStore,
+            AccountingMapper accountingMapper,
+            String reconciliationFactUrl,
+            RestTemplate restTemplate) {
         this.accountingMemoryStore = accountingMemoryStore;
         this.accountingMapper = accountingMapper;
+        this.reconciliationFactUrl = reconciliationFactUrl;
+        this.restTemplate = restTemplate;
     }
 
     @Override
@@ -45,6 +69,8 @@ public class AccountingEventServiceImpl implements AccountingEventService {
     public AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
         AccountEventDTO existingEvent = findExistingEvent("PAYMENT_SUCCESS", request.getPaymentOrderId());
         if (existingEvent != null) {
+            postReconciliationFact(existingEvent.getBusinessChainId(), existingEvent.getEventNo(),
+                    existingEvent.getBizNo(), request.getAmount(), existingEvent.getSummary());
             return existingEvent;
         }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", request.getPaymentOrderId())) {
@@ -55,18 +81,23 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                     request.getAmount(),
                     "支付事件消费者");
         }
-        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+        AccountEventDTO event = accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
                 "PAYMENT_SUCCESS",
                 request.getPaymentOrderId(),
                 "消费支付成功后自动入账",
                 "{\"orderNo\":\"" + request.getOrderNo() + "\",\"amount\":" + request.getAmount() + "}",
                 resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
+        postReconciliationFact(event.getBusinessChainId(), event.getEventNo(), event.getBizNo(),
+                request.getAmount(), event.getSummary());
+        return event;
     }
 
     @Override
     public AccountEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
         AccountEventDTO existingEvent = findExistingEvent("CLEARING_GENERATED", request.getClearingOrderNo());
         if (existingEvent != null) {
+            postReconciliationFact(existingEvent.getBusinessChainId(), existingEvent.getEventNo(),
+                    existingEvent.getBizNo(), request.getAmount(), existingEvent.getSummary());
             return existingEvent;
         }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "CLEARING_GENERATED_EVENT", request.getClearingOrderNo())) {
@@ -77,18 +108,23 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                     request.getAmount(),
                     "清分事件消费者");
         }
-        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+        AccountEventDTO event = accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
                 "CLEARING_GENERATED",
                 request.getClearingOrderNo(),
                 request.getSummary(),
                 "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}",
                 resolveBusinessChainId(request.getBusinessChainId(), request.getClearingOrderNo())));
+        postReconciliationFact(event.getBusinessChainId(), event.getEventNo(), event.getBizNo(),
+                request.getAmount(), event.getSummary());
+        return event;
     }
 
     @Override
     public AccountEventDTO consumeRefundSuccess(RefundSuccessEventRequestDTO request) {
         AccountEventDTO existingEvent = findExistingEvent("REFUND_SUCCESS", request.getRefundOrderId());
         if (existingEvent != null) {
+            postReconciliationFact(existingEvent.getBusinessChainId(), existingEvent.getEventNo(),
+                    request.getPaymentOrderId(), request.getAmount(), existingEvent.getSummary());
             return existingEvent;
         }
         if (!accountingMemoryStore.hasLedger(
@@ -103,13 +139,16 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         String summary = request.getSummary() == null || request.getSummary().trim().isEmpty()
                 ? "退款成功后冲回原支付入账"
                 : request.getSummary().trim();
-        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+        AccountEventDTO event = accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
                 "REFUND_SUCCESS",
                 request.getRefundOrderId(),
                 summary,
                 "{\"paymentOrderId\":\"" + request.getPaymentOrderId()
                         + "\",\"amount\":" + request.getAmount() + "}",
                 resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
+        postReconciliationFact(event.getBusinessChainId(), event.getEventNo(), request.getPaymentOrderId(),
+                request.getAmount(), event.getSummary());
+        return event;
     }
 
     @Override
@@ -169,5 +208,27 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         return businessChainId == null || businessChainId.trim().isEmpty()
                 ? "CHAIN-" + businessNo
                 : businessChainId.trim();
+    }
+
+    private void postReconciliationFact(String businessChainId, String eventNo, String businessNo,
+            BigDecimal amount, String summary) {
+        if (!StringUtils.hasText(reconciliationFactUrl)) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("businessChainId", businessChainId);
+        payload.put("systemCode", "accounting-system");
+        payload.put("factType", "ACCOUNTING_POSTED");
+        payload.put("factNo", eventNo);
+        payload.put("businessNo", businessNo);
+        payload.put("factStatus", "SUCCESS");
+        payload.put("amount", amount);
+        payload.put("payload", "{\"eventNo\":\"" + eventNo + "\",\"summary\":\""
+                + (summary == null ? "" : summary) + "\"}");
+        ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(), payload, Map.class);
+        Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
+        if (response == null || !response.getStatusCode().is2xxSuccessful() || !"0".equals(String.valueOf(code))) {
+            throw new IllegalStateException("账务事实上报失败");
+        }
     }
 }
