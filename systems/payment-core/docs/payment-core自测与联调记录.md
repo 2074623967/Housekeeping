@@ -15766,3 +15766,19 @@
 | 非 JSON 上游响应回归 | 明确返回客户端错误码和 HTTP 状态码 |
 | `git diff --check` | 通过 |
 | 提交 | `4ce80628 fix: normalize invalid api client responses` |
+
+## 597. 2026-09-23 用户端与管理端上游响应错误契约统一
+
+### 本轮变更
+
+1. `app-web` 和 `admin-web` 的浏览器端 API client 对非 JSON 或空响应统一返回 `PAYMENT-CLIENT-INVALID-RESPONSE`，不再把代理错误页降级成普通业务失败。
+2. 两端均保留可读错误消息，业务页面可以沿用现有错误展示，不把网关不可用误判为支付、退款或资金状态。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `app-web` Node 测试 | `22/22` 通过 |
+| `admin-web` Node 测试 | `48/48` 通过 |
+| `git diff --check` | 通过 |
+| 提交 | `47766543 fix: normalize frontend upstream response errors` |
