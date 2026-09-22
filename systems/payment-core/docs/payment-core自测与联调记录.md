@@ -15749,3 +15749,20 @@
 | 管理端 Vite 构建 | accounting、clearing、deposit、gateway-access、ops-config、reconciliation、refund-center、risk-control、settlement、wallet-account、wallet-system 共 `11/11` 通过 |
 | 构建命令 | 各管理端目录执行 `npm run build` |
 | 构建产物边界 | 本地构建均成功，未产生未跟踪仓库文件；不代表 CDN、生产缓存、浏览器兼容性或发布后现场验收 |
+
+## 596. 2026-09-23 服务调用端异常响应契约收口
+
+### 本轮变更
+
+1. `frontend/api-client/payment-api.mjs` 对上游返回非 JSON、空响应或代理错误页的情况统一抛出 `PAYMENT-API-CLIENT-INVALID-RESPONSE`，并保留 HTTP 状态码。
+2. CLI 错误输出优先保留结构化客户端错误码，避免调用方只能看到底层 JSON 解析异常。
+3. 该处理只改善服务调用端的失败可诊断性，不把网关不可用解释为支付失败、渠道失败或资金事实。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `frontend/api-client` Node 测试 | `7/7` 通过 |
+| 非 JSON 上游响应回归 | 明确返回客户端错误码和 HTTP 状态码 |
+| `git diff --check` | 通过 |
+| 提交 | `4ce80628 fix: normalize invalid api client responses` |
