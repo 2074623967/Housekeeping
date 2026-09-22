@@ -16399,3 +16399,16 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：`12/12` 管理端均通过各自测试与生产构建；payment-core 管理端保持 `49/49`，deposit `3/3`，clearing `5/5`，settlement `7/7`，其余管理端基线未回退。该结果只证明本地前端测试和构建可用，不替代真实浏览器现场核验、渠道、RabbitMQ 或正式发布治理证据。
+
+## 647. 2026-09-23 受控权限下本地全栈运行态复验补充
+
+使用本地已有 Maven 仓库执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh verify all
+```
+
+结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟和跨系统 happy-path 通过；本批生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+本记录只证明当前 demo/H2/HTTP 本地骨架可运行，不证明真实微信/支付宝/银行渠道、RabbitMQ、生产 MySQL、资金到账、财务关账、正式审批、现场核验或稳定观察完成；REG-08 当前批次 DLQ 运行态证据仍待 Docker/RabbitMQ 恢复后重新采集。

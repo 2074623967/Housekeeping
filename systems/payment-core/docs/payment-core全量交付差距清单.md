@@ -3359,3 +3359,9 @@
 ### 9.5 2026-09-23 后端统一回归最终收口
 
 在回归脚本统一 Maven 仓库解析、系统名选择和 JDK 注入后，使用受控 Maven 仓库执行完整 `backend-regression.mjs`：`12/12` 后端模块通过，合计 `1465/1465` 个测试，`0` failures、`0` errors、`0` skipped。该结果只更新本地自动化基线，不改变真实渠道、生产基础设施、资金事实或发布门禁。
+
+### 9.6 2026-09-23 受控权限下本地全栈运行态复验补充
+
+使用本地已有 Maven 仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`，`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟和跨系统 happy-path 通过；对账链路实际为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+该结果仅更新本地 demo/H2/HTTP 骨架的运行态证据，不改变真实渠道、RabbitMQ、生产 MySQL、资金到账、正式审批、现场核验、稳定观察或 `test -> master` / `master -> release/*` 门禁结论；REG-08 当前批次仍缺真实 broker 下的页面冻结和补偿闭环证据。
