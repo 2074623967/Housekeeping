@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePagePayload, payoutApi } from "./client.js";
+import { batchApi, eventApi, normalizePagePayload, orderApi, payoutApi } from "./client.js";
 
 test("normalizes empty settlement page items", () => {
   const result = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -73,6 +73,34 @@ test("keeps payout list pagination in the query contract", async () => {
     assert.equal(query.get("pageNo"), "2");
     assert.equal(query.get("pageSize"), "20");
     assert.equal(result.total, 41);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("passes pagination to settlement batch, order, and event lists", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    return {
+      ok: true,
+      async json() {
+        return { code: "0", data: { items: [], total: 41, pageNo: 3, pageSize: 20 } };
+      }
+    };
+  };
+
+  try {
+    await batchApi.getList({ pageNo: 3, pageSize: 20 });
+    await orderApi.getList({ pageNo: 3, pageSize: 20 });
+    await eventApi.getList({ pageNo: 3, pageSize: 20 });
+    assert.equal(requestedUrls.length, 3);
+    for (const requestedUrl of requestedUrls) {
+      const query = new URL(requestedUrl, "http://localhost").searchParams;
+      assert.equal(query.get("pageNo"), "3");
+      assert.equal(query.get("pageSize"), "20");
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

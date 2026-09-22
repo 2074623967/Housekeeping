@@ -16204,3 +16204,17 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：`12/12` 管理端通过各自测试与生产构建；clearing 管理端本轮为 `5/5` 测试通过，payment-core 管理端保持 `49/49` 通过。该回归只证明代码和构建基线没有回退，不改变当前 REG-08、RabbitMQ、真实渠道及正式发布治理边界。
+
+## 633. 2026-09-23 settlement 管理端主列表分页收口
+
+补齐 settlement 管理端四个主运营列表页的分页能力：结算批次、结算单、结算事件和审核工作台。主列表使用服务端 `total/pageNo/pageSize`，查询与重置回到第一页，翻页按钮在首尾页和加载中禁用；批次与事件下钻的关联结算单仍保持独立明细读取。
+
+验证：
+
+```bash
+cd systems/settlement-system/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：`7/7` API 客户端测试通过，Vite 生产构建通过，`git diff --check` 通过。新增契约测试覆盖批次、结算单和事件列表分页参数；本轮不形成新的生产、渠道或 RabbitMQ 事实证据。

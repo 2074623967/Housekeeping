@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from "vue";
 import { orderApi } from "../api/client";
 
 const rows = ref([]);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const message = ref("");
 const loading = ref(false);
 const actionLoading = ref(false);
@@ -19,13 +22,16 @@ const targetTypeOptions = ["SERVICE_PROVIDER", "MERCHANT"];
 
 const auditLogRows = computed(() => selectedDetail.value?.auditLogs || []);
 const itemRows = computed(() => selectedDetail.value?.items || []);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await orderApi.getList({ ...filters.value, pageNo: 1, pageSize: 20 });
+    const result = await orderApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = result.total;
+    pageNo.value = result.pageNo || targetPage;
     if (selectedOrder.value) {
       const latestOrder = result.items.find((item) => item.settlementNo === selectedOrder.value.settlementNo);
       if (latestOrder) {
@@ -76,8 +82,19 @@ async function submitAudit(row, actionType) {
 }
 
 function resetFilters() {
+  pageNo.value = 1;
   filters.value = { batchNo: "", targetType: "", settlementStatus: "" };
   loadRows();
+}
+
+function searchRows() {
+  pageNo.value = 1;
+  loadRows();
+}
+
+function changePage(targetPage) {
+  if (loading.value || targetPage < 1 || targetPage > totalPages.value || targetPage === pageNo.value) return;
+  loadRows(targetPage);
 }
 
 function settlementAmountSummary(order) {
@@ -123,7 +140,7 @@ onMounted(loadRows);
           <span>列表支持同页完成查看、审核、驳回和明细下钻，减少审核跳转成本。</span>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button primary" @click="searchRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -185,6 +202,13 @@ onMounted(loadRows);
             </tr>
           </tbody>
         </table>
+        <div class="pagination" aria-label="结算单分页">
+          <span>第 {{ pageNo }} / {{ totalPages }} 页，共 {{ total }} 条</span>
+          <div class="pagination-actions">
+            <button class="button secondary" :disabled="loading || pageNo <= 1" @click="changePage(pageNo - 1)">上一页</button>
+            <button class="button secondary" :disabled="loading || pageNo >= totalPages" @click="changePage(pageNo + 1)">下一页</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -362,4 +386,8 @@ onMounted(loadRows);
   color: #ffffff;
   border-color: #059669;
 }
+
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; color: #64748b; font-size: 13px; }
+.pagination-actions { display: flex; gap: 8px; }
+@media (max-width: 720px) { .pagination { align-items: stretch; flex-direction: column; } .pagination-actions .button { flex: 1; } }
 </style>
