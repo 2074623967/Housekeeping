@@ -13,6 +13,7 @@ import com.abc123.reconciliation.entity.ChannelRecordEntity;
 import com.abc123.reconciliation.entity.InternalRecordEntity;
 import com.abc123.reconciliation.mapper.ReconciliationMapper;
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Repository;
 
@@ -40,7 +41,7 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
 
     @Override
     public List<ReconciliationBatchListItemDTO> findBatches() {
-        return mapper.findBatches();
+        return safeList(mapper.findBatches());
     }
 
     @Override
@@ -55,22 +56,22 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
 
     @Override
     public List<ChannelRecordEntity> findChannelRecords(String batchNo) {
-        return mapper.findChannelRecords(batchNo);
+        return safeList(mapper.findChannelRecords(batchNo));
     }
 
     @Override
     public List<InternalRecordEntity> findInternalRecords(String batchNo) {
-        return mapper.findInternalRecords(batchNo);
+        return safeList(mapper.findInternalRecords(batchNo));
     }
 
     @Override
     public List<ReconciliationBatchChannelRecordDTO> findChannelRecordDetails(String batchNo) {
-        return mapper.findChannelRecordDetails(batchNo);
+        return safeList(mapper.findChannelRecordDetails(batchNo));
     }
 
     @Override
     public List<ReconciliationBatchInternalRecordDTO> findInternalRecordDetails(String batchNo) {
-        return mapper.findInternalRecordDetails(batchNo);
+        return safeList(mapper.findInternalRecordDetails(batchNo));
     }
 
     @Override
@@ -108,7 +109,7 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
 
     @Override
     public List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query) {
-        return mapper.findDifferences(query);
+        return safeList(mapper.findDifferences(query));
     }
 
     @Override
@@ -118,7 +119,7 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
 
     @Override
     public List<ReconciliationDifferenceDTO> findDifferencesByBatch(String batchNo) {
-        return mapper.findDifferencesByBatch(batchNo);
+        return safeList(mapper.findDifferencesByBatch(batchNo));
     }
 
     @Override
@@ -143,6 +144,10 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
 
     @Override
     public List<CrossSystemFactDTO> findCrossSystemFacts(String businessChainId) {
-        return mapper.findCrossSystemFacts(businessChainId);
+        return safeList(mapper.findCrossSystemFacts(businessChainId));
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }
