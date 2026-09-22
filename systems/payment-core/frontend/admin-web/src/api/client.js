@@ -956,7 +956,8 @@ export const refundApi = {
     });
     return `/api/refunds/export?${params.toString()}`;
   },
-  getDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`),
+  getDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`)
+    .then(normalizeRefundDetail),
   apply: (payload) => postJson("/api/refunds/apply", payload),
   approve: (refundOrderId, operator, remark = "") =>
     postJson("/api/refunds/approve", { refundOrderId, operator, remark }),
@@ -964,6 +965,17 @@ export const refundApi = {
   retry: (refundOrderId, operator, remark = "") =>
     postJson("/api/refunds/retry", { refundOrderId, operator, remark })
 };
+
+function normalizeRefundDetail(detail) {
+  if (!detail || typeof detail !== "object") {
+    return detail;
+  }
+  return {
+    ...detail,
+    attempts: Array.isArray(detail.attempts) ? detail.attempts : [],
+    operationLogs: Array.isArray(detail.operationLogs) ? detail.operationLogs : []
+  };
+}
 
 export const settlementApi = {
   getWorkerOverview: ({
