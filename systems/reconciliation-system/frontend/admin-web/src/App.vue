@@ -14,6 +14,10 @@ const businessChainId = ref("");
 const chainSnapshot = ref(null);
 const chainLoading = ref(false);
 
+function differencePageCount() {
+  return Math.max(1, Math.ceil(differences.total / filter.pageSize));
+}
+
 const typeLabel = {
   CHANNEL_ONLY: "渠道单边",
   INTERNAL_ONLY: "平台单边",
@@ -92,6 +96,17 @@ async function closeDifference(item) {
   } catch (error) {
     message.value = error.message;
   }
+}
+
+function goToDifferencePage(nextPage) {
+  if (loading.value || nextPage < 1 || nextPage > differencePageCount()) return;
+  filter.pageNo = nextPage;
+  refresh();
+}
+
+function resetDifferencePage() {
+  filter.pageNo = 1;
+  refresh();
 }
 
 async function openBatchDetail(batchNo) {
@@ -224,7 +239,7 @@ onMounted(refresh);
           <table v-else class="table"><thead><tr><th>来源系统</th><th>事实类型</th><th>事实编号</th><th>业务号</th><th>金额</th><th>配置版本</th><th>状态</th><th>发生时间</th></tr></thead><tbody><tr v-for="fact in chainSnapshot.facts" :key="`${fact.systemCode}:${fact.factType}:${fact.factNo}`"><td class="strong">{{ fact.systemCode }}</td><td>{{ fact.factType }}</td><td>{{ fact.factNo }}</td><td>{{ fact.businessNo || "—" }}</td><td>{{ fact.amount ?? "—" }}</td><td>{{ fact.snapshotVersion ?? "—" }}</td><td><span class="pill" :class="fact.factStatus === 'SUCCESS' ? 'completed' : 'open'">{{ fact.factStatus }}</span></td><td>{{ fact.occurredAt || "—" }}</td></tr></tbody></table>
         </template>
       </section>
-      <section v-else class="panel"><div class="section-title"><div><p class="eyebrow">OPEN DIFFERENCES</p><h2>差异处理台</h2></div><span class="count">共 {{ differences.total }} 条</span></div><div class="filters"><select v-model="filter.differenceType" @change="refresh"><option value="">全部差异类型</option><option value="CHANNEL_ONLY">渠道单边</option><option value="INTERNAL_ONLY">平台单边</option><option value="AMOUNT_MISMATCH">金额不一致</option><option value="STATUS_MISMATCH">状态不一致</option></select><button class="primary compact" @click="refresh">查询</button></div><div v-if="loading" class="empty">正在加载...</div><div v-else-if="!differences.items.length" class="empty">当前没有未结差异</div><table v-else class="table"><thead><tr><th>差异编号</th><th>批次 / 支付单</th><th>差异类型</th><th>渠道金额</th><th>平台金额</th><th>状态</th><th>处置</th></tr></thead><tbody><tr v-for="item in differences.items" :key="item.differenceNo"><td class="strong">{{ item.differenceNo }}</td><td>{{ item.batchNo }}<small>{{ item.paymentOrderId }}</small></td><td><span class="type">{{ typeLabel[item.differenceType] || item.differenceType }}</span></td><td>¥{{ Number(item.channelAmount || 0).toFixed(2) }}</td><td>¥{{ Number(item.internalAmount || 0).toFixed(2) }}</td><td><span class="pill open">待处置</span></td><td><button class="primary compact" @click="closeDifference(item)">人工结案</button></td></tr></tbody></table></section>
+      <section v-else class="panel"><div class="section-title"><div><p class="eyebrow">OPEN DIFFERENCES</p><h2>差异处理台</h2></div><span class="count">共 {{ differences.total }} 条</span></div><div class="filters"><select v-model="filter.differenceType" @change="resetDifferencePage"><option value="">全部差异类型</option><option value="CHANNEL_ONLY">渠道单边</option><option value="INTERNAL_ONLY">平台单边</option><option value="AMOUNT_MISMATCH">金额不一致</option><option value="STATUS_MISMATCH">状态不一致</option></select><button class="primary compact" @click="resetDifferencePage">查询</button></div><div v-if="loading" class="empty">正在加载...</div><div v-else-if="!differences.items.length" class="empty">当前没有未结差异</div><table v-else class="table"><thead><tr><th>差异编号</th><th>批次 / 支付单</th><th>差异类型</th><th>渠道金额</th><th>平台金额</th><th>状态</th><th>处置</th></tr></thead><tbody><tr v-for="item in differences.items" :key="item.differenceNo"><td class="strong">{{ item.differenceNo }}</td><td>{{ item.batchNo }}<small>{{ item.paymentOrderId }}</small></td><td><span class="type">{{ typeLabel[item.differenceType] || item.differenceType }}</span></td><td>¥{{ Number(item.channelAmount || 0).toFixed(2) }}</td><td>¥{{ Number(item.internalAmount || 0).toFixed(2) }}</td><td><span class="pill open">待处置</span></td><td><button class="primary compact" @click="closeDifference(item)">人工结案</button></td></tr></tbody></table><div class="pager" aria-label="差异分页"><span>共 {{ differences.total }} 条，第 {{ filter.pageNo }} / {{ differencePageCount() }} 页</span><div><button class="ghost compact" :disabled="loading || filter.pageNo <= 1" @click="goToDifferencePage(filter.pageNo - 1)">上一页</button><button class="ghost compact" :disabled="loading || filter.pageNo >= differencePageCount()" @click="goToDifferencePage(filter.pageNo + 1)">下一页</button></div></div></section>
     </main>
   </div>
 </template>

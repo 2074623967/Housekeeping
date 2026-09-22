@@ -66,3 +66,27 @@ test("encodes business chain identifiers when loading cross-system facts", async
     globalThis.fetch = originalFetch;
   }
 });
+
+test("keeps reconciliation difference pagination in the query contract", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify({ code: "0", data: { items: [], total: 41, pageNo: 2, pageSize: 20 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+  try {
+    const { getDifferences } = await import(`./api.js?differences=${Date.now()}`);
+    const result = await getDifferences({ differenceType: "AMOUNT_MISMATCH", status: "OPEN", pageNo: 2, pageSize: 20 });
+    const query = new URL(requestedUrl, "http://127.0.0.1").searchParams;
+    assert.equal(query.get("differenceType"), "AMOUNT_MISMATCH");
+    assert.equal(query.get("status"), "OPEN");
+    assert.equal(query.get("pageNo"), "2");
+    assert.equal(query.get("pageSize"), "20");
+    assert.equal(result.total, 41);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
