@@ -15820,6 +15820,22 @@ node tools/dev/frontend-admin-regression.mjs
 | 工作区产物 | 未产生需纳入仓库的构建产物变更 |
 | 运行态边界 | 只证明本地前端契约和构建可用，不代表真实渠道、资金、生产配置或发布治理完成 |
 
+## 601. 2026-09-23 payment-core 后端全量回归复核
+
+### 验证命令
+
+```bash
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `systems/payment-core/backend` Maven/Surefire | `1188/1188` 通过，`0` failures、`0` errors、`0` skipped |
+| 测试日志中的受控异常 | 属于失败闭合、事务回滚和敏感信息清洗场景的主动验证，不计为测试失败 |
+| 运行态边界 | 仅证明 demo profile 下本地代码和测试通过，不代表 RabbitMQ、真实渠道、生产 MySQL 或发布治理完成 |
+
 ## 599. 2026-09-23 小程序传输失败错误码补齐
 
 ### 本轮变更
