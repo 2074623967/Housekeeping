@@ -16180,3 +16180,17 @@ cd systems/payment-core/backend
 Surefire 汇总：`1188` tests，`0` failures、`0` errors、`0` skipped。日志中出现的异常文本来自预期失败分支、事务回滚和隔离配置测试断言，未形成失败用例。
 
 本轮只证明 demo/H2 测试配置下的 payment-core 后端当前代码基线可回归；不替代真实渠道、RabbitMQ、生产数据库、资金到账或正式发布治理验证。
+
+## 631. 2026-09-23 clearing 管理端主列表分页收口
+
+补齐 clearing 管理端四个主运营列表页的分页能力：清分批次、清分规则、费用规则和分账明细。页面现在使用服务端 `total/pageNo/pageSize`，查询与重置回到第一页，翻页按钮在首尾页和加载中禁用，移动端采用纵向分页布局；批次详情下钻的关联清分结果仍作为独立明细读取，不与批次主列表页码混用。
+
+验证：
+
+```bash
+cd systems/clearing-system/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：`5/5` API 客户端测试通过，Vite 生产构建通过，`git diff --check` 通过。新增契约测试覆盖批次、规则、费用和分账列表的分页参数传递。本轮不形成新的生产或 RabbitMQ 事实证据。

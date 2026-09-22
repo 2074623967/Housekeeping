@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from "vue";
 import { feeApi } from "../api/client";
 
 const rows = ref([]);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const message = ref("");
 const loading = ref(false);
 const actionLoading = ref(false);
@@ -19,13 +22,16 @@ const selectedFeeRule = ref(null);
 
 const activeFeeCount = computed(() => rows.value.filter((item) => item.status === "启用").length);
 const fixedFeeCount = computed(() => rows.value.filter((item) => item.feeMode === "FIXED").length);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await feeApi.getList({ ...filters.value, pageNo: 1, pageSize: 20 });
+    const result = await feeApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = result.total;
+    pageNo.value = result.pageNo || targetPage;
     if (selectedFeeRule.value) {
       const latestFeeRule = result.items.find((item) => item.feeRuleNo === selectedFeeRule.value.feeRuleNo);
       if (latestFeeRule) {
@@ -79,8 +85,19 @@ function selectFeeRule(row) {
 }
 
 function resetFilters() {
+  pageNo.value = 1;
   filters.value = { feeType: "", status: "" };
   loadRows();
+}
+
+function searchRows() {
+  pageNo.value = 1;
+  loadRows();
+}
+
+function changePage(targetPage) {
+  if (loading.value || targetPage < 1 || targetPage > totalPages.value || targetPage === pageNo.value) return;
+  loadRows(targetPage);
 }
 
 onMounted(loadRows);
@@ -98,7 +115,7 @@ onMounted(loadRows);
       <div class="card-grid metric-grid">
         <article class="card">
           <p class="card-title">费用规则总数</p>
-          <p class="card-value">{{ rows.length }}</p>
+          <p class="card-value">{{ total }}</p>
         </article>
         <article class="card">
           <p class="card-title">启用规则</p>
@@ -118,7 +135,7 @@ onMounted(loadRows);
           <span>费率模式适合平台抽佣，固定费用模式适合通道手续费或保底扣费。</span>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button primary" @click="searchRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -153,6 +170,13 @@ onMounted(loadRows);
             </tr>
           </tbody>
         </table>
+        <div class="pagination" aria-label="费用规则分页">
+          <span>第 {{ pageNo }} / {{ totalPages }} 页，共 {{ total }} 条</span>
+          <div class="pagination-actions">
+            <button class="button secondary" :disabled="loading || pageNo <= 1" @click="changePage(pageNo - 1)">上一页</button>
+            <button class="button secondary" :disabled="loading || pageNo >= totalPages" @click="changePage(pageNo + 1)">下一页</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -244,4 +268,8 @@ onMounted(loadRows);
   color: #64748b;
   text-align: center;
 }
+
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; color: #64748b; font-size: 13px; }
+.pagination-actions { display: flex; gap: 8px; }
+@media (max-width: 720px) { .pagination { align-items: stretch; flex-direction: column; } .pagination-actions .button { flex: 1; } }
 </style>

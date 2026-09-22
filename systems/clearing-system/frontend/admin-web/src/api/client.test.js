@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { batchApi, orderApi } from "./client.js";
+import { batchApi, feeApi, orderApi, ruleApi, shareApi } from "./client.js";
 
 test("keeps the clearing service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
@@ -83,6 +83,35 @@ test("sends all clearing order filters and pagination parameters", async () => {
     assert.equal(query.get("clearingStatus"), "清分成功");
     assert.equal(query.get("pageNo"), "2");
     assert.equal(query.get("pageSize"), "20");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("passes pagination to clearing batch, rule, fee, and share lists", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    return {
+      ok: true,
+      async json() {
+        return { code: "0", data: { items: [], total: 41, pageNo: 3, pageSize: 20 } };
+      }
+    };
+  };
+
+  try {
+    await batchApi.getList({ pageNo: 3, pageSize: 20 });
+    await ruleApi.getList({ pageNo: 3, pageSize: 20 });
+    await feeApi.getList({ pageNo: 3, pageSize: 20 });
+    await shareApi.getList({ pageNo: 3, pageSize: 20 });
+    assert.equal(requestedUrls.length, 4);
+    for (const requestedUrl of requestedUrls) {
+      const query = new URL(requestedUrl, "http://localhost").searchParams;
+      assert.equal(query.get("pageNo"), "3");
+      assert.equal(query.get("pageSize"), "20");
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
