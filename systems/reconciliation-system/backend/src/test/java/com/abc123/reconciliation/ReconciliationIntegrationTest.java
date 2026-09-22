@@ -183,6 +183,20 @@ class ReconciliationIntegrationTest {
     }
 
     @Test
+    void shouldUpgradeExistingFactStatusOnIdempotentRetry() {
+        String chainId = "CHAIN-IT-RETRY-001";
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-RETRY-001", "PENDING");
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-RETRY-001", "SUCCESS");
+
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
+
+        assertEquals(1, snapshot.getFactCount());
+        assertEquals("SUCCESS", snapshot.getFacts().get(0).getFactStatus());
+        assertEquals(1, snapshot.getCompletedStageCount());
+        assertEquals("IN_PROGRESS", snapshot.getChainStatus());
+    }
+
+    @Test
     void shouldBlockFinancialCloseWhenChainHasAbnormalFact() {
         String chainId = "CHAIN-IT-002";
         recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-002", "SUCCESS");
