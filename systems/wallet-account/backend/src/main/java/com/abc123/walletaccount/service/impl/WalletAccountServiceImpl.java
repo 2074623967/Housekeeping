@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,6 +48,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     @Override
     public PageResultDTO<WalletAccountDTO> pageAccounts(WalletAccountQueryDTO queryDTO) {
+        queryDTO = queryDTO == null ? new WalletAccountQueryDTO() : queryDTO;
         int pageNo = queryDTO.getPageNo() == null || queryDTO.getPageNo() < 1 ? 1 : queryDTO.getPageNo();
         int pageSize = queryDTO.getPageSize() == null || queryDTO.getPageSize() < 1 ? 20 : queryDTO.getPageSize();
         int offset = (pageNo - 1) * pageSize;
@@ -54,9 +56,9 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         pageResultDTO.setTotal(walletAccountDao.countAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(),
                 queryDTO.getAccountStatus(), queryDTO.getExtRefNo()));
-        pageResultDTO.setRecords(walletAccountDao.listAccounts(
+        pageResultDTO.setRecords(safeList(walletAccountDao.listAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(),
-                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), offset, pageSize)
+                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), offset, pageSize))
                 .stream()
                 .map(this::toAccountDTO)
                 .collect(Collectors.toList()));
@@ -69,11 +71,11 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         WalletAccountDetailDTO detailDTO = new WalletAccountDetailDTO();
         detailDTO.setAccount(toAccountDTO(accountEntity));
         detailDTO.setBalance(toBalanceDTO(accountEntity));
-        detailDTO.setRecentFlows(walletAccountDao.listRecentFlowsByAccountNo(walletAccountNo, 10)
+        detailDTO.setRecentFlows(safeList(walletAccountDao.listRecentFlowsByAccountNo(walletAccountNo, 10))
                 .stream()
                 .map(this::toFlowDTO)
                 .collect(Collectors.toList()));
-        detailDTO.setStatusLogs(walletAccountDao.listStatusLogsByAccountNo(walletAccountNo, 10)
+        detailDTO.setStatusLogs(safeList(walletAccountDao.listStatusLogsByAccountNo(walletAccountNo, 10))
                 .stream()
                 .map(this::toStatusLogDTO)
                 .collect(Collectors.toList()));
@@ -90,7 +92,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         if (walletAccountNos == null || walletAccountNos.isEmpty()) {
             return Collections.emptyList();
         }
-        return walletAccountDao.listBalancesByAccountNos(walletAccountNos)
+        return safeList(walletAccountDao.listBalancesByAccountNos(walletAccountNos))
                 .stream()
                 .map(this::toBalanceDTO)
                 .collect(Collectors.toList());
@@ -98,14 +100,16 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     @Override
     public PageResultDTO<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO) {
+        queryDTO = queryDTO == null ? new WalletFlowQueryDTO() : queryDTO;
         int pageNo = queryDTO.getPageNo() == null || queryDTO.getPageNo() < 1 ? 1 : queryDTO.getPageNo();
         int pageSize = queryDTO.getPageSize() == null || queryDTO.getPageSize() < 1 ? 20 : queryDTO.getPageSize();
         int offset = (pageNo - 1) * pageSize;
         PageResultDTO<WalletFlowDTO> pageResultDTO = new PageResultDTO<WalletFlowDTO>();
         pageResultDTO.setTotal(walletAccountDao.countFlows(
                 queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo()));
-        pageResultDTO.setRecords(walletAccountDao.listFlows(
+        pageResultDTO.setRecords(safeList(walletAccountDao.listFlows(
                 queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo(), offset, pageSize)
+                )
                 .stream()
                 .map(this::toFlowDTO)
                 .collect(Collectors.toList()));
@@ -146,7 +150,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         String taskStatus = queryDTO == null ? null : queryDTO.getTaskStatus();
         PageResultDTO<WalletFlowExportTaskDTO> pageResultDTO = new PageResultDTO<WalletFlowExportTaskDTO>();
         pageResultDTO.setTotal(walletAccountDao.countExportTasks(operatorId, taskStatus));
-        pageResultDTO.setRecords(walletAccountDao.listExportTasks(operatorId, taskStatus, offset, pageSize)
+        pageResultDTO.setRecords(safeList(walletAccountDao.listExportTasks(operatorId, taskStatus, offset, pageSize))
                 .stream()
                 .map(this::toExportTaskDTO)
                 .collect(Collectors.toList()));
@@ -167,8 +171,8 @@ public class WalletAccountServiceImpl implements WalletAccountService {
                 taskEntity.getWalletAccountNo(), taskEntity.getSourceSystem(), taskEntity.getSourceBizNo());
         List<WalletFlowEntity> flowEntities = total == 0
                 ? Collections.<WalletFlowEntity>emptyList()
-                : walletAccountDao.listFlows(taskEntity.getWalletAccountNo(), taskEntity.getSourceSystem(),
-                        taskEntity.getSourceBizNo(), 0, total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total);
+                : safeList(walletAccountDao.listFlows(taskEntity.getWalletAccountNo(), taskEntity.getSourceSystem(),
+                        taskEntity.getSourceBizNo(), 0, total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("流水号,账户号,流水类型,来源系统,来源业务单号,变更金额,变更前可用余额,变更后可用余额,操作人,操作原因,创建时间\n");
@@ -562,6 +566,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
             return "\"" + normalized + "\"";
         }
         return normalized;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? new ArrayList<>() : values;
     }
 
     private String decimalValue(BigDecimal value) {
