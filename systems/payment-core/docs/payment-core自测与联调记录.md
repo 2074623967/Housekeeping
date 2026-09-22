@@ -16307,3 +16307,26 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：退款中心定向 `4/4` 通过并构建成功，全量管理端 `12/12` 通过。后端已有分页查询与总数契约，本轮只补齐页面操作闭环；不改变真实退款渠道、账务、对账或生产消息事实。
+
+## 641. 2026-09-23 deposit-system 账户与流水分页闭环
+
+为 deposit-system 的账户和资金流水主列表补齐真实分页契约：
+
+- 后端新增统一 `PageResultDTO`，账户、流水查询接收 `pageNo/pageSize`，Mapper 增加分页与总数查询。
+- 保留 overview、V2 预览、导出等原有不分页语义，避免把摘要和下载接口误切成第一页。
+- 管理端接入分页响应归一化、页码控件和查询回第一页行为。
+
+验证：
+
+```bash
+cd systems/deposit-system/backend
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH \
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+
+cd ../frontend/admin-web
+npm test
+npm run build
+```
+
+结果：后端 `11/11` 通过，管理端 `3/3` 通过并构建成功。本轮仍只证明本地代码、H2 测试和前端构建可用，不代表生产数据库、真实渠道或正式发布验收。

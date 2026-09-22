@@ -12,4 +12,12 @@ public class DepositFlowQueryDTO {
     private String flowType;
     /** 业务关联号。 */
     private String referenceNo;
+    /** 页码。 */
+    private int pageNo = 1;
+    /** 页大小。 */
+    private int pageSize = 20;
+
+    public int getOffset() {
+        return (pageNo - 1) * pageSize;
+    }
 }

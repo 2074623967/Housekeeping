@@ -24,10 +24,10 @@ const overview = ref({
   totalAvailableAmount: 0,
   fullyPaidAccountCount: 0
 });
-const accounts = ref([]);
+const accountsPage = reactive({ items: [], total: 0, pageNo: 1, pageSize: 20 });
 const selected = ref(null);
 const selectedDetail = ref(null);
-const flows = ref([]);
+const flowsPage = reactive({ items: [], total: 0, pageNo: 1, pageSize: 20 });
 const v2Overview = ref({
   totalAccountCount: 0,
   bindingCount: 0,
@@ -45,8 +45,8 @@ const loading = ref(false);
 const errorMessage = ref("");
 const activeView = ref("overview");
 
-const accountFilter = reactive({ ownerType: "", status: "", keyword: "" });
-const flowFilter = reactive({ flowType: "", referenceNo: "" });
+const accountFilter = reactive({ ownerType: "", status: "", keyword: "", pageNo: 1, pageSize: 20 });
+const flowFilter = reactive({ flowType: "", referenceNo: "", pageNo: 1, pageSize: 20 });
 const form = reactive({ ownerId: "", ownerType: "WORKER", requiredAmount: 0 });
 const action = reactive({ type: "collect", amount: "", referenceNo: "", remark: "" });
 const debt = reactive({ debtNo: "", debtAmount: "", remark: "" });
@@ -72,17 +72,17 @@ const loadOverview = async () => {
 };
 
 const loadAccounts = async () => {
-  accounts.value = await getAccountsByQuery(accountFilter);
+  Object.assign(accountsPage, await getAccountsByQuery(accountFilter));
 };
 
 const loadSelected = async () => {
   if (!selected.value) {
     selectedDetail.value = null;
-    flows.value = [];
+    Object.assign(flowsPage, { items: [], total: 0, pageNo: 1, pageSize: 20 });
     return;
   }
   selectedDetail.value = await getAccountDetail(selected.value.accountNo);
-  flows.value = await getFlows(selected.value.accountNo, flowFilter);
+  Object.assign(flowsPage, await getFlows(selected.value.accountNo, flowFilter));
 };
 
 const refresh = async () => {
@@ -116,6 +116,7 @@ const searchAccounts = async () => {
   loading.value = true;
   errorMessage.value = "";
   try {
+    accountFilter.pageNo = 1;
     await loadAccounts();
     activeView.value = "accounts";
   } catch (error) {
@@ -190,7 +191,8 @@ const applyFlowFilter = async () => {
   loading.value = true;
   errorMessage.value = "";
   try {
-    flows.value = await getFlows(selected.value.accountNo, flowFilter);
+    flowFilter.pageNo = 1;
+    Object.assign(flowsPage, await getFlows(selected.value.accountNo, flowFilter));
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -466,7 +468,7 @@ onMounted(refresh);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in accounts" :key="item.accountNo">
+              <tr v-for="item in accountsPage.items" :key="item.accountNo">
               <td><button class="link" @click="selectAccount(item)">{{ item.accountNo }}</button></td>
               <td>{{ item.ownerId }}<small>{{ item.ownerType }}</small></td>
               <td>¥{{ Number(item.requiredAmount).toFixed(2) }}</td>
@@ -478,7 +480,12 @@ onMounted(refresh);
             </tr>
           </tbody>
         </table>
-        <div v-if="!accounts.length && !loading" class="empty">暂无保证金账户</div>
+          <div v-if="!accountsPage.items.length && !loading" class="empty">暂无保证金账户</div>
+          <div v-if="accountsPage.total > accountFilter.pageSize" class="pagination">
+            <span>第 {{ accountFilter.pageNo }} / {{ Math.max(1, Math.ceil(accountsPage.total / accountFilter.pageSize)) }} 页，共 {{ accountsPage.total }} 条</span>
+            <button class="ghost" :disabled="loading || accountFilter.pageNo <= 1" @click="accountFilter.pageNo--; loadAccounts()">上一页</button>
+            <button class="ghost" :disabled="loading || accountFilter.pageNo >= Math.ceil(accountsPage.total / accountFilter.pageSize)" @click="accountFilter.pageNo++; loadAccounts()">下一页</button>
+          </div>
       </section>
 
       <section v-else-if="activeView === 'create'" class="panel form-panel">
@@ -566,7 +573,7 @@ onMounted(refresh);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in flows" :key="item.flowNo">
+              <tr v-for="item in flowsPage.items" :key="item.flowNo">
                 <td>{{ item.flowNo }}</td>
                 <td><em>{{ item.flowType }}</em></td>
                 <td class="money">¥{{ Number(item.amount).toFixed(2) }}</td>
@@ -577,7 +584,12 @@ onMounted(refresh);
               </tr>
             </tbody>
           </table>
-          <div v-if="!flows.length" class="empty">暂无流水</div>
+          <div v-if="!flowsPage.items.length" class="empty">暂无流水</div>
+          <div v-if="flowsPage.total > flowFilter.pageSize" class="pagination">
+            <span>第 {{ flowFilter.pageNo }} / {{ Math.max(1, Math.ceil(flowsPage.total / flowFilter.pageSize)) }} 页，共 {{ flowsPage.total }} 条</span>
+            <button class="ghost" :disabled="loading || flowFilter.pageNo <= 1" @click="flowFilter.pageNo--; loadSelected()">上一页</button>
+            <button class="ghost" :disabled="loading || flowFilter.pageNo >= Math.ceil(flowsPage.total / flowFilter.pageSize)" @click="flowFilter.pageNo++; loadSelected()">下一页</button>
+          </div>
         </div>
       </section>
     </main>

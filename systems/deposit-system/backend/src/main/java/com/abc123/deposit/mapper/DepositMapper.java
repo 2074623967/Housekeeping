@@ -25,6 +25,17 @@ public interface DepositMapper {
                                          @Param("status") String status,
                                          @Param("keyword") String keyword);
 
+    List<DepositAccountDTO> findAccountsPage(@Param("ownerType") String ownerType,
+                                         @Param("status") String status,
+                                         @Param("keyword") String keyword,
+                                         @Param("pageNo") int pageNo,
+                                         @Param("pageSize") int pageSize,
+                                         @Param("offset") int offset);
+
+    long countAccounts(@Param("ownerType") String ownerType,
+                       @Param("status") String status,
+                       @Param("keyword") String keyword);
+
     DepositAccountDetailDTO findAccountDetail(@Param("accountNo") String accountNo);
 
     int updateBalance(@Param("accountNo") String accountNo,
@@ -46,4 +57,15 @@ public interface DepositMapper {
     List<DepositFlowDTO> findFlows(@Param("accountNo") String accountNo,
                                    @Param("flowType") String flowType,
                                    @Param("referenceNo") String referenceNo);
+
+    List<DepositFlowDTO> findFlowsPage(@Param("accountNo") String accountNo,
+                                   @Param("flowType") String flowType,
+                                   @Param("referenceNo") String referenceNo,
+                                   @Param("pageNo") int pageNo,
+                                   @Param("pageSize") int pageSize,
+                                   @Param("offset") int offset);
+
+    long countFlows(@Param("accountNo") String accountNo,
+                    @Param("flowType") String flowType,
+                    @Param("referenceNo") String referenceNo);
 }

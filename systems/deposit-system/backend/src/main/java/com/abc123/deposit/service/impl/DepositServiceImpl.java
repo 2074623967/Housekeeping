@@ -12,6 +12,7 @@ import com.abc123.deposit.dto.DepositFlowDTO;
 import com.abc123.deposit.dto.DepositFlowQueryDTO;
 import com.abc123.deposit.dto.DepositMigrationPreviewDTO;
 import com.abc123.deposit.dto.DepositOverviewDTO;
+import com.abc123.deposit.dto.PageResultDTO;
 import com.abc123.deposit.dto.DepositRuleBindingPreviewDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
@@ -88,6 +89,13 @@ public class DepositServiceImpl implements DepositService {
     @Override
     public List<DepositAccountDTO> accounts(DepositAccountQueryDTO query) {
         return safeList(dao.findAccounts(trimQuery(query)));
+    }
+
+    @Override
+    public PageResultDTO<DepositAccountDTO> accountsPage(DepositAccountQueryDTO query) {
+        DepositAccountQueryDTO normalized = normalizePageQuery(trimQuery(query));
+        return new PageResultDTO<>(safeList(dao.findAccountsPage(normalized)),
+                dao.countAccounts(normalized), normalized.getPageNo(), normalized.getPageSize());
     }
 
     @Override
@@ -196,6 +204,14 @@ public class DepositServiceImpl implements DepositService {
     @Override
     public List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query) {
         return safeList(dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query)));
+    }
+
+    @Override
+    public PageResultDTO<DepositFlowDTO> flowsPage(String accountNo, DepositFlowQueryDTO query) {
+        String normalizedAccountNo = required(accountNo, "保证金账户号不能为空");
+        DepositFlowQueryDTO normalized = normalizePageQuery(trimQuery(query));
+        return new PageResultDTO<>(safeList(dao.findFlowsPage(normalizedAccountNo, normalized)),
+                dao.countFlows(normalizedAccountNo, normalized), normalized.getPageNo(), normalized.getPageSize());
     }
 
     @Override
@@ -346,6 +362,18 @@ public class DepositServiceImpl implements DepositService {
         safeQuery.setFlowType(trimToNull(safeQuery.getFlowType()));
         safeQuery.setReferenceNo(trimToNull(safeQuery.getReferenceNo()));
         return safeQuery;
+    }
+
+    private DepositAccountQueryDTO normalizePageQuery(DepositAccountQueryDTO query) {
+        query.setPageNo(Math.max(1, query.getPageNo()));
+        query.setPageSize(Math.max(1, Math.min(100, query.getPageSize())));
+        return query;
+    }
+
+    private DepositFlowQueryDTO normalizePageQuery(DepositFlowQueryDTO query) {
+        query.setPageNo(Math.max(1, query.getPageNo()));
+        query.setPageSize(Math.max(1, Math.min(100, query.getPageSize())));
+        return query;
     }
 
     private BigDecimal positive(BigDecimal value) {

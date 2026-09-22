@@ -13,6 +13,7 @@ import com.abc123.deposit.dto.DepositTotalAccountDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
 import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.dto.DepositMigrationPreviewDTO;
+import com.abc123.deposit.dto.PageResultDTO;
 import java.util.List;
 
 /**
@@ -29,6 +30,8 @@ public interface DepositService {
     }
 
     List<DepositAccountDTO> accounts(DepositAccountQueryDTO query);
+
+    PageResultDTO<DepositAccountDTO> accountsPage(DepositAccountQueryDTO query);
 
     byte[] exportAccounts(DepositAccountQueryDTO query);
 
@@ -51,6 +54,8 @@ public interface DepositService {
     }
 
     List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query);
+
+    PageResultDTO<DepositFlowDTO> flowsPage(String accountNo, DepositFlowQueryDTO query);
 
     byte[] exportFlows(String accountNo, DepositFlowQueryDTO query);
 

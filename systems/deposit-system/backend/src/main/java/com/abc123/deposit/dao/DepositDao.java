@@ -21,6 +21,10 @@ public interface DepositDao {
 
     List<DepositAccountDTO> findAccounts(DepositAccountQueryDTO query);
 
+    List<DepositAccountDTO> findAccountsPage(DepositAccountQueryDTO query);
+
+    long countAccounts(DepositAccountQueryDTO query);
+
     DepositAccountDetailDTO findAccountDetail(String accountNo);
 
     int updateBalance(String accountNo, BigDecimal expectedBalance, BigDecimal expectedFrozenAmount,
@@ -33,4 +37,8 @@ public interface DepositDao {
     boolean existsFlowReference(String accountNo, String flowType, String referenceNo);
 
     List<DepositFlowDTO> findFlows(String accountNo, DepositFlowQueryDTO query);
+
+    List<DepositFlowDTO> findFlowsPage(String accountNo, DepositFlowQueryDTO query);
+
+    long countFlows(String accountNo, DepositFlowQueryDTO query);
 }

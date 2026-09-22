@@ -14,6 +14,7 @@ import com.abc123.deposit.dto.DepositOverviewDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
 import com.abc123.deposit.dto.DepositV2OverviewDTO;
+import com.abc123.deposit.dto.PageResultDTO;
 import java.nio.charset.StandardCharsets;
 import com.abc123.deposit.service.DepositService;
 import java.util.List;
@@ -47,14 +48,18 @@ public class DepositController {
     }
 
     @GetMapping("/accounts")
-    public ApiResponse<List<DepositAccountDTO>> accounts(@RequestParam(required = false) String ownerType,
+    public ApiResponse<PageResultDTO<DepositAccountDTO>> accounts(@RequestParam(required = false) String ownerType,
                                                          @RequestParam(required = false) String status,
-                                                         @RequestParam(required = false) String keyword) {
+                                                         @RequestParam(required = false) String keyword,
+                                                         @RequestParam(defaultValue = "1") int pageNo,
+                                                         @RequestParam(defaultValue = "20") int pageSize) {
         DepositAccountQueryDTO query = new DepositAccountQueryDTO();
         query.setOwnerType(ownerType);
         query.setStatus(status);
         query.setKeyword(keyword);
-        return ApiResponse.success(service.accounts(query));
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(service.accountsPage(query));
     }
 
     @GetMapping(value = "/accounts/export", produces = "text/csv;charset=UTF-8")
@@ -117,13 +122,17 @@ public class DepositController {
     }
 
     @GetMapping("/accounts/{accountNo}/flows")
-    public ApiResponse<List<DepositFlowDTO>> flows(@PathVariable String accountNo,
+    public ApiResponse<PageResultDTO<DepositFlowDTO>> flows(@PathVariable String accountNo,
                                                    @RequestParam(required = false) String flowType,
-                                                   @RequestParam(required = false) String referenceNo) {
+                                                   @RequestParam(required = false) String referenceNo,
+                                                   @RequestParam(defaultValue = "1") int pageNo,
+                                                   @RequestParam(defaultValue = "20") int pageSize) {
         DepositFlowQueryDTO query = new DepositFlowQueryDTO();
         query.setFlowType(flowType);
         query.setReferenceNo(referenceNo);
-        return ApiResponse.success(service.flows(accountNo, query));
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(service.flowsPage(accountNo, query));
     }
 
     @GetMapping(value = "/accounts/{accountNo}/flows/export", produces = "text/csv;charset=UTF-8")

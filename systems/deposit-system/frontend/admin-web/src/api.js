@@ -47,7 +47,7 @@ export const getAccountsByQuery = (query = {}) => {
     }
   });
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/api/deposits/accounts${suffix}`);
+  return request(`/api/deposits/accounts${suffix}`).then(normalizePage);
 };
 export const buildAccountsExportUrl = (query = {}) => {
   const params = new URLSearchParams();
@@ -67,8 +67,13 @@ export const getFlows = (accountNo, query = {}) => {
     }
   });
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`);
+  return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`).then(normalizePage);
 };
+
+const normalizePage = (page) => ({
+  ...page,
+  items: Array.isArray(page?.items) ? page.items : []
+});
 export const buildFlowsExportUrl = (accountNo, query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
