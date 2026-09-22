@@ -80,6 +80,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private final RefundMapper refundMapper;
     private final RefundChannelSubmitService refundChannelSubmitService;
 
+    @Value("${payment.downstream.reconciliation.fact-url:}")
+    private String reconciliationFactUrl;
+
     @Autowired
     public PaymentEventDispatchServiceImpl(
             PaymentMapper paymentMapper,
@@ -608,6 +611,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 String workerName = normalizeWorkerName(paymentMapper.findWorkerNameByOrderNo(orderNo));
                 if (amqp) {
                     publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
+                    postReconciliationFact(buildReconciliationFactPayload(
+                            detail.getPaymentOrderId(), orderNo, amount));
                 } else {
                     validateHttpDispatchConfiguration();
                     dispatchPaymentSuccessViaHttp(
@@ -642,6 +647,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         postForSuccess(accountingUrl, buildAccountingPayload(
                 detail.getPaymentOrderId(), orderNo, customerName, amount));
+        postReconciliationFact(buildReconciliationFactPayload(
+                detail.getPaymentOrderId(), orderNo, amount));
         if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
             throw new IllegalStateException("支付成功事件 HTTP 完成阶段更新失败");
         }
@@ -812,6 +819,28 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || !isSuccessfulResponseCode(response.getBody().getCode())) {
             throw new IllegalStateException("下游系统未明确返回业务成功");
         }
+    }
+
+    private void postReconciliationFact(Map<String, Object> payload) {
+        if (!StringUtils.hasText(reconciliationFactUrl)) {
+            return;
+        }
+        postForSuccess(reconciliationFactUrl, payload);
+    }
+
+    private Map<String, Object> buildReconciliationFactPayload(String paymentOrderId,
+                                                               String orderNo,
+                                                               BigDecimal amount) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("businessChainId", businessChainId(paymentOrderId));
+        payload.put("systemCode", "payment-core");
+        payload.put("factType", PAYMENT_SUCCESS_EVENT_TYPE);
+        payload.put("factNo", paymentOrderId);
+        payload.put("businessNo", orderNo);
+        payload.put("factStatus", "SUCCESS");
+        payload.put("amount", amount);
+        payload.put("payload", "{\"paymentOrderId\":\"" + paymentOrderId + "\"}");
+        return payload;
     }
 
     private boolean isSuccessfulResponseCode(String code) {

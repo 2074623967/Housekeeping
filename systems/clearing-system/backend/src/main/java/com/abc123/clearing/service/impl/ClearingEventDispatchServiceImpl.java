@@ -5,7 +5,9 @@ import com.abc123.clearing.entity.ShareItemEntity;
 import com.abc123.clearing.service.ClearingEventDispatchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +36,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
     private final long publisherConfirmTimeoutMs;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
+
+    @Value("${clearing.downstream.reconciliation.fact-url:}")
+    private String reconciliationFactUrl;
 
     @Autowired
     public ClearingEventDispatchServiceImpl(
@@ -125,11 +130,13 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         try {
             if (usesAmqp()) {
                 publishToAmqp(outboxEvent);
+                postReconciliationFact(clearingOrder);
                 clearingMemoryStore.markOutboxPublishSuccess(outboxEvent.getEventNo());
                 return true;
             }
             postForSuccess(settlementUrl, buildSettlementPayload(clearingOrder, workerShare, workerAmount));
             postForSuccess(accountingUrl, buildAccountingPayload(clearingOrder, workerAmount));
+            postReconciliationFact(clearingOrder);
             clearingMemoryStore.markOutboxPublishSuccess(outboxEvent.getEventNo());
             return true;
         } catch (RuntimeException exception) {
@@ -188,6 +195,22 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         }
     }
 
+    private void postReconciliationFact(ClearingOrderEntity clearingOrder) {
+        if (!StringUtils.hasText(reconciliationFactUrl)) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("businessChainId", "CHAIN-" + clearingOrder.getPaymentOrderId());
+        payload.put("systemCode", "clearing-system");
+        payload.put("factType", "CLEARING_GENERATED");
+        payload.put("factNo", clearingOrder.getClearingNo());
+        payload.put("businessNo", clearingOrder.getPaymentOrderId());
+        payload.put("factStatus", "SUCCESS");
+        payload.put("amount", clearingOrder.getOrderAmount());
+        payload.put("payload", "{\"clearingNo\":\"" + clearingOrder.getClearingNo() + "\"}");
+        postForSuccess(reconciliationFactUrl, payload);
+    }
+
     private SettlementClearingGeneratedPayload buildSettlementPayload(
             ClearingOrderEntity clearingOrder,
             ShareItemEntity workerShare,
@@ -195,6 +218,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         String targetNo = workerShare == null ? "WRK1001" : workerShare.getShareTargetNo();
         String targetName = workerShare == null ? "待分配服务者" : workerShare.getShareTargetName();
         return new SettlementClearingGeneratedPayload(
+                clearingOrder.getBusinessChainId(),
                 clearingOrder.getClearingNo(),
                 clearingOrder.getPaymentOrderId(),
                 "WORKER",
@@ -221,6 +245,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
      */
     private static class SettlementClearingGeneratedPayload {
 
+        private final String businessChainId;
         private final String clearingNo;
         private final String paymentOrderId;
         private final String targetType;
@@ -230,7 +255,8 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         private final BigDecimal deductAmount;
         private final BigDecimal netSettleAmount;
 
-        SettlementClearingGeneratedPayload(String clearingNo,
+        SettlementClearingGeneratedPayload(String businessChainId,
+                                           String clearingNo,
                                            String paymentOrderId,
                                            String targetType,
                                            String targetNo,
@@ -238,6 +264,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
                                            BigDecimal shouldSettleAmount,
                                            BigDecimal deductAmount,
                                            BigDecimal netSettleAmount) {
+            this.businessChainId = businessChainId;
             this.clearingNo = clearingNo;
             this.paymentOrderId = paymentOrderId;
             this.targetType = targetType;
@@ -250,6 +277,10 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
 
         public String getClearingNo() {
             return clearingNo;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
         }
 
         public String getPaymentOrderId() {

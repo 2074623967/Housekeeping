@@ -185,6 +185,19 @@ async function main() {
   const reconciliationChain = await api(
     `${reconciliationBaseUrl}/api/reconciliation/cross-system/chains/${encodeURIComponent(`CHAIN-${prepay.paymentOrderId}`)}`
   );
+  const requiredReconciliationFacts = [
+    ["payment-core", "PAYMENT_SUCCESS", prepay.paymentOrderId],
+    ["clearing-system", "CLEARING_GENERATED", clearingOrder.clearingNo],
+    ["settlement-system", "SETTLEMENT_CREATED", settlementOrder.settlementNo],
+    ["refund-center", "REFUND_SUCCESS", refundOutbox.eventId]
+  ];
+  for (const [systemCode, factType, factNo] of requiredReconciliationFacts) {
+    assert(reconciliationChain.facts.some((item) => item.systemCode === systemCode
+      && item.factType === factType
+      && item.factNo === factNo
+      && item.factStatus === "SUCCESS"),
+    `reconciliation ${systemCode}/${factType}/${factNo} fact was not recorded as SUCCESS`);
+  }
   assert(reconciliationChain.facts.filter((item) => item.systemCode === "refund-center"
     && item.factType === "REFUND_SUCCESS"
     && item.factNo === refundOutbox.eventId).length === 1,
@@ -200,7 +213,7 @@ async function main() {
     refundOrderId: refund.refundOrderId,
     refundEventId: refundOutbox.eventId,
     accountingEventTypes: ["PAYMENT_SUCCESS", "CLEARING_GENERATED", "REFUND_SUCCESS"],
-    reconciliationFactTypes: ["REFUND_SUCCESS"]
+    reconciliationFactTypes: requiredReconciliationFacts.map(([, factType]) => factType)
   }, null, 2));
 }
 

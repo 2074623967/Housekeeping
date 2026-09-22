@@ -26,6 +26,8 @@ mybatis:
 
 clearing:
   downstream:
+    reconciliation:
+      fact-url: ${HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL:}
     accounting:
       clearing-generated-account-no: ${HSP_CLEARING_DOWNSTREAM_ACCOUNTING_CLEARING_GENERATED_ACCOUNT_NO:ACT10002}
   amqp:

@@ -25,6 +25,9 @@ mybatis:
     map-underscore-to-camel-case: true
 
 settlement:
+  downstream:
+    reconciliation:
+      fact-url: ${HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL:}
   amqp:
     enabled: ${HSP_SETTLEMENT_AMQP_ENABLED:false}
     clearing-generated-queue: ${HSP_SETTLEMENT_AMQP_CLEARING_GENERATED_QUEUE:settlement.clearing-generated}
