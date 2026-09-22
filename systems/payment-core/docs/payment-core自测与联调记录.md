@@ -15799,6 +15799,21 @@
 | `admin-web` Node 测试 | `49/49` 通过 |
 | `git diff --check` | 待提交前复核 |
 
+## 600. 2026-09-23 跨系统管理端前端聚合回归
+
+### 验证范围
+
+本轮对 accounting、clearing、deposit、gateway-access、ops-config、payment-core、reconciliation、refund-center、risk-control、settlement、wallet-account、wallet-system 共 `12` 个管理端执行各自 `npm test && npm run build`。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 管理端 Node 测试 | `85/85` 通过，`0` failures、`0` errors、`0` skipped |
+| 管理端 Vite 构建 | `12/12` 通过 |
+| 工作区产物 | 未产生需纳入仓库的构建产物变更 |
+| 运行态边界 | 只证明本地前端契约和构建可用，不代表真实渠道、资金、生产配置或发布治理完成 |
+
 ## 599. 2026-09-23 小程序传输失败错误码补齐
 
 ### 本轮变更
