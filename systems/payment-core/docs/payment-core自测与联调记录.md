@@ -16133,3 +16133,9 @@ tools/dev/local-stack.sh verify all
 ```
 
 该检查用于在启动前发现工具链权限问题，不代表 Maven 依赖下载、生产数据库或真实服务依赖已经验收。
+
+## 627. 2026-09-23 全栈工具链 doctor 复核
+
+执行 `tools/dev/local-stack.sh doctor all` 通过：Maven、真实 JDK、Maven 仓库、Node/npm 和 `15` 个前端工程依赖均满足启动前置条件。
+
+同批次门禁复判仍为 `test -> master = false`、`release/* = false`；REG-08 仍缺当前批次页面与补偿闭环证据，release 仍缺候选说明正式化、正式签字、现场核验和稳定观察结束结论。
