@@ -15686,3 +15686,19 @@
 | `tools/dev/dlq-compensation-smoke.test.mjs` mock contract | `4/4` 通过，覆盖 payment.success replay/人工结案、clearing.generated settlement replay、自定义 payload 业务单号透传，以及事件类型不匹配拒绝 |
 | 无 broker 运行保护 | payment.success 与 clearing.generated 两种模式均明确失败，未回退历史证据 |
 | 当前批次运行态 | 待 Docker/RabbitMQ 恢复后执行，暂不登记为通过 |
+
+## 591. 2026-09-23 当前提交后端全量回归复核
+
+### 验证命令
+
+```bash
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `systems/payment-core/backend` Maven 全量测试 | Surefire 汇总 `1188/1188` 通过，`0` failures、`0` errors、`0` skipped，退出码 `0` |
+| 死信服务与控制器专项测试 | `PaymentDeadLetterTaskServiceImplTest`、`PaymentDeadLetterTaskControllerTest` 通过 |
+| 运行态边界 | 本轮仅验证本地代码与测试，不宣称 RabbitMQ、真实渠道或发布治理条件已完成 |
