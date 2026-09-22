@@ -128,17 +128,19 @@ function taskFromPage(page, messageId) {
 async function replayCurrentBatch() {
   const runId = `${Date.now()}-${process.pid}`;
   const messageId = `DLQ-SMOKE-${runId}`;
-  const paymentOrderId = `PAY-DLQ-SMOKE-${runId}`;
+  const defaultPaymentOrderId = `PAY-DLQ-SMOKE-${runId}`;
   const payload = process.env.HSP_DLQ_PAYLOAD_JSON
     ? JSON.parse(process.env.HSP_DLQ_PAYLOAD_JSON)
     : {
       eventType: "PAYMENT_SUCCESS",
       eventNo: `EVT-DLQ-SMOKE-${runId}`,
-      paymentOrderId,
+      paymentOrderId: defaultPaymentOrderId,
       orderNo: `ORD-DLQ-SMOKE-${runId}`,
       accountNo: "ACT10003",
       amount: 9.99
     };
+  const paymentOrderId = String(payload.paymentOrderId || "").trim();
+  assert(paymentOrderId, "DLQ payload must contain paymentOrderId");
 
   await publishDeadLetter(messageId, payload);
   const pending = await waitFor(
