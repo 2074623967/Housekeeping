@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -23,14 +24,22 @@ public class SettlementEventServiceImpl implements SettlementEventService {
 
     private final SettlementMemoryStore settlementMemoryStore;
     private final SettlementMapper settlementMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Value("${settlement.downstream.reconciliation.fact-url:}")
     private String reconciliationFactUrl;
 
+    @Autowired
     public SettlementEventServiceImpl(SettlementMemoryStore settlementMemoryStore, SettlementMapper settlementMapper) {
+        this(settlementMemoryStore, settlementMapper, new RestTemplate());
+    }
+
+    SettlementEventServiceImpl(SettlementMemoryStore settlementMemoryStore,
+                               SettlementMapper settlementMapper,
+                               RestTemplate restTemplate) {
         this.settlementMemoryStore = settlementMemoryStore;
         this.settlementMapper = settlementMapper;
+        this.restTemplate = restTemplate;
     }
 
     @Override
