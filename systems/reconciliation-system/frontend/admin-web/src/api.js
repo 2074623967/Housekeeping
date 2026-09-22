@@ -33,7 +33,8 @@ const request = async (url, options = {}) => {
 export const getOverview = () => request("/api/reconciliation/overview");
 export const getBatches = ({ pageNo = 1, pageSize = 20 } = {}) => {
   const params = new URLSearchParams({ pageNo: String(pageNo), pageSize: String(pageSize) });
-  return request(`/api/reconciliation/batches?${params.toString()}`);
+  return request(`/api/reconciliation/batches?${params.toString()}`)
+    .then((page) => normalizePage(page, pageNo, pageSize));
 };
 export const getBatchDetail = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`);
@@ -46,8 +47,17 @@ export const downloadBatchDetail = (batchNo) =>
 export const getDifferences = (query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => value && params.set(key, value));
-  return request(`/api/reconciliation/differences?${params.toString()}`);
+  return request(`/api/reconciliation/differences?${params.toString()}`)
+    .then((page) => normalizePage(page, query.pageNo, query.pageSize));
 };
+
+const normalizePage = (page, pageNo = 1, pageSize = 20) => ({
+  ...page,
+  items: Array.isArray(page?.items) ? page.items : [],
+  total: Number.isFinite(Number(page?.total)) ? Number(page.total) : 0,
+  pageNo: Number.isInteger(Number(page?.pageNo)) ? Number(page.pageNo) : Number(pageNo) || 1,
+  pageSize: Number.isInteger(Number(page?.pageSize)) ? Number(page.pageSize) : Number(pageSize) || 20
+});
 export const runBatch = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/run`, { method: "POST" });
 export const checkBatchReadiness = (batchNo) =>

@@ -112,3 +112,28 @@ test("keeps reconciliation batch pagination in the query contract", async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("normalizes empty reconciliation pages for the admin view", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ code: "0", data: null }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+  try {
+    const { getBatches, getDifferences } = await import(`./api.js?empty-pages=${Date.now()}`);
+    assert.deepEqual(await getBatches({ pageNo: 3, pageSize: 10 }), {
+      items: [],
+      total: 0,
+      pageNo: 3,
+      pageSize: 10
+    });
+    assert.deepEqual(await getDifferences({ pageNo: 2, pageSize: 15 }), {
+      items: [],
+      total: 0,
+      pageNo: 2,
+      pageSize: 15
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
