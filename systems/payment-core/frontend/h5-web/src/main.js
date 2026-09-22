@@ -5,15 +5,21 @@ import "../../shared/src/styles/terminal.css";
 import BusinessEntryView from "../../shared/src/views/BusinessEntryView.vue";
 import CashierView from "./views/CashierView.vue";
 import ResultView from "./views/ResultView.vue";
+import {
+  businessEntryRoutes,
+  cashierRoutePath,
+  paymentResultRoutePath
+} from "../../shared/src/router/terminalRoutes.js";
 
 const routes = [
   { path: "/", redirect: "/balance-pay" },
-  { path: "/recharge", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "recharge" } },
-  { path: "/withdraw", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "withdraw" } },
-  { path: "/transfer", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "transfer" } },
-  { path: "/balance-pay", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "balance-pay" } },
-  { path: "/cashier/:prepayOrderNo", name: "cashier", component: CashierView },
-  { path: "/payment-result/:paymentOrderId", name: "payment-result", component: ResultView }
+  ...businessEntryRoutes.map(({ path, sceneType }) => ({
+    path,
+    component: BusinessEntryView,
+    props: { terminalVariant: "h5", sceneType }
+  })),
+  { path: cashierRoutePath, name: "cashier", component: CashierView },
+  { path: paymentResultRoutePath, name: "payment-result", component: ResultView }
 ];
 
 const router = createRouter({
