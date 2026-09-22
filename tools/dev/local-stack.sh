@@ -156,6 +156,7 @@ start_backend() {
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
+        REFUND_CENTER_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         SPRING_PROFILES_ACTIVE=demo \
         "$MAVEN_BIN" -Dmaven.repo.local="$MAVEN_REPO" -Pdemo \
           -Dspring-boot.run.fork=false -q spring-boot:run \
@@ -167,6 +168,7 @@ start_backend() {
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
+        REFUND_CENTER_RECONCILIATION_FACT_URL="http://127.0.0.1:18150/api/reconciliation/cross-system/facts" \
         "$MAVEN_BIN" -Dmaven.repo.local="$MAVEN_REPO" \
           -Dspring-boot.run.fork=false -q spring-boot:run \
         >"$log_file" 2>&1 &

@@ -27,4 +27,4 @@ refund-center:
       refund-success-url: ${REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_URL:http://127.0.0.1:18110/api/accounting/events/refunds/success}
       refund-success-account-no: ${REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_ACCOUNT_NO:ACT10003}
     reconciliation:
-      fact-url: ${REFUND_CENTER_RECONCILIATION_FACT_URL:http://127.0.0.1:18150/api/reconciliation/cross-system/facts}
+      fact-url: ${REFUND_CENTER_RECONCILIATION_FACT_URL:}
