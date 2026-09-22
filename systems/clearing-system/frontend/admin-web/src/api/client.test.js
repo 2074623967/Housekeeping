@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { batchApi } from "./client.js";
+import { batchApi, orderApi } from "./client.js";
 
 test("keeps the clearing service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
@@ -49,6 +49,40 @@ test("reports clearing network failures with a stable client error", async () =>
       batchApi.getDetail("CLR-NETWORK"),
       (error) => error.code === "CLEARING-CLIENT-NETWORK"
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("sends all clearing order filters and pagination parameters", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return {
+      ok: true,
+      async json() {
+        return { code: "0", data: { items: [], total: 0, pageNo: 2, pageSize: 20 } };
+      }
+    };
+  };
+
+  try {
+    await orderApi.getList({
+      batchNo: "CLB-001",
+      orderNo: "ORD-001",
+      paymentOrderId: "PAY-001",
+      clearingStatus: "清分成功",
+      pageNo: 2,
+      pageSize: 20
+    });
+    const query = new URL(requestedUrl, "http://localhost").searchParams;
+    assert.equal(query.get("batchNo"), "CLB-001");
+    assert.equal(query.get("orderNo"), "ORD-001");
+    assert.equal(query.get("paymentOrderId"), "PAY-001");
+    assert.equal(query.get("clearingStatus"), "清分成功");
+    assert.equal(query.get("pageNo"), "2");
+    assert.equal(query.get("pageSize"), "20");
   } finally {
     globalThis.fetch = originalFetch;
   }

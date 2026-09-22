@@ -6,6 +6,9 @@ const rows = ref([]);
 const message = ref("");
 const loading = ref(false);
 const detailLoading = ref(false);
+const pageNo = ref(1);
+const total = ref(0);
+const pageSize = 20;
 const filters = ref({ batchNo: "", orderNo: "", paymentOrderId: "", clearingStatus: "" });
 const selectedOrder = ref(null);
 const selectedDetail = ref(null);
@@ -14,16 +17,21 @@ const detailMessage = ref("");
 const detailFeeRules = computed(() => selectedDetail.value?.feeRules || []);
 const detailShareItems = computed(() => selectedDetail.value?.shareItems || []);
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await orderApi.getList({ ...filters.value, pageNo: 1, pageSize: 20 });
+    const result = await orderApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = Number(result.total) || 0;
+    pageNo.value = Number(result.pageNo) || targetPage;
     if (selectedOrder.value) {
       const latestOrder = result.items.find((item) => item.clearingNo === selectedOrder.value.clearingNo);
       if (latestOrder) {
         selectedOrder.value = latestOrder;
+      } else {
+        selectedOrder.value = null;
+        selectedDetail.value = null;
       }
     }
   } catch (error) {
@@ -59,9 +67,18 @@ function exportDetailRows() {
   window.open(orderApi.buildDetailExportUrl(selectedOrder.value.clearingNo), "_blank", "noopener,noreferrer");
 }
 
+function goToPage(nextPage) {
+  const maxPage = Math.max(1, Math.ceil(total.value / pageSize));
+  if (loading.value || nextPage < 1 || nextPage > maxPage) {
+    return;
+  }
+  loadRows(nextPage);
+}
+
 function resetFilters() {
   filters.value = { batchNo: "", orderNo: "", paymentOrderId: "", clearingStatus: "" };
-  loadRows();
+  pageNo.value = 1;
+  loadRows(1);
 }
 
 onMounted(loadRows);
@@ -129,6 +146,13 @@ onMounted(loadRows);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="pager" aria-label="清分结果分页">
+        <span>共 {{ total }} 条，第 {{ pageNo }} / {{ Math.max(1, Math.ceil(total / pageSize)) }} 页</span>
+        <div class="pager-actions">
+          <button class="button secondary button-inline" :disabled="loading || pageNo <= 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary button-inline" :disabled="loading || pageNo >= Math.max(1, Math.ceil(total / pageSize))" @click="goToPage(pageNo + 1)">下一页</button>
+        </div>
       </div>
     </section>
 
@@ -303,5 +327,27 @@ onMounted(loadRows);
 .empty-cell {
   color: #64748b;
   text-align: center;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pager-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .pager {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
