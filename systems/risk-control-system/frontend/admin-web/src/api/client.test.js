@@ -18,6 +18,22 @@ test("keeps the risk control service envelope on success", async () => {
   }
 });
 
+test("normalizes nullable risk control collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: null };
+    }
+  });
+
+  try {
+    assert.deepEqual(await riskControlApi.getPolicies(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON risk control responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

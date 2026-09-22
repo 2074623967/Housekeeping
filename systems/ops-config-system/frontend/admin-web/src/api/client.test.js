@@ -18,6 +18,22 @@ test("keeps the ops config service envelope on success", async () => {
   }
 });
 
+test("normalizes nullable ops config collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: null };
+    }
+  });
+
+  try {
+    assert.deepEqual(await opsConfigApi.getBusinessLines(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON ops config responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

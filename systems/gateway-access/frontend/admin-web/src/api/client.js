@@ -5,6 +5,19 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+function normalizeListPayload(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
+  if (Array.isArray(data?.records)) {
+    return data.records;
+  }
+  return [];
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -34,19 +47,19 @@ const postJson = (url, payload) => request(url, { method: "POST", body: JSON.str
 
 export const gatewayAccessApi = {
   getSummary: () => request("/api/gateway-access/summary"),
-  getApplications: () => request("/api/gateway-access/applications"),
+  getApplications: () => request("/api/gateway-access/applications").then(normalizeListPayload),
   getGateways: ({ keyword = "", channelType = "全部", status = "全部" } = {}) => {
     const params = new URLSearchParams({ keyword, channelType, status });
-    return request(`/api/gateway-access/gateways?${params.toString()}`);
+    return request(`/api/gateway-access/gateways?${params.toString()}`).then(normalizeListPayload);
   },
   getCertificates: (riskLevel = "全部") => {
     const params = new URLSearchParams({ riskLevel });
-    return request(`/api/gateway-access/certificates?${params.toString()}`);
+    return request(`/api/gateway-access/certificates?${params.toString()}`).then(normalizeListPayload);
   },
-  getPermissions: () => request("/api/gateway-access/permissions"),
+  getPermissions: () => request("/api/gateway-access/permissions").then(normalizeListPayload),
   getAuditLogs: ({ keyword = "", appCode = "全部", resultStatus = "全部" } = {}) => {
     const params = new URLSearchParams({ keyword, appCode, resultStatus });
-    return request(`/api/gateway-access/audit-logs?${params.toString()}`);
+    return request(`/api/gateway-access/audit-logs?${params.toString()}`).then(normalizeListPayload);
   },
   downloadAuditLogs: ({ keyword = "", appCode = "全部", resultStatus = "全部" } = {}) => {
     const params = new URLSearchParams({ keyword, appCode, resultStatus });
@@ -59,7 +72,7 @@ export const gatewayAccessApi = {
   },
   getReleaseRoutes: ({ environment = "全部", status = "全部" } = {}) => {
     const params = new URLSearchParams({ environment, status });
-    return request(`/api/gateway-access/release-routes?${params.toString()}`);
+    return request(`/api/gateway-access/release-routes?${params.toString()}`).then(normalizeListPayload);
   },
   toggleApplication: (configCode, enabled) => postJson("/api/gateway-access/applications/toggle", { configCode, enabled }),
   toggleGateway: (configCode, enabled) => postJson("/api/gateway-access/gateways/toggle", { configCode, enabled }),

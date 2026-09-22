@@ -5,6 +5,19 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+function normalizeListPayload(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
+  if (Array.isArray(data?.records)) {
+    return data.records;
+  }
+  return [];
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -34,15 +47,15 @@ const postJson = (url, payload) => request(url, { method: "POST", body: JSON.str
 
 export const opsConfigApi = {
   getSummary: () => request("/api/ops-config/summary"),
-  getAgreementTemplates: () => request("/api/ops-config/agreement-templates"),
-  getBusinessLines: () => request("/api/ops-config/business-lines"),
-  getPaymentTypes: () => request("/api/ops-config/payment-types"),
-  getCashierTemplates: () => request("/api/ops-config/cashier-templates"),
-  getChannelProfiles: () => request("/api/ops-config/channel-profiles"),
-  getRoutingRules: () => request("/api/ops-config/routing-rules"),
-  getSystemControls: () => request("/api/ops-config/system-controls"),
-  getConfigChanges: () => request("/api/ops-config/changes"),
-  getRefreshEvents: () => request("/api/ops-config/refresh-events"),
+  getAgreementTemplates: () => request("/api/ops-config/agreement-templates").then(normalizeListPayload),
+  getBusinessLines: () => request("/api/ops-config/business-lines").then(normalizeListPayload),
+  getPaymentTypes: () => request("/api/ops-config/payment-types").then(normalizeListPayload),
+  getCashierTemplates: () => request("/api/ops-config/cashier-templates").then(normalizeListPayload),
+  getChannelProfiles: () => request("/api/ops-config/channel-profiles").then(normalizeListPayload),
+  getRoutingRules: () => request("/api/ops-config/routing-rules").then(normalizeListPayload),
+  getSystemControls: () => request("/api/ops-config/system-controls").then(normalizeListPayload),
+  getConfigChanges: () => request("/api/ops-config/changes").then(normalizeListPayload),
+  getRefreshEvents: () => request("/api/ops-config/refresh-events").then(normalizeListPayload),
   getEffectiveSnapshot: ({ businessCode = "", payType = "", terminalType = "" } = {}) => {
     const params = new URLSearchParams({ businessCode, payType, terminalType });
     return request(`/api/ops-config/effective-snapshot?${params.toString()}`);

@@ -18,6 +18,22 @@ test("keeps the gateway access service envelope on success", async () => {
   }
 });
 
+test("normalizes nullable gateway access collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: null };
+    }
+  });
+
+  try {
+    assert.deepEqual(await gatewayAccessApi.getApplications(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON gateway access responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

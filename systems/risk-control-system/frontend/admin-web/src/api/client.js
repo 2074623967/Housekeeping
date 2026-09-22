@@ -5,6 +5,19 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+function normalizeListPayload(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
+  if (Array.isArray(data?.records)) {
+    return data.records;
+  }
+  return [];
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -34,11 +47,11 @@ const postJson = (url, payload) => request(url, { method: "POST", body: JSON.str
 
 export const riskControlApi = {
   getSummary: () => request("/api/risk-control/summary"),
-  getPolicies: () => request("/api/risk-control/policies"),
-  getLimitRules: () => request("/api/risk-control/limit-rules"),
-  getBlocklists: () => request("/api/risk-control/blocklists"),
-  getInterceptEvents: () => request("/api/risk-control/intercept-events"),
-  getReviewOrders: () => request("/api/risk-control/review-orders"),
+  getPolicies: () => request("/api/risk-control/policies").then(normalizeListPayload),
+  getLimitRules: () => request("/api/risk-control/limit-rules").then(normalizeListPayload),
+  getBlocklists: () => request("/api/risk-control/blocklists").then(normalizeListPayload),
+  getInterceptEvents: () => request("/api/risk-control/intercept-events").then(normalizeListPayload),
+  getReviewOrders: () => request("/api/risk-control/review-orders").then(normalizeListPayload),
   downloadReviewOrders: () =>
     fetch("/api/risk-control/review-orders/export").then(async (response) => {
       if (!response.ok) {
@@ -46,7 +59,7 @@ export const riskControlApi = {
       }
       return response.blob();
     }),
-  getMonitorRules: () => request("/api/risk-control/monitor-rules"),
+  getMonitorRules: () => request("/api/risk-control/monitor-rules").then(normalizeListPayload),
   togglePolicy: (configCode, enabled) => postJson("/api/risk-control/policies/toggle", { configCode, enabled }),
   toggleLimitRule: (configCode, enabled) => postJson("/api/risk-control/limit-rules/toggle", { configCode, enabled }),
   toggleBlocklist: (configCode, enabled) => postJson("/api/risk-control/blocklists/toggle", { configCode, enabled }),
