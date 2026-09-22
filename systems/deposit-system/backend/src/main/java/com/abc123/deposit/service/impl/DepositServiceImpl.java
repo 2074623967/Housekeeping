@@ -69,7 +69,7 @@ public class DepositServiceImpl implements DepositService {
 
     @Override
     public DepositOverviewDTO overview() {
-        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        List<DepositAccountDTO> accounts = safeList(dao.findAccounts(new DepositAccountQueryDTO()));
         DepositOverviewDTO overview = new DepositOverviewDTO();
         overview.setAccountCount(accounts.size());
         overview.setOwnerCount((int) accounts.stream()
@@ -87,7 +87,7 @@ public class DepositServiceImpl implements DepositService {
 
     @Override
     public List<DepositAccountDTO> accounts(DepositAccountQueryDTO query) {
-        return dao.findAccounts(trimQuery(query));
+        return safeList(dao.findAccounts(trimQuery(query)));
     }
 
     @Override
@@ -195,7 +195,7 @@ public class DepositServiceImpl implements DepositService {
 
     @Override
     public List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query) {
-        return dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query));
+        return safeList(dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query)));
     }
 
     @Override
@@ -222,7 +222,7 @@ public class DepositServiceImpl implements DepositService {
 
     @Override
     public DepositV2OverviewDTO v2Overview() {
-        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        List<DepositAccountDTO> accounts = safeList(dao.findAccounts(new DepositAccountQueryDTO()));
         List<DepositTotalAccountDTO> totalAccounts = buildTotalAccounts(accounts);
         DepositV2OverviewDTO overview = new DepositV2OverviewDTO();
         overview.setTotalAccountCount(totalAccounts.size());
@@ -241,13 +241,13 @@ public class DepositServiceImpl implements DepositService {
 
     @Override
     public List<DepositTotalAccountDTO> totalAccounts() {
-        return buildTotalAccounts(dao.findAccounts(new DepositAccountQueryDTO()));
+        return buildTotalAccounts(safeList(dao.findAccounts(new DepositAccountQueryDTO())));
     }
 
     @Override
     public DepositTotalAccountDetailDTO totalAccountDetail(String totalAccountNo) {
         String normalizedTotalAccountNo = required(totalAccountNo, "总保证金账户号不能为空");
-        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        List<DepositAccountDTO> accounts = safeList(dao.findAccounts(new DepositAccountQueryDTO()));
         String ownerType = ownerTypeFromTotalAccountNo(normalizedTotalAccountNo);
         List<DepositAccountDTO> scopedAccounts = accounts.stream()
                 .filter(item -> ownerType.equals(item.getOwnerType()))
@@ -266,7 +266,8 @@ public class DepositServiceImpl implements DepositService {
     public List<DepositMigrationPreviewDTO> migrationPreview() {
         List<DepositMigrationPreviewDTO> items = new ArrayList<>();
         for (DepositTotalAccountDTO totalAccount : totalAccounts()) {
-            items.addAll(buildMigrations(totalAccount.getOwnerType(), dao.findAccounts(buildOwnerTypeQuery(totalAccount.getOwnerType()))));
+            items.addAll(buildMigrations(totalAccount.getOwnerType(),
+                    safeList(dao.findAccounts(buildOwnerTypeQuery(totalAccount.getOwnerType())))));
         }
         items.sort(Comparator.comparing(DepositMigrationPreviewDTO::getTargetTotalAccountNo)
                 .thenComparing(DepositMigrationPreviewDTO::getSourceAccountNo));
@@ -371,6 +372,10 @@ public class DepositServiceImpl implements DepositService {
 
     private BigDecimal sum(List<BigDecimal> values) {
         return values.stream().map(this::defaultValue).reduce(ZERO, BigDecimal::add);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? new ArrayList<>() : values;
     }
 
     private boolean isFullyPaid(DepositAccountDTO account) {
