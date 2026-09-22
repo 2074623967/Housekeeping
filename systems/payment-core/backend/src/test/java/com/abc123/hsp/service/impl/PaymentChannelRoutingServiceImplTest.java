@@ -54,6 +54,18 @@ class PaymentChannelRoutingServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullRoutingListsAsEmptyAndReturnChannelUnavailable() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                        .resolve(buildContext("微信支付", "WX_H5", "HOME_CLEAN", "APP_H5", "张女士",
+                                new BigDecimal("168.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, exception.getCode());
+    }
+
+    @Test
     void shouldFallbackToRequestedChannelWhenNoRuleMatches() {
         PaymentChannelRoutingConfigDTO requestedChannel = buildChannel("alipay_h5", "支付宝");
         requestedChannel.setRouteWeight(0);

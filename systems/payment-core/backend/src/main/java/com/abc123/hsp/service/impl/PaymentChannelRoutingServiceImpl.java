@@ -71,12 +71,14 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         if (routeContext == null || !StringUtils.hasText(routeContext.getPaymentMethod())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "paymentMethod is required");
         }
-        List<PaymentChannelRoutingConfigDTO> enabledChannels = paymentConfigMapper.findEnabledChannelsForRouting();
+        List<PaymentChannelRoutingConfigDTO> enabledChannels =
+                safeList(paymentConfigMapper.findEnabledChannelsForRouting());
         if (enabledChannels.isEmpty()) {
             throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, "no enabled payment channel found");
         }
         Map<String, PaymentChannelQueryHealthDTO> channelHealth = loadChannelHealth();
-        List<PaymentRouteRuleRuntimeDTO> enabledRules = paymentConfigMapper.findEnabledRouteRulesForRouting();
+        List<PaymentRouteRuleRuntimeDTO> enabledRules =
+                safeList(paymentConfigMapper.findEnabledRouteRulesForRouting());
         PaymentRouteDecisionDTO decision = resolveByRules(routeContext, enabledChannels, enabledRules, channelHealth);
         if (decision != null) {
             return decision;
@@ -120,6 +122,10 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             }
         }
         return null;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private boolean matchesRollout(PaymentRouteContextDTO routeContext, PaymentRouteRuleRuntimeDTO rule) {
