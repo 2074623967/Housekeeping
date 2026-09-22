@@ -28,6 +28,19 @@ export function normalizePagePayload(data) {
   return data;
 }
 
+export function normalizeDashboardPayload(data) {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
+  return {
+    ...data,
+    recentBatches: Array.isArray(data.recentBatches) ? data.recentBatches : [],
+    recentOrders: Array.isArray(data.recentOrders) ? data.recentOrders : [],
+    riskPayouts: Array.isArray(data.riskPayouts) ? data.riskPayouts : [],
+    recentEvents: Array.isArray(data.recentEvents) ? data.recentEvents : []
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -73,7 +86,7 @@ export const batchApi = {
 };
 
 export const dashboardApi = {
-  get: () => request("/api/settlements/dashboard")
+  get: () => request("/api/settlements/dashboard").then(normalizeDashboardPayload)
 };
 
 export const orderApi = {

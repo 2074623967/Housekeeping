@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { batchApi, eventApi, normalizePagePayload, orderApi, payoutApi } from "./client.js";
+import { batchApi, dashboardApi, eventApi, normalizeDashboardPayload, normalizePagePayload, orderApi, payoutApi } from "./client.js";
 
 test("normalizes empty settlement page items", () => {
   const result = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -15,6 +15,28 @@ test("keeps settlement summaries and populated pages unchanged", () => {
 
   assert.equal(normalizePagePayload(summary), summary);
   assert.equal(normalizePagePayload({ items }).items, items);
+});
+
+test("normalizes nullable settlement dashboard collections", async () => {
+  assert.deepEqual(normalizeDashboardPayload(null), null);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { recentBatches: null, riskPayouts: { items: [] } } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await dashboardApi.get(), {
+      recentBatches: [],
+      recentOrders: [],
+      riskPayouts: [],
+      recentEvents: []
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("posts a read-only payout inspection request", async () => {
