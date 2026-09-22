@@ -2,6 +2,7 @@ package com.abc123.reconciliation.controller;
 
 import com.abc123.reconciliation.common.ApiResponse;
 import com.abc123.reconciliation.dto.ChannelRecordRequestDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
@@ -17,7 +18,6 @@ import com.abc123.reconciliation.service.ReconciliationService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,8 +45,13 @@ public class ReconciliationController {
     }
 
     @GetMapping("/batches")
-    public ApiResponse<List<ReconciliationBatchListItemDTO>> batches() {
-        return ApiResponse.success(service.batches());
+    public ApiResponse<PageResultDTO<ReconciliationBatchListItemDTO>> batches(
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        BatchQueryDTO query = new BatchQueryDTO();
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(service.batches(query));
     }
 
     @GetMapping("/batches/{batchNo}")

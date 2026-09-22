@@ -16234,3 +16234,26 @@ node tools/dev/frontend-admin-regression.mjs
 对 clearing、settlement、accounting、payment-core 和 reconciliation 管理端进行固定第一页扫描：clearing、settlement、accounting 的主运营列表已接通服务端分页；payment-core 现有主列表已具备分页与快照门禁。剩余固定第一页调用均属于 Dashboard 摘要或已选中批次/事件的详情下钻；reconciliation 批次列表当前后端接口返回数组且没有分页契约，未仅修改前端制造假分页。
 
 该边界记录用于避免把摘要/详情查询误判为主列表缺陷，也避免在缺少后端契约时伪造分页能力。正式发布门禁不因此改变。
+
+## 636. 2026-09-23 reconciliation 批次列表分页闭环
+
+为 reconciliation 批次主列表补齐真实分页契约：
+
+- 后端新增 `BatchQueryDTO`，Controller 接收 `pageNo/pageSize`，Service 对页码和页大小做边界归一。
+- MyBatis 增加批次分页查询与总数查询，返回统一 `PageResultDTO<ReconciliationBatchListItemDTO>`。
+- reconciliation 管理端新增批次分页控件，并保持 Dashboard 摘要、批次详情和差异分页的独立行为。
+
+验证：
+
+```bash
+cd systems/reconciliation-system/frontend/admin-web
+npm test
+npm run build
+
+cd ../../backend
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH \
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+结果：前端 `6/6` 通过并构建成功；后端 `14/14` 通过（集成测试 `13`、DAO 边界测试 `1`）。本轮代码验证使用本地 H2/JDK，仍不代表生产数据库、真实渠道或正式发布验收。

@@ -2,6 +2,7 @@ package com.abc123.reconciliation.dao.impl;
 
 import com.abc123.reconciliation.dao.ReconciliationDao;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
@@ -40,8 +41,13 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
-    public List<ReconciliationBatchListItemDTO> findBatches() {
-        return safeList(mapper.findBatches());
+    public List<ReconciliationBatchListItemDTO> findBatches(BatchQueryDTO query) {
+        return safeList(mapper.findBatches(query));
+    }
+
+    @Override
+    public long countBatches() {
+        return mapper.countBatches();
     }
 
     @Override

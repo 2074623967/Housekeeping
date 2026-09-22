@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.reconciliation.common.BusinessException;
 import com.abc123.reconciliation.dto.ChannelRecordRequestDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
 import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
@@ -30,6 +31,24 @@ class ReconciliationIntegrationTest {
 
     @Autowired
     private ReconciliationService service;
+
+    @Test
+    void shouldPageReconciliationBatches() {
+        ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
+        request.setBusinessDate("2026-08-07");
+        request.setChannelCode("WECHAT");
+        service.createBatch(request);
+
+        BatchQueryDTO query = new BatchQueryDTO();
+        query.setPageNo(1);
+        query.setPageSize(1);
+        PageResultDTO<ReconciliationBatchListItemDTO> result = service.batches(query);
+
+        assertEquals(1, result.getPageNo());
+        assertEquals(1, result.getPageSize());
+        assertEquals(true, result.getTotal() >= 1);
+        assertEquals(true, result.getItems().size() <= 1);
+    }
 
     @Test
     void shouldMatchAndDetectAmountDifference() {

@@ -1,6 +1,7 @@
 package com.abc123.reconciliation.dao;
 
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
@@ -23,7 +24,9 @@ public interface ReconciliationDao {
 
     ReconciliationBatchListItemDTO findBatch(String batchNo);
 
-    List<ReconciliationBatchListItemDTO> findBatches();
+    List<ReconciliationBatchListItemDTO> findBatches(BatchQueryDTO query);
+
+    long countBatches();
 
     int insertChannelRecord(String batchNo, ChannelRecordEntity record);
 

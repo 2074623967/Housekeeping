@@ -31,7 +31,10 @@ const request = async (url, options = {}) => {
 };
 
 export const getOverview = () => request("/api/reconciliation/overview");
-export const getBatches = () => request("/api/reconciliation/batches");
+export const getBatches = ({ pageNo = 1, pageSize = 20 } = {}) => {
+  const params = new URLSearchParams({ pageNo: String(pageNo), pageSize: String(pageSize) });
+  return request(`/api/reconciliation/batches?${params.toString()}`);
+};
 export const getBatchDetail = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`);
 export const downloadBatchDetail = (batchNo) =>

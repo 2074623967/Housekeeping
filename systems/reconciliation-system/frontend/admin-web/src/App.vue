@@ -7,6 +7,9 @@ const loading = ref(false);
 const message = ref("");
 const overview = reactive({ batchCount: 0, runningBatchCount: 0, openDifferenceCount: 0, matchedCount: 0 });
 const batches = ref([]);
+const batchesTotal = ref(0);
+const batchPageNo = ref(1);
+const batchPageSize = 20;
 const differences = reactive({ items: [], total: 0 });
 const filter = reactive({ batchNo: "", differenceType: "", status: "OPEN", pageNo: 1, pageSize: 20 });
 const selectedBatch = ref(null);
@@ -46,7 +49,10 @@ async function refresh() {
   message.value = "";
   try {
     Object.assign(overview, await getOverview());
-    batches.value = await getBatches();
+    const batchPage = await getBatches({ pageNo: batchPageNo.value, pageSize: batchPageSize });
+    batches.value = batchPage.items || [];
+    batchesTotal.value = batchPage.total || 0;
+    batchPageNo.value = batchPage.pageNo || batchPageNo.value;
     Object.assign(differences, await getDifferences(filter));
     if (selectedBatch.value) {
       selectedBatch.value = await getBatchDetail(selectedBatch.value.batchNo);
@@ -106,6 +112,16 @@ function goToDifferencePage(nextPage) {
 
 function resetDifferencePage() {
   filter.pageNo = 1;
+  refresh();
+}
+
+function batchPageCount() {
+  return Math.max(1, Math.ceil(batchesTotal.value / batchPageSize));
+}
+
+function goToBatchPage(nextPage) {
+  if (loading.value || nextPage < 1 || nextPage > batchPageCount()) return;
+  batchPageNo.value = nextPage;
   refresh();
 }
 
@@ -172,7 +188,7 @@ onMounted(refresh);
         <div class="metrics"><article><span>对账批次</span><b>{{ overview.batchCount }}</b><small>累计批次</small></article><article class="blue"><span>已匹配记录</span><b>{{ overview.matchedCount }}</b><small>平台与渠道一致</small></article><article class="orange"><span>未结差异</span><b>{{ overview.openDifferenceCount }}</b><small>需要人工处置</small></article><article class="purple"><span>运行中批次</span><b>{{ overview.runningBatchCount }}</b><small>实时处理</small></article></div>
         <section class="panel"><div class="section-title"><div><p class="eyebrow">LATEST BATCHES</p><h3>最近对账批次</h3></div><button class="link" @click="view = 'batches'">查看全部</button></div><div v-if="!loading && !batches.length" class="empty">暂无对账批次</div><table v-else class="table"><thead><tr><th>批次号</th><th>业务日期</th><th>渠道</th><th>匹配 / 差异</th><th>对账准入</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches.slice(0, 5)" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}</td><td>{{ batch.matchedCount }} / <em>{{ batch.differenceCount }}</em></td><td><span class="pill" :class="readinessClass(batch.readinessStatus)">{{ readinessLabel[batch.readinessStatus] || batch.readinessStatus }}</span><small>{{ batch.readinessCompletedChainCount }}/{{ batch.readinessChainCount }} 条链路</small></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="checkReadiness(batch.batchNo)">检查准入</button><button class="link" @click="executeBatch(batch)">执行对账</button></td></tr></tbody></table></section>
       </section>
-      <section v-else-if="view === 'batches'" class="panel"><div class="section-title"><div><p class="eyebrow">RECONCILIATION BATCHES</p><h2>对账批次</h2></div></div><div v-if="!loading && !batches.length" class="empty">暂无对账批次</div><table v-else class="table"><thead><tr><th>批次号</th><th>日期</th><th>渠道 / 来源</th><th>渠道记录</th><th>平台记录</th><th>匹配</th><th>差异</th><th>对账准入</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}<small>{{ batch.billSource }}</small></td><td>{{ batch.channelCount }}</td><td>{{ batch.internalCount }}</td><td class="green">{{ batch.matchedCount }}</td><td class="red">{{ batch.differenceCount }}</td><td><span class="pill" :class="readinessClass(batch.readinessStatus)">{{ readinessLabel[batch.readinessStatus] || batch.readinessStatus }}</span><small>{{ batch.readinessSummary || "尚未检查" }}</small></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="checkReadiness(batch.batchNo)">检查准入</button><button class="link" @click="executeBatch(batch)">执行对账</button></td></tr></tbody></table></section>
+      <section v-else-if="view === 'batches'" class="panel"><div class="section-title"><div><p class="eyebrow">RECONCILIATION BATCHES</p><h2>对账批次</h2></div></div><div v-if="!loading && !batches.length" class="empty">暂无对账批次</div><table v-else class="table"><thead><tr><th>批次号</th><th>日期</th><th>渠道 / 来源</th><th>渠道记录</th><th>平台记录</th><th>匹配</th><th>差异</th><th>对账准入</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}<small>{{ batch.billSource }}</small></td><td>{{ batch.channelCount }}</td><td>{{ batch.internalCount }}</td><td class="green">{{ batch.matchedCount }}</td><td class="red">{{ batch.differenceCount }}</td><td><span class="pill" :class="readinessClass(batch.readinessStatus)">{{ readinessLabel[batch.readinessStatus] || batch.readinessStatus }}</span><small>{{ batch.readinessSummary || "尚未检查" }}</small></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="checkReadiness(batch.batchNo)">检查准入</button><button class="link" @click="executeBatch(batch)">执行对账</button></td></tr></tbody></table><div class="pager" aria-label="对账批次分页"><span>共 {{ batchesTotal }} 条，第 {{ batchPageNo }} / {{ batchPageCount() }} 页</span><div><button class="ghost compact" :disabled="loading || batchPageNo <= 1" @click="goToBatchPage(batchPageNo - 1)">上一页</button><button class="ghost compact" :disabled="loading || batchPageNo >= batchPageCount()" @click="goToBatchPage(batchPageNo + 1)">下一页</button></div></div></section>
       <section v-else-if="view === 'detail'" class="panel">
         <div v-if="!selectedBatch" class="empty">请选择一个对账批次查看详情</div>
         <template v-else>

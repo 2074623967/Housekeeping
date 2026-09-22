@@ -3,6 +3,7 @@ package com.abc123.reconciliation.service.impl;
 import com.abc123.reconciliation.common.BusinessException;
 import com.abc123.reconciliation.dao.ReconciliationDao;
 import com.abc123.reconciliation.dto.ChannelRecordRequestDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
@@ -255,8 +256,14 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
-    public List<ReconciliationBatchListItemDTO> batches() {
-        return dao.findBatches();
+    public PageResultDTO<ReconciliationBatchListItemDTO> batches(BatchQueryDTO query) {
+        if (query == null) {
+            query = new BatchQueryDTO();
+        }
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return new PageResultDTO<>(dao.findBatches(query), dao.countBatches(),
+                query.getPageNo(), query.getPageSize());
     }
 
     @Override

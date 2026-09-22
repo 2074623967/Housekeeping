@@ -1,6 +1,7 @@
 package com.abc123.reconciliation.service;
 
 import com.abc123.reconciliation.dto.ChannelRecordRequestDTO;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
@@ -32,7 +33,7 @@ public interface ReconciliationService {
 
     byte[] exportBatchDetail(String batchNo);
 
-    java.util.List<ReconciliationBatchListItemDTO> batches();
+    PageResultDTO<ReconciliationBatchListItemDTO> batches(BatchQueryDTO query);
 
     PageResultDTO<ReconciliationDifferenceDTO> differences(DifferenceQueryDTO query);
 

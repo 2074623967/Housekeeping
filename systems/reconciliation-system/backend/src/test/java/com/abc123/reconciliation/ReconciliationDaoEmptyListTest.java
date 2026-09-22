@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.abc123.reconciliation.dao.impl.ReconciliationDaoImpl;
+import com.abc123.reconciliation.dto.BatchQueryDTO;
 import com.abc123.reconciliation.mapper.ReconciliationMapper;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,7 @@ class ReconciliationDaoEmptyListTest {
     @Test
     void shouldNormalizeNullMapperListsToEmptyLists() {
         ReconciliationMapper mapper = mock(ReconciliationMapper.class);
-        when(mapper.findBatches()).thenReturn(null);
+        when(mapper.findBatches(org.mockito.ArgumentMatchers.any(BatchQueryDTO.class))).thenReturn(null);
         when(mapper.findChannelRecords("BATCH-EMPTY")).thenReturn(null);
         when(mapper.findInternalRecords("BATCH-EMPTY")).thenReturn(null);
         when(mapper.findChannelRecordDetails("BATCH-EMPTY")).thenReturn(null);
@@ -27,7 +28,7 @@ class ReconciliationDaoEmptyListTest {
 
         ReconciliationDaoImpl dao = new ReconciliationDaoImpl(mapper);
 
-        assertTrue(dao.findBatches().isEmpty());
+        assertTrue(dao.findBatches(new BatchQueryDTO()).isEmpty());
         assertTrue(dao.findChannelRecords("BATCH-EMPTY").isEmpty());
         assertTrue(dao.findInternalRecords("BATCH-EMPTY").isEmpty());
         assertTrue(dao.findChannelRecordDetails("BATCH-EMPTY").isEmpty());
