@@ -5,6 +5,41 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+function normalizeList(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (Array.isArray(value?.items)) {
+    return value.items;
+  }
+  if (Array.isArray(value?.records)) {
+    return value.records;
+  }
+  return [];
+}
+
+function normalizeDetail(value) {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return {
+    ...value,
+    ledgers: normalizeList(value.ledgers)
+  };
+}
+
+function normalizeDashboard(value) {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return {
+    ...value,
+    redPackets: normalizeList(value.redPackets),
+    riskEvents: normalizeList(value.riskEvents),
+    outLedgers: normalizeList(value.outLedgers)
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -31,8 +66,8 @@ async function request(url, options = {}) {
 }
 
 export const walletApi = {
-  getAccounts: () => request("/api/wallet/accounts"),
-  getBalanceSnapshots: () => request("/api/wallet/accounts/balance-snapshots"),
+  getAccounts: async () => normalizeList(await request("/api/wallet/accounts")),
+  getBalanceSnapshots: async () => normalizeList(await request("/api/wallet/accounts/balance-snapshots")),
   getLedgers: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -41,7 +76,7 @@ export const walletApi = {
       }
     });
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return request(`/api/wallet/accounts/ledgers${suffix}`);
+    return request(`/api/wallet/accounts/ledgers${suffix}`).then(normalizeList);
   },
   buildLedgerExportUrl: (params = {}) => {
     const query = new URLSearchParams();
@@ -53,7 +88,7 @@ export const walletApi = {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return `/api/wallet/accounts/ledgers/export${suffix}`;
   },
-  getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`),
+  getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`).then(normalizeDetail),
   balancePayment: (payload) => request("/api/wallet/accounts/balance-payments", {
     method: "POST",
     body: JSON.stringify(payload)
@@ -70,15 +105,15 @@ export const walletApi = {
     method: "POST",
     body: JSON.stringify(payload)
   }),
-  getRedPackets: () => request("/api/wallet/red-packets"),
+  getRedPackets: async () => normalizeList(await request("/api/wallet/red-packets")),
   issueRedPacket: (payload) => request("/api/wallet/red-packets", {
     method: "POST",
     body: JSON.stringify(payload)
   }),
-  getRiskEvents: () => request("/api/wallet/risk-events"),
+  getRiskEvents: async () => normalizeList(await request("/api/wallet/risk-events")),
   approveRiskEvent: (payload) => request("/api/wallet/risk-events/approve", {
     method: "POST",
     body: JSON.stringify(payload)
   }),
-  getMarketingFundDashboard: () => request("/api/wallet/marketing-funds/dashboard")
+  getMarketingFundDashboard: () => request("/api/wallet/marketing-funds/dashboard").then(normalizeDashboard)
 };

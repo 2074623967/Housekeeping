@@ -12,7 +12,7 @@ test("keeps the wallet service envelope on success", async () => {
   });
 
   try {
-    assert.deepEqual(await walletApi.getDetail("WAL-001"), { accountNo: "WAL-001" });
+    assert.deepEqual(await walletApi.getDetail("WAL-001"), { accountNo: "WAL-001", ledgers: [] });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -43,6 +43,57 @@ test("reports wallet network failures with a stable client error", async () => {
       walletApi.getAccounts(),
       (error) => error.code === "WALLET-CLIENT-NETWORK"
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes empty and wrapped wallet collections at the API boundary", async () => {
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    { code: "0", data: null },
+    { code: "0", data: { records: [{ ledgerNo: "LED-001" }] } },
+    { code: "0", data: { items: [{ eventNo: "RISK-001" }] } }
+  ];
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return responses.shift();
+    }
+  });
+
+  try {
+    assert.deepEqual(await walletApi.getAccounts(), []);
+    assert.deepEqual(await walletApi.getLedgers(), [{ ledgerNo: "LED-001" }]);
+    assert.deepEqual(await walletApi.getRiskEvents(), [{ eventNo: "RISK-001" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes nullable detail and marketing dashboard collections", async () => {
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    { code: "0", data: { account: { accountNo: "WAL-001" }, ledgers: null } },
+    { code: "0", data: { redPackets: null, riskEvents: { records: [] }, outLedgers: null } }
+  ];
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return responses.shift();
+    }
+  });
+
+  try {
+    assert.deepEqual(await walletApi.getDetail("WAL-001"), {
+      account: { accountNo: "WAL-001" },
+      ledgers: []
+    });
+    assert.deepEqual(await walletApi.getMarketingFundDashboard(), {
+      redPackets: [],
+      riskEvents: [],
+      outLedgers: []
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
