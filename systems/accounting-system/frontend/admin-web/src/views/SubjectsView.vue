@@ -21,14 +21,14 @@ const metrics = computed(() => ({
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await subjectApi.getList({ ...filters.value, pageNo: pageNo.value, pageSize });
+    const result = await subjectApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
     total.value = result.total;
-    pageNo.value = result.pageNo || pageNo.value;
+    pageNo.value = result.pageNo || targetPage;
     selectedRow.value = result.items[0] || null;
   } catch (error) {
     message.value = error.message;

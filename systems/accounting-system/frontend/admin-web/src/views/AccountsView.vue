@@ -19,17 +19,17 @@ const form = ref({ subjectId: "", accountType: "USER_CASH", currency: "CNY" });
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
     const [result, subjectResult] = await Promise.all([
-      accountApi.getList({ ...filters.value, pageNo: pageNo.value, pageSize }),
+      accountApi.getList({ ...filters.value, pageNo: targetPage, pageSize }),
       subjectApi.getList({ pageNo: 1, pageSize: 100 })
     ]);
     rows.value = result.items;
     total.value = result.total;
-    pageNo.value = result.pageNo || pageNo.value;
+    pageNo.value = result.pageNo || targetPage;
     subjects.value = subjectResult.items;
     if (!form.value.subjectId && subjects.value.length) {
       form.value.subjectId = subjects.value[0].subjectId;
