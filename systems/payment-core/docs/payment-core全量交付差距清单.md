@@ -3365,3 +3365,9 @@
 使用本地已有 Maven 仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`，`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟和跨系统 happy-path 通过；对账链路实际为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
 
 该结果仅更新本地 demo/H2/HTTP 骨架的运行态证据，不改变真实渠道、RabbitMQ、生产 MySQL、资金到账、正式审批、现场核验、稳定观察或 `test -> master` / `master -> release/*` 门禁结论；REG-08 当前批次仍缺真实 broker 下的页面冻结和补偿闭环证据。
+
+### 9.7 2026-09-23 当前端侧与 payment-core 后端验证口径校正
+
+本轮以实际命令输出为准补充当前批次口径：payment-core 后端全量 Maven 回归为 `1189` 个测试通过、`0` failures、`0` errors；用户端与服务调用端分别为 App `23/23`、H5 `2/2`、PC `2/2`、小程序 `13/13`、API client `8/8`，管理端为 `49/49`，端侧自动化测试合计 `97/97`，App/H5/PC 生产构建均通过。
+
+本节只校正当前可复核的代码与测试证据，不把测试通过解释为真实渠道受理、微信签名参数、RabbitMQ/DLQ、生产 MySQL、资金到账或发布治理事实；历史章节中的旧计数保留为当时批次记录。
