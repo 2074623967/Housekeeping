@@ -16412,3 +16412,9 @@ bash tools/dev/local-stack.sh verify all
 结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟和跨系统 happy-path 通过；本批生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
 
 本记录只证明当前 demo/H2/HTTP 本地骨架可运行，不证明真实微信/支付宝/银行渠道、RabbitMQ、生产 MySQL、资金到账、财务关账、正式审批、现场核验或稳定观察完成；REG-08 当前批次 DLQ 运行态证据仍待 Docker/RabbitMQ 恢复后重新采集。
+
+## 648. 2026-09-23 payment-core 任务中心运行态页面核验
+
+在 `http://127.0.0.1:5174/payment-task-center` 进行当前运行态检查：任务摘要、P1/P2/P3 严重等级口径、人工任务入口、任务执行日志和分页查询均完成加载；页面当前存在的待回调支付、失败退款事实异常和 SLA 超时项均按既有提示展示，未将它们误标为已收口。
+
+在当前窄视口下测得 `innerWidth=462`、`documentElement.scrollWidth=447`、`body.scrollWidth=447`，无横向溢出，页面无 `role=alert` 错误节点。该检查只证明任务中心运营骨架与响应式布局当前可用，不替代真实 RabbitMQ/DLQ、通知供应商或发布治理证据。
