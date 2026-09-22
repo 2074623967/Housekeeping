@@ -15874,3 +15874,21 @@ MAVEN_BIN=/path/to/mvn node tools/dev/backend-regression.mjs
 | `payment-core/backend` 定向执行 | 通过，模块回归命令成功完成 |
 | Maven 路径 | `/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn` |
 | 当前批次真实消息代理取证 | 未完成，Docker socket 权限阻断 |
+
+## 603. 2026-09-23 全系统后端聚合回归复核
+
+### 验证命令
+
+```bash
+MAVEN_BIN=/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn \
+  node tools/dev/backend-regression.mjs
+```
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端模块 | `12/12` 通过 |
+| Surefire 用例 | `1465/1465` 通过，`0` failures、`0` errors、`0` skipped |
+| 覆盖模块 | payment-core、gateway-access、settlement、accounting、clearing、refund-center、reconciliation、risk-control、ops-config、deposit、wallet-account、wallet-system |
+| 运行态边界 | 证明本地各后端模块测试可执行，不替代真实 RabbitMQ、渠道、生产数据库、资金事实或发布治理证据 |
