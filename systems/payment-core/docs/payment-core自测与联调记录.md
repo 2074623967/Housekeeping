@@ -15907,3 +15907,18 @@ MAVEN_BIN=/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn \
 | 合计 | `48/48` | 本轮涉及构建均通过 |
 
 本轮只证明本地客户端契约、路由、错误边界和小程序页面模型可运行；微信开发者工具/真机、`wx.requestPayment` 签名参数、真实渠道扣款与资金事实仍未被本地测试替代。
+
+## 605. 2026-09-23 支付流水页联查动作运行时修复
+
+### 本轮修复
+
+`PaymentFlowsView.vue` 的支付单、流水详情、支付请求和处理日志联查动作统一使用快照可用门禁。此前动作函数引用了未定义的 `canUseSnapshot`，页面构建虽可通过，但用户点击联查时会触发运行时错误；现已补齐该计算状态，并在加载中、无成功快照或快照刷新失败时关闭联查动作。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `admin-web` Node 测试 | `49/49` 通过 |
+| `admin-web` Vite 构建 | 通过，`109` modules |
+| `git diff --check` | 通过 |
+| 提交 | `6bc6c0aa fix(payment-core): guard payment flow snapshot actions` |
