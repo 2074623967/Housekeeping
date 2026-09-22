@@ -443,6 +443,9 @@ report_endpoint() {
   fi
   if http_is_ready "$url"; then
     http_state="READY"
+    if [[ "$pid_state" != pid=* ]]; then
+      pid_state="external/ready"
+    fi
   fi
   printf '%-38s %-10s %-18s %s\n' "$label" "$http_state" "$pid_state" "$url"
   [[ "$http_state" == "READY" ]]

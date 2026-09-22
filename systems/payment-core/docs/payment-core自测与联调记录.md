@@ -16093,3 +16093,9 @@ tools/dev/local-stack.sh happy-path
 本批次本地业务标识为：支付单 `PAY1790108391985b894c4e9`、清分单 `CLO20005`、结算单 `SLT20006`、退款单 `REF20260923041952515`。账务事实包含 `PAYMENT_SUCCESS/CLEARING_GENERATED/REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功。
 
 以上是 demo/H2/HTTP 受控本地骨架证据，不代表真实微信、支付宝、银行渠道、RabbitMQ、生产数据库、资金到账或正式发布治理已验收。
+
+## 623. 2026-09-23 本地栈外部托管状态显示与 REG-08 复核
+
+1. `tools/dev/local-stack.sh status` 现在将“HTTP 已 READY、但进程不是当前脚本托管”的服务显示为 `external/ready`，不再因残留 PID 文件显示为误导性的 `stale-pid`。
+2. 当前 payment-core 后端和四个前端入口复核均为 `READY / external/ready`，`bash -n tools/dev/local-stack.sh` 和补丁检查通过。
+3. 当前批次 REG-08 真实条件复核：`http://127.0.0.1:15672` RabbitMQ 管理接口不可达，Docker daemon 也未运行；因此未执行发布消息、未创建当前批次 DLQ 任务或回放事实，门禁继续保持未放行。
