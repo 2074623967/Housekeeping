@@ -151,3 +151,23 @@ test("uses the business id from a custom payment payload", async (t) => {
   assert.equal(result.exitCode, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /PAY-CUSTOM-PAYLOAD-001/);
 });
+
+test("rejects a custom payload with a mismatched event type", async (t) => {
+  const { server } = startMockServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+
+  const result = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_DLQ_EVENT_KIND: "payment-success",
+    HSP_DLQ_TARGET_SYSTEM: "accounting",
+    HSP_DLQ_PAYLOAD_JSON: JSON.stringify({
+      eventType: "CLEARING_GENERATED",
+      paymentOrderId: "PAY-WRONG-EVENT-001"
+    }),
+    HSP_DLQ_TIMEOUT_MS: "1000"
+  }, server);
+
+  assert.notEqual(result.exitCode, 0);
+  assert.match(result.stderr, /eventType must be PAYMENT_SUCCESS/);
+});

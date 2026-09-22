@@ -183,6 +183,10 @@ async function replayCurrentBatch() {
         accountNo: "ACT10003",
         amount: 9.99
       };
+  assert(payload && typeof payload === "object" && !Array.isArray(payload),
+    "DLQ payload must be a JSON object");
+  assert(payload.eventType === eventConfig.eventType,
+    `DLQ payload eventType must be ${eventConfig.eventType}`);
   const bizNo = eventKind === "clearing-generated"
     ? String(payload.clearingOrderNo || payload.clearingNo || "").trim()
     : String(payload.paymentOrderId || "").trim();
