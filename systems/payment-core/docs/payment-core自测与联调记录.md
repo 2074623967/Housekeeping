@@ -16099,3 +16099,15 @@ tools/dev/local-stack.sh happy-path
 1. `tools/dev/local-stack.sh status` 现在将“HTTP 已 READY、但进程不是当前脚本托管”的服务显示为 `external/ready`，不再因残留 PID 文件显示为误导性的 `stale-pid`。
 2. 当前 payment-core 后端和四个前端入口复核均为 `READY / external/ready`，`bash -n tools/dev/local-stack.sh` 和补丁检查通过。
 3. 当前批次 REG-08 真实条件复核：`http://127.0.0.1:15672` RabbitMQ 管理接口不可达，Docker daemon 也未运行；因此未执行发布消息、未创建当前批次 DLQ 任务或回放事实，门禁继续保持未放行。
+
+## 624. 2026-09-23 全栈 verify 复用外部托管服务
+
+执行：
+
+```bash
+tools/dev/local-stack.sh verify all
+```
+
+结果：脚本正确复用现有外部托管的 `12` 个后端、`15` 个前端及代理路径，全部显示 `READY / external/ready`；HTTP smoke 和 cross-system happy-path 均通过。新批次支付单为 `PAY1790108597980f54a867b`，清分单 `CLO20006`，结算单 `SLT20007`，退款单 `REF20260923042318300`，对账链路 `COMPLETED`、`4/4`、`financialCloseable=true`。
+
+该 verify 仍属于受控 demo/H2/HTTP 本地骨架验证；不改变真实渠道、RabbitMQ、生产数据库、资金到账和正式发布治理边界。
