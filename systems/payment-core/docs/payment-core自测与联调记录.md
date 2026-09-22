@@ -15985,3 +15985,13 @@ tools/dev/local-stack.sh happy-path
 `tools/dev/local-stack.sh` 不再依赖单一机器上的 Maven/JDK 绝对路径：Maven 按 `HSP_MAVEN_BIN`、PATH、仓库相邻工具链和已知本地候选路径探测；JDK 按 `HSP_JAVA_HOME`、PATH 和本机候选路径探测；Maven 本地仓库按 `HSP_MAVEN_REPO`、相邻仓库和用户本地仓库探测。
 
 验证结果：`bash -n tools/dev/local-stack.sh` 通过；显式配置 `HSP_MAVEN_BIN/HSP_JAVA_HOME` 执行 `doctor backends` 通过；移除两个环境变量后仍能通过本机探测执行 `doctor backends`。本轮不重启已运行服务，也不改变业务接口、数据库或资金状态。
+
+## 614. 2026-09-23 统一门禁复判
+
+执行：
+
+```bash
+node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json
+```
+
+当前结果：`canPromoteTestToMaster=false`、`canCreateRelease=false`。`test -> master` 仍有 `REG-08` 当前批次页面截图和补偿/DLQ 闭环证据缺口；`master -> release/*` 仍缺候选版正式化、正式签字审批、发布后现场核验和稳定观察结束结论。本次复判不改变任何放行状态，也不把本地长驻栈或 happy-path 当作生产发布证据。
