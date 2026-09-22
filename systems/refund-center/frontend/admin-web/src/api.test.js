@@ -30,3 +30,33 @@ test("normalizes null refund outbox page items", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("reports non-JSON refund responses with a stable client error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });
+  try {
+    const { getOverview } = await import(`./api.js?invalid=${Date.now()}`);
+    await assert.rejects(
+      getOverview(),
+      (error) => error.code === "REFUND-CLIENT-INVALID-RESPONSE"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("reports refund network failures with a stable client error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed");
+  };
+  try {
+    const { getOverview } = await import(`./api.js?network=${Date.now()}`);
+    await assert.rejects(
+      getOverview(),
+      (error) => error.code === "REFUND-CLIENT-NETWORK"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

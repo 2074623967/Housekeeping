@@ -7,3 +7,4 @@ npm install
 npm run build
 ```
 
+管理端 API client 已区分退款服务的网络失败、超时、非 JSON 响应和业务错误；Node 测试 `4/4` 通过，Vite 生产构建通过。这些结果不代表真实渠道退款或资金到账。

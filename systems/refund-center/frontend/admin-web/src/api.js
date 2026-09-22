@@ -1,11 +1,32 @@
+const createRequestError = (code, message, cause) => {
+  const error = new Error(`${message} [${code}]`);
+  error.code = code;
+  error.cause = cause;
+  return error;
+};
+
 const jsonRequest = async (url, options = {}) => {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  const body = await response.json();
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch (error) {
+    const code = error?.name === "AbortError"
+      ? "REFUND-CLIENT-TIMEOUT"
+      : "REFUND-CLIENT-NETWORK";
+    throw createRequestError(code, error?.name === "AbortError" ? "退款服务请求超时" : "无法连接退款服务", error);
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw createRequestError("REFUND-CLIENT-INVALID-RESPONSE", `退款服务返回了无法解析的响应 [HTTP ${response.status}]`, error);
+  }
   if (!response.ok || body.code !== "0") {
-    throw new Error(body.message || "请求失败");
+    const code = body?.code || `REFUND-CLIENT-HTTP-${response.status}`;
+    throw createRequestError(code, body?.message || "请求失败");
   }
   return body.data;
 };
