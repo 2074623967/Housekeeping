@@ -39,6 +39,8 @@ const mavenHome = process.env.MAVEN_HOME;
 const mavenCandidates = [
   configuredMaven,
   mavenHome ? path.join(mavenHome, "bin", "mvn") : "",
+  path.join(rootDir, "..", "apache-maven-3.9.16", "bin", "mvn"),
+  path.join(rootDir, "..", "apache-maven-3.9.12", "bin", "mvn"),
   "mvn"
 ].filter(Boolean);
 const maven = mavenCandidates.find((candidate) => {

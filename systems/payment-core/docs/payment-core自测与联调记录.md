@@ -15995,3 +15995,9 @@ node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases
 ```
 
 当前结果：`canPromoteTestToMaster=false`、`canCreateRelease=false`。`test -> master` 仍有 `REG-08` 当前批次页面截图和补偿/DLQ 闭环证据缺口；`master -> release/*` 仍缺候选版正式化、正式签字审批、发布后现场核验和稳定观察结束结论。本次复判不改变任何放行状态，也不把本地长驻栈或 happy-path 当作生产发布证据。
+
+## 615. 2026-09-23 后端全量回归工具链复核
+
+首次在未设置 `MAVEN_BIN/MAVEN_HOME` 的环境执行 `node tools/dev/backend-regression.mjs` 时，原脚本因 PATH 没有 Maven 直接失败；已补充仓库相邻 Maven 工具链探测。修复后重新执行同一命令，12/12 后端模块全部通过，未发生 failures、errors 或 skipped。
+
+本轮只改善回归工具的环境发现能力，不改变后端业务、接口、数据库、真实渠道或发布门禁结论。
