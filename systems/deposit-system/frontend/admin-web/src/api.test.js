@@ -15,6 +15,27 @@ test("keeps the deposit service envelope on success", async () => {
   }
 });
 
+test("normalizes nullable V2 deposit collections", async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      call += 1;
+      return call === 1
+        ? { code: "0", data: null }
+        : { code: "0", data: { bindings: null, migrations: null } };
+    }
+  });
+  try {
+    const { getV2TotalAccounts, getV2TotalAccountDetail } = await import(`./api.js?v2=${Date.now()}`);
+    assert.deepEqual(await getV2TotalAccounts(), []);
+    assert.deepEqual(await getV2TotalAccountDetail("TA-001"), { bindings: [], migrations: [] });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON deposit responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

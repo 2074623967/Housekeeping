@@ -30,13 +30,24 @@ const request = async (url, options = {}) => {
   return body.data;
 };
 
+const normalizeList = (value) => (Array.isArray(value) ? value : []);
+
+const normalizeTotalAccountDetail = (value) => {
+  if (!value || typeof value !== "object") return value;
+  return {
+    ...value,
+    bindings: normalizeList(value.bindings),
+    migrations: normalizeList(value.migrations)
+  };
+};
+
 export const getAccounts = () => request("/api/deposits/accounts");
 export const getOverview = () => request("/api/deposits/overview");
 export const getV2Overview = () => request("/api/deposits/v2/overview");
-export const getV2TotalAccounts = () => request("/api/deposits/v2/total-accounts");
+export const getV2TotalAccounts = () => request("/api/deposits/v2/total-accounts").then(normalizeList);
 export const getV2TotalAccountDetail = (totalAccountNo) =>
-  request(`/api/deposits/v2/total-accounts/${encodeURIComponent(totalAccountNo)}`);
-export const getV2Migrations = () => request("/api/deposits/v2/migrations");
+  request(`/api/deposits/v2/total-accounts/${encodeURIComponent(totalAccountNo)}`).then(normalizeTotalAccountDetail);
+export const getV2Migrations = () => request("/api/deposits/v2/migrations").then(normalizeList);
 export const getAccountDetail = (accountNo) =>
   request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}`);
 export const getAccountsByQuery = (query = {}) => {
