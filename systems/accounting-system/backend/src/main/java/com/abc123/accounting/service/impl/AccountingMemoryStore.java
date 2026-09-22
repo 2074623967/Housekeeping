@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.PostConstruct;
@@ -66,7 +67,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountSubjectEntity> subjects() {
-        return accountingDataMapper.findSubjects();
+        return safeList(accountingDataMapper.findSubjects());
     }
 
     @Transactional
@@ -87,7 +88,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountEntity> accounts() {
-        return accountingDataMapper.findAccounts();
+        return safeList(accountingDataMapper.findAccounts());
     }
 
     @Transactional
@@ -122,7 +123,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountLedgerEntity> ledgers() {
-        List<AccountLedgerEntity> copied = new ArrayList<>(accountingDataMapper.findLedgers());
+        List<AccountLedgerEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findLedgers()));
         copied.sort(Comparator.comparing(AccountLedgerEntity::getCreatedAt).reversed());
         return copied;
     }
@@ -157,7 +158,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountFreezeEntity> freezes() {
-        List<AccountFreezeEntity> copied = new ArrayList<>(accountingDataMapper.findFreezes());
+        List<AccountFreezeEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findFreezes()));
         copied.sort(Comparator.comparing(AccountFreezeEntity::getCreatedAt).reversed());
         return copied;
     }
@@ -230,7 +231,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountAdjustmentEntity> adjustments() {
-        List<AccountAdjustmentEntity> copied = new ArrayList<>(accountingDataMapper.findAdjustments());
+        List<AccountAdjustmentEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findAdjustments()));
         copied.sort(Comparator.comparing(AccountAdjustmentEntity::getCreatedAt).reversed());
         return copied;
     }
@@ -280,7 +281,7 @@ public class AccountingMemoryStore {
     }
 
     public List<AccountEventEntity> events() {
-        return accountingDataMapper.findEvents();
+        return safeList(accountingDataMapper.findEvents());
     }
 
     public boolean hasLedger(String accountNo, String bizType, String bizNo) {
@@ -351,5 +352,9 @@ public class AccountingMemoryStore {
 
     private String now() {
         return LocalDateTime.now().format(DATE_TIME_FORMATTER);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }

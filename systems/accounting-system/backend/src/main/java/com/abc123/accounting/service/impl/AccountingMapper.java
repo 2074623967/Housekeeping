@@ -16,6 +16,7 @@ import com.abc123.accounting.entity.AccountFreezeEntity;
 import com.abc123.accounting.entity.AccountLedgerEntity;
 import com.abc123.accounting.entity.AccountSubjectEntity;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -137,7 +138,8 @@ public class AccountingMapper {
         AccountDetailDTO dto = new AccountDetailDTO();
         dto.setAccount(toAccountDTO(account, balance));
         dto.setBalance(toBalanceDTO(account, balance));
-        dto.setRecentLedgers(recentLedgers.stream().limit(8).map(this::toLedgerDTO).collect(Collectors.toList()));
+        List<AccountLedgerEntity> safeLedgers = recentLedgers == null ? Collections.emptyList() : recentLedgers;
+        dto.setRecentLedgers(safeLedgers.stream().limit(8).map(this::toLedgerDTO).collect(Collectors.toList()));
         return dto;
     }
 
