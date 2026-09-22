@@ -15805,6 +15805,12 @@
 
 本轮对 accounting、clearing、deposit、gateway-access、ops-config、payment-core、reconciliation、refund-center、risk-control、settlement、wallet-account、wallet-system 共 `12` 个管理端执行各自 `npm test && npm run build`。
 
+后续可重复执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
 ### 验证结果
 
 | 项目 | 结果 |
