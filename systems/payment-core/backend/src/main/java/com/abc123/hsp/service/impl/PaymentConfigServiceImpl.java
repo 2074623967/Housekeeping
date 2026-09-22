@@ -1841,7 +1841,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Override
     @Transactional
     public PaymentControlPolicySelfCheckSummaryDTO runAllEnabledControlPolicySelfChecks() {
-        List<PaymentControlPolicySelfCheckItemDTO> items = paymentConfigMapper.findEnabledControlPolicySelfCheckItems();
+        List<PaymentControlPolicySelfCheckItemDTO> items =
+                safeList(paymentConfigMapper.findEnabledControlPolicySelfCheckItems());
         int passCount = 0;
         int warnCount = 0;
         int failCount = 0;
@@ -1882,7 +1883,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             return new SelfCheckResult("FAIL", "danger", "支付方式、渠道或商户授权为空，禁止进入严格模式提交");
         }
 
-        List<PaymentChannelConfigDTO> channels = paymentConfigMapper.findChannels();
+        List<PaymentChannelConfigDTO> channels = safeList(paymentConfigMapper.findChannels());
         Set<String> enabledChannelCodes = new HashSet<String>();
         Set<String> enabledPaymentMethods = new HashSet<String>();
         for (PaymentChannelConfigDTO channel : channels) {

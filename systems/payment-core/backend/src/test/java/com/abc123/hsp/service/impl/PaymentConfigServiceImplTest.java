@@ -1659,6 +1659,44 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullSelfCheckAndChannelListsAsEmpty() {
+        when(paymentConfigMapper.findEnabledControlPolicySelfCheckItems()).thenReturn(null);
+        PaymentControlPolicySelfCheckSummaryDTO summary =
+                new PaymentConfigServiceImpl(paymentConfigMapper).runAllEnabledControlPolicySelfChecks();
+
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), summary.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), summary.getPassCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), summary.getWarnCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), summary.getFailCount());
+
+        PaymentControlPolicyDTO policy = new PaymentControlPolicyDTO();
+        policy.setSourceAppId("housekeeping-app-web");
+        policy.setAllowedPaymentMethods("微信支付");
+        policy.setAllowedChannelCodes("wx_h5");
+        policy.setAllowedMerchantNos("MCH_HOME_APP");
+        policy.setTokenAuthRequired("关闭");
+        when(paymentConfigMapper.findControlPolicyBySourceAppId("housekeeping-app-web"))
+                .thenReturn(policy);
+        when(paymentConfigMapper.findChannels()).thenReturn(null);
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.updateControlPolicySelfCheck(
+                org.mockito.ArgumentMatchers.eq("housekeeping-app-web"),
+                org.mockito.ArgumentMatchers.eq("WARN"),
+                org.mockito.ArgumentMatchers.eq("warn"),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+
+        PaymentControlPolicySelfCheckItemDTO item = new PaymentControlPolicySelfCheckItemDTO();
+        item.setSourceAppId("housekeeping-app-web");
+        when(paymentConfigMapper.findEnabledControlPolicySelfCheckItems())
+                .thenReturn(Collections.singletonList(item));
+
+        PaymentControlPolicySelfCheckSummaryDTO nullChannelsSummary =
+                new PaymentConfigServiceImpl(paymentConfigMapper).runAllEnabledControlPolicySelfChecks();
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), nullChannelsSummary.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), nullChannelsSummary.getWarnCount());
+    }
+
+    @Test
     void shouldSubmitProtocolStatusReviewWithoutChangingRuntime() {
         PaymentProtocolConfigEntity current = buildProtocolEntity();
         PaymentProtocolStatusReviewRequestDTO request = new PaymentProtocolStatusReviewRequestDTO();
