@@ -715,6 +715,23 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeNullRefundDetailCollections() {
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-NULL-COLLECTIONS");
+        detail.setCustomerName("张女士");
+        when(refundMapper.findDetailByRefundOrderId("REF-NULL-COLLECTIONS")).thenReturn(detail);
+        when(refundMapper.findOperationLogs("REF-NULL-COLLECTIONS")).thenReturn(null);
+        when(refundMapper.findAttempts("REF-NULL-COLLECTIONS")).thenReturn(null);
+
+        RefundDetailDTO result = createService().detail("REF-NULL-COLLECTIONS");
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getOperationLogs());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getOperationLogs().isEmpty());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getAttempts());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getAttempts().isEmpty());
+    }
+
+    @Test
     void shouldFinalizeTrustedSuccessfulRefundCallback() {
         RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
         RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");

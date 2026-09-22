@@ -161,9 +161,13 @@ public class RefundServiceImpl implements RefundService {
         RefundDetailDTO outwardDetail = new RefundDetailDTO();
         BeanUtils.copyProperties(detail, outwardDetail);
         outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
-        outwardDetail.setOperationLogs(refundMapper.findOperationLogs(requiredRefundOrderId));
-        outwardDetail.setAttempts(refundMapper.findAttempts(requiredRefundOrderId));
+        outwardDetail.setOperationLogs(safeList(refundMapper.findOperationLogs(requiredRefundOrderId)));
+        outwardDetail.setAttempts(safeList(refundMapper.findAttempts(requiredRefundOrderId)));
         return outwardDetail;
+    }
+
+    private <T> List<T> safeList(List<T> items) {
+        return items == null ? Collections.emptyList() : items;
     }
 
     private List<RefundListItemDTO> maskItems(List<RefundListItemDTO> items) {
