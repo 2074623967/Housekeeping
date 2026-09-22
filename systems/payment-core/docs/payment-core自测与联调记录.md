@@ -15957,3 +15957,7 @@ node tools/dev/frontend-admin-regression.mjs
 ## 609. 2026-09-23 链路事实时间字段映射修复
 
 复核 reconciliation `CrossSystemFactDTO` 后发现事实发生时间字段为 `occurredAt`，链路诊断表此前错误读取 `factAt`，导致时间列显示为空。已修正为后端契约字段，并完成 reconciliation admin `4/4` 测试与 Vite 构建复核；不涉及 API、数据库或资金状态变化。
+
+## 610. 2026-09-23 链路事实金额与配置版本展示补齐
+
+跨系统链路诊断事实表新增金额和配置快照版本列，金额沿用后端字符串序列化，不做 JavaScript 浮点转换；用于运营核对各阶段金额口径及实际消费的配置版本。reconciliation admin `4/4` 测试和 Vite 构建继续通过，不新增写入口或资金事实。
