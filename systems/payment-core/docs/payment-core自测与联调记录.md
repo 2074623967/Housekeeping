@@ -16267,3 +16267,16 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：`12/12` 管理端均通过各自测试与生产构建；payment-core `49/49`、clearing `5/5`、settlement `7/7`、reconciliation `6/6`。该回归只证明当前代码和构建基线未回退，不替代真实浏览器现场核验、RabbitMQ/DLQ 当前批次证据、生产渠道或正式发布审批。
+
+## 638. 2026-09-23 当前 HEAD 后端全量回归复核
+
+在当前 `test` HEAD 使用真实 JDK 8 执行：
+
+```bash
+cd systems/payment-core/backend
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH \
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+Surefire 汇总：`1188` tests，`0` failures、`0` errors、`0` skipped。输出中的异常来自预期失败分支、事务回滚和隔离配置测试断言；本轮只证明本地 demo/H2 测试基线可回归，不替代真实渠道、生产数据库、RabbitMQ、资金到账或正式发布治理验证。
