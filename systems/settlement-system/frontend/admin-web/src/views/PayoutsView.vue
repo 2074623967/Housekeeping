@@ -15,6 +15,8 @@ const recordRows = ref([]);
 const recordMessage = ref("");
 const recordFilters = ref({ payoutStatus: "" });
 const retryForm = ref({ operatorName: "结算运营", reason: "失败批次人工补发" });
+const inspection = ref(null);
+const inspectionLoading = ref(false);
 
 async function loadRows() {
   loading.value = true;
@@ -39,6 +41,18 @@ async function createPayout() {
     message.value = error.message;
   } finally {
     actionLoading.value = false;
+  }
+}
+
+async function inspectPayouts() {
+  inspectionLoading.value = true;
+  message.value = "";
+  try {
+    inspection.value = await payoutApi.inspect();
+  } catch (error) {
+    message.value = error.message;
+  } finally {
+    inspectionLoading.value = false;
   }
 }
 
@@ -170,6 +184,21 @@ onMounted(loadRows);
           <input v-model="executeForm.failureReason" placeholder="例如：银行通道超时" />
         </div>
       </div>
+      <div class="inspection-row">
+        <div>
+          <strong>出款巡检</strong>
+          <span class="inspection-hint">只读扫描当前批次，不会自动执行银行出款或重试。</span>
+        </div>
+        <button class="button secondary" :disabled="inspectionLoading" @click="inspectPayouts">
+          {{ inspectionLoading ? "巡检中..." : "立即巡检" }}
+        </button>
+      </div>
+      <div v-if="inspection" class="inspection-grid" aria-live="polite">
+        <div class="inspection-stat"><span>待处理</span><strong>{{ inspection.pendingBatchCount }}</strong></div>
+        <div class="inspection-stat warning"><span>失败待重试</span><strong>{{ inspection.failedBatchCount }}</strong></div>
+        <div class="inspection-stat success"><span>已完成</span><strong>{{ inspection.completedBatchCount }}</strong></div>
+        <div class="inspection-stat muted"><span>批次总数</span><strong>{{ inspection.totalBatchCount }}</strong></div>
+      </div>
       <div v-if="message" class="state-box">{{ message }}</div>
       <div v-else-if="loading" class="state-box">出款批次加载中...</div>
       <div v-else class="table-wrap">
@@ -265,6 +294,65 @@ onMounted(loadRows);
   color: #1e3a8a;
 }
 
+.inspection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.inspection-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inspection-hint {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inspection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.inspection-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+}
+
+.inspection-stat strong {
+  font-size: 20px;
+}
+
+.inspection-stat.warning {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.inspection-stat.success {
+  border-color: #059669;
+  background: #ecfdf5;
+}
+
+.inspection-stat.muted {
+  border-color: #64748b;
+  background: #f1f5f9;
+}
+
 .button-inline {
   padding: 8px 12px;
 }
@@ -288,5 +376,16 @@ onMounted(loadRows);
 .empty-cell {
   color: #64748b;
   text-align: center;
+}
+
+@media (max-width: 760px) {
+  .inspection-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inspection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

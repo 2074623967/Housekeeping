@@ -80,6 +80,7 @@ export const payoutApi = {
     return `/api/settlements/payouts/export?${params.toString()}`;
   },
   create: (payload) => postJson("/api/settlements/payouts", payload),
+  inspect: () => postJson("/api/settlements/payouts/inspect", {}),
   execute: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/execute`, payload),
   retry: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/retry`, payload),
   records: (payoutBatchNo, { payoutStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
