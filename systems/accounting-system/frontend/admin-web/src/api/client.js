@@ -66,6 +66,16 @@ function requestPage(url, options = {}) {
   }));
 }
 
+function normalizeAccountDetail(data) {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
+  return {
+    ...data,
+    recentLedgers: Array.isArray(data.recentLedgers) ? data.recentLedgers : []
+  };
+}
+
 function postJson(url, payload) {
   return request(url, {
     method: "POST",
@@ -100,7 +110,7 @@ export const accountApi = {
     return requestPage(`/api/accounting/accounts?${params.toString()}`);
   },
   open: (payload) => postJson("/api/accounting/accounts/open", payload),
-  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`),
+  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`).then(normalizeAccountDetail),
   downloadDetail: (accountNo) =>
     fetch(`/api/accounting/accounts/${encodeURIComponent(accountNo)}/export`).then(async (response) => {
       if (!response.ok) {

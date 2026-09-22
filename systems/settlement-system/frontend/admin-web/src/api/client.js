@@ -41,6 +41,17 @@ export function normalizeDashboardPayload(data) {
   };
 }
 
+function normalizeOrderDetail(data) {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
+  return {
+    ...data,
+    items: Array.isArray(data.items) ? data.items : [],
+    auditLogs: Array.isArray(data.auditLogs) ? data.auditLogs : []
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -97,7 +108,7 @@ export const orderApi = {
   create: (payload) => postJson("/api/settlements/orders", payload),
   audit: (settlementNo, payload) => postJson(`/api/settlements/orders/${settlementNo}/audit`, payload),
   reject: (settlementNo, payload) => postJson(`/api/settlements/orders/${settlementNo}/reject`, payload),
-  getDetail: (settlementNo) => request(`/api/settlements/orders/${settlementNo}/full`)
+  getDetail: (settlementNo) => request(`/api/settlements/orders/${settlementNo}/full`).then(normalizeOrderDetail)
 };
 
 export const payoutApi = {

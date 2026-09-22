@@ -46,6 +46,26 @@ test("keeps the clearing service envelope on success", async () => {
   }
 });
 
+test("normalizes null clearing order detail collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { order: { clearingNo: "CLO-001" }, shareItems: null, feeRules: null } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await orderApi.getDetail("CLO-001"), {
+      order: { clearingNo: "CLO-001" },
+      shareItems: [],
+      feeRules: []
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON clearing responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ledgerApi, normalizePagePayload, subjectApi } from "./client.js";
+import { accountApi, ledgerApi, normalizePagePayload, subjectApi } from "./client.js";
 
 test("normalizes null accounting page items without changing summaries", () => {
   assert.deepEqual(normalizePagePayload({ items: null, total: 0 }).items, []);
@@ -23,6 +23,25 @@ test("normalizes a null accounting page response for list consumers", async () =
       total: 0,
       pageNo: 1,
       pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes null accounting detail ledgers", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { account: { accountNo: "ACC-001" }, recentLedgers: null } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await accountApi.getDetail("ACC-001"), {
+      account: { accountNo: "ACC-001" },
+      recentLedgers: []
     });
   } finally {
     globalThis.fetch = originalFetch;

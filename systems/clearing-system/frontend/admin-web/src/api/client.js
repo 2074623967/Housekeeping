@@ -72,6 +72,17 @@ function requestPage(url, options = {}) {
   }));
 }
 
+function normalizeOrderDetail(data) {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
+  return {
+    ...data,
+    shareItems: Array.isArray(data.shareItems) ? data.shareItems : [],
+    feeRules: Array.isArray(data.feeRules) ? data.feeRules : []
+  };
+}
+
 export const batchApi = {
   getList: ({ batchDate = "", batchStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchDate, batchStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
@@ -91,7 +102,7 @@ export const orderApi = {
     const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus });
     return `/api/clearing/orders/export?${params.toString()}`;
   },
-  getDetail: (clearingNo) => request(`/api/clearing/orders/${clearingNo}`),
+  getDetail: (clearingNo) => request(`/api/clearing/orders/${clearingNo}`).then(normalizeOrderDetail),
   buildDetailExportUrl: (clearingNo) => `/api/clearing/orders/${clearingNo}/export`
 };
 

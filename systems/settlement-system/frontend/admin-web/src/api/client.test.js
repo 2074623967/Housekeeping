@@ -39,6 +39,26 @@ test("normalizes nullable settlement dashboard collections", async () => {
   }
 });
 
+test("normalizes null settlement order detail collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { order: { settlementNo: "SET-001" }, items: null, auditLogs: null } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await orderApi.getDetail("SET-001"), {
+      order: { settlementNo: "SET-001" },
+      items: [],
+      auditLogs: []
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("posts a read-only payout inspection request", async () => {
   const originalFetch = globalThis.fetch;
   let request;
