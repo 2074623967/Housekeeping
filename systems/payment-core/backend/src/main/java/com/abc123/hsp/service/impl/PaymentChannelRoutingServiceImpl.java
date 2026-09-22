@@ -257,7 +257,8 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             return Collections.emptyMap();
         }
         Map<String, PaymentChannelQueryHealthDTO> channelHealth = new HashMap<>();
-        for (PaymentChannelQueryHealthDTO metric : paymentMapper.findRecentChannelQueryHealth(queryHealthLookbackHours)) {
+        for (PaymentChannelQueryHealthDTO metric : safeList(
+                paymentMapper.findRecentChannelQueryHealth(queryHealthLookbackHours))) {
             String channelCode = normalizeChannelCode(metric.getChannelCode());
             PaymentChannelQueryHealthDTO aggregatedMetric = channelHealth.get(channelCode);
             if (aggregatedMetric == null) {
