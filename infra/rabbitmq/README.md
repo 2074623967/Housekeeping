@@ -43,6 +43,18 @@ bash infra/rabbitmq/queue_snapshot.sh
 bash infra/rabbitmq/queue_snapshot.sh '20260803-a|payment.compensation'
 ```
 
+## 当前批次 DLQ/replay 取证
+
+RabbitMQ 与 payment-core、下游消费者均启动后，可使用仓库内脚本生成新的同批次补偿证据：
+
+```bash
+HSP_DLQ_SUFFIX=20260923-a \
+HSP_DLQ_TARGET_SYSTEM=accounting \
+node tools/dev/dlq-compensation-smoke.mjs
+```
+
+脚本要求隔离 suffix，不接受历史任务号；会通过 Management API 发布新消息，轮询 `PENDING_REVIEW` 任务，执行 `READY_TO_REPLAY -> REPLAYED`，并查询下游 `PAYMENT_SUCCESS` 事实。RabbitMQ 不可用时会直接失败，不会退回历史证据。
+
 The snapshot output is designed to paste directly into `docs/2026-07-31-MQ补偿演练记录模板.md`.
 
 ## Topology
