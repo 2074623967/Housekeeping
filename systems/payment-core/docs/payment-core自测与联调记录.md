@@ -16111,3 +16111,15 @@ tools/dev/local-stack.sh verify all
 结果：脚本正确复用现有外部托管的 `12` 个后端、`15` 个前端及代理路径，全部显示 `READY / external/ready`；HTTP smoke 和 cross-system happy-path 均通过。新批次支付单为 `PAY1790108597980f54a867b`，清分单 `CLO20006`，结算单 `SLT20007`，退款单 `REF20260923042318300`，对账链路 `COMPLETED`、`4/4`、`financialCloseable=true`。
 
 该 verify 仍属于受控 demo/H2/HTTP 本地骨架验证；不改变真实渠道、RabbitMQ、生产数据库、资金到账和正式发布治理边界。
+
+## 625. 2026-09-23 清分/结算/对账分页接口运行态复核
+
+在当前受控本地托管栈中分别请求第二页：
+
+| 接口 | 结果 |
+| --- | --- |
+| `GET /api/clearing/orders?pageNo=2&pageSize=20` | `code=0`，`total=6`，`pageNo=2`，`pageSize=20` |
+| `GET /api/settlements/payouts?pageNo=2&pageSize=20` | `code=0`，`total=0`，`pageNo=2`，`pageSize=20` |
+| `GET /api/reconciliation/differences?pageNo=2&pageSize=20` | `code=0`，`total=1`，`pageNo=2`，`pageSize=20` |
+
+空页仍保留标准分页元数据；本轮只验证本地 HTTP 查询契约，不代表生产数据量、索引性能或财务正式核验。
