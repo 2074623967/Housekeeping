@@ -13,6 +13,7 @@ import com.abc123.riskcontrol.entity.LimitRuleEntity;
 import com.abc123.riskcontrol.entity.ReviewOrderEntity;
 import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import com.abc123.riskcontrol.mapper.RiskControlMapper;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Repository;
 
@@ -30,32 +31,32 @@ public class RiskControlDaoImpl implements RiskControlDao {
 
     @Override
     public List<RiskPolicyDTO> findPolicies() {
-        return mapper.findPolicies();
+        return safeList(mapper.findPolicies());
     }
 
     @Override
     public List<LimitRuleDTO> findLimitRules() {
-        return mapper.findLimitRules();
+        return safeList(mapper.findLimitRules());
     }
 
     @Override
     public List<BlocklistDTO> findBlocklists() {
-        return mapper.findBlocklists();
+        return safeList(mapper.findBlocklists());
     }
 
     @Override
     public List<InterceptEventDTO> findInterceptEvents() {
-        return mapper.findInterceptEvents();
+        return safeList(mapper.findInterceptEvents());
     }
 
     @Override
     public List<ReviewOrderDTO> findReviewOrders() {
-        return mapper.findReviewOrders();
+        return safeList(mapper.findReviewOrders());
     }
 
     @Override
     public List<MonitorRuleDTO> findMonitorRules() {
-        return mapper.findMonitorRules();
+        return safeList(mapper.findMonitorRules());
     }
 
     @Override
@@ -80,17 +81,17 @@ public class RiskControlDaoImpl implements RiskControlDao {
 
     @Override
     public List<BlocklistEntity> findEnabledBlocklists() {
-        return mapper.findEnabledBlocklists();
+        return safeList(mapper.findEnabledBlocklists());
     }
 
     @Override
     public List<LimitRuleEntity> findEnabledLimitRulesByScene(String sceneCode) {
-        return mapper.findEnabledLimitRulesByScene(sceneCode);
+        return safeList(mapper.findEnabledLimitRulesByScene(sceneCode));
     }
 
     @Override
     public List<RiskPolicyEntity> findEnabledPoliciesForDecision() {
-        return mapper.findEnabledPoliciesForDecision();
+        return safeList(mapper.findEnabledPoliciesForDecision());
     }
 
     @Override
@@ -141,5 +142,9 @@ public class RiskControlDaoImpl implements RiskControlDao {
     @Override
     public int updateReviewOrderWhenPending(String reviewNo, String status, String statusType, String reviewer) {
         return mapper.updateReviewOrderWhenPending(reviewNo, status, statusType, reviewer);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }
