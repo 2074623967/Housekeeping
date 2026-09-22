@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { accountApi, subjectApi } from "../api/client";
 
@@ -17,6 +17,8 @@ const selectedAccount = ref(null);
 const filters = ref({ subjectId: "", accountType: "", status: "" });
 const form = ref({ subjectId: "", accountType: "USER_CASH", currency: "CNY" });
 
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
+
 async function loadRows() {
   loading.value = true;
   message.value = "";
@@ -27,6 +29,7 @@ async function loadRows() {
     ]);
     rows.value = result.items;
     total.value = result.total;
+    pageNo.value = result.pageNo || pageNo.value;
     subjects.value = subjectResult.items;
     if (!form.value.subjectId && subjects.value.length) {
       form.value.subjectId = subjects.value[0].subjectId;
@@ -88,6 +91,18 @@ function resetFilters() {
   loadRows();
 }
 
+function searchRows() {
+  pageNo.value = 1;
+  loadRows();
+}
+
+function changePage(targetPage) {
+  if (loading.value || targetPage < 1 || targetPage > totalPages.value || targetPage === pageNo.value) {
+    return;
+  }
+  loadRows(targetPage);
+}
+
 onMounted(loadRows);
 </script>
 
@@ -105,7 +120,7 @@ onMounted(loadRows);
         <div class="field"><label>账户类型</label><input v-model="filters.accountType" placeholder="USER_CASH / WORKER_INCENTIVE" /></div>
         <div class="field"><label>账户状态</label><input v-model="filters.status" placeholder="正常 / 关闭" /></div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button primary" @click="searchRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -147,6 +162,13 @@ onMounted(loadRows);
               </tr>
             </tbody>
           </table>
+          <div class="pagination" aria-label="账户分页">
+            <span class="pagination-summary">第 {{ pageNo }} / {{ totalPages }} 页，共 {{ total }} 条</span>
+            <div class="pagination-actions">
+              <button class="button secondary" :disabled="loading || pageNo <= 1" @click="changePage(pageNo - 1)">上一页</button>
+              <button class="button secondary" :disabled="loading || pageNo >= totalPages" @click="changePage(pageNo + 1)">下一页</button>
+            </div>
+          </div>
         </div>
 
         <div class="panel" style="margin-bottom:0">
@@ -191,3 +213,34 @@ onMounted(loadRows);
     </section>
   </div>
 </template>
+
+<style scoped>
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.pagination-summary {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-actions .button {
+    flex: 1;
+  }
+}
+</style>

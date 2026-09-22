@@ -4,24 +4,31 @@ import { adjustmentApi } from "../api/client";
 
 const rows = ref([]);
 const selectedRow = ref(null);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const loading = ref(false);
 const message = ref("");
 const filters = ref({ accountNo: "", adjustStatus: "" });
 const form = ref({ accountNo: "", adjustDirection: "贷方", adjustAmount: "8.00", adjustReason: "系统补偿", createdBy: "财务小李" });
 
 const metrics = computed(() => ({
-  total: rows.value.length,
+  total: total.value,
   pendingTotal: rows.value.filter((item) => item.adjustStatus !== "已生效").length,
   effectiveTotal: rows.value.filter((item) => item.adjustStatus === "已生效").length,
   amountTotal: rows.value.reduce((sum, item) => sum + Number(item.adjustAmount || 0), 0).toFixed(2)
 }));
 
-async function loadRows() {
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
+
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await adjustmentApi.getList({ ...filters.value, pageNo: 1, pageSize: 50 });
+    const result = await adjustmentApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = result.total;
+    pageNo.value = result.pageNo || targetPage;
     selectedRow.value = result.items[0] || null;
   } catch (error) {
     message.value = error.message;
@@ -55,8 +62,21 @@ function pickRow(row) {
 }
 
 function resetFilters() {
+  pageNo.value = 1;
   filters.value = { accountNo: "", adjustStatus: "" };
   loadRows();
+}
+
+function searchRows() {
+  pageNo.value = 1;
+  loadRows();
+}
+
+function changePage(targetPage) {
+  if (loading.value || targetPage < 1 || targetPage > totalPages.value || targetPage === pageNo.value) {
+    return;
+  }
+  loadRows(targetPage);
 }
 
 onMounted(loadRows);
@@ -88,7 +108,7 @@ onMounted(loadRows);
         <div class="field"><label>账户号</label><input v-model="filters.accountNo" /></div>
         <div class="field"><label>调账状态</label><input v-model="filters.adjustStatus" /></div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button primary" @click="searchRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -120,6 +140,13 @@ onMounted(loadRows);
               </tr>
             </tbody>
           </table>
+          <div class="pagination" aria-label="调账单分页">
+            <span class="pagination-summary">第 {{ pageNo }} / {{ totalPages }} 页，共 {{ total }} 条</span>
+            <div class="pagination-actions">
+              <button class="button secondary" :disabled="loading || pageNo <= 1" @click="changePage(pageNo - 1)">上一页</button>
+              <button class="button secondary" :disabled="loading || pageNo >= totalPages" @click="changePage(pageNo + 1)">下一页</button>
+            </div>
+          </div>
         </div>
 
         <div class="panel" style="margin-bottom:0">
@@ -183,5 +210,34 @@ onMounted(loadRows);
   padding: 16px 0;
   text-align: center;
   color: #64748b;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.pagination-summary {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-actions .button {
+    flex: 1;
+  }
 }
 </style>

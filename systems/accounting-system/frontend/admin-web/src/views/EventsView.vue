@@ -4,6 +4,9 @@ import { eventApi } from "../api/client";
 
 const rows = ref([]);
 const selectedRow = ref(null);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const loading = ref(false);
 const message = ref("");
 const filters = ref({ eventType: "", bizNo: "", paymentOrderId: "" });
@@ -22,7 +25,7 @@ const form = ref({
 });
 
 const dashboardMetrics = computed(() => ({
-  total: rows.value.length,
+  total: total.value,
   successTotal: rows.value.filter((item) => item.eventStatus === "处理成功").length,
   failedTotal: rows.value.filter((item) => item.eventStatus && item.eventStatus !== "处理成功").length,
   paymentSuccessTotal: rows.value.filter((item) => item.eventType === "PAYMENT_SUCCESS").length,
@@ -40,12 +43,16 @@ const parsedPayload = computed(() => {
   }
 });
 
-async function loadRows() {
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
+
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await eventApi.getList({ ...filters.value, pageNo: 1, pageSize: 50 });
+    const result = await eventApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = result.total;
+    pageNo.value = result.pageNo || targetPage;
     selectedRow.value = result.items[0] || null;
   } catch (error) {
     message.value = error.message;
@@ -93,8 +100,21 @@ function pickRow(row) {
 }
 
 function resetFilters() {
+  pageNo.value = 1;
   filters.value = { eventType: "", bizNo: "", paymentOrderId: "" };
   loadRows();
+}
+
+function searchRows() {
+  pageNo.value = 1;
+  loadRows();
+}
+
+function changePage(targetPage) {
+  if (loading.value || targetPage < 1 || targetPage > totalPages.value || targetPage === pageNo.value) {
+    return;
+  }
+  loadRows(targetPage);
 }
 
 onMounted(loadRows);
@@ -138,7 +158,7 @@ onMounted(loadRows);
         <div class="field"><label>业务单号</label><input v-model="filters.bizNo" /></div>
         <div class="field"><label>支付单号</label><input v-model="filters.paymentOrderId" /></div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button primary" @click="searchRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -203,6 +223,13 @@ onMounted(loadRows);
               </tr>
             </tbody>
           </table>
+          <div class="pagination" aria-label="账户事件分页">
+            <span class="pagination-summary">第 {{ pageNo }} / {{ totalPages }} 页，共 {{ total }} 条</span>
+            <div class="pagination-actions">
+              <button class="button secondary" :disabled="loading || pageNo <= 1" @click="changePage(pageNo - 1)">上一页</button>
+              <button class="button secondary" :disabled="loading || pageNo >= totalPages" @click="changePage(pageNo + 1)">下一页</button>
+            </div>
+          </div>
         </div>
 
         <div class="panel" style="margin-bottom:0">
@@ -290,5 +317,34 @@ pre {
   padding: 16px 0;
   text-align: center;
   color: #64748b;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.pagination-summary {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-actions .button {
+    flex: 1;
+  }
 }
 </style>
