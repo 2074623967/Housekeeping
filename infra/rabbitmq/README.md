@@ -64,6 +64,8 @@ node tools/dev/dlq-compensation-smoke.mjs
 
 增加 `HSP_DLQ_INCLUDE_MANUAL=true` 可在同一运行中额外注入一条非法报文并核验 `MANUAL_RESOLVED`。脚本要求隔离 suffix，不接受历史任务号；会通过 Management API 发布新消息，轮询 `PENDING_REVIEW` 任务，执行人工处置和定向 replay，并查询对应下游事实。RabbitMQ 不可用时会直接失败，不会退回历史证据。
 
+可用 `HSP_DLQ_TIMEOUT_MS` 和 `HSP_DLQ_POLL_MS` 调整轮询超时与间隔，两者必须是正数；可用 `HSP_DLQ_PAYLOAD_JSON` 提供当前批次自定义 JSON 报文，必须是对象、事件类型必须匹配所选模式，且必须包含对应业务单号。参数或 JSON 非法时，脚本会在发布消息前失败，不产生伪造的运行态结果。
+
 The snapshot output is designed to paste directly into `docs/2026-07-31-MQ补偿演练记录模板.md`.
 
 ## Topology

@@ -38,3 +38,5 @@ node tools/dev/dlq-compensation-smoke.mjs
 ```
 
 每次执行必须把脚本输出中的新 `messageId`、`taskNo`、最终任务状态、`replayCount`、路由键和下游事实写入 `api/reg-08-dlq-api-evidence.md`、`database/reg-08-dlq-db-evidence.md`、`events/reg-08-dlq-event-evidence.md`，并重新采集死信任务页的 `PENDING_REVIEW`、`READY_TO_REPLAY` 与 `REPLAYED` 截图。完成后重新运行统一门禁，不能沿用本文件历史编号。
+
+可选参数 `HSP_DLQ_TIMEOUT_MS`、`HSP_DLQ_POLL_MS` 必须为正数；`HSP_DLQ_PAYLOAD_JSON` 必须是与事件模式匹配的 JSON 对象并包含业务单号。非法参数会在消息发布前失败，不能写入当前批次证据。
