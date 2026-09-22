@@ -41,6 +41,16 @@ const outboxQuery = reactive({
 });
 const outboxPage = reactive({ items: [], total: 0 });
 
+const pageCount = (result, queryState) =>
+  Math.max(1, Math.ceil(Number(result?.total || 0) / Number(queryState.pageSize || 20)));
+
+const changePage = async (queryState, result, nextPage, loader) => {
+  const maxPage = pageCount(result, queryState);
+  if (loading.value || nextPage < 1 || nextPage > maxPage || nextPage === queryState.pageNo) return;
+  queryState.pageNo = nextPage;
+  await loader();
+};
+
 const statusLabel = {
   REVIEWING: "审核中",
   APPROVED: "已审核",
@@ -275,6 +285,13 @@ async function refreshCurrentView() {
             <td><button class="link-button" @click="openDetail(item)">查看详情</button></td>
           </tr></tbody>
         </table>
+        <div v-if="page.total > query.pageSize" class="pagination" aria-label="退款单分页">
+          <span>第 {{ query.pageNo }} / {{ pageCount(page, query) }} 页，共 {{ page.total }} 条</span>
+          <div>
+            <button class="secondary-button" :disabled="loading || query.pageNo <= 1" @click="changePage(query, page, query.pageNo - 1, loadList)">上一页</button>
+            <button class="secondary-button" :disabled="loading || query.pageNo >= pageCount(page, query)" @click="changePage(query, page, query.pageNo + 1, loadList)">下一页</button>
+          </div>
+        </div>
       </section>
 
       <section v-else-if="activeView === 'outbox'" class="panel">
@@ -306,6 +323,13 @@ async function refreshCurrentView() {
             </td>
           </tr></tbody>
         </table>
+        <div v-if="outboxPage.total > outboxQuery.pageSize" class="pagination" aria-label="退款成功事件分页">
+          <span>第 {{ outboxQuery.pageNo }} / {{ pageCount(outboxPage, outboxQuery) }} 页，共 {{ outboxPage.total }} 条</span>
+          <div>
+            <button class="secondary-button" :disabled="loading || outboxQuery.pageNo <= 1" @click="changePage(outboxQuery, outboxPage, outboxQuery.pageNo - 1, loadOutbox)">上一页</button>
+            <button class="secondary-button" :disabled="loading || outboxQuery.pageNo >= pageCount(outboxPage, outboxQuery)" @click="changePage(outboxQuery, outboxPage, outboxQuery.pageNo + 1, loadOutbox)">下一页</button>
+          </div>
+        </div>
       </section>
 
       <section v-else class="detail-layout">
