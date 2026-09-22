@@ -16002,6 +16002,22 @@ node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases
 
 本轮只改善回归工具的环境发现能力，不改变后端业务、接口、数据库、真实渠道或发布门禁结论。
 
+## 618. 2026-09-23 REG-08 DLQ smoke 失败契约与环境复核
+
+`tools/dev/dlq-compensation-smoke.mjs` 的网络请求现在统一转换为带目标 URL 的稳定 `request failed` 错误；新增不可达 RabbitMQ 管理接口测试后，DLQ smoke mock 回归为 `7/7` 通过。
+
+使用新隔离后缀尝试当前批次真实 smoke：
+
+```bash
+HSP_DLQ_SUFFIX=20260923-b \
+HSP_DLQ_EVENT_KIND=payment-success \
+HSP_DLQ_TARGET_SYSTEM=accounting \
+HSP_DLQ_TIMEOUT_MS=1000 \
+node tools/dev/dlq-compensation-smoke.mjs
+```
+
+结果：在发布消息前因 `http://127.0.0.1:15672` RabbitMQ 管理接口不可达而失败；`docker info` 同时确认 Docker daemon 未运行。未创建当前批次 DLQ 消息、任务号、回放事实或截图，因此 `REG-08` 继续保持 `HISTORICAL`，门禁不改判。
+
 ## 616. 2026-09-23 payment-core 用户端回归复核
 
 按各工程实际 package 脚本执行用户端回归：

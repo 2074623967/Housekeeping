@@ -203,3 +203,16 @@ test("reports malformed custom payload JSON clearly", async (t) => {
   assert.notEqual(result.exitCode, 0);
   assert.match(result.stderr, /HSP_DLQ_PAYLOAD_JSON must be valid JSON/);
 });
+
+test("reports unavailable RabbitMQ management clearly", async () => {
+  const result = await runSmoke({
+    HSP_DLQ_SUFFIX: "unavailable-broker",
+    HSP_DLQ_EVENT_KIND: "payment-success",
+    HSP_DLQ_TARGET_SYSTEM: "accounting",
+    HSP_RABBIT_MANAGEMENT_URL: "http://127.0.0.1:1/api",
+    HSP_DLQ_TIMEOUT_MS: "1000"
+  }, { address: () => ({ port: 1 }) });
+
+  assert.notEqual(result.exitCode, 0);
+  assert.match(result.stderr, /request failed/);
+});
