@@ -16139,3 +16139,19 @@ tools/dev/local-stack.sh verify all
 执行 `tools/dev/local-stack.sh doctor all` 通过：Maven、真实 JDK、Maven 仓库、Node/npm 和 `15` 个前端工程依赖均满足启动前置条件。
 
 同批次门禁复判仍为 `test -> master = false`、`release/* = false`；REG-08 仍缺当前批次页面与补偿闭环证据，release 仍缺候选说明正式化、正式签字、现场核验和稳定观察结束结论。
+
+## 628. 2026-09-23 accounting 管理端列表骨架分页收口
+
+补齐 accounting 管理端六个核心列表页的可用分页入口：主体、账户、流水、冻结单、调账单和账户事件。查询与重置会回到第一页，翻页按钮在首尾页和加载中禁用；接口返回的总数与页码用于分页摘要，翻页后详情预览同步当前页首条记录。Dashboard 仍保持摘要用途的第一页读取，不将摘要改造成运营明细列表。
+
+验证：
+
+```bash
+cd systems/accounting-system/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：API 客户端测试 `4/4` 通过，Vite 生产构建通过，`git diff --check` 通过。流水分页参数契约测试覆盖筛选条件、`pageNo` 与 `pageSize`。本轮代码提交为 `813161b2`、`8fcd1804`。
+
+本轮只证明管理端分页代码和构建契约可用；accounting 后端未在本轮常驻运行，未形成新的 HTTP 运行态样本，也不代表生产数据规模、索引性能或正式发布验收。
