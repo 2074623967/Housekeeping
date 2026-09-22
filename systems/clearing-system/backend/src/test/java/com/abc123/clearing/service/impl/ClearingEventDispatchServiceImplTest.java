@@ -79,6 +79,37 @@ class ClearingEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldKeepClearingOutboxRetryableWhenReconciliationFactFails() {
+        ClearingOrderEntity clearingOrder = new ClearingOrderEntity();
+        clearingOrder.setClearingNo("CLR-001");
+        clearingOrder.setPaymentOrderId("PAY-001");
+        clearingOrder.setWorkerAmount(new BigDecimal("120.00"));
+        when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
+        when(clearingMemoryStore.sharesByClearingNo("CLR-001"))
+                .thenReturn(Collections.<ShareItemEntity>emptyList());
+        when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(restTemplate.postForEntity(eq("http://settlement"), any(), eq(String.class)))
+                .thenReturn(new ResponseEntity<>("ok", HttpStatus.OK));
+        when(restTemplate.postForEntity(eq("http://accounting"), any(), eq(String.class)))
+                .thenReturn(new ResponseEntity<>("ok", HttpStatus.OK));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(String.class)))
+                .thenReturn(new ResponseEntity<>("unavailable", HttpStatus.BAD_GATEWAY));
+
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore,
+                "http://settlement",
+                "http://accounting",
+                "ACT10002",
+                restTemplate);
+        setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+        verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), any(), eq(String.class));
+    }
+
+    @Test
     void shouldPublishClearingGeneratedToAmqpWithPublisherConfirm() {
         ClearingOrderEntity clearingOrder = new ClearingOrderEntity();
         clearingOrder.setClearingNo("CLR-001");
@@ -158,5 +189,15 @@ class ClearingEventDispatchServiceImplTest {
         event.setBizNo("CLR-001");
         event.setPayload("{\"clearingNo\":\"CLR-001\",\"amount\":120.00}");
         return event;
+    }
+
+    private void setField(Object target, String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("无法设置测试字段 " + fieldName, exception);
+        }
     }
 }
