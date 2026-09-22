@@ -51,3 +51,39 @@ test("posts a read-only payout inspection request", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("reports non-JSON settlement responses with a stable client error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 502,
+    async json() {
+      throw new SyntaxError("Unexpected token < in JSON");
+    }
+  });
+
+  try {
+    await assert.rejects(
+      payoutApi.inspect(),
+      (error) => error.code === "SETTLEMENT-CLIENT-INVALID-RESPONSE"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("reports settlement network failures with a stable client error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed");
+  };
+
+  try {
+    await assert.rejects(
+      payoutApi.inspect(),
+      (error) => error.code === "SETTLEMENT-CLIENT-NETWORK"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
