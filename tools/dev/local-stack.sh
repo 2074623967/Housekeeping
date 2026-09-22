@@ -61,6 +61,7 @@ command:
   status   查看进程和 HTTP 可用状态
   smoke    对已启动页面和核心查询接口做 HTTP 冒烟
   happy-path 生成本地隔离支付单并验证支付、清分、结算、账务链路
+  verify   在同一会话启动全栈、冒烟、执行 happy-path 后统一停止
 
 scope:
   all        全部后端和前端（默认）
@@ -397,6 +398,28 @@ run_report() {
   return "$failures"
 }
 
+run_verify() {
+  local scope="$1"
+  local result=0
+
+  if [[ "$scope" != "all" ]]; then
+    echo "[FAIL] verify 只支持 all，跨系统 happy-path 需要完整本地栈" >&2
+    return 2
+  fi
+
+  # 保持启动、验证和清理在同一受控会话，避免后台进程被运行器回收后留下 stale PID。
+  run_doctor "$scope" || return $?
+  run_start "$scope" || result=$?
+  if [[ "$result" -eq 0 ]]; then
+    run_report "$scope" "smoke" || result=$?
+  fi
+  if [[ "$result" -eq 0 ]]; then
+    node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
+  fi
+  run_stop "$scope" || [[ "$result" -ne 0 ]] || result=$?
+  return "$result"
+}
+
 main() {
   local command_name="${1:-}"
   local scope="${2:-all}"
@@ -428,6 +451,9 @@ main() {
       ;;
     happy-path)
       node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs"
+      ;;
+    verify)
+      run_verify "$scope"
       ;;
     help|-h|--help)
       usage

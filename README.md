@@ -126,6 +126,9 @@ tools/dev/local-stack.sh up all
 tools/dev/local-stack.sh status all
 tools/dev/local-stack.sh smoke all
 tools/dev/local-stack.sh happy-path
+
+# 在同一受控会话完成全栈启动、HTTP 冒烟、跨系统 happy-path 并自动停止
+tools/dev/local-stack.sh verify all
 ```
 
 也可以只运行某一类或某个系统：
@@ -137,6 +140,8 @@ tools/dev/local-stack.sh up payment-core
 ```
 
 `up` 适合由当前 Codex 任务窗口持续托管：暂停 Codex 任务不会主动停止服务，回到原任务后可以继续检查；只有在托管终端发送 `Ctrl-C` 才会停止本次脚本拉起的进程。需要脱离当前窗口运行时使用 `start`，之后用 `stop` 显式停止。
+
+`verify all` 适合一次性验收本地骨架。它把启动、冒烟、跨系统 happy-path 和停止放在同一个受控会话中，避免运行器回收后台进程后留下 stale PID。
 
 运行日志位于 `.runtime/local-stack/logs/`，PID 文件位于 `.runtime/local-stack/pids/`。
 
