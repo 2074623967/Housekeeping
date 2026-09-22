@@ -15683,5 +15683,6 @@
 | 项目 | 结果 |
 | --- | --- |
 | Node.js 语法检查 | 通过 |
+| `tools/dev/dlq-compensation-smoke.test.mjs` mock contract | `2/2` 通过，覆盖 payment.success replay/人工结案与 clearing.generated settlement replay |
 | 无 broker 运行保护 | payment.success 与 clearing.generated 两种模式均明确失败，未回退历史证据 |
 | 当前批次运行态 | 待 Docker/RabbitMQ 恢复后执行，暂不登记为通过 |

@@ -105,7 +105,7 @@ async function paymentApi(path, options = {}) {
 
 async function publishDeadLetter(messageId, payload, rawPayload = false) {
   const result = await requestJson(
-    `${managementBaseUrl}/exchanges/%2F/${encodeURIComponent(config.exchange)}/publish`,
+    `${managementBaseUrl}/exchanges/%2F/${encodeURIComponent(eventConfig.exchange)}/publish`,
     {
       method: "POST",
       headers: { Authorization: basicAuth() },
@@ -116,7 +116,7 @@ async function publishDeadLetter(messageId, payload, rawPayload = false) {
           content_type: "application/json",
           headers: {
             "x-retry-count": 3,
-            eventType: config.eventType
+            eventType: eventConfig.eventType
           }
         },
         routing_key: config.routingKey,
@@ -216,7 +216,7 @@ async function replayCurrentBatch() {
 
   const downstream = await waitFor(
     "downstream event fact",
-    () => requestJson(`${config.downstreamBaseUrl}/api/${config.downstreamPath}/events?eventType=${encodeURIComponent(config.eventType)}&bizNo=${encodeURIComponent(bizNo)}&pageNo=1&pageSize=20`),
+    () => requestJson(`${config.downstreamBaseUrl}/api/${config.downstreamPath}/events?eventType=${encodeURIComponent(eventConfig.eventType)}&bizNo=${encodeURIComponent(bizNo)}&pageNo=1&pageSize=20`),
     (body) => body && body.code === "0" && body.data && Array.isArray(body.data.items) && body.data.items.length > 0
   );
 
