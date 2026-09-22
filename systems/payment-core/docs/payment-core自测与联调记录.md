@@ -15965,3 +15965,17 @@ node tools/dev/frontend-admin-regression.mjs
 ## 611. 2026-09-23 后端回归工具 Maven 探测可移植性修复
 
 `tools/dev/backend-regression.mjs` 移除机器相关的绝对 Maven 路径，改为按 `MAVEN_BIN`、`MAVEN_HOME/bin/mvn`、PATH 中的 `mvn` 顺序探测；找不到时给出明确配置提示。使用显式 `MAVEN_BIN` 对 reconciliation 后端定向回归验证通过，`1/1` 模块通过。
+
+## 612. 2026-09-23 全套本地骨架持续托管与跨系统验收
+
+按项目级运行基线在当前任务窗口启动 `tools/dev/local-stack.sh up all`，由同一托管会话持续运行。12 个后端和 15 个前端入口全部达到 `READY`，未使用外部进程或静态页面替代。
+
+随后执行：
+
+```bash
+tools/dev/local-stack.sh status all
+tools/dev/local-stack.sh smoke all
+tools/dev/local-stack.sh happy-path
+```
+
+结果：状态检查和 HTTP 冒烟通过；跨系统 happy-path 实际生成支付单、支付成功事件、清分单、结算单、退款单，并确认账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功，链路状态为 `COMPLETED`，财务收口判断为 `true`。该结果证明本地 demo/H2/HTTP 功能骨架可运行，不代表真实渠道、生产 MQ、生产数据库或正式发布治理已完成。
