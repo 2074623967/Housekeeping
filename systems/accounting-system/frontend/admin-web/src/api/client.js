@@ -12,16 +12,33 @@ async function parseResponsePayload(response) {
   try {
     return await response.json();
   } catch (error) {
-    return null;
+    const parseError = new Error("账务服务返回了无法解析的响应");
+    parseError.code = "ACCOUNTING-CLIENT-INVALID-RESPONSE";
+    parseError.status = response.status;
+    parseError.cause = error;
+    throw parseError;
   }
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  const payload = await parseResponsePayload(response);
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch (error) {
+    const code = error?.name === "AbortError"
+      ? "ACCOUNTING-CLIENT-TIMEOUT"
+      : "ACCOUNTING-CLIENT-NETWORK";
+    throw createBusinessError({ code }, error?.name === "AbortError" ? "账务服务请求超时" : "无法连接账务服务");
+  }
+  let payload;
+  try {
+    payload = await parseResponsePayload(response);
+  } catch (error) {
+    throw createBusinessError({ code: error.code }, `${error.message} [HTTP ${error.status}]`);
+  }
   if (!response.ok) {
     throw createBusinessError(payload, `Request failed: ${response.status}`);
   }
