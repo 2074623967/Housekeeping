@@ -16,8 +16,8 @@ const accountingBaseUrl = process.env.HSP_ACCOUNTING_BASE_URL || "http://127.0.0
 const settlementBaseUrl = process.env.HSP_SETTLEMENT_BASE_URL || "http://127.0.0.1:18130";
 const targetSystem = process.env.HSP_DLQ_TARGET_SYSTEM || "accounting";
 const eventKind = process.env.HSP_DLQ_EVENT_KIND || "payment-success";
-const timeoutMs = Number(process.env.HSP_DLQ_TIMEOUT_MS || 30000);
-const pollMs = Number(process.env.HSP_DLQ_POLL_MS || 500);
+const timeoutMs = positiveEnvNumber("HSP_DLQ_TIMEOUT_MS", 30000);
+const pollMs = positiveEnvNumber("HSP_DLQ_POLL_MS", 500);
 
 const targetConfig = {
   "payment-success": {
@@ -66,6 +66,18 @@ function requiredEnv(name) {
     throw new Error(`${name} is required; use an isolated RabbitMQ topology suffix`);
   }
   return value.trim();
+}
+
+function positiveEnvNumber(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") {
+    return fallback;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+  return value;
 }
 
 function assert(condition, message) {
@@ -155,7 +167,7 @@ async function replayCurrentBatch() {
     ? `CLO-DLQ-SMOKE-${runId}`
     : `PAY-DLQ-SMOKE-${runId}`;
   const payload = process.env.HSP_DLQ_PAYLOAD_JSON
-    ? JSON.parse(process.env.HSP_DLQ_PAYLOAD_JSON)
+    ? parsePayload(process.env.HSP_DLQ_PAYLOAD_JSON)
     : eventKind === "clearing-generated"
       ? {
         eventType: "CLEARING_GENERATED",
@@ -236,6 +248,14 @@ async function replayCurrentBatch() {
     bizNo,
     suffix
   };
+}
+
+function parsePayload(rawPayload) {
+  try {
+    return JSON.parse(rawPayload);
+  } catch (error) {
+    throw new Error(`HSP_DLQ_PAYLOAD_JSON must be valid JSON: ${error.message}`);
+  }
 }
 
 async function resolveInvalidCurrentBatch() {

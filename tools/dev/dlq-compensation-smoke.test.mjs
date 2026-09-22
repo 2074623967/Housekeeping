@@ -171,3 +171,35 @@ test("rejects a custom payload with a mismatched event type", async (t) => {
   assert.notEqual(result.exitCode, 0);
   assert.match(result.stderr, /eventType must be PAYMENT_SUCCESS/);
 });
+
+test("rejects invalid timeout configuration before publishing", async (t) => {
+  const { server } = startMockServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+
+  const result = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_DLQ_EVENT_KIND: "payment-success",
+    HSP_DLQ_TARGET_SYSTEM: "accounting",
+    HSP_DLQ_TIMEOUT_MS: "not-a-number"
+  }, server);
+
+  assert.notEqual(result.exitCode, 0);
+  assert.match(result.stderr, /HSP_DLQ_TIMEOUT_MS must be a positive number/);
+});
+
+test("reports malformed custom payload JSON clearly", async (t) => {
+  const { server } = startMockServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+
+  const result = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_DLQ_EVENT_KIND: "payment-success",
+    HSP_DLQ_TARGET_SYSTEM: "accounting",
+    HSP_DLQ_PAYLOAD_JSON: "{invalid-json"
+  }, server);
+
+  assert.notEqual(result.exitCode, 0);
+  assert.match(result.stderr, /HSP_DLQ_PAYLOAD_JSON must be valid JSON/);
+});
