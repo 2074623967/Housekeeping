@@ -110,15 +110,25 @@ export async function executeRequest(baseUrl, request, fetchImpl = fetch) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetchImpl(`${baseUrl}${request.path}`, {
-      method: request.method,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Terminal": "API"
-      },
-      body: request.data ? JSON.stringify(request.data) : undefined,
-      signal: controller.signal
-    });
+    let response;
+    try {
+      response = await fetchImpl(`${baseUrl}${request.path}`, {
+        method: request.method,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Terminal": "API"
+        },
+        body: request.data ? JSON.stringify(request.data) : undefined,
+        signal: controller.signal
+      });
+    } catch (error) {
+      const transportError = new Error(error?.name === "AbortError" ? "支付服务请求超时" : "无法连接支付服务");
+      transportError.code = error?.name === "AbortError"
+        ? "PAYMENT-API-CLIENT-TIMEOUT"
+        : "PAYMENT-API-CLIENT-NETWORK";
+      transportError.cause = error;
+      throw transportError;
+    }
     const payload = await readResponsePayload(response);
     if (!response.ok || !payload || payload.code !== "0") {
       const error = new Error(payload && payload.message ? payload.message : `HTTP ${response.status}`);

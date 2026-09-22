@@ -105,3 +105,21 @@ test("normalizes non-JSON upstream responses into a client error", async () => {
     }
   );
 });
+
+test("normalizes network failures and timeouts into transport errors", async () => {
+  await assert.rejects(
+    executeRequest("http://localhost", { method: "GET", path: "/detail" }, async () => {
+      throw new TypeError("fetch failed");
+    }),
+    (error) => error.code === "PAYMENT-API-CLIENT-NETWORK"
+  );
+
+  await assert.rejects(
+    executeRequest("http://localhost", { method: "GET", path: "/detail" }, async () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      throw error;
+    }),
+    (error) => error.code === "PAYMENT-API-CLIENT-TIMEOUT"
+  );
+});

@@ -31,10 +31,18 @@ export function normalizePagePayload(data) {
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch (error) {
+    const transportCode = error?.name === "AbortError"
+      ? "PAYMENT-CLIENT-TIMEOUT"
+      : "PAYMENT-CLIENT-NETWORK";
+    throw createBusinessError({ code: transportCode }, error?.name === "AbortError" ? "支付服务请求超时" : "无法连接支付服务");
+  }
   let payload;
   try {
     payload = await parseResponsePayload(response);

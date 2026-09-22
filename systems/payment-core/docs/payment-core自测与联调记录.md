@@ -15782,3 +15782,19 @@
 | `admin-web` Node 测试 | `48/48` 通过 |
 | `git diff --check` | 通过 |
 | 提交 | `47766543 fix: normalize frontend upstream response errors` |
+
+## 598. 2026-09-23 三端传输失败错误码统一
+
+### 本轮变更
+
+1. `api-client`、`app-web` 和 `admin-web` 对网络断开统一返回网络错误码，对中止请求统一返回超时错误码。
+2. 收银台、管理后台和服务到服务调用端可以据此区分业务拒绝、协议响应异常、网络不可达和请求超时；不改变支付、退款或资金状态。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `api-client` Node 测试 | `8/8` 通过 |
+| `app-web` Node 测试 | `23/23` 通过 |
+| `admin-web` Node 测试 | `49/49` 通过 |
+| `git diff --check` | 待提交前复核 |

@@ -36,3 +36,15 @@ test("reports non-JSON upstream responses with a stable client error", async (co
     }
   );
 });
+
+test("reports network failures with a stable client error", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => {
+    throw new TypeError("fetch failed");
+  });
+
+  const { dashboardApi } = await import("./client.js");
+  await assert.rejects(
+    dashboardApi.getSummary(),
+    (error) => error.code === "PAYMENT-CLIENT-NETWORK"
+  );
+});
