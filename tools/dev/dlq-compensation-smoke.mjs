@@ -160,11 +160,20 @@ async function replayCurrentBatch() {
       ? {
         eventType: "CLEARING_GENERATED",
         eventNo: `EVT-DLQ-SMOKE-${runId}`,
+        businessChainId: `CHAIN-DLQ-SMOKE-${runId}`,
         clearingNo: defaultBizNo,
         clearingOrderNo: defaultBizNo,
+        paymentOrderId: `PAY-DLQ-SMOKE-${runId}`,
         accountNo: "ACT10003",
-        amount: 9.99,
-        netAmount: 9.99
+        bizNo: defaultBizNo,
+        summary: "当前批次 clearing.generated 补偿复核",
+        targetType: "WORKER",
+        targetNo: "WRK1001",
+        targetName: "李阿姨",
+        shouldSettleAmount: 120.00,
+        deductAmount: 8.00,
+        netSettleAmount: 112.00,
+        amount: 112.00
       }
       : {
         eventType: "PAYMENT_SUCCESS",
