@@ -354,6 +354,12 @@ run_doctor() {
         failures=1
       fi
     done
+    if [[ -d "$MAVEN_REPO" && -w "$MAVEN_REPO" ]]; then
+      echo "[OK] Maven repository writable -> $MAVEN_REPO"
+    else
+      echo "[FAIL] Maven repository missing or not writable -> $MAVEN_REPO" >&2
+      failures=1
+    fi
   fi
   if [[ "$scope" != "backends" ]]; then
     for command_name in node npm; do

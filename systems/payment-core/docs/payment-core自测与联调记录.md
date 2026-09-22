@@ -16123,3 +16123,13 @@ tools/dev/local-stack.sh verify all
 | `GET /api/reconciliation/differences?pageNo=2&pageSize=20` | `code=0`，`total=1`，`pageNo=2`，`pageSize=20` |
 
 空页仍保留标准分页元数据；本轮只验证本地 HTTP 查询契约，不代表生产数据量、索引性能或财务正式核验。
+
+## 626. 2026-09-23 本地栈 Maven 仓库前置诊断
+
+`tools/dev/local-stack.sh doctor backends` 新增 Maven 本地仓库路径与可写性检查，当前受控环境输出：
+
+```text
+[OK] Maven repository writable -> /Users/abc123/apache-maven-3.9.16/repository
+```
+
+该检查用于在启动前发现工具链权限问题，不代表 Maven 依赖下载、生产数据库或真实服务依赖已经验收。
