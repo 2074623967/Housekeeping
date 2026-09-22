@@ -16155,3 +16155,15 @@ npm run build
 结果：API 客户端测试 `4/4` 通过，Vite 生产构建通过，`git diff --check` 通过。流水分页参数契约测试覆盖筛选条件、`pageNo` 与 `pageSize`。本轮代码提交为 `813161b2`、`8fcd1804`。
 
 本轮只证明管理端分页代码和构建契约可用；accounting 后端未在本轮常驻运行，未形成新的 HTTP 运行态样本，也不代表生产数据规模、索引性能或正式发布验收。
+
+## 629. 2026-09-23 管理端全量回归复核
+
+在 accounting 管理端分页收口后重新执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端均通过各自 `npm test && npm run build`。其中 payment-core 管理端 `49/49` 通过，accounting 管理端 `4/4` 通过；全量回归脚本最终输出 `12/12 admin apps passed test and build`。
+
+该结果证明当前代码基线的管理端测试与生产构建没有回退，不替代真实浏览器交互、现场核验、RabbitMQ/DLQ 当前批次证据或正式发布审批。
