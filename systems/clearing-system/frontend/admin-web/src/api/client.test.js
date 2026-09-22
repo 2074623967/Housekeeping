@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { batchApi, feeApi, orderApi, ruleApi, shareApi } from "./client.js";
+import { batchApi, feeApi, normalizePagePayload, orderApi, ruleApi, shareApi } from "./client.js";
+
+test("normalizes null clearing page items without changing non-page payloads", () => {
+  const page = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
+  assert.deepEqual(page.items, []);
+  const detail = { clearingNo: "CLO-001" };
+  assert.equal(normalizePagePayload(detail), detail);
+});
 
 test("keeps the clearing service envelope on success", async () => {
   const originalFetch = globalThis.fetch;

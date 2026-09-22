@@ -44,7 +44,7 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return payload.data;
+  return normalizePagePayload(payload.data);
 }
 
 function postJson(url, payload) {
@@ -52,6 +52,15 @@ function postJson(url, payload) {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function normalizePagePayload(data) {
+  if (data && typeof data === "object"
+      && Object.prototype.hasOwnProperty.call(data, "items")
+      && !Array.isArray(data.items)) {
+    return { ...data, items: [] };
+  }
+  return data;
 }
 
 export const batchApi = {
