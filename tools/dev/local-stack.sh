@@ -408,6 +408,8 @@ run_verify() {
   fi
 
   # 保持启动、验证和清理在同一受控会话，避免后台进程被运行器回收后留下 stale PID。
+  trap 'run_stop "$scope"; exit 130' INT TERM
+  trap 'run_stop "$scope"' EXIT
   run_doctor "$scope" || return $?
   run_start "$scope" || result=$?
   if [[ "$result" -eq 0 ]]; then
@@ -417,6 +419,7 @@ run_verify() {
     node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
   fi
   run_stop "$scope" || [[ "$result" -ne 0 ]] || result=$?
+  trap - INT TERM EXIT
   return "$result"
 }
 
