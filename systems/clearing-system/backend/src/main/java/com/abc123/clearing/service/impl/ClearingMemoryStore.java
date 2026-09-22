@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -61,7 +62,7 @@ public class ClearingMemoryStore {
     }
 
     public List<ClearingBatchEntity> batches() {
-        List<ClearingBatchEntity> items = new ArrayList<>(clearingDataMapper.findBatches());
+        List<ClearingBatchEntity> items = new ArrayList<>(safeList(clearingDataMapper.findBatches()));
         items.sort(Comparator.comparing(ClearingBatchEntity::getCreatedAt).reversed());
         return items;
     }
@@ -130,7 +131,7 @@ public class ClearingMemoryStore {
     }
 
     public List<ClearingOrderEntity> orders() {
-        List<ClearingOrderEntity> items = new ArrayList<>(clearingDataMapper.findOrders());
+        List<ClearingOrderEntity> items = new ArrayList<>(safeList(clearingDataMapper.findOrders()));
         items.sort(Comparator.comparing(ClearingOrderEntity::getCreatedAt).reversed());
         return items;
     }
@@ -140,7 +141,7 @@ public class ClearingMemoryStore {
     }
 
     public List<ClearingRuleEntity> rules() {
-        List<ClearingRuleEntity> items = new ArrayList<>(clearingDataMapper.findRules());
+        List<ClearingRuleEntity> items = new ArrayList<>(safeList(clearingDataMapper.findRules()));
         items.sort(Comparator.comparing(ClearingRuleEntity::getCreatedAt).reversed());
         return items;
     }
@@ -171,7 +172,7 @@ public class ClearingMemoryStore {
     }
 
     public List<FeeRuleEntity> feeRules() {
-        List<FeeRuleEntity> items = new ArrayList<>(clearingDataMapper.findFeeRules());
+        List<FeeRuleEntity> items = new ArrayList<>(safeList(clearingDataMapper.findFeeRules()));
         items.sort(Comparator.comparing(FeeRuleEntity::getCreatedAt).reversed());
         return items;
     }
@@ -193,26 +194,26 @@ public class ClearingMemoryStore {
     }
 
     public List<ShareItemEntity> shares() {
-        List<ShareItemEntity> items = new ArrayList<>(clearingDataMapper.findShares());
+        List<ShareItemEntity> items = new ArrayList<>(safeList(clearingDataMapper.findShares()));
         items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
         return items;
     }
 
     public List<ShareItemEntity> sharesByClearingNo(String clearingNo) {
-        List<ShareItemEntity> items = new ArrayList<>(clearingDataMapper.findSharesByClearingNo(clearingNo));
+        List<ShareItemEntity> items = new ArrayList<>(safeList(clearingDataMapper.findSharesByClearingNo(clearingNo)));
         items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
         return items;
     }
 
     public List<ClearingEventEntity> events() {
-        List<ClearingEventEntity> items = new ArrayList<>(clearingDataMapper.findEvents());
+        List<ClearingEventEntity> items = new ArrayList<>(safeList(clearingDataMapper.findEvents()));
         items.sort(Comparator.comparing(ClearingEventEntity::getCreatedAt).reversed());
         return items;
     }
 
     public List<ClearingEventEntity> dueFailedClearingGeneratedEvents(int limit) {
-        return clearingDataMapper.findDueFailedClearingGeneratedEvents(
-                LocalDateTime.now().format(DATE_TIME_FORMATTER), Math.max(limit, 1));
+        return safeList(clearingDataMapper.findDueFailedClearingGeneratedEvents(
+                LocalDateTime.now().format(DATE_TIME_FORMATTER), Math.max(limit, 1)));
     }
 
     public boolean hasConsumedPaymentSuccess(String paymentOrderId) {
@@ -378,7 +379,7 @@ public class ClearingMemoryStore {
         if (existingEvent != null) {
             return existingEvent;
         }
-        ShareItemEntity workerShare = clearingDataMapper.findSharesByClearingNo(clearingOrder.getClearingNo()).stream()
+        ShareItemEntity workerShare = safeList(clearingDataMapper.findSharesByClearingNo(clearingOrder.getClearingNo())).stream()
                 .filter(item -> "WORKER".equals(item.getShareType()))
                 .findFirst()
                 .orElse(null);
@@ -428,32 +429,32 @@ public class ClearingMemoryStore {
     }
 
     private String firstBatchNo() {
-        List<ClearingBatchEntity> items = clearingDataMapper.findBatches();
+        List<ClearingBatchEntity> items = safeList(clearingDataMapper.findBatches());
         return items.isEmpty() ? null : items.get(0).getBatchNo();
     }
 
     private String firstOrderNo() {
-        List<ClearingOrderEntity> items = clearingDataMapper.findOrders();
+        List<ClearingOrderEntity> items = safeList(clearingDataMapper.findOrders());
         return items.isEmpty() ? null : items.get(0).getClearingNo();
     }
 
     private String firstRuleNo() {
-        List<ClearingRuleEntity> items = clearingDataMapper.findRules();
+        List<ClearingRuleEntity> items = safeList(clearingDataMapper.findRules());
         return items.isEmpty() ? null : items.get(0).getRuleNo();
     }
 
     private String firstFeeRuleNo() {
-        List<FeeRuleEntity> items = clearingDataMapper.findFeeRules();
+        List<FeeRuleEntity> items = safeList(clearingDataMapper.findFeeRules());
         return items.isEmpty() ? null : items.get(0).getFeeRuleNo();
     }
 
     private String firstShareItemNo() {
-        List<ShareItemEntity> items = clearingDataMapper.findShares();
+        List<ShareItemEntity> items = safeList(clearingDataMapper.findShares());
         return items.isEmpty() ? null : items.get(0).getShareItemNo();
     }
 
     private String firstEventNo() {
-        List<ClearingEventEntity> items = clearingDataMapper.findEvents();
+        List<ClearingEventEntity> items = safeList(clearingDataMapper.findEvents());
         return items.isEmpty() ? null : items.get(0).getEventNo();
     }
 
@@ -462,6 +463,10 @@ public class ClearingMemoryStore {
             return;
         }
         seq.set(parseNumericSuffix(code));
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private int parseVersion(String versionNo) {
