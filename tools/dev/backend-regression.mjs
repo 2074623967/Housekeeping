@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { accessSync, existsSync, mkdirSync, constants as fsConstants } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -28,7 +28,8 @@ if (onlyIndex >= 0 && !only) {
 }
 
 const selected = only
-  ? backendApps.filter((appDir) => appDir === only || appDir.endsWith(`/${only}`))
+  ? backendApps.filter((appDir) =>
+      appDir === only || appDir.endsWith(`/${only}`) || appDir.endsWith(`/${only}/backend`))
   : backendApps;
 if (selected.length === 0) {
   throw new Error(`未找到后端模块：${only}`);
@@ -53,13 +54,40 @@ if (!maven) {
   throw new Error("未找到 Maven，请将 mvn 放入 PATH，或设置 MAVEN_BIN / MAVEN_HOME");
 }
 
+const configuredRepo = process.env.MAVEN_REPO || process.env.HSP_MAVEN_REPO;
+const repoCandidates = [
+  configuredRepo,
+  path.join(rootDir, "..", "apache-maven-3.9.16", "repository"),
+  path.join(rootDir, "..", "apache-maven-3.9.12", "repository"),
+  process.env.HOME ? path.join(process.env.HOME, ".m2", "repository") : ""
+].filter(Boolean);
+
+const isWritableDirectory = (directory) => {
+  try {
+    accessSync(directory, fsConstants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+let mavenRepo = repoCandidates.find((candidate) =>
+  existsSync(candidate) && isWritableDirectory(candidate));
+if (!mavenRepo) {
+  mavenRepo = path.join(rootDir, ".runtime", "maven-repository");
+  mkdirSync(mavenRepo, { recursive: true });
+}
+if (!isWritableDirectory(mavenRepo)) {
+  throw new Error(`Maven 仓库不可写：${mavenRepo}，可设置 MAVEN_REPO 或 HSP_MAVEN_REPO`);
+}
+
 for (const appDir of selected) {
   const absoluteDir = path.join(rootDir, appDir);
   if (!existsSync(path.join(absoluteDir, "pom.xml"))) {
     throw new Error(`${appDir}: pom.xml 不存在`);
   }
-  console.log(`[backend-regression] ${appDir} :: ${maven} -q test`);
-  execFileSync(maven, ["-q", "test"], {
+  console.log(`[backend-regression] ${appDir} :: ${maven} -Dmaven.repo.local=${mavenRepo} -q test`);
+  execFileSync(maven, ["-Dmaven.repo.local=" + mavenRepo, "-q", "test"], {
     cwd: absoluteDir,
     stdio: "inherit"
   });

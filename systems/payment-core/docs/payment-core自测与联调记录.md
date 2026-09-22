@@ -16357,3 +16357,17 @@ git diff --check
 ```
 
 结果：脚本语法、补丁检查和回退场景 `doctor backends` 均通过。该修复只改善本地工具链前置诊断，不改变 Maven 依赖来源、业务接口、数据库或支付资金状态。
+
+## 644. 2026-09-23 后端全量回归 Maven 仓库解析统一
+
+`tools/dev/backend-regression.mjs` 与 `local-stack.sh` 统一 Maven 仓库解析：支持显式 `MAVEN_REPO/HSP_MAVEN_REPO`，按相邻仓库、用户仓库和工作区 `.runtime/maven-repository` 回退，并向每个 Maven 测试进程显式传入 `-Dmaven.repo.local`。
+
+验证：
+
+```bash
+HOME=/private/tmp/hsp-no-maven-home-$$ \
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+node tools/dev/backend-regression.mjs --only payment-core
+```
+
+首次执行暴露了 `--only payment-core` 选择器只支持完整目录的问题，已一并修正为支持系统名；修正后 payment-core 后端全量 `1188/1188` 通过，`0` failures、`0` errors、`0` skipped。本轮工具改动同时通过 `node --check` 与 `git diff --check`，不把仓库解析修复本身解释为新的渠道或生产证据。
