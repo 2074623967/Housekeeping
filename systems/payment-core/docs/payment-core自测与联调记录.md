@@ -15922,3 +15922,13 @@ MAVEN_BIN=/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn \
 | `admin-web` Vite 构建 | 通过，`109` modules |
 | `git diff --check` | 通过 |
 | 提交 | `6bc6c0aa fix(payment-core): guard payment flow snapshot actions` |
+
+## 606. 2026-09-23 跨系统管理端修复后回归
+
+支付流水页运行时修复后重新执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：12 个管理端均通过 `npm test && npm run build`，前端用例合计 `85/85` 通过；本轮未发现跨系统管理端契约或构建回退。
