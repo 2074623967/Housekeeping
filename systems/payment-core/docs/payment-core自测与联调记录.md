@@ -16375,3 +16375,17 @@ node tools/dev/backend-regression.mjs --only payment-core
 补充验证时，全量回归在 `deposit-system` 暴露 JRE 缺少编译器的问题，未将中断前的模块汇总为全量通过；脚本已增加 JDK 解析和显式环境注入，需在修复后重新执行全量回归。
 
 修复后重新执行全量回归时，已通过 payment-core、gateway-access、settlement、accounting，随后 clearing 的一个 Spring Context 用例因 H2 `t_clearing_batch already exists` 报错而中断；单独使用同一脚本和同一 JDK/Maven 仓库重跑 clearing-system 后 `36/36` 通过。该次全量仍不登记为通过，后续需再做一次完整串行回归确认。
+
+## 645. 2026-09-23 后端统一回归最终收口
+
+在 JDK 注入、Maven 仓库解析和系统名选择器修复后，重新执行：
+
+```bash
+HOME=/private/tmp/hsp-no-maven-home-$$ \
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+node tools/dev/backend-regression.mjs
+```
+
+结果：`12/12` 后端模块通过，合计 `1465/1465` 个测试，`0` failures、`0` errors、`0` skipped；本次包含 clearing-system `36/36` 和 deposit-system `11/11`。前一次全量中断和 clearing 定向复验均保留为历史诊断，不覆盖本次最终结果。
+
+该结果证明统一回归脚本、JDK/Maven 工具链和本地 H2 测试基线可运行，不代表真实渠道、RabbitMQ、生产 MySQL、资金到账或正式发布治理完成。

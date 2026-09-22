@@ -3355,3 +3355,7 @@
 随后在允许本地端口监听和已有 Maven 仓库写入的受控环境中重新执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过，跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，链路 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
 
 该证据修正的是本地运行权限造成的“无法复验”状态，不改变系统边界：它仍属于 demo/H2/HTTP 骨架证据，不证明真实渠道、RabbitMQ、生产 MySQL、资金到账、正式审批、现场核验或稳定观察完成。
+
+### 9.5 2026-09-23 后端统一回归最终收口
+
+在回归脚本统一 Maven 仓库解析、系统名选择和 JDK 注入后，使用受控 Maven 仓库执行完整 `backend-regression.mjs`：`12/12` 后端模块通过，合计 `1465/1465` 个测试，`0` failures、`0` errors、`0` skipped。该结果只更新本地自动化基线，不改变真实渠道、生产基础设施、资金事实或发布门禁。
