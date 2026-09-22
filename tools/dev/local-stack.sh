@@ -36,10 +36,18 @@ resolve_java_home() {
     printf '%s' "$HSP_JAVA_HOME"
     return 0
   fi
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
+    local mac_java_home
+    mac_java_home="$(/usr/libexec/java_home 2>/dev/null || true)"
+    if [[ -n "$mac_java_home" && -x "$mac_java_home/bin/java" ]]; then
+      printf '%s' "$mac_java_home"
+      return 0
+    fi
+  fi
   if command -v java >/dev/null 2>&1; then
     local java_bin
     java_bin="$(command -v java)"
-    if [[ "$java_bin" == */bin/java ]]; then
+    if [[ "$java_bin" == */bin/java && -x "${java_bin%/bin/java}/bin/java" ]]; then
       printf '%s' "${java_bin%/bin/java}"
       return 0
     fi
@@ -65,7 +73,7 @@ resolve_maven_repo() {
     "$ROOT_DIR/../apache-maven-3.9.12/repository" \
     "/Users/abc123/apache-maven-3.9.16/repository" \
     "/Users/abc123/workspace/apache-maven-3.9.12/repository"; do
-    if [[ -d "$candidate" ]]; then
+    if [[ -d "$candidate" && -w "$candidate" ]]; then
       printf '%s' "$candidate"
       return 0
     fi

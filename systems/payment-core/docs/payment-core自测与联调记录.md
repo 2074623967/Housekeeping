@@ -16061,3 +16061,11 @@ node tools/dev/frontend-admin-regression.mjs
 结果：`12/12` 管理端均通过 `npm test && npm run build`，前端用例合计 `89/89` 通过。覆盖 payment-core、clearing、settlement、reconciliation、accounting、refund、deposit、wallet、wallet-account、risk-control、ops-config 和 gateway-access 管理端。
 
 本轮只证明管理端 API 契约与生产构建没有回退；不替代真实浏览器、微信开发者工具、RabbitMQ、渠道、生产数据库或正式发布治理验证。
+
+## 621. 2026-09-23 本地全栈启动工具链探测修复
+
+1. 修正 `tools/dev/local-stack.sh` 在 macOS 上把 `/usr/bin/java` 错误裁剪为 `/usr` 的问题，优先通过 `/usr/libexec/java_home` 解析真实 JDK Home，并保留显式 `HSP_JAVA_HOME` 覆盖能力。
+2. Maven 本地仓库探测增加可写性判断，避免优先选中不可写的绝对路径仓库；找不到可写候选时继续落到用户本地仓库或运行时目录。
+3. `bash -n tools/dev/local-stack.sh`、默认 `doctor backends` 和显式 `HSP_JAVA_HOME` 的 `doctor backends` 均通过。
+
+本轮单服务启动仍受当前执行沙箱限制：Maven 解析器状态文件写入绝对用户仓库被拒绝，前端监听本地端口返回 `EPERM`；未把该次失败记录成服务业务失败，也未生成新的 READY、smoke 或 happy-path 证据。需在允许本地端口监听和 Maven 仓库写入的托管环境复验全栈启动。
