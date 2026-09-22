@@ -1,16 +1,39 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "";
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.code !== "0") {
-    throw new Error(payload.message || "请求失败");
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      ...options
+    });
+  } catch (error) {
+    const code = error?.name === "AbortError"
+      ? "WALLET-ACCOUNT-CLIENT-TIMEOUT"
+      : "WALLET-ACCOUNT-CLIENT-NETWORK";
+    const message = error?.name === "AbortError" ? "钱包账户服务请求超时" : "无法连接钱包账户服务";
+    const transportError = new Error(`${message} [${code}]`);
+    transportError.code = code;
+    transportError.cause = error;
+    throw transportError;
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    const parseError = new Error(`钱包账户服务返回了无法解析的响应 [HTTP ${response.status}] [WALLET-ACCOUNT-CLIENT-INVALID-RESPONSE]`);
+    parseError.code = "WALLET-ACCOUNT-CLIENT-INVALID-RESPONSE";
+    parseError.cause = error;
+    throw parseError;
+  }
+  if (!response.ok || payload?.code !== "0") {
+    const code = payload?.code || `WALLET-ACCOUNT-CLIENT-HTTP-${response.status}`;
+    const businessError = new Error(`${payload?.message || "请求失败"} [${code}]`);
+    businessError.code = code;
+    throw businessError;
   }
   return payload.data;
 }
@@ -39,7 +62,7 @@ export async function fetchWalletAccounts(params) {
 }
 
 export async function fetchWalletAccountDetail(walletAccountNo) {
-  return request(`/api/wallet/accounts/${walletAccountNo}`);
+  return request(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}`);
 }
 
 export async function fetchWalletBalances(walletAccountNos) {
