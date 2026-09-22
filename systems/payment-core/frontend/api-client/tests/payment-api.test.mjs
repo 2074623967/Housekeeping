@@ -87,3 +87,21 @@ test("keeps the original service envelope and rejects business failures", async 
     (error) => error.payload.code === "PAYMENT-1002"
   );
 });
+
+test("normalizes non-JSON upstream responses into a client error", async () => {
+  await assert.rejects(
+    executeRequest("http://localhost", { method: "GET", path: "/detail" }, async () => ({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON");
+      }
+    })),
+    (error) => {
+      assert.equal(error.code, "PAYMENT-API-CLIENT-INVALID-RESPONSE");
+      assert.equal(error.status, 502);
+      assert.match(error.message, /无法解析/);
+      return true;
+    }
+  );
+});

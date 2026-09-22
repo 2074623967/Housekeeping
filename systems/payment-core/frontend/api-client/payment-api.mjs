@@ -94,6 +94,18 @@ export function resolveBaseUrl(options, environment = process.env) {
   return value.replace(/\/$/, "");
 }
 
+async function readResponsePayload(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    const parseError = new Error("支付服务返回了无法解析的响应");
+    parseError.code = "PAYMENT-API-CLIENT-INVALID-RESPONSE";
+    parseError.status = response.status;
+    parseError.cause = error;
+    throw parseError;
+  }
+}
+
 export async function executeRequest(baseUrl, request, fetchImpl = fetch) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -107,7 +119,7 @@ export async function executeRequest(baseUrl, request, fetchImpl = fetch) {
       body: request.data ? JSON.stringify(request.data) : undefined,
       signal: controller.signal
     });
-    const payload = await response.json();
+    const payload = await readResponsePayload(response);
     if (!response.ok || !payload || payload.code !== "0") {
       const error = new Error(payload && payload.message ? payload.message : `HTTP ${response.status}`);
       error.payload = payload;
@@ -128,7 +140,11 @@ export async function main(argv = process.argv.slice(2), environment = process.e
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().catch((error) => {
-    const output = error.payload || { code: "PAYMENT-API-CLIENT", message: error.message };
+    const output = error.payload || {
+      code: error.code || "PAYMENT-API-CLIENT",
+      message: error.message,
+      ...(error.status ? { status: error.status } : {})
+    };
     process.stderr.write(`${JSON.stringify(output, null, 2)}\n`);
     process.exitCode = 1;
   });
