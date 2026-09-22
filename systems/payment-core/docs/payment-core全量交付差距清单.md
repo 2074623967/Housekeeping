@@ -3308,6 +3308,28 @@
 
 ## 9. 最终结论
 
+### 9.1 2026-09-23 当前批次回归总数校正
+
+截至当前 `test` HEAD，各后端工程本地 Maven 全量回归合计 `1465` 个用例通过，明细为：
+
+| 系统 | 用例数 |
+| --- | ---: |
+| payment-core | 1188 |
+| gateway-access | 51 |
+| settlement-system | 36 |
+| accounting-system | 43 |
+| clearing-system | 36 |
+| refund-center | 17 |
+| reconciliation-system | 13 |
+| risk-control-system | 11 |
+| ops-config-system | 12 |
+| deposit-system | 11 |
+| wallet-account | 23 |
+| wallet-system | 24 |
+| 合计 | **1465** |
+
+该总数只表示本地自动化测试结果；不替代真实渠道、RabbitMQ、生产 MySQL、资金到账、正式审批、现场核验或稳定观察证据。当前统一门禁仍以自动审计为准：`test -> master = false`、`master -> release/* = false`。
+
 当前 `payment-core` 已经具备可运行的正向支付核心域 V1 骨架，但距离完整生产支付平台仍有明确差距。
 
 这次最重要的纠偏结论是：
