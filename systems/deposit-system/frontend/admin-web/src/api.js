@@ -1,11 +1,31 @@
+const createRequestError = (code, message, cause) => {
+  const error = new Error(`${message} [${code}]`);
+  error.code = code;
+  error.cause = cause;
+  return error;
+};
+
 const request = async (url, options = {}) => {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  const body = await response.json();
-  if (!response.ok || body.code !== "0") {
-    throw new Error(body.message || "请求失败");
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch (error) {
+    const code = error?.name === "AbortError"
+      ? "DEPOSIT-CLIENT-TIMEOUT"
+      : "DEPOSIT-CLIENT-NETWORK";
+    throw createRequestError(code, error?.name === "AbortError" ? "保证金服务请求超时" : "无法连接保证金服务", error);
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw createRequestError("DEPOSIT-CLIENT-INVALID-RESPONSE", `保证金服务返回了无法解析的响应 [HTTP ${response.status}]`, error);
+  }
+  if (!response.ok || body?.code !== "0") {
+    throw createRequestError(body?.code || `DEPOSIT-CLIENT-HTTP-${response.status}`, body?.message || "请求失败");
   }
   return body.data;
 };
