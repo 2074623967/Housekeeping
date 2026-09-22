@@ -15702,3 +15702,14 @@
 | `systems/payment-core/backend` Maven 全量测试 | Surefire 汇总 `1188/1188` 通过，`0` failures、`0` errors、`0` skipped，退出码 `0` |
 | 死信服务与控制器专项测试 | `PaymentDeadLetterTaskServiceImplTest`、`PaymentDeadLetterTaskControllerTest` 通过 |
 | 运行态边界 | 本轮仅验证本地代码与测试，不宣称 RabbitMQ、真实渠道或发布治理条件已完成 |
+
+## 592. 2026-09-23 当前提交前端全量回归复核
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 前端测试 | `admin-web 47/47`、`app-web 21/21`、`pc-web 2/2`、`h5-web 2/2`、`mini-program 11/11`、`api-client 6/6`，合计 `89/89` 通过 |
+| Vite 构建 | `admin-web`、`app-web`、`pc-web`、`h5-web` 均构建成功 |
+| 构建提示 | `admin-web` 有单个 bundle 超过 500 kB 的 Vite 提示，不影响本次构建成功；代码分包仍列为后续性能优化项 |
+| 运行态边界 | 本轮仅验证前端代码与构建产物，不宣称真实渠道、消息代理或发布治理条件已完成 |
