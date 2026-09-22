@@ -16257,3 +16257,13 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
 ```
 
 结果：前端 `6/6` 通过并构建成功；后端 `14/14` 通过（集成测试 `13`、DAO 边界测试 `1`）。本轮代码验证使用本地 H2/JDK，仍不代表生产数据库、真实渠道或正式发布验收。
+
+## 637. 2026-09-23 reconciliation 改动后跨系统管理端回归
+
+对 reconciliation 批次主列表分页改动执行全量管理端回归：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端均通过各自测试与生产构建；payment-core `49/49`、clearing `5/5`、settlement `7/7`、reconciliation `6/6`。该回归只证明当前代码和构建基线未回退，不替代真实浏览器现场核验、RabbitMQ/DLQ 当前批次证据、生产渠道或正式发布审批。
