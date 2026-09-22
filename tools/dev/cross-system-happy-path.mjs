@@ -204,6 +204,16 @@ async function main() {
     && item.factType === "REFUND_SUCCESS"
     && item.factNo === refundOutbox.eventId).length === 1,
   "reconciliation REFUND_SUCCESS fact was not recorded idempotently");
+  assert(reconciliationChain.expectedStageCount === 4,
+    `reconciliation expected stage count was ${reconciliationChain.expectedStageCount}, expected 4`);
+  assert(reconciliationChain.completedStageCount === reconciliationChain.expectedStageCount,
+    `reconciliation completed stage count was ${reconciliationChain.completedStageCount}`);
+  assert(reconciliationChain.chainStatus === "COMPLETED",
+    `reconciliation chain was not COMPLETED: ${reconciliationChain.chainStatus}`);
+  assert(reconciliationChain.responsibilityStatus === "CLOSED",
+    `reconciliation responsibility was not CLOSED: ${reconciliationChain.responsibilityStatus}`);
+  assert(reconciliationChain.financialCloseable === true,
+    "reconciliation chain was not financial-closeable");
 
   console.log("[PASS] cross-system local happy path");
   console.log(JSON.stringify({
@@ -215,7 +225,11 @@ async function main() {
     refundOrderId: refund.refundOrderId,
     refundEventId: refundOutbox.eventId,
     accountingEventTypes: ["PAYMENT_SUCCESS", "CLEARING_GENERATED", "REFUND_SUCCESS"],
-    reconciliationFactTypes: requiredReconciliationFacts.map(([, factType]) => factType)
+    reconciliationFactTypes: requiredReconciliationFacts.map(([, factType]) => factType),
+    reconciliationChainStatus: reconciliationChain.chainStatus,
+    reconciliationCompletedStageCount: reconciliationChain.completedStageCount,
+    reconciliationExpectedStageCount: reconciliationChain.expectedStageCount,
+    reconciliationFinancialCloseable: reconciliationChain.financialCloseable
   }, null, 2));
 }
 

@@ -202,3 +202,13 @@
    - 缺少同批次 retry / DLQ / replay / 人工结案补偿链路证据
    - 缺少正式来源应用页面级截图证据
    - 缺少一版可直接用于 `master / release` 判断的冻结版发布文档
+
+## 10. 2026-09-22 本地 happy-path 财务收口断言补强
+
+`tools/dev/cross-system-happy-path.mjs` 现在除逐条核验 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`SETTLEMENT_CREATED`、`ACCOUNTING_POSTED` 和 `REFUND_SUCCESS` 事实外，还必须满足：
+
+1. `expectedStageCount = 4` 且 `completedStageCount = expectedStageCount`；
+2. 链路状态为 `COMPLETED`，责任状态为 `CLOSED`；
+3. `financialCloseable = true`。
+
+这组断言只在本地联调服务真实返回完整四阶段事实时通过，不把“事实行存在”直接解释为财务已收口；仍不替代渠道账单、生产账务、资金到账或正式财务审批证据。
