@@ -15949,3 +15949,7 @@ node tools/dev/frontend-admin-regression.mjs
 | reconciliation admin Vite 构建 | 通过，`11` modules |
 | reconciliation backend 回归 | `1/1` 模块通过（`ReconciliationIntegrationTest`） |
 | 真实跨系统事实 | 当前未启动长驻栈；本轮不把本地契约测试解释为真实 MQ、生产数据库或财务收口事实 |
+
+## 608. 2026-09-23 链路诊断后的管理端聚合回归
+
+执行 `node tools/dev/frontend-admin-regression.mjs`，12 个管理端均通过 `npm test && npm run build`，前端用例合计 `85/85` 通过；新增 reconciliation 链路诊断入口未造成其他管理端回退。
