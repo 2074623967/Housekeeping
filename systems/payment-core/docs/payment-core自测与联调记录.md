@@ -16218,3 +16218,13 @@ npm run build
 ```
 
 结果：`7/7` API 客户端测试通过，Vite 生产构建通过，`git diff --check` 通过。新增契约测试覆盖批次、结算单和事件列表分页参数；本轮不形成新的生产、渠道或 RabbitMQ 事实证据。
+
+## 634. 2026-09-23 settlement 改动后跨系统管理端回归
+
+再次执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端通过各自测试与生产构建；settlement 管理端本轮为 `7/7` 测试通过，payment-core 管理端保持 `49/49` 通过。该回归只证明代码和构建基线没有回退，不改变当前发布证据和治理门禁。
