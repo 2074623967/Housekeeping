@@ -15979,3 +15979,9 @@ tools/dev/local-stack.sh happy-path
 ```
 
 结果：状态检查和 HTTP 冒烟通过；跨系统 happy-path 实际生成支付单、支付成功事件、清分单、结算单、退款单，并确认账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功，链路状态为 `COMPLETED`，财务收口判断为 `true`。该结果证明本地 demo/H2/HTTP 功能骨架可运行，不代表真实渠道、生产 MQ、生产数据库或正式发布治理已完成。
+
+## 613. 2026-09-23 本地全栈启动工具链探测可移植性
+
+`tools/dev/local-stack.sh` 不再依赖单一机器上的 Maven/JDK 绝对路径：Maven 按 `HSP_MAVEN_BIN`、PATH、仓库相邻工具链和已知本地候选路径探测；JDK 按 `HSP_JAVA_HOME`、PATH 和本机候选路径探测；Maven 本地仓库按 `HSP_MAVEN_REPO`、相邻仓库和用户本地仓库探测。
+
+验证结果：`bash -n tools/dev/local-stack.sh` 通过；显式配置 `HSP_MAVEN_BIN/HSP_JAVA_HOME` 执行 `doctor backends` 通过；移除两个环境变量后仍能通过本机探测执行 `doctor backends`。本轮不重启已运行服务，也不改变业务接口、数据库或资金状态。

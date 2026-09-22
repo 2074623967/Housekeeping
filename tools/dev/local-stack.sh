@@ -6,11 +6,80 @@ readonly ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 readonly RUNTIME_DIR="$ROOT_DIR/.runtime/local-stack"
 readonly PID_DIR="$RUNTIME_DIR/pids"
 readonly LOG_DIR="$RUNTIME_DIR/logs"
-readonly MAVEN_BIN="${HSP_MAVEN_BIN:-/Users/abc123/apache-maven-3.9.16/bin/mvn}"
-readonly MAVEN_REPO="${HSP_MAVEN_REPO:-/Users/abc123/apache-maven-3.9.16/repository}"
-readonly JAVA_HOME_PATH="${HSP_JAVA_HOME:-/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home}"
 readonly LOCAL_JAVA_OPTS="${HSP_LOCAL_JAVA_OPTS:--Xms64m -Xmx256m}"
 readonly START_TIMEOUT_SECONDS="${HSP_LOCAL_START_TIMEOUT_SECONDS:-90}"
+
+resolve_maven_bin() {
+  if [[ -n "${HSP_MAVEN_BIN:-}" ]]; then
+    printf '%s' "$HSP_MAVEN_BIN"
+    return 0
+  fi
+  if command -v mvn >/dev/null 2>&1; then
+    command -v mvn
+    return 0
+  fi
+  for candidate in \
+    "$ROOT_DIR/../apache-maven-3.9.16/bin/mvn" \
+    "$ROOT_DIR/../apache-maven-3.9.12/bin/mvn" \
+    "/Users/abc123/apache-maven-3.9.16/bin/mvn" \
+    "/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn"; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s' "mvn"
+}
+
+resolve_java_home() {
+  if [[ -n "${HSP_JAVA_HOME:-}" ]]; then
+    printf '%s' "$HSP_JAVA_HOME"
+    return 0
+  fi
+  if command -v java >/dev/null 2>&1; then
+    local java_bin
+    java_bin="$(command -v java)"
+    if [[ "$java_bin" == */bin/java ]]; then
+      printf '%s' "${java_bin%/bin/java}"
+      return 0
+    fi
+  fi
+  for candidate in \
+    "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home" \
+    "/Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home"; do
+    if [[ -x "$candidate/bin/java" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s' ""
+}
+
+resolve_maven_repo() {
+  if [[ -n "${HSP_MAVEN_REPO:-}" ]]; then
+    printf '%s' "$HSP_MAVEN_REPO"
+    return 0
+  fi
+  for candidate in \
+    "$ROOT_DIR/../apache-maven-3.9.16/repository" \
+    "$ROOT_DIR/../apache-maven-3.9.12/repository" \
+    "/Users/abc123/apache-maven-3.9.16/repository" \
+    "/Users/abc123/workspace/apache-maven-3.9.12/repository"; do
+    if [[ -d "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  if [[ -n "${HOME:-}" ]]; then
+    printf '%s' "$HOME/.m2/repository"
+    return 0
+  fi
+  printf '%s' "$ROOT_DIR/.runtime/maven-repository"
+}
+
+readonly MAVEN_BIN="$(resolve_maven_bin)"
+readonly JAVA_HOME_PATH="$(resolve_java_home)"
+readonly MAVEN_REPO="$(resolve_maven_repo)"
 
 backend_manifest() {
   cat <<'EOF'
