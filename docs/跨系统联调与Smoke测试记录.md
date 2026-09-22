@@ -212,3 +212,26 @@
 3. `financialCloseable = true`。
 
 这组断言只在本地联调服务真实返回完整四阶段事实时通过，不把“事实行存在”直接解释为财务已收口；仍不替代渠道账单、生产账务、资金到账或正式财务审批证据。
+
+## 11. 2026-09-23 当前 HEAD 全栈复核
+
+### 11.1 执行命令
+
+```sh
+HSP_MAVEN_BIN=/Users/abc123/apache-maven-3.9.16/bin/mvn \
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+tools/dev/local-stack.sh verify all
+```
+
+### 11.2 结果
+
+| 范围 | 结果 |
+| --- | --- |
+| 全部选定后端 | 全部 READY，HTTP 冒烟通过 |
+| 全部选定前端 | 全部 READY，代理查询通过 |
+| 支付主链路 | `PAYMENT_SUCCESS -> CLEARING_GENERATED -> SETTLEMENT_CREATED -> ACCOUNTING_POSTED` |
+| 退款链路 | `REFUND_SUCCESS`，事实保持幂等 |
+| 对账链路 | `COMPLETED`，`completedStageCount=4`，`expectedStageCount=4`，`financialCloseable=true` |
+| 运行清理 | 验证结束后所有本次启动进程自动停止 |
+
+本轮生成的隔离样例由脚本动态创建，未将固定历史编号当作当前事实。该验证仍只覆盖受控本地 demo/H2/HTTP 栈的正向收口，不替代真实渠道、生产 RabbitMQ/MySQL、失败重试/DLQ/replay、资金到账、正式审批或发布治理证据。

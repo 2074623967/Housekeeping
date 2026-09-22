@@ -15643,3 +15643,13 @@
 | `api-client` 服务间调用契约测试 | `6/6` 通过 |
 
 本轮补齐小程序和零依赖 API 联调端的当前 HEAD 契约证据；小程序仍需微信开发者工具/真机与真实 `wx.requestPayment` 参数，API client 仍需正式商户认证和真实渠道接入，均不在本地测试通过的声明范围内。
+
+## 588. 2026-09-23 当前 HEAD 全栈财务收口复核
+
+| 项目 | 结果 |
+| --- | --- |
+| `tools/dev/local-stack.sh verify all` | 提权运行通过；全部选定后端与前端 READY，HTTP 冒烟通过并自动清理 |
+| 跨系统支付链路 | `PAYMENT_SUCCESS -> CLEARING_GENERATED -> SETTLEMENT_CREATED -> ACCOUNTING_POSTED` |
+| 退款与对账 | `REFUND_SUCCESS`；`chainStatus=COMPLETED`，四阶段完整，`financialCloseable=true` |
+
+本轮验证证明当前 HEAD 在受控本地隔离栈中的正向财务链路没有回退；不证明真实微信/支付宝/银行渠道、生产 RabbitMQ/MySQL、失败派发补偿、资金到账、正式财务审批或 release 放行已经完成。
