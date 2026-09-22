@@ -16371,3 +16371,7 @@ node tools/dev/backend-regression.mjs --only payment-core
 ```
 
 首次执行暴露了 `--only payment-core` 选择器只支持完整目录的问题，已一并修正为支持系统名；修正后 payment-core 后端全量 `1188/1188` 通过，`0` failures、`0` errors、`0` skipped。本轮工具改动同时通过 `node --check` 与 `git diff --check`，不把仓库解析修复本身解释为新的渠道或生产证据。
+
+补充验证时，全量回归在 `deposit-system` 暴露 JRE 缺少编译器的问题，未将中断前的模块汇总为全量通过；脚本已增加 JDK 解析和显式环境注入，需在修复后重新执行全量回归。
+
+修复后重新执行全量回归时，已通过 payment-core、gateway-access、settlement、accounting，随后 clearing 的一个 Spring Context 用例因 H2 `t_clearing_batch already exists` 报错而中断；单独使用同一脚本和同一 JDK/Maven 仓库重跑 clearing-system 后 `36/36` 通过。该次全量仍不登记为通过，后续需再做一次完整串行回归确认。

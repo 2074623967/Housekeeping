@@ -54,6 +54,19 @@ if (!maven) {
   throw new Error("未找到 Maven，请将 mvn 放入 PATH，或设置 MAVEN_BIN / MAVEN_HOME");
 }
 
+const javaHomeCandidates = [
+  process.env.JAVA_HOME,
+  "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home",
+  "/Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home"
+].filter(Boolean);
+const javaHome = javaHomeCandidates.find((candidate) => {
+  const javac = path.join(candidate, "bin", "javac");
+  return existsSync(javac) && spawnSync(javac, ["-version"], { stdio: "ignore" }).status === 0;
+});
+if (!javaHome) {
+  throw new Error("未找到可编译的 JDK，请设置 JAVA_HOME");
+}
+
 const configuredRepo = process.env.MAVEN_REPO || process.env.HSP_MAVEN_REPO;
 const repoCandidates = [
   configuredRepo,
@@ -81,6 +94,12 @@ if (!isWritableDirectory(mavenRepo)) {
   throw new Error(`Maven 仓库不可写：${mavenRepo}，可设置 MAVEN_REPO 或 HSP_MAVEN_REPO`);
 }
 
+const javaEnv = {
+  ...process.env,
+  JAVA_HOME: javaHome,
+  PATH: `${path.join(javaHome, "bin")}${process.env.PATH ? `:${process.env.PATH}` : ""}`
+};
+
 for (const appDir of selected) {
   const absoluteDir = path.join(rootDir, appDir);
   if (!existsSync(path.join(absoluteDir, "pom.xml"))) {
@@ -89,6 +108,7 @@ for (const appDir of selected) {
   console.log(`[backend-regression] ${appDir} :: ${maven} -Dmaven.repo.local=${mavenRepo} -q test`);
   execFileSync(maven, ["-Dmaven.repo.local=" + mavenRepo, "-q", "test"], {
     cwd: absoluteDir,
+    env: javaEnv,
     stdio: "inherit"
   });
 }
