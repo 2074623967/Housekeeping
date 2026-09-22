@@ -40,7 +40,11 @@ function request(path, options) {
         resolve(payload.data);
       },
       fail(error) {
-        reject(createBusinessError(null, error.errMsg || "支付服务连接失败"));
+        const message = error && error.errMsg ? error.errMsg : "支付服务连接失败";
+        const code = /timeout|超时/i.test(message)
+          ? "PAYMENT-MINI-TIMEOUT"
+          : "PAYMENT-MINI-NETWORK";
+        reject(createBusinessError({ code }, message));
       }
     });
   });
