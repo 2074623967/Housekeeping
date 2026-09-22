@@ -16424,3 +16424,16 @@ bash tools/dev/local-stack.sh verify all
 发现 `PaymentLogServiceImpl.list()` 直接把 Mapper 返回列表交给分页响应，空库或持久化层返回 `null` 时不满足前端统一空数组契约。本轮新增 `safeList` 归一化，并补充 `PaymentLogServiceImplTest` 的 `null` 列表回归用例。
 
 验证结果：定向日志服务测试 `9/9` 通过；payment-core 后端全量回归 `1/1` 模块通过。本轮不改变日志查询、导出或脱敏语义，也不代表生产数据库容量和发布治理已完成。
+
+## 650. 2026-09-23 最新提交全栈复验
+
+在最新 `test` HEAD 上再次执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh verify all
+```
+
+结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。本批次复验使用了受控环境中已存在的外部服务进程，脚本结束后未留下本次启动的服务进程。
+
+该结果只证明最新代码在 demo/H2/HTTP 本地骨架下可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、财务关账、正式审批、现场核验或稳定观察完成。
