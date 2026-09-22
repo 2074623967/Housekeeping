@@ -15953,3 +15953,7 @@ node tools/dev/frontend-admin-regression.mjs
 ## 608. 2026-09-23 链路诊断后的管理端聚合回归
 
 执行 `node tools/dev/frontend-admin-regression.mjs`，12 个管理端均通过 `npm test && npm run build`，前端用例合计 `85/85` 通过；新增 reconciliation 链路诊断入口未造成其他管理端回退。
+
+## 609. 2026-09-23 链路事实时间字段映射修复
+
+复核 reconciliation `CrossSystemFactDTO` 后发现事实发生时间字段为 `occurredAt`，链路诊断表此前错误读取 `factAt`，导致时间列显示为空。已修正为后端契约字段，并完成 reconciliation admin `4/4` 测试与 Vite 构建复核；不涉及 API、数据库或资金状态变化。
