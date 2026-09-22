@@ -16,3 +16,23 @@ test("keeps non-paged payloads and existing arrays unchanged", () => {
   assert.equal(normalizePagePayload(summary), summary);
   assert.equal(normalizePagePayload({ items }).items, items);
 });
+
+test("reports non-JSON upstream responses with a stable client error", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: false,
+    status: 502,
+    json: async () => {
+      throw new SyntaxError("Unexpected token < in JSON");
+    }
+  }));
+
+  const { dashboardApi } = await import("./client.js");
+  await assert.rejects(
+    dashboardApi.getSummary(),
+    (error) => {
+      assert.equal(error.code, "PAYMENT-CLIENT-INVALID-RESPONSE");
+      assert.match(error.message, /无法解析/);
+      return true;
+    }
+  );
+});

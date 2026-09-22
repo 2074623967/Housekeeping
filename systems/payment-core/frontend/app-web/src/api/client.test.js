@@ -24,3 +24,22 @@ test("encodes cashier and payment detail identifiers as single path segments", a
     "/api/payments/PAY%2F1%3F%23%25"
   ]);
 });
+
+test("reports non-JSON upstream responses with a stable client error", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: false,
+    status: 502,
+    json: async () => {
+      throw new SyntaxError("Unexpected token < in JSON");
+    }
+  }));
+
+  await assert.rejects(
+    paymentApi.getDetail("PAY-INVALID-RESPONSE"),
+    (error) => {
+      assert.equal(error.code, "PAYMENT-CLIENT-INVALID-RESPONSE");
+      assert.match(error.message, /无法解析/);
+      return true;
+    }
+  );
+});
