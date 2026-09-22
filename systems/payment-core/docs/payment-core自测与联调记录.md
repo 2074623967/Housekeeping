@@ -15947,4 +15947,5 @@ node tools/dev/frontend-admin-regression.mjs
 | --- | --- |
 | reconciliation admin Node 测试 | `4/4` 通过 |
 | reconciliation admin Vite 构建 | 通过，`11` modules |
+| reconciliation backend 回归 | `1/1` 模块通过（`ReconciliationIntegrationTest`） |
 | 真实跨系统事实 | 当前未启动长驻栈；本轮不把本地契约测试解释为真实 MQ、生产数据库或财务收口事实 |
