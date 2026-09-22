@@ -11,6 +11,7 @@ import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import com.abc123.opsconfig.mapper.OpsConfigMapper;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Repository;
 
@@ -28,37 +29,37 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
 
     @Override
     public List<AgreementTemplateDTO> findAgreementTemplates() {
-        return mapper.findAgreementTemplates();
+        return safeList(mapper.findAgreementTemplates());
     }
 
     @Override
     public List<BusinessLineDTO> findBusinessLines() {
-        return mapper.findBusinessLines();
+        return safeList(mapper.findBusinessLines());
     }
 
     @Override
     public List<PaymentTypeDTO> findPaymentTypes() {
-        return mapper.findPaymentTypes();
+        return safeList(mapper.findPaymentTypes());
     }
 
     @Override
     public List<CashierTemplateDTO> findCashierTemplates() {
-        return mapper.findCashierTemplates();
+        return safeList(mapper.findCashierTemplates());
     }
 
     @Override
     public List<ChannelProfileDTO> findChannelProfiles() {
-        return mapper.findChannelProfiles();
+        return safeList(mapper.findChannelProfiles());
     }
 
     @Override
     public List<RoutingRuleDTO> findRoutingRules() {
-        return mapper.findRoutingRules();
+        return safeList(mapper.findRoutingRules());
     }
 
     @Override
     public List<SystemControlDTO> findSystemControls() {
-        return mapper.findSystemControls();
+        return safeList(mapper.findSystemControls());
     }
 
     @Override
@@ -88,7 +89,7 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
 
     @Override
     public List<SystemControlDTO> findEnabledSystemControls() {
-        return mapper.findEnabledSystemControls();
+        return safeList(mapper.findEnabledSystemControls());
     }
 
     @Override
@@ -148,7 +149,7 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
 
     @Override
     public List<OpsConfigChangeDTO> findConfigChanges() {
-        return mapper.findConfigChanges();
+        return safeList(mapper.findConfigChanges());
     }
 
     @Override
@@ -211,11 +212,15 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
 
     @Override
     public List<OpsConfigRefreshEventDTO> findRefreshEvents() {
-        return mapper.findRefreshEvents();
+        return safeList(mapper.findRefreshEvents());
     }
 
     @Override
     public int acknowledgeRefreshEvent(String eventNo, String acknowledgedBy) {
         return mapper.acknowledgeRefreshEvent(eventNo, acknowledgedBy);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }
