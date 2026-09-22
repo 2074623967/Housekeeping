@@ -1,11 +1,31 @@
+function createRequestError(code, message, cause) {
+  const error = new Error(`${message} [${code}]`);
+  error.code = code;
+  error.cause = cause;
+  return error;
+}
+
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.code !== "0") {
-    throw new Error(payload.message || "请求失败");
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch (error) {
+    const code = error?.name === "AbortError"
+      ? "OPS-CONFIG-CLIENT-TIMEOUT"
+      : "OPS-CONFIG-CLIENT-NETWORK";
+    throw createRequestError(code, error?.name === "AbortError" ? "运营配置服务请求超时" : "无法连接运营配置服务", error);
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw createRequestError("OPS-CONFIG-CLIENT-INVALID-RESPONSE", `运营配置服务返回了无法解析的响应 [HTTP ${response.status}]`, error);
+  }
+  if (!response.ok || payload?.code !== "0") {
+    throw createRequestError(payload?.code || `OPS-CONFIG-CLIENT-HTTP-${response.status}`, payload?.message || "请求失败");
   }
   return payload.data;
 }
