@@ -15598,3 +15598,21 @@
 
 1. 本轮证明本地受控栈中四阶段事实能够完整落库、重复退款事实能够幂等收口，且 happy-path 已实际执行财务收口断言。
 2. 本地 demo/H2/HTTP 联调不证明真实微信、支付宝、银行渠道、生产 RabbitMQ、生产 MySQL、资金到账、正式财务审批或 release 放行条件已完成。
+
+## 585. 2026-09-23 settlement 巡检增量后的全栈回归复核
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `tools/dev/local-stack.sh verify all` | 通过；全部选定后端和前端服务 READY，HTTP smoke 通过并自动清理 |
+| payment-core 后端全量测试 | `1188` 个用例通过，`0` failures，`0` errors，`0` skipped |
+| 跨系统支付主链路 | `PAYMENT_SUCCESS -> CLEARING_GENERATED -> SETTLEMENT_CREATED -> ACCOUNTING_POSTED` |
+| 退款与对账链路 | `REFUND_SUCCESS`；`chainStatus=COMPLETED`、`completedStageCount=4`、`expectedStageCount=4`、`financialCloseable=true` |
+| 统一门禁 | `test -> master` 允许；`master -> release/*` 不允许 |
+
+### 变更范围与证据边界
+
+1. 本轮复核覆盖 settlement 出款巡检骨架提交后的全栈启动、HTTP 冒烟、跨系统 happy-path 和 payment-core 回归，未发现主链路回退。
+2. settlement 巡检默认关闭；本轮没有自动执行真实出款、重试或银行通道调用。
+3. 本地 H2/demo/HTTP 栈只证明接口形状、状态收口和对账事实在受控环境下可联通，不证明真实渠道、生产 RabbitMQ/MySQL、资金到账、正式审批、现场核验或稳定观察已经完成。

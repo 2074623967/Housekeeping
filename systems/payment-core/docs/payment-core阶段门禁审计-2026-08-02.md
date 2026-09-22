@@ -267,3 +267,13 @@
 ## 13. 2026-09-21 当前 HEAD 复核
 
 统一门禁脚本在当前 `test` HEAD 上重跑：回归包 `10/10` 场景完整，`test -> master` 判定为允许；release 材料结构完整，但正式放行条件仍未闭环，`master -> release/*` 继续不允许。剩余阻断为候选发布说明、正式签字审批、实际现场核验记录和稳定观察结束结论，均未被本轮代码提交替代。
+
+## 14. 2026-09-23 settlement 增量后的复判
+
+本轮先完成 settlement 出款巡检骨架的独立提交，再重跑本地全栈验证。所有选定后端和前端服务均 READY，HTTP smoke 与跨系统 happy-path 通过，实际观察到 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`SETTLEMENT_CREATED`、`ACCOUNTING_POSTED`、`REFUND_SUCCESS` 五类事实；对账链为 `COMPLETED`、4/4，`financialCloseable=true`。
+
+当前有效门禁结论保持不变：
+
+1. `test -> master`：允许，回归证据和本地跨系统验证均未出现回退。
+2. `master -> release/*`：不允许，候选发布说明正式化、正式签字审批、发布后现场核验记录和 master 稳定观察结束结论仍未形成。
+3. 本轮本地 H2/demo/HTTP 结果不替代真实渠道、生产消息代理、生产数据库、资金到账、财务审批、现场核验或稳定观察事实。
