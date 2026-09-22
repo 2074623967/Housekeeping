@@ -20,3 +20,21 @@
 3. 所有场景统一使用 `REG-01 ~ REG-10` 编号，不允许新增临时口径编号。
 4. 如果场景属于补偿、回放、回滚演练，必须在 `events/` 或 `database/` 中保留执行前后对比证据。
 5. 完成回归后，先运行 `tools/release/audit_regression_pack.mjs`，再决定是否更新发布结论。
+
+## 当前 HEAD 补偿复核
+
+REG-08 当前被标记为 `HISTORICAL`，历史任务号和截图不能直接恢复放行。RabbitMQ 与 payment-core、clearing、settlement、accounting 消费者均启动后，使用新隔离 suffix 执行：
+
+```bash
+HSP_DLQ_SUFFIX=20260923-a \
+HSP_DLQ_EVENT_KIND=payment-success \
+HSP_DLQ_TARGET_SYSTEM=accounting \
+node tools/dev/dlq-compensation-smoke.mjs
+
+HSP_DLQ_SUFFIX=20260923-a \
+HSP_DLQ_EVENT_KIND=clearing-generated \
+HSP_DLQ_TARGET_SYSTEM=settlement \
+node tools/dev/dlq-compensation-smoke.mjs
+```
+
+每次执行必须把脚本输出中的新 `messageId`、`taskNo`、最终任务状态、`replayCount`、路由键和下游事实写入 `api/reg-08-dlq-api-evidence.md`、`database/reg-08-dlq-db-evidence.md`、`events/reg-08-dlq-event-evidence.md`，并重新采集死信任务页的 `PENDING_REVIEW`、`READY_TO_REPLAY` 与 `REPLAYED` 截图。完成后重新运行统一门禁，不能沿用本文件历史编号。
