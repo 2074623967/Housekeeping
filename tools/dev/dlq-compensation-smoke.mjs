@@ -103,7 +103,7 @@ async function paymentApi(path, options = {}) {
   return body.data;
 }
 
-async function publishDeadLetter(messageId, payload) {
+async function publishDeadLetter(messageId, payload, rawPayload = false) {
   const result = await requestJson(
     `${managementBaseUrl}/exchanges/%2F/${encodeURIComponent(config.exchange)}/publish`,
     {
@@ -120,7 +120,7 @@ async function publishDeadLetter(messageId, payload) {
           }
         },
         routing_key: config.routingKey,
-        payload: JSON.stringify(payload),
+        payload: rawPayload ? payload : JSON.stringify(payload),
         payload_encoding: "string"
       })
     }
@@ -234,10 +234,43 @@ async function replayCurrentBatch() {
   };
 }
 
-replayCurrentBatch()
-  .then((result) => {
+async function resolveInvalidCurrentBatch() {
+  const runId = `${Date.now()}-${process.pid}`;
+  const messageId = `DLQ-MANUAL-SMOKE-${runId}`;
+  await publishDeadLetter(messageId, `{invalid-${eventKind}-${runId}`, true);
+  const pending = await waitFor(
+    "invalid dead-letter task intake",
+    () => paymentApi(`/api/payment-dead-letter-tasks?messageId=${encodeURIComponent(messageId)}&pageNo=1&pageSize=20`),
+    (page) => Boolean(taskFromPage(page, messageId))
+  );
+  const task = taskFromPage(pending, messageId);
+  assert(task.taskStatus === "PENDING_REVIEW", `unexpected invalid task status: ${task.taskStatus}`);
+  const resolved = await paymentApi(`/api/payment-dead-letter-tasks/${encodeURIComponent(task.taskNo)}/resolve-manually`, {
+    method: "POST",
+    body: JSON.stringify({
+      operator: process.env.HSP_DLQ_OPERATOR || "支付运营A",
+      resolutionNote: `当前批次 ${runId} 报文非法，保留审计副本后人工结案`
+    })
+  });
+  assert(resolved.taskStatus === "MANUAL_RESOLVED",
+    `unexpected manual resolution status: ${resolved.taskStatus}`);
+  return {
+    messageId,
+    taskNo: task.taskNo,
+    taskStatus: resolved.taskStatus,
+    eventKind,
+    targetSystem,
+    suffix
+  };
+}
+
+Promise.all([
+  replayCurrentBatch(),
+  process.env.HSP_DLQ_INCLUDE_MANUAL === "true" ? resolveInvalidCurrentBatch() : Promise.resolve(null)
+])
+  .then(([result, manual]) => {
     console.log("[PASS] current-batch DLQ compensation smoke");
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ replay: result, manual }, null, 2));
   })
   .catch((error) => {
     console.error(`[FAIL] ${error.message}`);
