@@ -16037,3 +16037,15 @@ node tools/dev/dlq-compensation-smoke.mjs
 新增 `tools/dev/payment-core-user-regression.mjs`，统一遍历 `api-client`、`app-web`、`h5-web`、`pc-web` 和 `mini-program`，要求每个工程声明 `test` 脚本；只有声明了 `build` 的工程才执行构建，原生小程序和 API client 的无构建脚本会明确记录为 accepted，而不会误报失败。支持 `--only` 定向执行。
 
 执行 `node tools/dev/payment-core-user-regression.mjs` 结果为 `5/5 user apps passed their declared checks`：API client `8/8`、App `23/23`、H5 `2/2`、PC `2/2`、小程序 `13/13`，App/H5/PC 构建通过。
+
+## 619. 2026-09-23 payment-core 后端当前 HEAD 全量回归
+
+在当前 `test` HEAD 执行：
+
+```bash
+/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn -q test
+```
+
+Surefire 报告汇总 `1188` 个用例，`0` failures、`0` errors、`0` skipped。测试期间出现的异常文本均来自预期失败分支和事务回滚断言，不构成测试失败。
+
+本轮只证明 payment-core 本地后端测试可回归；RabbitMQ、真实渠道、生产数据库、生产通知供应商和正式发布治理仍未被本地测试替代。
