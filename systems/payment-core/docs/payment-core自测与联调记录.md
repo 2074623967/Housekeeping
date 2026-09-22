@@ -15729,3 +15729,13 @@
 | admin-web Vite 构建 | 通过；入口 JS 从原约 `682 kB` 降为约 `103 kB`，业务页面按路由拆分 |
 | 构建产物边界 | 详情、列表、配置和任务页面均生成独立 chunk；未产生未跟踪仓库文件 |
 | 运行态边界 | 本轮只改善前端首屏加载，不代表生产 CDN、缓存策略或真实发布验收已完成 |
+
+## 594. 2026-09-23 当前门禁快照
+
+执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json` 的当前结果：
+
+| 门禁 | 当前结论 |
+| --- | --- |
+| `test -> master` | `false`；REG-08 仍缺当前批次页面截图和补偿/回滚闭环证据 |
+| `master -> release/*` | `false`；候选说明正式化、正式签字审批、发布后现场核验、稳定观察结束结论仍未形成 |
+| 历史记录边界 | 文档中更早批次的 `test -> master = 是` 仅保留为历史事实，不作为当前 HEAD 放行依据 |
