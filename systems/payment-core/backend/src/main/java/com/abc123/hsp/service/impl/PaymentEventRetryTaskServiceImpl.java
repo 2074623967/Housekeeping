@@ -5,6 +5,7 @@ import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import java.util.List;
+import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -50,9 +51,9 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
     @Override
     public PaymentEventRetryResultDTO retryFailedEvents(boolean automatic, String operator) {
         String normalizedOperator = normalizeOperator(operator);
-        List<String> eventNos = automatic
+        List<String> eventNos = safeList(automatic
                 ? paymentEventMapper.findDueFailedEventNos(batchSize)
-                : paymentEventMapper.findAllFailedEventNos(batchSize);
+                : paymentEventMapper.findAllFailedEventNos(batchSize));
         PaymentEventRetryResultDTO result = new PaymentEventRetryResultDTO();
         result.setProcessedCount(eventNos.size());
         for (String eventNo : eventNos) {
@@ -110,6 +111,10 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
         if (result.getFailedEventNos().size() < 3) {
             result.getFailedEventNos().add(eventNo);
         }
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private static final class SanitizedEventRetryTransactionException extends RuntimeException {

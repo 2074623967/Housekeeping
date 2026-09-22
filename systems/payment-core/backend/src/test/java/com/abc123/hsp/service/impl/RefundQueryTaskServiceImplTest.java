@@ -71,6 +71,18 @@ class RefundQueryTaskServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullRefundQueryCandidatesAsEmpty() {
+        when(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(30, 20, 100))
+                .thenReturn(null);
+
+        RefundQueryTaskResultDTO result = service().queryPendingRefunds("payment-core-admin");
+
+        assertEquals(0, result.getProcessedCount());
+        assertEquals(0, result.getSuccessCount());
+        assertEquals(0, result.getFailCount());
+    }
+
+    @Test
     void shouldClampGlobalAndPerChannelQueryBatchSizes() {
         when(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(30, 1, 1))
                 .thenReturn(Collections.emptyList());

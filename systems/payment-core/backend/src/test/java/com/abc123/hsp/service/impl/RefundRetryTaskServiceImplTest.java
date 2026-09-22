@@ -98,4 +98,16 @@ class RefundRetryTaskServiceImplTest {
         verify(refundMapper).findFailedRefundOrderIds(1000);
         verify(refundMapper).findFailedRefundOrderIds(1);
     }
+
+    @Test
+    void shouldTreatNullRefundRetryCandidatesAsEmpty() {
+        when(refundMapper.findFailedRefundOrderIds(100)).thenReturn(null);
+
+        RefundRetryResultDTO result = new RefundRetryTaskServiceImpl(
+                refundMapper, refundService, transactionManager).retryFailedRefunds("refund-retry-scheduler");
+
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
 }

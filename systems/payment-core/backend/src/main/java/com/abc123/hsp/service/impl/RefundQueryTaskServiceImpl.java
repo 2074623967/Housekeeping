@@ -7,6 +7,7 @@ import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.RefundQueryTaskService;
 import com.abc123.hsp.service.RefundService;
 import java.util.List;
+import java.util.Collections;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -48,19 +49,19 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
 
     @Override
     public RefundQueryTaskResultDTO queryPendingRefunds(String triggeredBy) {
-        return query(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(
-                minAgeSeconds, perChannelBatchSize, batchSize), triggeredBy);
+        return query(safeList(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(
+                minAgeSeconds, perChannelBatchSize, batchSize)), triggeredBy);
     }
 
     @Override
     public RefundQueryTaskResultDTO queryDueRefunds(String triggeredBy) {
-        return query(paymentTaskCenterMapper.findDuePendingRefundOrderIdsForQuery(
+        return query(safeList(paymentTaskCenterMapper.findDuePendingRefundOrderIdsForQuery(
                 minAgeSeconds,
                 retryIntervalSeconds,
                 retryBackoffFactor,
                 maxRetryIntervalSeconds,
                 perChannelBatchSize,
-                batchSize), triggeredBy);
+                batchSize)), triggeredBy);
     }
 
     @Override
@@ -96,5 +97,9 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
             }
         }
         return result;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }

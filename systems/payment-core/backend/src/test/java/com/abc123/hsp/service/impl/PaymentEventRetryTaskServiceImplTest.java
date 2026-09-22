@@ -106,6 +106,21 @@ class PaymentEventRetryTaskServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullEventCandidatesAsEmpty() {
+        when(paymentEventMapper.findDueFailedEventNos(100)).thenReturn(null);
+
+        PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
+                paymentEventMapper, paymentEventDispatchService, transactionManager)
+                .retryFailedEvents(true, "payment-event-scheduler");
+
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        verify(transactionManager, never()).getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
+    }
+
+    @Test
     void shouldRejectInvalidOperatorBeforeReadingCandidates() {
         PaymentEventRetryTaskServiceImpl service = new PaymentEventRetryTaskServiceImpl(
                 paymentEventMapper, paymentEventDispatchService, transactionManager);

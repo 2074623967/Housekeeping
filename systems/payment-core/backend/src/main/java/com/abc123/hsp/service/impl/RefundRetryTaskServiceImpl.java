@@ -5,6 +5,7 @@ import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundService;
 import java.util.List;
+import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,7 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
 
     @Override
     public RefundRetryResultDTO retryFailedRefunds(String triggeredBy) {
-        List<String> refundOrderIds = refundMapper.findFailedRefundOrderIds(batchSize);
+        List<String> refundOrderIds = safeList(refundMapper.findFailedRefundOrderIds(batchSize));
         RefundRetryResultDTO result = new RefundRetryResultDTO();
         result.setProcessedCount(refundOrderIds.size());
         for (String refundOrderId : refundOrderIds) {
@@ -79,6 +80,10 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
                     ? exception
                     : new SanitizedRefundRetryTransactionException(exception);
         }
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private static final class SanitizedRefundRetryTransactionException extends RuntimeException {

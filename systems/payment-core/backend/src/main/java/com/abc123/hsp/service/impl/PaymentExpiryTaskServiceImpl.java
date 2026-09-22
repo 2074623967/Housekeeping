@@ -6,6 +6,7 @@ import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.List;
+import java.util.Collections;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +55,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
     @Override
     public PaymentExpiryCloseResultDTO closeExpiredPayments() {
         cleanupStaleRetries();
-        List<ExpiredPaymentDTO> expiredPayments = paymentMapper.findExpiredPayments(batchSize);
+        List<ExpiredPaymentDTO> expiredPayments = safeList(paymentMapper.findExpiredPayments(batchSize));
         PaymentExpiryCloseResultDTO result = new PaymentExpiryCloseResultDTO();
         result.setProcessedCount(expiredPayments.size());
         for (ExpiredPaymentDTO payment : expiredPayments) {
@@ -83,6 +84,10 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
             LOGGER.warn("Failed to clean stale expiry close retry markers, exceptionType={}",
                     exception.getClass().getName());
         }
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
