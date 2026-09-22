@@ -15739,3 +15739,13 @@
 | `test -> master` | `false`；REG-08 仍缺当前批次页面截图和补偿/回滚闭环证据 |
 | `master -> release/*` | `false`；候选说明正式化、正式签字审批、发布后现场核验、稳定观察结束结论仍未形成 |
 | 历史记录边界 | 文档中更早批次的 `test -> master = 是` 仅保留为历史事实，不作为当前 HEAD 放行依据 |
+
+## 595. 2026-09-23 跨系统管理端构建复核
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 管理端 Vite 构建 | accounting、clearing、deposit、gateway-access、ops-config、reconciliation、refund-center、risk-control、settlement、wallet-account、wallet-system 共 `11/11` 通过 |
+| 构建命令 | 各管理端目录执行 `npm run build` |
+| 构建产物边界 | 本地构建均成功，未产生未跟踪仓库文件；不代表 CDN、生产缓存、浏览器兼容性或发布后现场验收 |
