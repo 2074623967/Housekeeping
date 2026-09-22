@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,19 +61,19 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     @Override
     public PageResultDTO<GatewayAppDTO> applications() {
-        List<GatewayAppDTO> records = gatewayAccessMapper.findApplications();
+        List<GatewayAppDTO> records = safeList(gatewayAccessMapper.findApplications());
         return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayChannelDTO> gateways(GatewayChannelQueryDTO query) {
-        List<GatewayChannelDTO> records = gatewayAccessMapper.findGateways(normalizeGatewayQuery(query));
+        List<GatewayChannelDTO> records = safeList(gatewayAccessMapper.findGateways(normalizeGatewayQuery(query)));
         return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayCertificateDTO> certificates(String riskLevel) {
-        List<GatewayCertificateDTO> records = new ArrayList<>(gatewayAccessMapper.findCertificates());
+        List<GatewayCertificateDTO> records = new ArrayList<>(safeList(gatewayAccessMapper.findCertificates()));
         records.forEach(this::enrichCertificateRisk);
         if (StringUtils.hasText(riskLevel) && !"全部".equals(riskLevel.trim())) {
             String normalizedRiskLevel = riskLevel.trim();
@@ -83,13 +84,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     @Override
     public PageResultDTO<GatewayPermissionDTO> permissions() {
-        List<GatewayPermissionDTO> records = gatewayAccessMapper.findPermissions();
+        List<GatewayPermissionDTO> records = safeList(gatewayAccessMapper.findPermissions());
         return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query) {
-        List<GatewayAuditLogDTO> records = gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query));
+        List<GatewayAuditLogDTO> records = safeList(gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query)));
         return page(records, 1, 20);
     }
 
@@ -98,7 +99,7 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
      */
     @Override
     public byte[] exportAuditLogs(GatewayAuditQueryDTO query) {
-        List<GatewayAuditLogDTO> records = gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query));
+        List<GatewayAuditLogDTO> records = safeList(gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query)));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("请求流水号,应用编码,网关编码,操作类型,签名算法,客户端IP,结果状态,风险提示,发生时间\n");
@@ -118,7 +119,8 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     @Override
     public PageResultDTO<GatewayReleaseRouteDTO> releaseRoutes(GatewayReleaseRouteQueryDTO query) {
-        List<GatewayReleaseRouteDTO> records = gatewayAccessMapper.findReleaseRoutes(normalizeReleaseRouteQuery(query));
+        List<GatewayReleaseRouteDTO> records = safeList(
+                gatewayAccessMapper.findReleaseRoutes(normalizeReleaseRouteQuery(query)));
         return page(records, 1, 20);
     }
 
@@ -210,7 +212,12 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     }
 
     private <T> PageResultDTO<T> page(List<T> records, int pageNo, int pageSize) {
-        return new PageResultDTO<>(records, records.size(), pageNo, pageSize);
+        List<T> safeRecords = safeList(records);
+        return new PageResultDTO<>(safeRecords, safeRecords.size(), pageNo, pageSize);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     /**
