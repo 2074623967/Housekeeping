@@ -16194,3 +16194,13 @@ npm run build
 ```
 
 结果：`5/5` API 客户端测试通过，Vite 生产构建通过，`git diff --check` 通过。新增契约测试覆盖批次、规则、费用和分账列表的分页参数传递。本轮不形成新的生产或 RabbitMQ 事实证据。
+
+## 632. 2026-09-23 clearing 改动后跨系统管理端回归
+
+再次执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端通过各自测试与生产构建；clearing 管理端本轮为 `5/5` 测试通过，payment-core 管理端保持 `49/49` 通过。该回归只证明代码和构建基线没有回退，不改变当前 REG-08、RabbitMQ、真实渠道及正式发布治理边界。
