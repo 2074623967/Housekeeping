@@ -92,6 +92,17 @@ class PaymentLogServiceImplTest {
     }
 
     @Test
+    void shouldReturnEmptyPageWhenMapperReturnsNullList() {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        when(paymentLogMapper.findAll(query)).thenReturn(null);
+        when(paymentLogMapper.count(query)).thenReturn(0L);
+
+        assertTrue(new PaymentLogServiceImpl(paymentLogMapper).list(query).getItems().isEmpty());
+        verify(paymentLogMapper).findAll(query);
+        verify(paymentLogMapper).count(query);
+    }
+
+    @Test
     void shouldRejectOversizedPaymentLogQueryBeforeMapperAccess() {
         PaymentLogQueryDTO paymentOrderQuery = new PaymentLogQueryDTO();
         paymentOrderQuery.setPaymentOrderId(repeat("P", 65));

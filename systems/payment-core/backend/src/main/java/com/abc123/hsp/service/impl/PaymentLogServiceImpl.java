@@ -11,6 +11,8 @@ import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
+import java.util.Collections;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -47,7 +49,7 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     public PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentLogMapper.findAll(query),
+                safeList(paymentLogMapper.findAll(query)),
                 paymentLogMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -115,6 +117,10 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     private String csvCell(String value) {
         String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private void normalizeQuery(PaymentLogQueryDTO query) {

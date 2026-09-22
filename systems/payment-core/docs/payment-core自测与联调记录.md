@@ -16418,3 +16418,9 @@ bash tools/dev/local-stack.sh verify all
 在 `http://127.0.0.1:5174/payment-task-center` 进行当前运行态检查：任务摘要、P1/P2/P3 严重等级口径、人工任务入口、任务执行日志和分页查询均完成加载；页面当前存在的待回调支付、失败退款事实异常和 SLA 超时项均按既有提示展示，未将它们误标为已收口。
 
 在当前窄视口下测得 `innerWidth=462`、`documentElement.scrollWidth=447`、`body.scrollWidth=447`，无横向溢出，页面无 `role=alert` 错误节点。该检查只证明任务中心运营骨架与响应式布局当前可用，不替代真实 RabbitMQ/DLQ、通知供应商或发布治理证据。
+
+## 649. 2026-09-23 支付处理日志空分页边界补强
+
+发现 `PaymentLogServiceImpl.list()` 直接把 Mapper 返回列表交给分页响应，空库或持久化层返回 `null` 时不满足前端统一空数组契约。本轮新增 `safeList` 归一化，并补充 `PaymentLogServiceImplTest` 的 `null` 列表回归用例。
+
+验证结果：定向日志服务测试 `9/9` 通过；payment-core 后端全量回归 `1/1` 模块通过。本轮不改变日志查询、导出或脱敏语义，也不代表生产数据库容量和发布治理已完成。
