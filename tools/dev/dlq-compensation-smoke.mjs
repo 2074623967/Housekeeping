@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Run a current-batch payment.success.* DLQ -> task -> replay smoke.
+ * Run a current-batch payment.success.* or clearing.generated.* DLQ smoke.
  *
  * The script intentionally requires an isolated RabbitMQ suffix. It never
  * falls back to historical task numbers or the default shared topology.
@@ -13,28 +13,51 @@ const managementUser = process.env.HSP_RABBIT_MANAGEMENT_USER || "hsp";
 const managementPassword = process.env.HSP_RABBIT_MANAGEMENT_PASSWORD || "hsp-local-drill-20260801";
 const paymentCoreBaseUrl = process.env.HSP_PAYMENT_CORE_BASE_URL || "http://127.0.0.1:18081";
 const accountingBaseUrl = process.env.HSP_ACCOUNTING_BASE_URL || "http://127.0.0.1:18110";
+const settlementBaseUrl = process.env.HSP_SETTLEMENT_BASE_URL || "http://127.0.0.1:18130";
 const targetSystem = process.env.HSP_DLQ_TARGET_SYSTEM || "accounting";
+const eventKind = process.env.HSP_DLQ_EVENT_KIND || "payment-success";
 const timeoutMs = Number(process.env.HSP_DLQ_TIMEOUT_MS || 30000);
 const pollMs = Number(process.env.HSP_DLQ_POLL_MS || 500);
 
 const targetConfig = {
-  accounting: {
-    routingKey: `payment.success.accounting.dlq.${suffix}.v1`,
-    replayRoutingKey: `payment.success.accounting.replay.${suffix}.v1`,
-    downstreamBaseUrl: accountingBaseUrl,
-    eventType: "PAYMENT_SUCCESS"
+  "payment-success": {
+    exchange: "payment.trade.dlq",
+    eventType: "PAYMENT_SUCCESS",
+    accounting: {
+      routingKey: `payment.success.accounting.dlq.${suffix}.v1`,
+      replayRoutingKey: `payment.success.accounting.replay.${suffix}.v1`,
+      downstreamBaseUrl: accountingBaseUrl,
+      downstreamPath: "accounting"
+    },
+    clearing: {
+      routingKey: `payment.success.clearing.dlq.${suffix}.v1`,
+      replayRoutingKey: `payment.success.clearing.replay.${suffix}.v1`,
+      downstreamBaseUrl: process.env.HSP_CLEARING_BASE_URL || "http://127.0.0.1:18120",
+      downstreamPath: "clearing"
+    }
   },
-  clearing: {
-    routingKey: `payment.success.clearing.dlq.${suffix}.v1`,
-    replayRoutingKey: `payment.success.clearing.replay.${suffix}.v1`,
-    downstreamBaseUrl: process.env.HSP_CLEARING_BASE_URL || "http://127.0.0.1:18120",
-    eventType: "PAYMENT_SUCCESS"
+  "clearing-generated": {
+    exchange: "clearing.trade.dlq",
+    eventType: "CLEARING_GENERATED",
+    accounting: {
+      routingKey: `clearing.generated.accounting.dlq.${suffix}.v1`,
+      replayRoutingKey: `clearing.generated.accounting.replay.${suffix}.v1`,
+      downstreamBaseUrl: accountingBaseUrl,
+      downstreamPath: "accounting"
+    },
+    settlement: {
+      routingKey: `clearing.generated.settlement.dlq.${suffix}.v1`,
+      replayRoutingKey: `clearing.generated.settlement.replay.${suffix}.v1`,
+      downstreamBaseUrl: settlementBaseUrl,
+      downstreamPath: "settlements"
+    }
   }
 };
 
-const config = targetConfig[targetSystem];
+const eventConfig = targetConfig[eventKind];
+const config = eventConfig && eventConfig[targetSystem];
 if (!config) {
-  throw new Error(`HSP_DLQ_TARGET_SYSTEM must be accounting or clearing, got ${targetSystem}`);
+  throw new Error(`unsupported event/target: ${eventKind}/${targetSystem}`);
 }
 
 function requiredEnv(name) {
@@ -82,7 +105,7 @@ async function paymentApi(path, options = {}) {
 
 async function publishDeadLetter(messageId, payload) {
   const result = await requestJson(
-    `${managementBaseUrl}/exchanges/%2F/payment.trade.dlq/publish`,
+    `${managementBaseUrl}/exchanges/%2F/${encodeURIComponent(config.exchange)}/publish`,
     {
       method: "POST",
       headers: { Authorization: basicAuth() },
@@ -93,7 +116,7 @@ async function publishDeadLetter(messageId, payload) {
           content_type: "application/json",
           headers: {
             "x-retry-count": 3,
-            eventType: "PAYMENT_SUCCESS"
+            eventType: config.eventType
           }
         },
         routing_key: config.routingKey,
@@ -128,19 +151,33 @@ function taskFromPage(page, messageId) {
 async function replayCurrentBatch() {
   const runId = `${Date.now()}-${process.pid}`;
   const messageId = `DLQ-SMOKE-${runId}`;
-  const defaultPaymentOrderId = `PAY-DLQ-SMOKE-${runId}`;
+  const defaultBizNo = eventKind === "clearing-generated"
+    ? `CLO-DLQ-SMOKE-${runId}`
+    : `PAY-DLQ-SMOKE-${runId}`;
   const payload = process.env.HSP_DLQ_PAYLOAD_JSON
     ? JSON.parse(process.env.HSP_DLQ_PAYLOAD_JSON)
-    : {
-      eventType: "PAYMENT_SUCCESS",
-      eventNo: `EVT-DLQ-SMOKE-${runId}`,
-      paymentOrderId: defaultPaymentOrderId,
-      orderNo: `ORD-DLQ-SMOKE-${runId}`,
-      accountNo: "ACT10003",
-      amount: 9.99
-    };
-  const paymentOrderId = String(payload.paymentOrderId || "").trim();
-  assert(paymentOrderId, "DLQ payload must contain paymentOrderId");
+    : eventKind === "clearing-generated"
+      ? {
+        eventType: "CLEARING_GENERATED",
+        eventNo: `EVT-DLQ-SMOKE-${runId}`,
+        clearingNo: defaultBizNo,
+        clearingOrderNo: defaultBizNo,
+        accountNo: "ACT10003",
+        amount: 9.99,
+        netAmount: 9.99
+      }
+      : {
+        eventType: "PAYMENT_SUCCESS",
+        eventNo: `EVT-DLQ-SMOKE-${runId}`,
+        paymentOrderId: defaultBizNo,
+        orderNo: `ORD-DLQ-SMOKE-${runId}`,
+        accountNo: "ACT10003",
+        amount: 9.99
+      };
+  const bizNo = eventKind === "clearing-generated"
+    ? String(payload.clearingOrderNo || payload.clearingNo || "").trim()
+    : String(payload.paymentOrderId || "").trim();
+  assert(bizNo, `DLQ payload must contain ${eventKind === "clearing-generated" ? "clearingOrderNo or clearingNo" : "paymentOrderId"}`);
 
   await publishDeadLetter(messageId, payload);
   const pending = await waitFor(
@@ -170,7 +207,7 @@ async function replayCurrentBatch() {
 
   const downstream = await waitFor(
     "downstream event fact",
-    () => requestJson(`${config.downstreamBaseUrl}/api/${targetSystem === "accounting" ? "accounting" : "clearing"}/events?eventType=${encodeURIComponent(config.eventType)}&bizNo=${encodeURIComponent(paymentOrderId)}&pageNo=1&pageSize=20`),
+    () => requestJson(`${config.downstreamBaseUrl}/api/${config.downstreamPath}/events?eventType=${encodeURIComponent(config.eventType)}&bizNo=${encodeURIComponent(bizNo)}&pageNo=1&pageSize=20`),
     (body) => body && body.code === "0" && body.data && Array.isArray(body.data.items) && body.data.items.length > 0
   );
 
@@ -181,7 +218,9 @@ async function replayCurrentBatch() {
     replayCount: replayed.replayCount,
     replayRoutingKey: replayed.replayRoutingKey,
     downstreamFactCount: downstream.data.items.length,
+    eventKind,
     targetSystem,
+    bizNo,
     suffix
   };
 }

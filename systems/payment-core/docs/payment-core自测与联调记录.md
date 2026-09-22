@@ -15675,7 +15675,7 @@
 ### 新增能力
 
 1. 新增 `tools/dev/dlq-compensation-smoke.mjs`，要求显式提供隔离 `HSP_DLQ_SUFFIX`。
-2. 工具通过 RabbitMQ Management API 发布新 `payment.success.*` 死信消息，轮询 payment-core 补偿任务，执行人工复核和定向 replay，再查询 accounting/clearing 下游事件事实。
+2. 工具通过 RabbitMQ Management API 发布新 `payment.success.*` 或 `clearing.generated.*` 死信消息，轮询 payment-core 补偿任务，执行人工复核和定向 replay，再查询 accounting/clearing/settlement 下游事件事实。
 3. 工具不接受历史任务号；RabbitMQ、payment-core 或下游事实任一不可用时直接失败，不产生“已完成”输出。
 
 ### 验证结果
@@ -15683,5 +15683,5 @@
 | 项目 | 结果 |
 | --- | --- |
 | Node.js 语法检查 | 通过 |
-| 无 broker 运行保护 | `HSP_DLQ_SUFFIX=20260923-a node tools/dev/dlq-compensation-smoke.mjs` 明确失败，未回退历史证据 |
+| 无 broker 运行保护 | payment.success 与 clearing.generated 两种模式均明确失败，未回退历史证据 |
 | 当前批次运行态 | 待 Docker/RabbitMQ 恢复后执行，暂不登记为通过 |
