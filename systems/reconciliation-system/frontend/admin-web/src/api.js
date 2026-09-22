@@ -51,6 +51,8 @@ export const checkBatchReadiness = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/readiness-check`, {
     method: "POST"
   });
+export const getCrossSystemChain = (businessChainId) =>
+  request(`/api/reconciliation/cross-system/chains/${encodeURIComponent(businessChainId)}`);
 export const resolveDifference = (differenceNo, payload) =>
   request(`/api/reconciliation/differences/${encodeURIComponent(differenceNo)}/resolve`, {
     method: "POST",

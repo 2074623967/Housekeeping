@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { checkBatchReadiness, downloadBatchDetail, getBatchDetail, getBatches, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
+import { checkBatchReadiness, downloadBatchDetail, getBatchDetail, getBatches, getCrossSystemChain, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
 
 const view = ref("overview");
 const loading = ref(false);
@@ -10,6 +10,9 @@ const batches = ref([]);
 const differences = reactive({ items: [], total: 0 });
 const filter = reactive({ batchNo: "", differenceType: "", status: "OPEN", pageNo: 1, pageSize: 20 });
 const selectedBatch = ref(null);
+const businessChainId = ref("");
+const chainSnapshot = ref(null);
+const chainLoading = ref(false);
 
 const typeLabel = {
   CHANNEL_ONLY: "渠道单边",
@@ -117,6 +120,21 @@ async function exportBatchDetail(batchNo) {
   }
 }
 
+async function inspectCrossSystemChain() {
+  const chainId = businessChainId.value.trim();
+  if (!chainId || chainLoading.value) return;
+  chainLoading.value = true;
+  message.value = "";
+  try {
+    chainSnapshot.value = await getCrossSystemChain(chainId);
+  } catch (error) {
+    chainSnapshot.value = null;
+    message.value = error.message;
+  } finally {
+    chainLoading.value = false;
+  }
+}
+
 onMounted(refresh);
 </script>
 
@@ -128,10 +146,11 @@ onMounted(refresh);
       <button class="nav" :class="{ active: view === 'differences' }" @click="view = 'differences'">差异处理 <small>Differences</small></button>
       <button class="nav" :class="{ active: view === 'batches' }" @click="view = 'batches'">对账批次 <small>Batches</small></button>
       <button class="nav" :class="{ active: view === 'detail' }" :disabled="!selectedBatch" @click="view = 'detail'">批次详情 <small>Batch Detail</small></button>
+      <button class="nav" :class="{ active: view === 'chain' }" @click="view = 'chain'">链路诊断 <small>Chain Facts</small></button>
       <div class="note"><b>财务核对链路</b><p>渠道账单、内部支付事实和差异处置必须可追踪。</p></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><p class="eyebrow">FINANCE CONTROL / RECONCILIATION</p><h1>{{ view === "overview" ? "对账工作台" : view === "differences" ? "差异处理台" : view === "detail" ? "批次详情工作台" : "对账批次" }}</h1></div><button class="ghost" @click="refresh">刷新数据</button></header>
+      <header class="topbar"><div><p class="eyebrow">FINANCE CONTROL / RECONCILIATION</p><h1>{{ view === "overview" ? "对账工作台" : view === "differences" ? "差异处理台" : view === "detail" ? "批次详情工作台" : view === "chain" ? "跨系统链路诊断" : "对账批次" }}</h1></div><button class="ghost" @click="refresh">刷新数据</button></header>
       <div v-if="message" class="message">{{ message }}</div>
       <section v-if="view === 'overview'">
         <div class="hero panel"><div><p class="eyebrow teal">RECONCILIATION CONTROL TOWER</p><h2>先把事实核对清楚，再进入财务处理</h2><p>每个批次都记录渠道账单、平台事实、自动匹配结果和差异结案状态。</p></div><button class="primary" @click="view = 'differences'">处理未结差异</button></div>
@@ -177,6 +196,32 @@ onMounted(refresh);
             <div v-if="!selectedBatch.differences.length" class="empty">当前批次没有差异</div>
             <table v-else class="table"><thead><tr><th>差异编号</th><th>支付单号</th><th>差异类型</th><th>渠道金额</th><th>平台金额</th><th>状态</th><th>结论</th></tr></thead><tbody><tr v-for="item in selectedBatch.differences" :key="item.differenceNo"><td class="strong">{{ item.differenceNo }}</td><td>{{ item.paymentOrderId }}</td><td><span class="type">{{ typeLabel[item.differenceType] || item.differenceType }}</span></td><td>¥{{ Number(item.channelAmount || 0).toFixed(2) }}</td><td>¥{{ Number(item.internalAmount || 0).toFixed(2) }}</td><td><span class="pill" :class="item.status === 'RESOLVED' ? 'completed' : 'open'">{{ item.status === "RESOLVED" ? "已结案" : "待处置" }}</span></td><td>{{ item.resolution || "-" }}</td></tr></tbody></table>
           </section>
+        </template>
+      </section>
+      <section v-else-if="view === 'chain'" class="panel">
+        <div class="section-title"><div><p class="eyebrow">CROSS-SYSTEM FACT SNAPSHOT</p><h2>跨系统业务链路诊断</h2></div></div>
+        <div class="filters chain-filters">
+          <label for="business-chain-id">业务链路 ID</label>
+          <input id="business-chain-id" v-model.trim="businessChainId" placeholder="例如 CHAIN-PAY202609230001" :disabled="chainLoading" @keyup.enter="inspectCrossSystemChain" />
+          <button class="primary compact" :disabled="chainLoading || !businessChainId" @click="inspectCrossSystemChain">{{ chainLoading ? "查询中..." : "查询链路" }}</button>
+        </div>
+        <div v-if="!chainSnapshot && !chainLoading" class="empty">输入业务链路 ID，查看支付、清分、结算、账务等系统事实和财务收口判断。</div>
+        <div v-else-if="chainLoading" class="empty">正在读取跨系统事实快照...</div>
+        <template v-else>
+          <div class="detail-grid chain-summary">
+            <article><span>业务链路 ID</span><b>{{ chainSnapshot.businessChainId }}</b></article>
+            <article><span>链路状态</span><b>{{ chainSnapshot.chainStatus }}</b></article>
+            <article><span>责任状态</span><b>{{ chainSnapshot.responsibilityStatus }}</b></article>
+            <article><span>财务收口</span><b>{{ chainSnapshot.financialCloseable ? "允许" : "禁止" }}</b></article>
+            <article><span>已完成阶段</span><b>{{ chainSnapshot.completedStageCount }} / {{ chainSnapshot.expectedStageCount }}</b></article>
+            <article><span>事实数量</span><b>{{ chainSnapshot.factCount }}</b></article>
+          </div>
+          <section class="readiness-card" :class="chainSnapshot.financialCloseable ? 'readiness-ready' : 'readiness-blocked'">
+            <div><p class="eyebrow">DIAGNOSIS</p><h3>{{ chainSnapshot.diagnosis }}</h3><p>{{ chainSnapshot.nextAction }}</p></div>
+            <div class="readiness-facts"><span>异常事实 <b>{{ chainSnapshot.abnormalFactCount }}</b></span><span>最近事实 <b>{{ chainSnapshot.lastFactAt || "—" }}</b></span></div>
+          </section>
+          <div v-if="!chainSnapshot.facts?.length" class="empty">当前链路暂无已上报事实。</div>
+          <table v-else class="table"><thead><tr><th>来源系统</th><th>事实类型</th><th>事实编号</th><th>业务号</th><th>状态</th><th>发生时间</th></tr></thead><tbody><tr v-for="fact in chainSnapshot.facts" :key="`${fact.systemCode}:${fact.factType}:${fact.factNo}`"><td class="strong">{{ fact.systemCode }}</td><td>{{ fact.factType }}</td><td>{{ fact.factNo }}</td><td>{{ fact.businessNo || "—" }}</td><td><span class="pill" :class="fact.factStatus === 'SUCCESS' ? 'completed' : 'open'">{{ fact.factStatus }}</span></td><td>{{ fact.factAt || "—" }}</td></tr></tbody></table>
         </template>
       </section>
       <section v-else class="panel"><div class="section-title"><div><p class="eyebrow">OPEN DIFFERENCES</p><h2>差异处理台</h2></div><span class="count">共 {{ differences.total }} 条</span></div><div class="filters"><select v-model="filter.differenceType" @change="refresh"><option value="">全部差异类型</option><option value="CHANNEL_ONLY">渠道单边</option><option value="INTERNAL_ONLY">平台单边</option><option value="AMOUNT_MISMATCH">金额不一致</option><option value="STATUS_MISMATCH">状态不一致</option></select><button class="primary compact" @click="refresh">查询</button></div><div v-if="loading" class="empty">正在加载...</div><div v-else-if="!differences.items.length" class="empty">当前没有未结差异</div><table v-else class="table"><thead><tr><th>差异编号</th><th>批次 / 支付单</th><th>差异类型</th><th>渠道金额</th><th>平台金额</th><th>状态</th><th>处置</th></tr></thead><tbody><tr v-for="item in differences.items" :key="item.differenceNo"><td class="strong">{{ item.differenceNo }}</td><td>{{ item.batchNo }}<small>{{ item.paymentOrderId }}</small></td><td><span class="type">{{ typeLabel[item.differenceType] || item.differenceType }}</span></td><td>¥{{ Number(item.channelAmount || 0).toFixed(2) }}</td><td>¥{{ Number(item.internalAmount || 0).toFixed(2) }}</td><td><span class="pill open">待处置</span></td><td><button class="primary compact" @click="closeDifference(item)">人工结案</button></td></tr></tbody></table></section>

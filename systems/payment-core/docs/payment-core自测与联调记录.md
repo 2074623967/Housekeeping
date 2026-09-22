@@ -15932,3 +15932,19 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：12 个管理端均通过 `npm test && npm run build`，前端用例合计 `85/85` 通过；本轮未发现跨系统管理端契约或构建回退。
+
+## 607. 2026-09-23 对账管理端跨系统链路诊断入口
+
+### 本轮变更
+
+1. reconciliation 管理端新增“链路诊断”入口，可按 `businessChainId` 查询支付、清分、结算、账务等跨系统事实快照。
+2. 新增 API client `getCrossSystemChain`，对链路标识进行单路径编码，并沿用现有网络、非 JSON 和业务错误契约。
+3. 页面展示统一链路状态、责任状态、完成阶段、异常事实、财务收口判断、下一动作和事实明细；只读查询不新增资金或状态写入口。
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| reconciliation admin Node 测试 | `4/4` 通过 |
+| reconciliation admin Vite 构建 | 通过，`11` modules |
+| 真实跨系统事实 | 当前未启动长驻栈；本轮不把本地契约测试解释为真实 MQ、生产数据库或财务收口事实 |

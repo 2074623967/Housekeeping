@@ -44,3 +44,25 @@ test("reports reconciliation network failures with a stable client error", async
     globalThis.fetch = originalFetch;
   }
 });
+
+test("encodes business chain identifiers when loading cross-system facts", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify({
+      code: "0",
+      data: { businessChainId: "CHAIN/001", chainStatus: "COMPLETED" }
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const { getCrossSystemChain } = await import(`./api.js?chain=${Date.now()}`);
+    assert.deepEqual(await getCrossSystemChain("CHAIN/001"), {
+      businessChainId: "CHAIN/001",
+      chainStatus: "COMPLETED"
+    });
+    assert.equal(requestedUrl, "/api/reconciliation/cross-system/chains/CHAIN%2F001");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
