@@ -15892,3 +15892,18 @@ MAVEN_BIN=/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn \
 | Surefire 用例 | `1465/1465` 通过，`0` failures、`0` errors、`0` skipped |
 | 覆盖模块 | payment-core、gateway-access、settlement、accounting、clearing、refund-center、reconciliation、risk-control、ops-config、deposit、wallet-account、wallet-system |
 | 运行态边界 | 证明本地各后端模块测试可执行，不替代真实 RabbitMQ、渠道、生产数据库、资金事实或发布治理证据 |
+
+## 604. 2026-09-23 payment-core 用户端与小程序回归复核
+
+### 验证结果
+
+| 端 | 自动化测试 | 构建 |
+| --- | ---: | --- |
+| `api-client` | `8/8` | 不适用（Node 服务调用端） |
+| `app-web` | `23/23` | 既有构建记录保持通过 |
+| `h5-web` | `2/2` | Vite 通过，`41` modules |
+| `pc-web` | `2/2` | Vite 通过，`42` modules |
+| `mini-program` | `13/13` | 原生小程序，无 Vite 构建 |
+| 合计 | `48/48` | 本轮涉及构建均通过 |
+
+本轮只证明本地客户端契约、路由、错误边界和小程序页面模型可运行；微信开发者工具/真机、`wx.requestPayment` 签名参数、真实渠道扣款与资金事实仍未被本地测试替代。
