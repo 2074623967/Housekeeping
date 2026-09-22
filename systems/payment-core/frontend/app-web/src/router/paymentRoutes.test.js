@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { buildCashierRoute, buildPaymentResultRoute } from "./paymentRoutes.js";
+import {
+  businessEntryRoutes,
+  buildCashierRoute,
+  buildPaymentResultRoute
+} from "./paymentRoutes.js";
+
+test("keeps App business entry routes complete", () => {
+  assert.deepEqual(businessEntryRoutes.map((route) => route.sceneType), [
+    "recharge", "withdraw", "transfer", "balance-pay"
+  ]);
+});
 
 function createTestRouter() {
   return createRouter({

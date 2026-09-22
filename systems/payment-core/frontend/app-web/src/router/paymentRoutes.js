@@ -1,15 +1,7 @@
-export function buildCashierRoute(prepayOrderNo, query = {}) {
-  return {
-    name: "cashier",
-    params: { prepayOrderNo },
-    query
-  };
-}
-
-export function buildPaymentResultRoute(paymentOrderId, query = {}) {
-  return {
-    name: "payment-result",
-    params: { paymentOrderId },
-    query
-  };
-}
+export {
+  businessEntryRoutes,
+  cashierRoutePath,
+  paymentResultRoutePath,
+  buildCashierRoute,
+  buildPaymentResultRoute
+} from "../../../shared/src/router/terminalRoutes.js";
