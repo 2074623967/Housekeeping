@@ -16068,4 +16068,28 @@ node tools/dev/frontend-admin-regression.mjs
 2. Maven 本地仓库探测增加可写性判断，避免优先选中不可写的绝对路径仓库；找不到可写候选时继续落到用户本地仓库或运行时目录。
 3. `bash -n tools/dev/local-stack.sh`、默认 `doctor backends` 和显式 `HSP_JAVA_HOME` 的 `doctor backends` 均通过。
 
-本轮单服务启动仍受当前执行沙箱限制：Maven 解析器状态文件写入绝对用户仓库被拒绝，前端监听本地端口返回 `EPERM`；未把该次失败记录成服务业务失败，也未生成新的 READY、smoke 或 happy-path 证据。需在允许本地端口监听和 Maven 仓库写入的托管环境复验全栈启动。
+在未提升的执行沙箱中，单服务启动仍受 Maven 状态文件写入和本地端口监听限制；该次失败不代表业务服务失败。后续已在允许本地端口监听和 Maven 仓库访问的受控托管环境完成复验，见第 622 节。
+
+## 622. 2026-09-23 受控本地全栈 HTTP 与 happy-path 复核
+
+在允许本地端口和托管进程访问的受控环境中执行：
+
+```bash
+tools/dev/local-stack.sh status all
+tools/dev/local-stack.sh smoke all
+tools/dev/local-stack.sh happy-path
+```
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 本地托管状态 | `12` 个后端、`15` 个前端及代理路径均 `READY` |
+| HTTP 冒烟 | `[PASS] 所选本地系统 HTTP 冒烟通过` |
+| payment-core dashboard | `code=0`，返回工作台摘要 |
+| 跨系统 happy-path | `[PASS] cross-system local happy path` |
+| 对账链路 | `COMPLETED`，`4/4` 阶段完成，`financialCloseable=true` |
+
+本批次本地业务标识为：支付单 `PAY1790108391985b894c4e9`、清分单 `CLO20005`、结算单 `SLT20006`、退款单 `REF20260923041952515`。账务事实包含 `PAYMENT_SUCCESS/CLEARING_GENERATED/REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功。
+
+以上是 demo/H2/HTTP 受控本地骨架证据，不代表真实微信、支付宝、银行渠道、RabbitMQ、生产数据库、资金到账或正式发布治理已验收。
