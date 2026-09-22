@@ -15961,3 +15961,7 @@ node tools/dev/frontend-admin-regression.mjs
 ## 610. 2026-09-23 链路事实金额与配置版本展示补齐
 
 跨系统链路诊断事实表新增金额和配置快照版本列，金额沿用后端字符串序列化，不做 JavaScript 浮点转换；用于运营核对各阶段金额口径及实际消费的配置版本。reconciliation admin `4/4` 测试和 Vite 构建继续通过，不新增写入口或资金事实。
+
+## 611. 2026-09-23 后端回归工具 Maven 探测可移植性修复
+
+`tools/dev/backend-regression.mjs` 移除机器相关的绝对 Maven 路径，改为按 `MAVEN_BIN`、`MAVEN_HOME/bin/mvn`、PATH 中的 `mvn` 顺序探测；找不到时给出明确配置提示。使用显式 `MAVEN_BIN` 对 reconciliation 后端定向回归验证通过，`1/1` 模块通过。

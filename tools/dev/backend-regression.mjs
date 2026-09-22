@@ -35,9 +35,12 @@ if (selected.length === 0) {
 }
 
 const configuredMaven = process.env.MAVEN_BIN;
-const mavenCandidates = configuredMaven
-  ? [configuredMaven]
-  : ["mvn", "/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn"];
+const mavenHome = process.env.MAVEN_HOME;
+const mavenCandidates = [
+  configuredMaven,
+  mavenHome ? path.join(mavenHome, "bin", "mvn") : "",
+  "mvn"
+].filter(Boolean);
 const maven = mavenCandidates.find((candidate) => {
   if (candidate !== "mvn" && !existsSync(candidate)) {
     return false;
@@ -45,7 +48,7 @@ const maven = mavenCandidates.find((candidate) => {
   return spawnSync(candidate, ["-v"], { stdio: "ignore" }).status === 0;
 });
 if (!maven) {
-  throw new Error("未找到 Maven，请设置 MAVEN_BIN");
+  throw new Error("未找到 Maven，请将 mvn 放入 PATH，或设置 MAVEN_BIN / MAVEN_HOME");
 }
 
 for (const appDir of selected) {
