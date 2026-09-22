@@ -16015,3 +16015,9 @@ node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases
 | `mini-program` | `13/13` | 原生小程序工程无 `build` 脚本，按测试契约执行 |
 
 本轮确认用户端测试和可构建 Web 入口没有回退；原生小程序真机、微信开发者工具和真实 `wx.requestPayment` 仍未验证，不把本地测试解释为真实扣款或渠道事实。
+
+## 617. 2026-09-23 payment-core 用户端回归脚本固化
+
+新增 `tools/dev/payment-core-user-regression.mjs`，统一遍历 `api-client`、`app-web`、`h5-web`、`pc-web` 和 `mini-program`，要求每个工程声明 `test` 脚本；只有声明了 `build` 的工程才执行构建，原生小程序和 API client 的无构建脚本会明确记录为 accepted，而不会误报失败。支持 `--only` 定向执行。
+
+执行 `node tools/dev/payment-core-user-regression.mjs` 结果为 `5/5 user apps passed their declared checks`：API client `8/8`、App `23/23`、H5 `2/2`、PC `2/2`、小程序 `13/13`，App/H5/PC 构建通过。
