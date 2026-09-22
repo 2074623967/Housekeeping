@@ -16049,3 +16049,15 @@ node tools/dev/dlq-compensation-smoke.mjs
 Surefire 报告汇总 `1188` 个用例，`0` failures、`0` errors、`0` skipped。测试期间出现的异常文本均来自预期失败分支和事务回滚断言，不构成测试失败。
 
 本轮只证明 payment-core 本地后端测试可回归；RabbitMQ、真实渠道、生产数据库、生产通知供应商和正式发布治理仍未被本地测试替代。
+
+## 620. 2026-09-23 跨系统管理端聚合回归复核
+
+执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端均通过 `npm test && npm run build`，前端用例合计 `89/89` 通过。覆盖 payment-core、clearing、settlement、reconciliation、accounting、refund、deposit、wallet、wallet-account、risk-control、ops-config 和 gateway-access 管理端。
+
+本轮只证明管理端 API 契约与生产构建没有回退；不替代真实浏览器、微信开发者工具、RabbitMQ、渠道、生产数据库或正式发布治理验证。
