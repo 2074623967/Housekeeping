@@ -16343,3 +16343,17 @@ bash tools/dev/local-stack.sh verify all
 结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 实际生成支付、清分、结算、账务、退款和对账事实，账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功，链路状态为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
 
 该结果是当前 demo/H2/HTTP 受控本地运行态证据，不代表真实微信、支付宝、银行渠道、RabbitMQ、生产数据库、资金到账、财务关账或正式发布治理已完成。
+
+## 643. 2026-09-23 本地全栈 Maven 仓库回退修复
+
+修正 `tools/dev/local-stack.sh` 的 Maven 仓库解析：当显式配置、工具链相邻仓库和用户 Maven 仓库均不可用时，自动创建并回退到工作区 `.runtime/maven-repository`，避免仅因 `$HOME/.m2/repository` 缺失或不可写而阻断本地骨架启动。
+
+验证：
+
+```bash
+bash -n tools/dev/local-stack.sh
+HOME=/private/tmp/hsp-no-maven-home-$$ bash tools/dev/local-stack.sh doctor backends
+git diff --check
+```
+
+结果：脚本语法、补丁检查和回退场景 `doctor backends` 均通过。该修复只改善本地工具链前置诊断，不改变 Maven 依赖来源、业务接口、数据库或支付资金状态。

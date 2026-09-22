@@ -78,11 +78,20 @@ resolve_maven_repo() {
       return 0
     fi
   done
+  if [[ -n "${HOME:-}" && -d "$HOME/.m2/repository" && -w "$HOME/.m2/repository" ]]; then
+    printf '%s' "$HOME/.m2/repository"
+    return 0
+  fi
+  local runtime_repo="$ROOT_DIR/.runtime/maven-repository"
+  if mkdir -p "$runtime_repo" 2>/dev/null && [[ -w "$runtime_repo" ]]; then
+    printf '%s' "$runtime_repo"
+    return 0
+  fi
   if [[ -n "${HOME:-}" ]]; then
     printf '%s' "$HOME/.m2/repository"
     return 0
   fi
-  printf '%s' "$ROOT_DIR/.runtime/maven-repository"
+  printf '%s' "$runtime_repo"
 }
 
 readonly MAVEN_BIN="$(resolve_maven_bin)"
