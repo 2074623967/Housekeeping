@@ -20,6 +20,22 @@ test("encodes wallet account detail identifiers as one path segment", async () =
   }
 });
 
+test("normalizes null wallet account page records", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: { records: null, total: 0, pageNo: 1, pageSize: 20 }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { fetchWalletAccounts } = await import(`./api.js?empty-page=${Date.now()}`);
+    const result = await fetchWalletAccounts({});
+    assert.deepEqual(result.records, []);
+    assert.equal(result.total, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON wallet account responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

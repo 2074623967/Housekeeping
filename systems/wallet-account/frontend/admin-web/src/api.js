@@ -35,7 +35,16 @@ async function request(path, options = {}) {
     businessError.code = code;
     throw businessError;
   }
-  return payload.data;
+  return normalizePagePayload(payload.data);
+}
+
+function normalizePagePayload(data) {
+  if (data && typeof data === "object"
+      && Object.prototype.hasOwnProperty.call(data, "records")
+      && !Array.isArray(data.records)) {
+    return { ...data, records: [] };
+  }
+  return data;
 }
 
 async function post(path, body) {
