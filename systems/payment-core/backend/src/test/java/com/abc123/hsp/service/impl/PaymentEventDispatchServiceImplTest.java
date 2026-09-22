@@ -1296,6 +1296,57 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldKeepPaymentEventRetryableWhenReconciliationFactFailsAfterDownstreamsSucceed() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-RECONCILIATION-FAIL", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-RECONCILIATION-FAIL")).thenReturn(event);
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(
+                eq("http://reconciliation/facts"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("RECONCILIATION_UNAVAILABLE", HttpStatus.BAD_GATEWAY));
+
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate);
+        setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+
+        service.publishPaymentSuccess("EVT-RECONCILIATION-FAIL", "PAY-001");
+        verify(paymentEventMapper).markPublishFailed("EVT-RECONCILIATION-FAIL");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-RECONCILIATION-FAIL");
+        verify(restTemplate).postForEntity(
+                eq("http://reconciliation/facts"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    private void setField(Object target, String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("无法设置测试字段 " + fieldName, exception);
+        }
+    }
+
+    @Test
     void shouldFailWhenPaymentSuccessEventStatusCannotBeUpdated() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-STATUS-CONFLICT", 0);
