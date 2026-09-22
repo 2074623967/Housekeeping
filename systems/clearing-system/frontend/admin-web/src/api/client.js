@@ -44,7 +44,7 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return normalizePagePayload(payload.data);
+  return payload.data;
 }
 
 function postJson(url, payload) {
@@ -63,10 +63,19 @@ export function normalizePagePayload(data) {
   return data;
 }
 
+function requestPage(url, options = {}) {
+  return request(url, options).then((data) => normalizePagePayload(data || {
+    items: [],
+    total: 0,
+    pageNo: 1,
+    pageSize: 20
+  }));
+}
+
 export const batchApi = {
   getList: ({ batchDate = "", batchStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchDate, batchStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/batches?${params.toString()}`);
+    return requestPage(`/api/clearing/batches?${params.toString()}`);
   },
   getDetail: (batchNo) => request(`/api/clearing/batches/${batchNo}`),
   create: (payload) => postJson("/api/clearing/batches", payload),
@@ -76,7 +85,7 @@ export const batchApi = {
 export const orderApi = {
   getList: ({ batchNo = "", orderNo = "", paymentOrderId = "", clearingStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/orders?${params.toString()}`);
+    return requestPage(`/api/clearing/orders?${params.toString()}`);
   },
   buildListExportUrl: ({ batchNo = "", orderNo = "", paymentOrderId = "", clearingStatus = "" } = {}) => {
     const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus });
@@ -89,7 +98,7 @@ export const orderApi = {
 export const ruleApi = {
   getList: ({ ruleType = "", ruleStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ ruleType, ruleStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/rules?${params.toString()}`);
+    return requestPage(`/api/clearing/rules?${params.toString()}`);
   },
   create: (payload) => postJson("/api/clearing/rules", payload),
   enable: (ruleNo) => postJson(`/api/clearing/rules/${ruleNo}/enable`, {}),
@@ -99,7 +108,7 @@ export const ruleApi = {
 export const feeApi = {
   getList: ({ feeType = "", status = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ feeType, status, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/fees?${params.toString()}`);
+    return requestPage(`/api/clearing/fees?${params.toString()}`);
   },
   create: (payload) => postJson("/api/clearing/fees", payload)
 };
@@ -107,14 +116,14 @@ export const feeApi = {
 export const shareApi = {
   getList: ({ clearingNo = "", shareType = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ clearingNo, shareType, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/shares?${params.toString()}`);
+    return requestPage(`/api/clearing/shares?${params.toString()}`);
   }
 };
 
 export const eventApi = {
   getList: ({ eventType = "", bizNo = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ eventType, bizNo, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/clearing/events?${params.toString()}`);
+    return requestPage(`/api/clearing/events?${params.toString()}`);
   },
   consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload),
   replayFailed: () => postJson("/api/clearing/events/replay-failed", {})
