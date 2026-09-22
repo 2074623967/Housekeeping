@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ledgerApi, subjectApi } from "./client.js";
+import { ledgerApi, normalizePagePayload, subjectApi } from "./client.js";
+
+test("normalizes null accounting page items without changing summaries", () => {
+  assert.deepEqual(normalizePagePayload({ items: null, total: 0 }).items, []);
+  const summary = { postedCount: 2 };
+  assert.equal(normalizePagePayload(summary), summary);
+});
 
 test("keeps the accounting service envelope on success", async () => {
   const originalFetch = globalThis.fetch;

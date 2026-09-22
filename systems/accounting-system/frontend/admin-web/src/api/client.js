@@ -45,7 +45,16 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return payload.data;
+  return normalizePagePayload(payload.data);
+}
+
+export function normalizePagePayload(data) {
+  if (data && typeof data === "object"
+      && Object.prototype.hasOwnProperty.call(data, "items")
+      && !Array.isArray(data.items)) {
+    return { ...data, items: [] };
+  }
+  return data;
 }
 
 function postJson(url, payload) {
