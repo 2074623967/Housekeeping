@@ -16228,3 +16228,9 @@ node tools/dev/frontend-admin-regression.mjs
 ```
 
 结果：`12/12` 管理端通过各自测试与生产构建；settlement 管理端本轮为 `7/7` 测试通过，payment-core 管理端保持 `49/49` 通过。该回归只证明代码和构建基线没有回退，不改变当前发布证据和治理门禁。
+
+## 635. 2026-09-23 主运营列表分页扫描边界
+
+对 clearing、settlement、accounting、payment-core 和 reconciliation 管理端进行固定第一页扫描：clearing、settlement、accounting 的主运营列表已接通服务端分页；payment-core 现有主列表已具备分页与快照门禁。剩余固定第一页调用均属于 Dashboard 摘要或已选中批次/事件的详情下钻；reconciliation 批次列表当前后端接口返回数组且没有分页契约，未仅修改前端制造假分页。
+
+该边界记录用于避免把摘要/详情查询误判为主列表缺陷，也避免在缺少后端契约时伪造分页能力。正式发布门禁不因此改变。
