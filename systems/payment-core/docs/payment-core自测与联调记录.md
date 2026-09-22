@@ -16001,3 +16001,17 @@ node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases
 首次在未设置 `MAVEN_BIN/MAVEN_HOME` 的环境执行 `node tools/dev/backend-regression.mjs` 时，原脚本因 PATH 没有 Maven 直接失败；已补充仓库相邻 Maven 工具链探测。修复后重新执行同一命令，12/12 后端模块全部通过，未发生 failures、errors 或 skipped。
 
 本轮只改善回归工具的环境发现能力，不改变后端业务、接口、数据库、真实渠道或发布门禁结论。
+
+## 616. 2026-09-23 payment-core 用户端回归复核
+
+按各工程实际 package 脚本执行用户端回归：
+
+| 入口 | 测试 | 构建 |
+| --- | ---: | --- |
+| `api-client` | `8/8` | 无 `build` 脚本，按 CLI 工程只执行测试 |
+| `app-web` | `23/23` | Vite 通过 |
+| `h5-web` | `2/2` | Vite 通过 |
+| `pc-web` | `2/2` | Vite 通过 |
+| `mini-program` | `13/13` | 原生小程序工程无 `build` 脚本，按测试契约执行 |
+
+本轮确认用户端测试和可构建 Web 入口没有回退；原生小程序真机、微信开发者工具和真实 `wx.requestPayment` 仍未验证，不把本地测试解释为真实扣款或渠道事实。
