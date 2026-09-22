@@ -25,6 +25,9 @@ mybatis:
     map-underscore-to-camel-case: true
 
 settlement:
+  payout-inspection:
+    enabled: ${HSP_SETTLEMENT_PAYOUT_INSPECTION_ENABLED:false}
+    fixed-delay-ms: ${HSP_SETTLEMENT_PAYOUT_INSPECTION_FIXED_DELAY_MS:300000}
   downstream:
     reconciliation:
       fact-url: ${HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL:}

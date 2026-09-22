@@ -5,6 +5,7 @@ import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
+import com.abc123.settlement.dto.PayoutInspectionDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
 import com.abc123.settlement.dto.RetryPayoutBatchRequestDTO;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import com.abc123.settlement.service.PayoutService;
+import com.abc123.settlement.service.PayoutInspectionService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,9 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PayoutController {
 
     private final PayoutService payoutService;
+    private final PayoutInspectionService payoutInspectionService;
 
-    public PayoutController(PayoutService payoutService) {
+    public PayoutController(PayoutService payoutService, PayoutInspectionService payoutInspectionService) {
         this.payoutService = payoutService;
+        this.payoutInspectionService = payoutInspectionService;
     }
 
     @GetMapping
@@ -65,6 +69,11 @@ public class PayoutController {
     @PostMapping("/{payoutBatchNo}/retry")
     public ApiResponse<PayoutBatchDTO> retry(@PathVariable String payoutBatchNo, @RequestBody RetryPayoutBatchRequestDTO request) {
         return ApiResponse.success(payoutService.retry(payoutBatchNo, request));
+    }
+
+    @PostMapping("/inspect")
+    public ApiResponse<PayoutInspectionDTO> inspect() {
+        return ApiResponse.success(payoutInspectionService.inspect());
     }
 
     @GetMapping("/{payoutBatchNo}/records")

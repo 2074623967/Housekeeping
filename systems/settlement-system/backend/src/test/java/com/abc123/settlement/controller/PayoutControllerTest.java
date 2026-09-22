@@ -7,6 +7,7 @@ import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.RetryPayoutBatchRequestDTO;
 import java.nio.charset.StandardCharsets;
+import com.abc123.settlement.service.PayoutInspectionService;
 import com.abc123.settlement.service.PayoutService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,9 +24,12 @@ class PayoutControllerTest {
     @Mock
     private PayoutService payoutService;
 
+    @Mock
+    private PayoutInspectionService payoutInspectionService;
+
     @Test
     void shouldListPayoutBatches() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
 
         controller.list("PBT50001", "待出款", 1, 20);
 
@@ -34,7 +38,7 @@ class PayoutControllerTest {
 
     @Test
     void shouldCreatePayoutBatch() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
         CreatePayoutBatchRequestDTO request = new CreatePayoutBatchRequestDTO();
 
         controller.create(request);
@@ -44,7 +48,7 @@ class PayoutControllerTest {
 
     @Test
     void shouldExecutePayoutBatch() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
         ExecutePayoutBatchRequestDTO request = new ExecutePayoutBatchRequestDTO();
 
         controller.execute("PBT50001", request);
@@ -54,7 +58,7 @@ class PayoutControllerTest {
 
     @Test
     void shouldRetryPayoutBatch() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
         RetryPayoutBatchRequestDTO request = new RetryPayoutBatchRequestDTO();
 
         controller.retry("PBT50001", request);
@@ -64,7 +68,7 @@ class PayoutControllerTest {
 
     @Test
     void shouldListPayoutRecords() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
 
         controller.records("PBT50001", "出款失败", 1, 20);
 
@@ -73,7 +77,7 @@ class PayoutControllerTest {
 
     @Test
     void shouldExportPayoutBatches() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
         when(payoutService.exportBatches("SET10001", "待出款")).thenReturn("csv".getBytes(StandardCharsets.UTF_8));
 
         byte[] body = controller.exportBatches("SET10001", "待出款").getBody();
@@ -84,12 +88,21 @@ class PayoutControllerTest {
 
     @Test
     void shouldExportPayoutRecords() {
-        PayoutController controller = new PayoutController(payoutService);
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
         when(payoutService.exportRecords("PBT50001", "已失败")).thenReturn("record".getBytes(StandardCharsets.UTF_8));
 
         byte[] body = controller.exportRecords("PBT50001", "已失败").getBody();
 
         verify(payoutService).exportRecords("PBT50001", "已失败");
         assertEquals("record", new String(body, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void shouldInspectPayoutBatches() {
+        PayoutController controller = new PayoutController(payoutService, payoutInspectionService);
+
+        controller.inspect();
+
+        verify(payoutInspectionService).inspect();
     }
 }
