@@ -3349,3 +3349,9 @@
 2. 当前实现已覆盖用户端支付入口、统一收银台、管理端运营排障和本地跨系统接口骨架
 3. 后续开发应继续按四类资料收口 payment-core 保留边界，同时把清分、结算、账务、对账等资金作业留在对应子系统
 4. 所有 `test -> master` 与 `master -> release/*` 结论必须以最新自动审计和当前批次证据为准，不沿用历史放行记录
+
+### 9.4 2026-09-23 受控权限下当前运行态复验补充
+
+随后在允许本地端口监听和已有 Maven 仓库写入的受控环境中重新执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过，跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，链路 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+该证据修正的是本地运行权限造成的“无法复验”状态，不改变系统边界：它仍属于 demo/H2/HTTP 骨架证据，不证明真实渠道、RabbitMQ、生产 MySQL、资金到账、正式审批、现场核验或稳定观察完成。

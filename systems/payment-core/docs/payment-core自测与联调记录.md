@@ -16330,3 +16330,16 @@ npm run build
 ```
 
 结果：后端 `11/11` 通过，管理端 `3/3` 通过并构建成功。本轮仍只证明本地代码、H2 测试和前端构建可用，不代表生产数据库、真实渠道或正式发布验收。
+
+## 642. 2026-09-23 受控权限下全栈运行态复验
+
+使用本地已有 Maven 仓库和受控端口权限执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh verify all
+```
+
+结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 实际生成支付、清分、结算、账务、退款和对账事实，账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含支付成功、清分生成、结算创建、账务入账和退款成功，链路状态为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+该结果是当前 demo/H2/HTTP 受控本地运行态证据，不代表真实微信、支付宝、银行渠道、RabbitMQ、生产数据库、资金到账、财务关账或正式发布治理已完成。
