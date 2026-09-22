@@ -15852,3 +15852,25 @@ node tools/dev/frontend-admin-regression.mjs
 | 网络失败回归 | 通过 |
 | 超时失败回归 | 通过 |
 | `git diff --check` | 待提交前复核 |
+
+## 602. 2026-09-23 后端模块回归脚本接入
+
+### 本轮变更
+
+新增 `tools/dev/backend-regression.mjs`，统一维护 12 个后端模块的 Maven 回归入口：
+
+```bash
+node tools/dev/backend-regression.mjs
+node tools/dev/backend-regression.mjs --only payment-core/backend
+MAVEN_BIN=/path/to/mvn node tools/dev/backend-regression.mjs
+```
+
+脚本会校验模块目录和 `pom.xml`，探测可用 Maven，并在任一模块失败时以非零状态退出；它只负责本地自动化回归，不替代真实 RabbitMQ、渠道、生产数据库或发布治理证据。
+
+### 当前验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `payment-core/backend` 定向执行 | 通过，模块回归命令成功完成 |
+| Maven 路径 | `/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn` |
+| 当前批次真实消息代理取证 | 未完成，Docker socket 权限阻断 |
