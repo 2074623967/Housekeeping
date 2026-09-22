@@ -571,14 +571,14 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentRouteRuleReviewDTO> listRouteRuleReviews() {
-        List<PaymentRouteRuleReviewDTO> reviews = paymentConfigMapper.findRouteRuleReviews();
+        List<PaymentRouteRuleReviewDTO> reviews = safeList(paymentConfigMapper.findRouteRuleReviews());
         List<PaymentRouteRuleConfigDTO> currentRules = null;
         for (PaymentRouteRuleReviewDTO review : reviews) {
             if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
                 continue;
             }
             if (currentRules == null) {
-                currentRules = paymentConfigMapper.findRouteRules();
+                currentRules = safeList(paymentConfigMapper.findRouteRules());
             }
             PaymentRouteRuleConfigDTO candidate = toConfigDto(review);
             List<PaymentRouteRuleConflictDTO> candidateConflicts = findCandidateConflicts(candidate, currentRules);
@@ -1918,7 +1918,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private boolean hasEnabledGatewayForAnyChannel(Set<String> allowedChannels) {
-        List<PaymentGatewayConfigDTO> gateways = paymentConfigMapper.findGateways();
+        List<PaymentGatewayConfigDTO> gateways = safeList(paymentConfigMapper.findGateways());
         for (PaymentGatewayConfigDTO gateway : gateways) {
             if ("ENABLED".equals(gateway.getStatus())
                     && hasAnyConfiguredValue(gateway.getChannelScope(), allowedChannels)) {
@@ -3645,7 +3645,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private String resolveProtocolTypeName(String protocolType, String requestProtocolTypeName) {
         String normalizedProtocolType = requireText(protocolType, "协议类型不能为空");
-        List<PaymentProtocolTypeOptionDTO> protocolTypeOptions = paymentConfigMapper.findProtocolTypeOptions();
+        List<PaymentProtocolTypeOptionDTO> protocolTypeOptions =
+                safeList(paymentConfigMapper.findProtocolTypeOptions());
         for (PaymentProtocolTypeOptionDTO protocolTypeOption : protocolTypeOptions) {
             if (normalizedProtocolType.equals(protocolTypeOption.getProtocolType())) {
                 return protocolTypeOption.getProtocolTypeName();
@@ -4683,7 +4684,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private Set<String> resolveReturnCodeImportChannels() {
-        List<PaymentChannelConfigDTO> channels = paymentConfigMapper.findChannels();
+        List<PaymentChannelConfigDTO> channels = safeList(paymentConfigMapper.findChannels());
         Set<String> channelCodes = new HashSet<>();
         if (channels != null) {
             for (PaymentChannelConfigDTO channel : channels) {

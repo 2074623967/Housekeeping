@@ -429,6 +429,17 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullRouteReviewAndRuleListsAsEmpty() {
+        when(paymentConfigMapper.findRouteRuleReviews()).thenReturn(null);
+
+        List<PaymentRouteRuleReviewDTO> reviews =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleReviews();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(reviews);
+        org.junit.jupiter.api.Assertions.assertTrue(reviews.isEmpty());
+    }
+
+    @Test
     void shouldApproveReviewWithDifferentDeclaredReviewerAndPublishVersion() {
         PaymentRouteRuleReviewEntity review = buildPendingReview();
         PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
@@ -1610,6 +1621,36 @@ class PaymentConfigServiceImplTest {
 
         verify(paymentConfigMapper).updateControlPolicySelfCheck(
                 org.mockito.ArgumentMatchers.eq("housekeeping-h5-web"),
+                org.mockito.ArgumentMatchers.eq("WARN"),
+                org.mockito.ArgumentMatchers.eq("warn"),
+                org.mockito.ArgumentMatchers.contains("未找到覆盖授权渠道的启用网关"));
+    }
+
+    @Test
+    void shouldTreatNullGatewayListAsEmptyDuringControlPolicySelfCheck() {
+        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
+        request.setConfigCode("APP_EMPTY_GATEWAYS");
+        PaymentControlPolicyDTO policy = new PaymentControlPolicyDTO();
+        policy.setSourceAppId("APP_EMPTY_GATEWAYS");
+        policy.setAllowedPaymentMethods("微信支付");
+        policy.setAllowedChannelCodes("wx_h5");
+        policy.setAllowedMerchantNos("merchant-1");
+        policy.setTokenAuthRequired("关闭");
+        when(paymentConfigMapper.findControlPolicyBySourceAppId("APP_EMPTY_GATEWAYS")).thenReturn(policy);
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(null);
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.singletonList(policy));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
+        PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .runControlPolicySelfCheck(request);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(overview);
+        verify(paymentConfigMapper).updateControlPolicySelfCheck(
+                org.mockito.ArgumentMatchers.eq("APP_EMPTY_GATEWAYS"),
                 org.mockito.ArgumentMatchers.eq("WARN"),
                 org.mockito.ArgumentMatchers.eq("warn"),
                 org.mockito.ArgumentMatchers.contains("未找到覆盖授权渠道的启用网关"));
