@@ -8,6 +8,7 @@ import com.abc123.wallet.mapper.WalletMapper;
 import com.abc123.wallet.service.WalletRedPacketService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class WalletRedPacketServiceImpl implements WalletRedPacketService {
     public List<WalletRedPacketDTO> listRedPackets() {
         List<WalletRedPacketEntity> entities = walletMapper.findRedPackets();
         List<WalletRedPacketDTO> results = new ArrayList<>();
-        for (WalletRedPacketEntity entity : entities) {
+        for (WalletRedPacketEntity entity : safeList(entities)) {
             results.add(toDTO(entity));
         }
         return results;
@@ -78,7 +79,7 @@ public class WalletRedPacketServiceImpl implements WalletRedPacketService {
                     "红包总金额达到风控审批阈值");
         }
         List<WalletRedPacketEntity> entities = walletMapper.findRedPackets();
-        for (WalletRedPacketEntity entity : entities) {
+        for (WalletRedPacketEntity entity : safeList(entities)) {
             if (redPacketNo.equals(entity.getRedPacketNo())) {
                 return toDTO(entity);
             }
@@ -96,5 +97,9 @@ public class WalletRedPacketServiceImpl implements WalletRedPacketService {
         dto.setStatus(entity.getStatus());
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }

@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import com.abc123.wallet.service.WalletService;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -26,12 +27,12 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public List<WalletAccountDTO> listAccounts() {
-        return walletMapper.findAccounts().stream().map(this::toAccountDTO).collect(Collectors.toList());
+        return safeList(walletMapper.findAccounts()).stream().map(this::toAccountDTO).collect(Collectors.toList());
     }
 
     @Override
     public List<WalletBalanceSnapshotDTO> listBalanceSnapshots() {
-        return walletMapper.findAccounts().stream().map(this::toBalanceSnapshotDTO).collect(Collectors.toList());
+        return safeList(walletMapper.findAccounts()).stream().map(this::toBalanceSnapshotDTO).collect(Collectors.toList());
     }
 
     @Override
@@ -42,13 +43,14 @@ public class WalletServiceImpl implements WalletService {
         }
         WalletAccountDetailDTO detail = new WalletAccountDetailDTO();
         detail.setAccount(toAccountDTO(account));
-        detail.setLedgers(walletMapper.findLedgersByAccountNo(accountNo).stream().map(this::toLedgerDTO).collect(Collectors.toList()));
+        detail.setLedgers(safeList(walletMapper.findLedgersByAccountNo(accountNo)).stream()
+                .map(this::toLedgerDTO).collect(Collectors.toList()));
         return detail;
     }
 
     @Override
     public List<WalletLedgerDTO> listLedgers(String accountNo, String bizType, String direction) {
-        return walletMapper.findAllLedgers(accountNo, bizType, direction)
+        return safeList(walletMapper.findAllLedgers(accountNo, bizType, direction))
                 .stream()
                 .map(this::toLedgerDTO)
                 .collect(Collectors.toList());
@@ -130,6 +132,10 @@ public class WalletServiceImpl implements WalletService {
             return BigDecimal.ZERO;
         }
         return new BigDecimal(value);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private String formatAmount(BigDecimal amount) {

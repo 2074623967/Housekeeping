@@ -7,6 +7,7 @@ import com.abc123.wallet.entity.WalletRedPacketEntity;
 import com.abc123.wallet.mapper.WalletMapper;
 import com.abc123.wallet.service.WalletRiskEventService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.math.BigDecimal;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ public class WalletRiskEventServiceImpl implements WalletRiskEventService {
     @Override
     public List<WalletRiskEventDTO> listRiskEvents() {
         List<WalletRiskEventDTO> results = new ArrayList<>();
-        for (WalletRiskEventEntity entity : walletMapper.findRiskEvents()) {
+        for (WalletRiskEventEntity entity : safeList(walletMapper.findRiskEvents())) {
             results.add(toDTO(entity));
         }
         return results;
@@ -81,5 +82,9 @@ public class WalletRiskEventServiceImpl implements WalletRiskEventService {
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setHandledAt(entity.getHandledAt());
         return dto;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 }
