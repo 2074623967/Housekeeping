@@ -15582,3 +15582,19 @@
 1. `test -> master` 的回归证据、场景台账和自动化验证已满足当前审计条件。
 2. `master -> release/*` 仍被正式签字审批、发布后现场核验、稳定观察结束结论和候选版正式化四项真实治理事实阻断。
 3. 本轮没有修改 release 材料来制造放行结论，也没有把本地/H2/模拟渠道结果解释为真实渠道、资金到账、生产消息或生产稳定性证据。
+
+## 584. 2026-09-22 单会话全栈 happy-path 财务收口复核
+
+### 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `tools/dev/local-stack.sh verify all` | 通过；全部选定后端和前端服务 READY，HTTP smoke 通过，流程结束自动清理服务 |
+| 支付主链路 | `PAYMENT_SUCCESS -> CLEARING_GENERATED -> SETTLEMENT_CREATED -> ACCOUNTING_POSTED` 全部成功 |
+| 退款链路 | `REFUND_SUCCESS` 事实成功并保持幂等 |
+| 对账链路 | `chainStatus=COMPLETED`、`responsibilityStatus=CLOSED`、`completedStageCount=4`、`expectedStageCount=4`、`financialCloseable=true` |
+
+### 证据边界
+
+1. 本轮证明本地受控栈中四阶段事实能够完整落库、重复退款事实能够幂等收口，且 happy-path 已实际执行财务收口断言。
+2. 本地 demo/H2/HTTP 联调不证明真实微信、支付宝、银行渠道、生产 RabbitMQ、生产 MySQL、资金到账、正式财务审批或 release 放行条件已完成。
