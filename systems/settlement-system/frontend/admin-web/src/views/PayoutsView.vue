@@ -5,6 +5,9 @@ import { payoutApi } from "../api/client";
 const rows = ref([]);
 const message = ref("");
 const loading = ref(false);
+const pageNo = ref(1);
+const total = ref(0);
+const pageSize = 20;
 const actionLoading = ref(false);
 const recordsLoading = ref(false);
 const filters = ref({ batchNo: "", payoutStatus: "" });
@@ -18,12 +21,14 @@ const retryForm = ref({ operatorName: "结算运营", reason: "失败批次人�
 const inspection = ref(null);
 const inspectionLoading = ref(false);
 
-async function loadRows() {
+async function loadRows(targetPage = pageNo.value) {
   loading.value = true;
   message.value = "";
   try {
-    const result = await payoutApi.getList({ ...filters.value, pageNo: 1, pageSize: 20 });
+    const result = await payoutApi.getList({ ...filters.value, pageNo: targetPage, pageSize });
     rows.value = result.items;
+    total.value = Number(result.total) || 0;
+    pageNo.value = targetPage;
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -129,9 +134,18 @@ function exportRecordRows() {
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
+function goToPage(nextPage) {
+  const maxPage = Math.max(1, Math.ceil(total.value / pageSize));
+  if (loading.value || nextPage < 1 || nextPage > maxPage) {
+    return;
+  }
+  loadRows(nextPage);
+}
+
 function resetFilters() {
   filters.value = { batchNo: "", payoutStatus: "" };
-  loadRows();
+  pageNo.value = 1;
+  loadRows(1);
 }
 
 onMounted(loadRows);
@@ -228,8 +242,18 @@ onMounted(loadRows);
                 </button>
               </td>
             </tr>
+            <tr v-if="rows.length === 0">
+              <td colspan="11" class="empty-cell">当前筛选条件下暂无出款批次。</td>
+            </tr>
           </tbody>
         </table>
+      </div>
+      <div class="pager" aria-label="出款批次分页">
+        <span>共 {{ total }} 条，第 {{ pageNo }} / {{ Math.max(1, Math.ceil(total / pageSize)) }} 页</span>
+        <div class="pager-actions">
+          <button class="button secondary button-inline" :disabled="loading || pageNo <= 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary button-inline" :disabled="loading || pageNo >= Math.max(1, Math.ceil(total / pageSize))" @click="goToPage(pageNo + 1)">下一页</button>
+        </div>
       </div>
     </section>
     <section class="panel">
@@ -378,6 +402,21 @@ onMounted(loadRows);
   text-align: center;
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pager-actions {
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 760px) {
   .inspection-row {
     align-items: flex-start;
@@ -386,6 +425,11 @@ onMounted(loadRows);
 
   .inspection-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pager {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

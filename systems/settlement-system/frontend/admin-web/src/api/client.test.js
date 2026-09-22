@@ -52,6 +52,32 @@ test("posts a read-only payout inspection request", async () => {
   }
 });
 
+test("keeps payout list pagination in the query contract", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestUrl = "";
+  globalThis.fetch = async (url) => {
+    requestUrl = url;
+    return {
+      ok: true,
+      async json() {
+        return { code: "0", data: { items: [], total: 41, pageNo: 2, pageSize: 20 } };
+      }
+    };
+  };
+
+  try {
+    const result = await payoutApi.getList({ batchNo: "SET-001", payoutStatus: "待出款", pageNo: 2, pageSize: 20 });
+    const query = new URL(requestUrl, "http://127.0.0.1").searchParams;
+    assert.equal(query.get("batchNo"), "SET-001");
+    assert.equal(query.get("payoutStatus"), "待出款");
+    assert.equal(query.get("pageNo"), "2");
+    assert.equal(query.get("pageSize"), "20");
+    assert.equal(result.total, 41);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON settlement responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
