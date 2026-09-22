@@ -16280,3 +16280,13 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
 ```
 
 Surefire 汇总：`1188` tests，`0` failures、`0` errors、`0` skipped。输出中的异常来自预期失败分支、事务回滚和隔离配置测试断言；本轮只证明本地 demo/H2 测试基线可回归，不替代真实渠道、生产数据库、RabbitMQ、资金到账或正式发布治理验证。
+
+## 639. 2026-09-23 小程序支付骨架回归
+
+在 `systems/payment-core/frontend/mini-program` 执行：
+
+```bash
+npm test
+```
+
+结果：`13/13` 通过，覆盖业务入口、预付单、收银台提交、网络错误、支付结果自动刷新、主动查单和受限关单。当前后端仍未返回微信 `wx.requestPayment` 签名参数，本轮验证只证明小程序本地功能骨架和状态保护可用，不代表真实微信扣款。
