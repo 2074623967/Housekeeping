@@ -16389,3 +16389,13 @@ node tools/dev/backend-regression.mjs
 结果：`12/12` 后端模块通过，合计 `1465/1465` 个测试，`0` failures、`0` errors、`0` skipped；本次包含 clearing-system `36/36` 和 deposit-system `11/11`。前一次全量中断和 clearing 定向复验均保留为历史诊断，不覆盖本次最终结果。
 
 该结果证明统一回归脚本、JDK/Maven 工具链和本地 H2 测试基线可运行，不代表真实渠道、RabbitMQ、生产 MySQL、资金到账或正式发布治理完成。
+
+## 646. 2026-09-23 管理端全量回归最终复核
+
+在后端统一回归收口后再次执行：
+
+```bash
+node tools/dev/frontend-admin-regression.mjs
+```
+
+结果：`12/12` 管理端均通过各自测试与生产构建；payment-core 管理端保持 `49/49`，deposit `3/3`，clearing `5/5`，settlement `7/7`，其余管理端基线未回退。该结果只证明本地前端测试和构建可用，不替代真实浏览器现场核验、渠道、RabbitMQ 或正式发布治理证据。
