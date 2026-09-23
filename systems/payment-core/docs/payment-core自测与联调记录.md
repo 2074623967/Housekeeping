@@ -16698,3 +16698,9 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 同时补齐管理端测试脚本对 `src/constants/*.test.js` 的收集，系统目录契约测试不再被测试命令遗漏。
 
 验证：payment-core admin-web `61/61` 测试通过、生产构建通过；全量管理端 `12/12` 工程测试与构建通过；`git diff --check` 通过。该入口只解决本地骨架可达性，不代表统一身份、跨系统权限或生产域名配置已经完成。
+
+## 679. 2026-09-23 后端回归 Maven 探测统一
+
+修复 `tools/dev/backend-regression.mjs` 与 `tools/dev/local-stack.sh` 的工具链偏差：回归脚本现在同时接受 `MAVEN_BIN/HSP_MAVEN_BIN`、`JAVA_HOME/HSP_JAVA_HOME` 和 `MAVEN_REPO/HSP_MAVEN_REPO`，并优先探测 Maven 3.9.16 及其本地仓库，避免 PATH 或旧目录残留导致回归误选 Maven 3.9.12。
+
+验证：`node --check tools/dev/backend-regression.mjs` 通过；使用 Maven 3.9.16、JDK 8 和对应本地仓库执行 `node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过，Surefire 全量测试 `1202/1202`，失败 `0`、错误 `0`、跳过 `0`。该改动只统一本地验收工具链，不改变业务状态机、真实渠道或发布门禁。

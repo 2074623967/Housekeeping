@@ -35,12 +35,13 @@ if (selected.length === 0) {
   throw new Error(`未找到后端模块：${only}`);
 }
 
-const configuredMaven = process.env.MAVEN_BIN;
+const configuredMaven = process.env.MAVEN_BIN || process.env.HSP_MAVEN_BIN;
 const mavenHome = process.env.MAVEN_HOME;
 const mavenCandidates = [
   configuredMaven,
   mavenHome ? path.join(mavenHome, "bin", "mvn") : "",
   path.join(rootDir, "..", "apache-maven-3.9.16", "bin", "mvn"),
+  "/Users/abc123/apache-maven-3.9.16/bin/mvn",
   path.join(rootDir, "..", "apache-maven-3.9.12", "bin", "mvn"),
   "mvn"
 ].filter(Boolean);
@@ -56,6 +57,7 @@ if (!maven) {
 
 const javaHomeCandidates = [
   process.env.JAVA_HOME,
+  process.env.HSP_JAVA_HOME,
   "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home",
   "/Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home"
 ].filter(Boolean);
@@ -71,6 +73,7 @@ const configuredRepo = process.env.MAVEN_REPO || process.env.HSP_MAVEN_REPO;
 const repoCandidates = [
   configuredRepo,
   path.join(rootDir, "..", "apache-maven-3.9.16", "repository"),
+  "/Users/abc123/apache-maven-3.9.16/repository",
   path.join(rootDir, "..", "apache-maven-3.9.12", "repository"),
   process.env.HOME ? path.join(process.env.HOME, ".m2", "repository") : ""
 ].filter(Boolean);
