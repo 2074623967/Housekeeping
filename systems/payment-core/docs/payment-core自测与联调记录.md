@@ -16625,6 +16625,12 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
 
 验证结果：`RefundServiceImplTest` 定向回归通过；随后执行 payment-core 后端全量 Maven 回归，Surefire `1200/1200` 通过，`0` failures、`0` errors、`0` skipped。该修复只统一退款详情错误契约，不改变退款状态机、渠道协议、到账事实或发布门禁。
 
+## 668. 2026-09-23 请求绑定错误统一返回校验码
+
+补强全局请求契约：空请求体、非法 JSON、缺失请求参数、路径参数缺失以及分页参数类型错误现在统一返回 `PAYMENT-400`，不再被通用异常处理器误判为 `PAYMENT-500`。响应结构保持 `code/message/data/requestId` 不变，便于各端稳定区分用户输入错误与系统故障。
+
+新增 `GlobalExceptionHandlerTest` 覆盖空/不可读请求体和参数类型绑定失败场景。随后使用仓库内 Maven 3.9.16、JDK 8 和本地依赖仓库执行 payment-core 全量回归，Surefire 汇总 `1202/1202`，`0` failures、`0` errors、`0` skipped。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：

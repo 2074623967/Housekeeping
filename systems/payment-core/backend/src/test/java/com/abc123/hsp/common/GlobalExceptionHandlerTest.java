@@ -6,6 +6,8 @@ import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * 全局异常处理器测试。
@@ -32,6 +34,28 @@ class GlobalExceptionHandlerTest {
 
         Assertions.assertEquals(ErrorCode.VALIDATION_ERROR, response.getCode());
         Assertions.assertEquals("paymentMethod is required", response.getMessage());
+    }
+
+    @Test
+    void shouldReturnValidationErrorCodeWhenRequestBodyIsUnreadable() {
+        ApiResponse<Void> response = globalExceptionHandler.handleUnreadableRequestBody(
+                new HttpMessageNotReadableException("request body is empty")
+        );
+
+        Assertions.assertEquals(ErrorCode.VALIDATION_ERROR, response.getCode());
+        Assertions.assertEquals("请求体不能为空且必须是合法 JSON", response.getMessage());
+    }
+
+    @Test
+    void shouldReturnValidationErrorCodeWhenRequestParameterBindingFails() {
+        MethodArgumentTypeMismatchException exception = new MethodArgumentTypeMismatchException(
+                "bad-page", Integer.class, "pageNo", null, new IllegalArgumentException("not a number")
+        );
+
+        ApiResponse<Void> response = globalExceptionHandler.handleRequestBindingException(exception);
+
+        Assertions.assertEquals(ErrorCode.VALIDATION_ERROR, response.getCode());
+        Assertions.assertTrue(response.getMessage().contains("pageNo"));
     }
 
     @Test
