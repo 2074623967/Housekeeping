@@ -37,6 +37,7 @@ const PaymentTaskCenterView = () => import("../views/PaymentTaskCenterView.vue")
 const PaymentTaskRunDetailView = () => import("../views/PaymentTaskRunDetailView.vue");
 const PaymentDeadLetterTasksView = () => import("../views/PaymentDeadLetterTasksView.vue");
 const PaymentDeadLetterTaskDetailView = () => import("../views/PaymentDeadLetterTaskDetailView.vue");
+const SystemDirectoryView = () => import("../views/SystemDirectoryView.vue");
 
 const routes = [
   {
@@ -45,6 +46,7 @@ const routes = [
     children: [
       { path: "", redirect: "/dashboard" },
       { path: "dashboard", component: DashboardView },
+      { path: "system-directory", name: "system-directory", component: SystemDirectoryView },
       { path: "orders", name: "orders", component: OrdersView },
       { path: "orders/:orderNo", name: "order-detail", component: OrderDetailView },
       { path: "bills", name: "bills", component: BillsView },

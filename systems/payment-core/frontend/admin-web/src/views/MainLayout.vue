@@ -2,7 +2,10 @@
 const navGroups = [
   {
     title: "总览",
-    links: [{ label: "工作台", to: "/dashboard" }]
+    links: [
+      { label: "工作台", to: "/dashboard" },
+      { label: "系统总览", to: "/system-directory" }
+    ]
   },
   {
     title: "交易支付",

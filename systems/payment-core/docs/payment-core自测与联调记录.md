@@ -16690,3 +16690,11 @@ node tools/dev/cross-system-happy-path.mjs
 ## 677. 2026-09-23 API client 退款审核命令后的门禁复判
 
 API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无变化：`test -> master=false`、`canCreateRelease=false`。代码层退款申请、审核、查单和重试命令不构成真实退款到账、财务审批或发布治理证据；现有 REG-08 与 release 四项真实阻断继续保留。
+
+## 678. 2026-09-23 支付后台系统总览入口
+
+为让本地功能骨架可以从一个后台入口继续使用，payment-core 管理端新增“系统总览”页面，集中列出 12 个管理后台和 App/H5/PC 3 个用户端，并按支付核心、资金域、平台治理分组。入口地址默认对应本地栈端口，同时支持通过 `VITE_*_BASE_URL` 环境变量替换为其他环境地址；每个入口均以新窗口打开，保留当前运营后台上下文。
+
+同时补齐管理端测试脚本对 `src/constants/*.test.js` 的收集，系统目录契约测试不再被测试命令遗漏。
+
+验证：payment-core admin-web `61/61` 测试通过、生产构建通过；全量管理端 `12/12` 工程测试与构建通过；`git diff --check` 通过。该入口只解决本地骨架可达性，不代表统一身份、跨系统权限或生产域名配置已经完成。
