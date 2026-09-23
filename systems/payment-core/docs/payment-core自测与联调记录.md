@@ -16855,3 +16855,18 @@ node tools/dev/backend-regression.mjs
 退款中心补齐支付成功事实投影的 MySQL 幂等 upsert、共享 schema 的跨 H2/MySQL 载荷类型，并在管理端详情页提供失败回调到失败重试的可操作路径。定向结果为退款中心后端 `18/18`、管理端 `6/6`，生产构建通过；随后执行全量后端回归，`12/12` 模块通过，Surefire 汇总 `1490/1490`，失败 `0`、错误 `0`、跳过 `0`。
 
 本轮仍只证明本地 H2/HTTP 和前端构建骨架可回归；真实 MySQL 实例、渠道回调验签、RabbitMQ relay、生产资金到账和发布治理证据仍未形成，不能据此推进 `test -> master` 或 `master -> release/*`。
+
+## 703. 2026-09-24 当前 HEAD 全栈可运行骨架复验
+
+在原任务窗口持续托管的本地栈中执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh verify all
+```
+
+结果：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+同批次端侧回归结果：payment-core 后端 `1203/1203`，admin-web `63/63`，App `26/26`，H5 `2/2`，PC `2/2`，小程序 `20/20`，API client `10/10`；全量管理端 `12/12` 测试与生产构建通过。
+
+本轮只证明当前 demo/H2/HTTP 骨架可持续运行和各端契约可回归，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、可信身份、正式审批、现场核验或发布门禁完成；`test -> master` 与 `master -> release/*` 仍以统一审计和真实证据为准。
