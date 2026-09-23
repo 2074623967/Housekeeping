@@ -16831,3 +16831,9 @@ node tools/dev/backend-regression.mjs
 本轮按“先把架子搭起来、每个入口能打开并完成基本操作，再补生产化细节”的阶段目标复核 payment-core。代码事实已确认：管理端系统总览可到达 12 个后台和 App/H5/PC 用户端；App/H5/PC/小程序已覆盖业务入口、收银台、支付结果和退款进度；API client 覆盖支付与退款的服务调用骨架。同步修正文档中早期“小程序未实现”和“用户端只有收银台/结果页”的旧口径。
 
 验证：admin-web `63/63`、App `26/26`、H5 `2/2`、PC `2/2`、小程序 `20/20` 通过，`git diff --check` 通过。真实微信/支付宝/银行协议、可信身份权限、生产数据库与 MQ、资金到账、通知送达、现场核验和发布审批仍属于后续阶段，不能由本地 demo 或前端测试替代。
+
+## 699. 2026-09-23 本地回归工具复用 Maven 缓存
+
+本轮修复 `tools/dev/local-stack.sh` 和 `tools/dev/backend-regression.mjs` 的本地 Maven 仓库选择：在工作区运行时仓库为空或不可写、但机器已有可读依赖缓存时，优先复用该缓存；本地栈后端/前端启动失败或超时时会清理对应 PID 文件，避免留下 stale 状态。
+
+验证：`bash -n tools/dev/local-stack.sh`、`node --check tools/dev/backend-regression.mjs`、`tools/dev/local-stack.sh doctor backends` 通过；payment-core 后端回归 `1/1` 模块、`1203/1203` 测试通过。当前沙箱仍禁止普通进程监听本地端口，未将受限环境下的 `EPERM` 误记为应用失败；真实端口验证需在允许本地监听的托管环境执行。
