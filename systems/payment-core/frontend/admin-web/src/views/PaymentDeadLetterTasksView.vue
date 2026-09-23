@@ -166,28 +166,29 @@ async function runAction(item, action) {
   const payload = { operator: normalizedOperator, resolutionNote: normalizedNote };
   try {
     let actionResult;
+    let replayMessage;
     if (action === "ready") {
       actionResult = await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload);
     } else if (action === "resolve") {
       actionResult = await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload);
     } else {
       actionResult = await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
+      replayMessage = replayActionMessage(actionResult);
     }
     if (action === "ready") {
       successMessage.value = `任务 ${item.taskNo} 已通过复核，等待定向重放`;
     } else if (action === "resolve") {
       successMessage.value = `任务 ${item.taskNo} 已人工结案`;
-    } else {
-      const replayMessage = replayActionMessage(actionResult);
+    }
+    const refreshed = await loadTasks(item.taskNo, { ...loadedQuery.value });
+    if (!refreshed) {
+      actionErrorMessage.value = `任务 ${item.taskNo} 操作已完成，但最新列表刷新失败，请刷新成功后再继续操作`;
+    } else if (action === "replay") {
       if (replayMessage.tone === "error") {
         actionErrorMessage.value = replayMessage.message;
       } else {
         successMessage.value = replayMessage.message;
       }
-    }
-    const refreshed = await loadTasks(item.taskNo, { ...loadedQuery.value });
-    if (!refreshed) {
-      actionErrorMessage.value = `任务 ${item.taskNo} 操作已完成，但最新列表刷新失败，请刷新成功后再继续操作`;
     }
   } catch (error) {
     actionErrorMessage.value = `死信任务操作失败：${error.message}`;
