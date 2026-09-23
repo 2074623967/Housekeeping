@@ -2758,6 +2758,39 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldReleaseSubmitTokenWhenConcurrentCloseWinsBeforeThisRequest() {
+        PaymentDetailDTO initialDetail = new PaymentDetailDTO();
+        initialDetail.setPaymentOrderId("PAY-CLOSE-RACE");
+        initialDetail.setOrderNo("ORD-CLOSE-RACE");
+        initialDetail.setStatus("PREPAY_CREATED");
+
+        PaymentDetailDTO closedDetail = new PaymentDetailDTO();
+        closedDetail.setPaymentOrderId("PAY-CLOSE-RACE");
+        closedDetail.setOrderNo("ORD-CLOSE-RACE");
+        closedDetail.setStatus("CLOSED");
+
+        when(paymentMapper.findDetail("PAY-CLOSE-RACE")).thenReturn(initialDetail, closedDetail);
+        when(paymentMapper.markUnsubmittedPaymentClosed("PAY-CLOSE-RACE")).thenReturn(0);
+
+        com.abc123.hsp.dto.PaymentCloseRequestDTO request = new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        request.setPaymentOrderId("PAY-CLOSE-RACE");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .close(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("CLOSED", result.getStatus());
+        verify(paymentMapper).releaseSubmitConcurrencyToken(
+                "PAY-CLOSE-RACE", "CLOSE_ALREADY_FINALIZED");
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldKeepSubmitTokenWhenLegacySubmittedPaymentIsAlreadyClosed() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CLOSE-LEGACY");

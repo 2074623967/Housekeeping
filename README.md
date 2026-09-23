@@ -131,6 +131,14 @@ tools/dev/local-stack.sh happy-path
 tools/dev/local-stack.sh verify all
 ```
 
+`up` 会在当前终端持续托管服务，适合在同一个 Codex 任务窗口中暂停后继续；暂停任务不会主动停止已启动进程，回到窗口后可继续执行 `status`、`smoke` 或业务验收。macOS 如果系统默认 Java 只有 JRE，可显式指定完整 JDK 和已有 Maven 缓存：
+
+```bash
+HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh up all
+```
+
 也可以只运行某一类或某个系统：
 
 ```bash

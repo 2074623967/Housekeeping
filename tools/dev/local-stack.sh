@@ -8,6 +8,7 @@ readonly PID_DIR="$RUNTIME_DIR/pids"
 readonly LOG_DIR="$RUNTIME_DIR/logs"
 readonly LOCAL_JAVA_OPTS="${HSP_LOCAL_JAVA_OPTS:--Xms64m -Xmx256m}"
 readonly START_TIMEOUT_SECONDS="${HSP_LOCAL_START_TIMEOUT_SECONDS:-90}"
+STACK_SCOPE=""
 
 resolve_maven_bin() {
   if [[ -n "${HSP_MAVEN_BIN:-}" ]]; then
@@ -32,14 +33,14 @@ resolve_maven_bin() {
 }
 
 resolve_java_home() {
-  if [[ -n "${HSP_JAVA_HOME:-}" ]]; then
+  if [[ -n "${HSP_JAVA_HOME:-}" && -x "${HSP_JAVA_HOME}/bin/java" && -x "${HSP_JAVA_HOME}/bin/javac" ]]; then
     printf '%s' "$HSP_JAVA_HOME"
     return 0
   fi
   if [[ "$(uname -s)" == "Darwin" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
     local mac_java_home
     mac_java_home="$(/usr/libexec/java_home 2>/dev/null || true)"
-    if [[ -n "$mac_java_home" && -x "$mac_java_home/bin/java" ]]; then
+    if [[ -n "$mac_java_home" && -x "$mac_java_home/bin/java" && -x "$mac_java_home/bin/javac" ]]; then
       printf '%s' "$mac_java_home"
       return 0
     fi
@@ -47,7 +48,7 @@ resolve_java_home() {
   if command -v java >/dev/null 2>&1; then
     local java_bin
     java_bin="$(command -v java)"
-    if [[ "$java_bin" == */bin/java && -x "${java_bin%/bin/java}/bin/java" ]]; then
+    if [[ "$java_bin" == */bin/java && -x "${java_bin%/bin/java}/bin/java" && -x "${java_bin%/bin/java}/bin/javac" ]]; then
       printf '%s' "${java_bin%/bin/java}"
       return 0
     fi
@@ -55,7 +56,7 @@ resolve_java_home() {
   for candidate in \
     "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home" \
     "/Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home"; do
-    if [[ -x "$candidate/bin/java" ]]; then
+    if [[ -x "$candidate/bin/java" && -x "$candidate/bin/javac" ]]; then
       printf '%s' "$candidate"
       return 0
     fi
@@ -355,7 +356,7 @@ run_doctor() {
     fi
   done
   if [[ "$scope" != "frontends" ]]; then
-    for executable in "$MAVEN_BIN" "$JAVA_HOME_PATH/bin/java"; do
+    for executable in "$MAVEN_BIN" "$JAVA_HOME_PATH/bin/java" "$JAVA_HOME_PATH/bin/javac"; do
       if [[ -x "$executable" ]]; then
         echo "[OK] $executable"
       else
@@ -529,8 +530,9 @@ main() {
       run_doctor "$scope"
       ;;
     up)
+      STACK_SCOPE="$scope"
       trap 'exit 130' INT TERM
-      trap 'run_stop "$scope"' EXIT
+      trap 'run_stop "${STACK_SCOPE:-all}"' EXIT
       run_doctor "$scope" && run_start "$scope" && run_report "$scope" "smoke" || return $?
       echo "[RUNNING] 本地系统持续运行中；按 Ctrl-C 停止由本脚本启动的进程。"
       while true; do

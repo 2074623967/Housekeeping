@@ -3300,7 +3300,14 @@
 2. `tools/dev/local-stack.sh` 只在本地全栈启动时显式注入四个事实地址；受控本地 happy-path 仍通过 `PAYMENT_SUCCESS / CLEARING_GENERATED / SETTLEMENT_CREATED / REFUND_SUCCESS` 四类对账事实断言。
 3. 退款中心全量回归通过；本轮不改变退款状态机、渠道协议或真实资金事实。显式地址只证明本地接口联通，不替代真实消息代理、生产数据库、渠道账单或正式财务收口。
 
-### 8.398 2026-09-23 全栈复核后的当前证据
+### 8.398 2026-09-23 人工关单并发令牌竞争边界补强
+
+1. 修复人工关单先读到未提交状态、条件更新被并发请求抢先完成时的竞争分支：若后读到的支付单已关闭且没有渠道交易号、没有支付尝试，统一释放预付单提交并发令牌。
+2. 同步将已关闭支付单的令牌释放判断从严格 `null` 改为无有效文本，覆盖历史空字符串数据，避免旧数据长期占用提交窗口。
+3. 新增 `PaymentServiceImplTest` 竞争场景回归，确认不重复写关闭事件且会以 `CLOSE_ALREADY_FINALIZED` 释放令牌；payment-core 定向服务测试通过。
+4. 本轮只修复本地状态竞争和并发令牌清理，不改变已提交渠道的关单保护、真实渠道事实或发布门禁结论。
+
+### 8.399 2026-09-23 全栈复核后的当前证据
 
 1. settlement 出款巡检骨架提交后，`tools/dev/local-stack.sh verify all` 再次通过，payment-core、清分、结算、账务、退款和对账服务均 READY，跨系统 happy-path 实际收口到 `ACCOUNTING_POSTED`。
 2. 对账链路实际返回 `COMPLETED`、4/4、`financialCloseable=true`；这只是本地受控环境中的跨系统事实，不是生产财务关账或审批签字证明。

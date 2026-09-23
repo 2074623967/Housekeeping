@@ -1404,7 +1404,8 @@ public class PaymentServiceImpl implements PaymentService {
             return outwardDetail(detail);
         }
         if ("CLOSED".equalsIgnoreCase(detail.getStatus())) {
-            if (detail.getChannelTransactionNo() == null && detail.getLatestAttemptStatus() == null) {
+            if (!StringUtils.hasText(detail.getChannelTransactionNo())
+                    && !StringUtils.hasText(detail.getLatestAttemptStatus())) {
                 paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
             }
             return outwardDetail(detail);
@@ -1413,6 +1414,12 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
             if (latestDetail != null && ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
                     || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
+                if ("CLOSED".equalsIgnoreCase(latestDetail.getStatus())
+                        && !StringUtils.hasText(latestDetail.getChannelTransactionNo())
+                        && !StringUtils.hasText(latestDetail.getLatestAttemptStatus())) {
+                    paymentMapper.releaseSubmitConcurrencyToken(
+                            request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
+                }
                 return outwardDetail(latestDetail);
             }
             throw new BusinessException(
