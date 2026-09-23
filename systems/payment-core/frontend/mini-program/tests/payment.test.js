@@ -82,6 +82,58 @@ test("keeps the local demo path when native payment parameters are absent", asyn
   assert.deepEqual(await requestNativePayment({ paymentOrderId: "PAY-DEMO" }), { invoked: false });
 });
 
+test("passes complete native payment parameters to wx.requestPayment", async () => {
+  const previousWx = global.wx;
+  let requestOptions;
+  global.wx = {
+    requestPayment(options) {
+      requestOptions = options;
+      options.success();
+    }
+  };
+  try {
+    const result = await requestNativePayment({
+      nativePaymentParams: {
+        timeStamp: "1710000000",
+        nonceStr: "nonce",
+        package: "prepay_id=wx-prepay",
+        signType: "RSA",
+        paySign: "signature"
+      }
+    });
+    assert.deepEqual(result, { invoked: true });
+    assert.equal(requestOptions.package, "prepay_id=wx-prepay");
+    assert.equal(typeof requestOptions.success, "function");
+  } finally {
+    global.wx = previousWx;
+  }
+});
+
+test("maps a native payment cancellation to a stable client error", async () => {
+  const previousWx = global.wx;
+  global.wx = {
+    requestPayment(options) {
+      options.fail({ errMsg: "requestPayment:fail cancel" });
+    }
+  };
+  try {
+    await assert.rejects(
+      requestNativePayment({
+        paymentParams: {
+          timeStamp: "1710000000",
+          nonceStr: "nonce",
+          package: "prepay_id=wx-prepay",
+          signType: "RSA",
+          paySign: "signature"
+        }
+      }),
+      (error) => error.code === "PAYMENT-MINI-NATIVE-CANCEL"
+    );
+  } finally {
+    global.wx = previousWx;
+  }
+});
+
 test("maps payment terminal states without inventing success", () => {
   assert.equal(resultMeta("SUCCESS").tone, "success");
   assert.equal(resultMeta("CLOSED").tone, "danger");
