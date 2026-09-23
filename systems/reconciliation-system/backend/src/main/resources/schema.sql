@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS t_cross_system_fact_snapshot (
     amount DECIMAL(18,2) NULL COMMENT '事实金额',
     snapshot_version BIGINT NULL COMMENT '来源配置快照版本',
     occurred_at TIMESTAMP NOT NULL COMMENT '事实发生时间',
-    payload CLOB NULL COMMENT '事实摘要或脱敏载荷',
+    payload TEXT NULL COMMENT '事实摘要或脱敏载荷',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
     UNIQUE (business_chain_id, system_code, fact_type, fact_no),
     INDEX idx_cross_system_chain (business_chain_id),
