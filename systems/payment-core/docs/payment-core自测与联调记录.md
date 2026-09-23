@@ -16712,3 +16712,7 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 ## 681. 2026-09-23 跨系统主链路复核
 
 在同一持续托管栈中执行 `node tools/dev/cross-system-happy-path.mjs`，本地链路重新生成支付、支付成功事件、清分、结算、账务、退款和对账事实。结果为：对账链路 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`；账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`SETTLEMENT_CREATED`、`ACCOUNTING_POSTED`、`REFUND_SUCCESS`。该结果只证明本地 H2/HTTP 骨架跨系统可联调，不代表真实消息代理、资金到账、生产数据库或财务审批。
+
+## 682. 2026-09-23 当前批次门禁复判
+
+重新执行 payment-core gate audit：`test -> master=false`、`canCreateRelease=false`。当前回归包仍缺 REG-08 同批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式候选发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论。本轮本地代码、页面构建和跨系统 happy-path 均不替代这些真实治理事实。
