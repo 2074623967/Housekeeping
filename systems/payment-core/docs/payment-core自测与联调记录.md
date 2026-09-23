@@ -16774,3 +16774,17 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 - `http://127.0.0.1:5175/balance-pay`：业务入口、客户/金额/业务号表单、创建预付单入口、重置入口和后续真实账户域边界说明正常渲染。
 
 本轮只证明当前受控本地栈的页面可达性、主要空态和入口骨架可用，不代表真实身份权限、真实渠道受理、RabbitMQ/DLQ 消费、资金到账或生产视觉验收完成。当前门禁仍以统一审计为准：`test -> master=false`、`canCreateRelease=false`；REG-08 仍缺当前批次真实页面冻结及补偿/replay/DLQ/下游闭环，release 仍缺正式发布说明、正式签字、发布后现场核验和 master 稳定观察结束结论。
+
+## 693. 2026-09-23 全系统后端回归复核
+
+在当前 `test` HEAD 上使用 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/dev/backend-regression.mjs
+```
+
+结果：`12/12` 个后端模块通过，Surefire 汇总 `1489/1489`，`0` failures、`0` errors、`0` skipped。当前模块明细为：payment-core `1203`、gateway-access `51`、settlement-system `38`、accounting-system `47`、clearing-system `38`、refund-center `17`、reconciliation-system `14`、risk-control-system `11`、ops-config-system `12`、deposit-system `11`、wallet-account `23`、wallet-system `24`。
+
+该结果只更新本地 Java/H2 自动化基线，证明事件契约收口后各后端模块未出现自动化回归；不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账或发布治理事实。统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
