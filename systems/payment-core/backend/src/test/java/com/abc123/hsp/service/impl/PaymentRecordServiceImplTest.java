@@ -108,6 +108,23 @@ class PaymentRecordServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeNullPaymentRecordDetailCollections() {
+        PaymentRecordDetailDTO detail = new PaymentRecordDetailDTO();
+        detail.setPaymentOrderId("PAY-DETAIL-EMPTY");
+        when(paymentRecordMapper.findDetail("PAY-DETAIL-EMPTY")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-DETAIL-EMPTY")).thenReturn(null);
+        when(paymentMapper.findNotifyLogs("PAY-DETAIL-EMPTY")).thenReturn(null);
+        when(paymentMapper.findEventItems("PAY-DETAIL-EMPTY")).thenReturn(null);
+
+        PaymentRecordDetailDTO result = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper)
+                .detail("PAY-DETAIL-EMPTY");
+
+        assertTrue(result.getRouteLogs().isEmpty());
+        assertTrue(result.getNotifyLogs().isEmpty());
+        assertTrue(result.getEventLogs().isEmpty());
+    }
+
+    @Test
     void shouldExportMaskedAndSpreadsheetSafePaymentRecords() {
         PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
         query.setRecordType(" ALL ");

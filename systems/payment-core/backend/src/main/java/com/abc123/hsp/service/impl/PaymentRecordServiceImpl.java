@@ -143,10 +143,14 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                 sensitiveDataMasker.maskIdempotencyKey(detail.getLatestIdempotencyKey()));
         outwardDetail.setLatestRequestPayload(sensitiveDataMasker.maskPayload(detail.getLatestRequestPayload()));
         outwardDetail.setLatestResponsePayload(sensitiveDataMasker.maskPayload(detail.getLatestResponsePayload()));
-        outwardDetail.setRouteLogs(paymentMapper.findRouteLogs(normalizedPaymentOrderId));
-        outwardDetail.setNotifyLogs(paymentMapper.findNotifyLogs(normalizedPaymentOrderId));
-        outwardDetail.setEventLogs(paymentMapper.findEventItems(normalizedPaymentOrderId));
+        outwardDetail.setRouteLogs(safeList(paymentMapper.findRouteLogs(normalizedPaymentOrderId)));
+        outwardDetail.setNotifyLogs(safeList(paymentMapper.findNotifyLogs(normalizedPaymentOrderId)));
+        outwardDetail.setEventLogs(safeList(paymentMapper.findEventItems(normalizedPaymentOrderId)));
         return outwardDetail;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private String normalizeOptionalQueryField(

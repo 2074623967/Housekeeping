@@ -3336,6 +3336,51 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldThrowNotFoundWhenPaymentDetailMissing() {
+        when(paymentMapper.findDetail("PAY-DETAIL-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .detail("PAY-DETAIL-MISSING")
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_ORDER_NOT_FOUND, exception.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals("支付单不存在", exception.getMessage());
+    }
+
+    @Test
+    void shouldNormalizeNullPaymentDetailCollections() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-DETAIL-EMPTY");
+        detail.setCustomerName("张女士");
+        when(paymentMapper.findDetail("PAY-DETAIL-EMPTY")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-DETAIL-EMPTY")).thenReturn(null);
+        when(paymentMapper.findNotifyLogs("PAY-DETAIL-EMPTY")).thenReturn(null);
+        when(paymentMapper.findEventItems("PAY-DETAIL-EMPTY")).thenReturn(null);
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .detail("PAY-DETAIL-EMPTY");
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getRouteLogs());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getNotifyLogs());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getEventLogs());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getRouteLogs().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getNotifyLogs().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getEventLogs().isEmpty());
+    }
+
+    @Test
     void shouldKeepLatestAttemptContextWhenLoadingPaymentDetail() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-DETAIL-100");

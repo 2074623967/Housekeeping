@@ -16437,3 +16437,9 @@ bash tools/dev/local-stack.sh verify all
 结果：`12` 个后端、`15` 个前端及代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。本批次复验使用了受控环境中已存在的外部服务进程，脚本结束后未留下本次启动的服务进程。
 
 该结果只证明最新代码在 demo/H2/HTTP 本地骨架下可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、财务关账、正式审批、现场核验或稳定观察完成。
+
+## 651. 2026-09-23 支付单与支付记录详情契约收口
+
+本轮将支付单详情不存在统一收口为 `PAYMENT_ORDER_NOT_FOUND`，并将支付单/支付记录详情中的路由、回调、事件轨迹 `NULL` 集合归一为空数组，避免后台详情页收到 `200 + data:null` 或不可迭代集合。
+
+验证结果：`PaymentServiceImplTest 94/94`、`PaymentRecordServiceImplTest 6/6` 通过；随后重新执行 payment-core 后端全量回归，`1/1` 模块通过，`1194/1194` 测试通过，`0` failures、`0` errors、`0` skipped。该结果只证明本地 Java/H2 服务契约和回归基线，不代表真实渠道、生产数据库或发布治理已完成。

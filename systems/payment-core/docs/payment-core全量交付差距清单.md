@@ -3313,6 +3313,13 @@
 2. 对账链路实际返回 `COMPLETED`、4/4、`financialCloseable=true`；这只是本地受控环境中的跨系统事实，不是生产财务关账或审批签字证明。
 3. 当前 payment-core 仍按“正向支付核心域可运行 V1 骨架，运营排障能力较完整，真实渠道与生产治理待接”表述；当前审计仍判定 `test -> master = false`，原因是 REG-08 缺当前批次页面与补偿闭环证据；`master -> release/* = false`，仍受四项真实治理事实阻断。
 
+### 8.400 2026-09-23 详情查询契约收口
+
+1. `PaymentServiceImpl.detail` 对不存在的支付单统一返回 `PAYMENT_ORDER_NOT_FOUND`，与订单、账单、支付请求、支付记录等详情服务保持一致，不再返回 `200 + data:null`。
+2. 支付单详情和支付记录详情的路由、回调、事件轨迹集合在 mapper 返回 `NULL` 时统一输出空数组，保持后台详情 API 可直接迭代。
+3. 新增 `PaymentServiceImplTest` 两个场景和 `PaymentRecordServiceImplTest` 一个场景；定向回归为 `PaymentServiceImplTest 94/94`、`PaymentRecordServiceImplTest 6/6`，失败 `0`、错误 `0`。
+4. 本轮只收口 payment-core 查询契约和空数据边界，不改变支付状态机、渠道协议、下游资金事实或发布门禁结论。
+
 ## 9. 最终结论
 
 ### 9.1 2026-09-23 当前批次回归总数校正
@@ -3378,3 +3385,11 @@
 本轮以实际命令输出为准补充当前批次口径：payment-core 后端全量 Maven 回归为 `1189` 个测试通过、`0` failures、`0` errors；用户端与服务调用端分别为 App `23/23`、H5 `2/2`、PC `2/2`、小程序 `13/13`、API client `8/8`，管理端为 `49/49`，端侧自动化测试合计 `97/97`，App/H5/PC 生产构建均通过。
 
 本节只校正当前可复核的代码与测试证据，不把测试通过解释为真实渠道受理、微信签名参数、RabbitMQ/DLQ、生产 MySQL、资金到账或发布治理事实；历史章节中的旧计数保留为当时批次记录。
+
+### 9.8 2026-09-23 详情契约定向回归补充
+
+本轮定向回归实际执行 `PaymentServiceImplTest,PaymentRecordServiceImplTest`，共 `100/100` 个测试通过，`0` failures、`0` errors；完整 payment-core 回归仍需在本轮代码变更后重新执行，不能沿用旧批次的全量计数。
+
+### 9.9 2026-09-23 详情契约变更后的 payment-core 全量回归
+
+本轮在详情契约收口后重新执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过，Surefire 汇总为 `1194` tests、`0` failures、`0` errors、`0` skipped。该计数只代表本地 Java/H2 自动化基线，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账或发布治理证据。

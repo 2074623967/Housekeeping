@@ -332,7 +332,11 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentDetailDTO detail(String paymentOrderId) {
         String normalizedPaymentOrderId = normalizeRequiredRequestField(
                 paymentOrderId, "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH);
-        return outwardDetail(paymentMapper.findDetail(normalizedPaymentOrderId));
+        PaymentDetailDTO detail = paymentMapper.findDetail(normalizedPaymentOrderId);
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        }
+        return outwardDetail(detail);
     }
 
     @Transactional
@@ -2124,10 +2128,14 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             return null;
         }
-        detail.setRouteLogs(paymentMapper.findRouteLogs(detail.getPaymentOrderId()));
-        detail.setNotifyLogs(paymentMapper.findNotifyLogs(detail.getPaymentOrderId()));
-        detail.setEventLogs(paymentMapper.findEventItems(detail.getPaymentOrderId()));
+        detail.setRouteLogs(safeList(paymentMapper.findRouteLogs(detail.getPaymentOrderId())));
+        detail.setNotifyLogs(safeList(paymentMapper.findNotifyLogs(detail.getPaymentOrderId())));
+        detail.setEventLogs(safeList(paymentMapper.findEventItems(detail.getPaymentOrderId())));
         return detail;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     private List<PaymentListItemDTO> maskPaymentItems(List<PaymentListItemDTO> items) {
