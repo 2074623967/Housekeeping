@@ -3463,3 +3463,7 @@
 全局异常处理器新增对不可读 JSON 请求体、缺失请求参数、缺失路径参数和参数类型绑定失败的统一处理，均返回 `PAYMENT-400`。这补齐了前端和 API client 识别输入错误所需的稳定契约；当前未改变支付状态机、渠道适配器或跨系统职责边界。
 
 本轮新增测试已执行；使用仓库内 Maven 3.9.16、JDK 8 和本地依赖仓库完成 payment-core 全量回归，Surefire 汇总 `1202/1202`，`0` failures、`0` errors、`0` skipped。该结果仍只代表本地 Java/H2 自动化基线，不替代真实渠道、生产基础设施或发布治理证据。
+
+### 9.19 2026-09-23 当前批次门禁复核
+
+代码回归完成后重新执行 payment-core gate audit。当前 `REG-08` 仍缺同批次页面冻结截图和补偿/replay/DLQ 闭环证据，故 `test -> master=false`；release 仍缺正式版发布说明、签字审批、发布后现场核验和 master 稳定观察结束结论，故 `canCreateRelease=false`。这些是真实治理缺口，不由本轮代码测试替代。

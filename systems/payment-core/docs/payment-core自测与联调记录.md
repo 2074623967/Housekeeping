@@ -16631,6 +16631,10 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
 
 新增 `GlobalExceptionHandlerTest` 覆盖空/不可读请求体和参数类型绑定失败场景。随后使用仓库内 Maven 3.9.16、JDK 8 和本地依赖仓库执行 payment-core 全量回归，Surefire 汇总 `1202/1202`，`0` failures、`0` errors、`0` skipped。
 
+## 669. 2026-09-23 当前批次门禁复核
+
+重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir /Users/abc123/workspace/home-service-payment-system --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression --stdout-json`。代码回归证据本身完整，但当前批次 `REG-08` 仍缺同批次页面冻结截图和补偿/replay/DLQ 闭环证据；因此 `test -> master=false`、`canCreateRelease=false`。release 仍缺正式版发布说明、签字审批、发布后现场核验和 master 稳定观察结束结论。本轮不使用本地测试结果替代这些真实治理证据。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：
