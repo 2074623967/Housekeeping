@@ -16870,3 +16870,9 @@ bash tools/dev/local-stack.sh verify all
 同批次端侧回归结果：payment-core 后端 `1203/1203`，admin-web `63/63`，App `26/26`，H5 `2/2`，PC `2/2`，小程序 `20/20`，API client `10/10`；全量管理端 `12/12` 测试与生产构建通过。
 
 本轮只证明当前 demo/H2/HTTP 骨架可持续运行和各端契约可回归，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、可信身份、正式审批、现场核验或发布门禁完成；`test -> master` 与 `master -> release/*` 仍以统一审计和真实证据为准。
+
+## 704. 2026-09-24 死信补偿任务定向回归
+
+在原任务窗口持续托管栈保持运行期间，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 payment-core 死信补偿定向回归：服务 `PaymentDeadLetterTaskServiceImplTest`、控制器 `PaymentDeadLetterTaskControllerTest`、AMQP 监听器 `PaymentDeadLetterTaskAmqpListenerTest` 合计 `26/26` 通过，失败 `0`、错误 `0`、跳过 `0`。
+
+本轮只复核死信入账、脱敏、人工复核、人工结案、定向重放、发布确认、失败闭合和路由监听等可运行骨架，不代表真实 RabbitMQ/DLQ 送达、下游消费、资金事实或当前批次 REG-08 页面冻结证据已形成。统一门禁审计仍保持 `test -> master=false`、`canCreateRelease=false`。
