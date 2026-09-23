@@ -29,3 +29,4 @@ button { cursor: pointer; }
 .pagination > div { display: flex; gap: 8px; }
 .pagination .secondary-button { padding: 7px 11px; font-size: 12px; }
 @media (max-width: 1250px) { .main { padding: 26px; }.detail-grid { grid-template-columns: repeat(2, 1fr); }.detail-grid div.wide { grid-column: span 2; } }
+.link-button.danger-link { color: #b34d49; }
