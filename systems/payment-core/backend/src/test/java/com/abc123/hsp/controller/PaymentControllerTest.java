@@ -52,6 +52,15 @@ class PaymentControllerTest {
     }
 
     @Test
+    void shouldDelegateNullSubmitBodyToServiceValidation() {
+        PaymentController controller = new PaymentController(paymentService);
+
+        controller.submit(null, servletRequest);
+
+        verify(paymentService).submit(null);
+    }
+
+    @Test
     void shouldForwardExplicitOperatorsFromAdminEndpoints() {
         PaymentController controller = new PaymentController(paymentService);
         PaymentQueryRequestDTO queryRequest = new PaymentQueryRequestDTO();

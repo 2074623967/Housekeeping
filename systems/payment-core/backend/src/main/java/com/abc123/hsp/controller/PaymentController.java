@@ -135,6 +135,10 @@ public class PaymentController {
     @PostMapping("/submit")
     public ApiResponse<PrepayOrderDTO> submit(@RequestBody PaymentSubmitRequestDTO request,
             HttpServletRequest servletRequest) {
+        if (request == null) {
+            // 让服务层统一返回支付提交请求的业务错误，而不是在补充请求上下文时触发 NPE。
+            return ApiResponse.success(paymentService.submit(null));
+        }
         request.setClientIp(resolveClientIp(servletRequest));
         if (!StringUtils.hasText(request.getTerminal())) {
             request.setTerminal(resolveTerminal(servletRequest));

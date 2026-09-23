@@ -16609,7 +16609,13 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
   -q -f systems/payment-core/backend/pom.xml test
 ```
 
-结果：Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped。测试日志中的异常均来自既有失败分支、事务回滚和敏感信息脱敏测试，进程最终退出码为 `0`。该结果证明当前本地 Java/H2 骨架回归通过，不代表真实渠道、生产 MQ/MySQL、资金到账或 release 治理条件完成。
+结果：Surefire 汇总 `1199/1199`，`0` failures、`0` errors、`0` skipped。测试日志中的异常均来自既有失败分支、事务回滚和敏感信息脱敏测试，进程最终退出码为 `0`。该结果证明当前本地 Java/H2 骨架回归通过，不代表真实渠道、生产 MQ/MySQL、资金到账或 release 治理条件完成。
+
+## 666. 2026-09-23 支付提交空请求入口校验
+
+补强 `POST /api/payments/submit` 的空请求体边界：控制器不再在补充客户端 IP 和终端信息前直接解引用请求对象，而是将 `null` 原样交给 `PaymentService` 的统一提交参数校验，避免 malformed JSON `null` 被转换为控制器 NPE 和非预期 500。正常请求的可信代理 IP 与终端解析路径保持不变。
+
+验证：新增 `PaymentControllerTest.shouldDelegateNullSubmitBodyToServiceValidation`，并重跑 payment-core 后端全量测试，Surefire `1199/1199` 全部通过。
 
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
