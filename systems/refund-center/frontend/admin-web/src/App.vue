@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import {
   downloadRefundDetail,
+  applyRefund,
   dispatchRefundOutbox,
   getOverview,
   getRefundDetail,
@@ -16,6 +17,13 @@ const activeOperation = ref("");
 const errorMessage = ref("");
 const overviewError = ref("");
 const selectedRefund = ref(null);
+const applyForm = reactive({
+  paymentOrderId: "",
+  refundAmount: "",
+  refundMethod: "ORIGINAL",
+  refundReason: "",
+  idempotencyKey: ""
+});
 const query = reactive({
   refundOrderId: "",
   paymentOrderId: "",
@@ -109,6 +117,40 @@ async function openDetail(item) {
     activeView.value = "detail";
   } catch (error) {
     errorMessage.value = error.message;
+  }
+}
+
+function resetApplyForm() {
+  Object.assign(applyForm, {
+    paymentOrderId: "",
+    refundAmount: "",
+    refundMethod: "ORIGINAL",
+    refundReason: "",
+    idempotencyKey: ""
+  });
+}
+
+async function submitApplication() {
+  if (activeOperation.value) return;
+  activeOperation.value = "refund:apply";
+  errorMessage.value = "";
+  try {
+    const item = await applyRefund({
+      paymentOrderId: applyForm.paymentOrderId.trim(),
+      refundAmount: Number(applyForm.refundAmount),
+      refundMethod: applyForm.refundMethod,
+      refundReason: applyForm.refundReason.trim(),
+      idempotencyKey: applyForm.idempotencyKey.trim() || undefined
+    });
+    await loadOverview();
+    await loadList();
+    selectedRefund.value = await getRefundDetail(item.refundOrderId);
+    activeView.value = "detail";
+    resetApplyForm();
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    activeOperation.value = "";
   }
 }
 
@@ -213,6 +255,9 @@ async function refreshCurrentView() {
       <button class="nav-item" :class="{ active: activeView === 'list' }" @click="showList">
         <span>退款单管理</span><small>Refund Orders</small>
       </button>
+      <button class="nav-item" :class="{ active: activeView === 'apply' }" @click="activeView = 'apply'">
+        <span>发起退款</span><small>Apply Refund</small>
+      </button>
       <button class="nav-item" :class="{ active: activeView === 'outbox' }" @click="showOutbox">
         <span>成功事件出站</span><small>Outbox Relay</small>
       </button>
@@ -229,7 +274,7 @@ async function refreshCurrentView() {
       <header class="topbar">
         <div>
           <p class="eyebrow">HOME SERVICE PAYMENT PLATFORM / REVERSE FLOW</p>
-          <h1>{{ activeView === "detail" ? "退款单详情" : activeView === "list" ? "退款单管理" : activeView === "outbox" ? "退款成功事件出站管理" : "退款运营工作台" }}</h1>
+          <h1>{{ activeView === "detail" ? "退款单详情" : activeView === "list" ? "退款单管理" : activeView === "apply" ? "发起退款" : activeView === "outbox" ? "退款成功事件出站管理" : "退款运营工作台" }}</h1>
         </div>
         <button class="refresh-button" :disabled="loading || !!activeOperation" @click="refreshCurrentView()">{{ loading ? "刷新中..." : "刷新数据" }}</button>
       </header>
@@ -259,6 +304,25 @@ async function refreshCurrentView() {
             <em>失败可回到处理中重试</em>
           </div>
         </section>
+      </section>
+
+      <section v-else-if="activeView === 'apply'" class="panel apply-panel">
+        <div class="section-header">
+          <div><span class="section-kicker">REFUND APPLICATION</span><h2>发起退款申请</h2></div>
+          <span class="count-tip">申请后进入审核中</span>
+        </div>
+        <form class="apply-form" @submit.prevent="submitApplication">
+          <label>原支付单号<input v-model.trim="applyForm.paymentOrderId" required maxlength="64" placeholder="例如 PAY-DEMO-1001" /></label>
+          <label>退款金额<input v-model="applyForm.refundAmount" required min="0.01" step="0.01" type="number" placeholder="不能超过原支付金额" /></label>
+          <label>退款方式<select v-model="applyForm.refundMethod"><option value="ORIGINAL">原路退款</option><option value="TRANSFER">退转付</option></select></label>
+          <label class="wide-field">退款原因<textarea v-model.trim="applyForm.refundReason" maxlength="256" rows="4" placeholder="例如：客户取消服务"></textarea></label>
+          <label class="wide-field">幂等键（可选）<input v-model.trim="applyForm.idempotencyKey" maxlength="128" placeholder="同一业务重试时保持不变" /></label>
+          <div class="apply-actions">
+            <button class="primary-button" type="submit" :disabled="activeOperation === 'refund:apply'">{{ activeOperation === "refund:apply" ? "提交中..." : "提交退款申请" }}</button>
+            <button class="secondary-button" type="button" :disabled="activeOperation === 'refund:apply'" @click="resetApplyForm">清空</button>
+          </div>
+        </form>
+        <p class="form-hint">系统会先校验支付成功事实和累计退款金额，申请成功后可在详情页继续审核、提交渠道和处理回调。</p>
       </section>
 
       <section v-else-if="activeView === 'list'" class="panel">

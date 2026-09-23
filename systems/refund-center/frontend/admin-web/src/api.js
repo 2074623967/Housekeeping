@@ -46,6 +46,12 @@ export const getRefunds = (query) => {
 export const getRefundDetail = (refundOrderId) =>
   jsonRequest(`/api/refunds/${encodeURIComponent(refundOrderId)}`).then(normalizeRefundDetail);
 
+export const applyRefund = (request) =>
+  jsonRequest("/api/refunds/apply", {
+    method: "POST",
+    body: JSON.stringify(request)
+  });
+
 export const downloadRefundDetail = (refundOrderId) =>
   fetch(`/api/refunds/${encodeURIComponent(refundOrderId)}/export`).then(async (response) => {
     if (!response.ok) {
