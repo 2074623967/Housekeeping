@@ -2,12 +2,23 @@
 
 import { pathToFileURL } from "node:url";
 
-const COMMANDS = new Set(["prepay", "cashier", "submit", "detail", "query", "close"]);
+const COMMANDS = new Set([
+  "prepay",
+  "cashier",
+  "submit",
+  "detail",
+  "query",
+  "close",
+  "refund-apply",
+  "refund-detail",
+  "refund-query",
+  "refund-retry"
+]);
 
 export function parseArguments(argv) {
   const [command, ...tokens] = argv;
   if (!COMMANDS.has(command)) {
-    throw new Error("命令仅支持 prepay、cashier、submit、detail、query 或 close");
+    throw new Error("命令仅支持 prepay、cashier、submit、detail、query、close、refund-apply、refund-detail、refund-query 或 refund-retry");
   }
   const options = {};
   for (let index = 0; index < tokens.length; index += 1) {
@@ -73,6 +84,48 @@ export function buildRequest(command, options, now = Date.now()) {
         terminal: "API",
         clientDeviceId: options["client-device-id"] || "payment-api-client",
         idempotencyKey: options["idempotency-key"] || `API-${prepayOrderNo}-${now}`
+      }
+    };
+  }
+  if (command === "refund-apply") {
+    const paymentOrderId = requireOption(options, "payment-order-id");
+    return {
+      method: "POST",
+      path: "/api/refunds/apply",
+      data: {
+        paymentOrderId,
+        idempotencyKey: options["idempotency-key"] || `API-REFUND-${paymentOrderId}-${now}`,
+        refundAmount: requireOption(options, "refund-amount"),
+        refundMethod: options["refund-method"] || "原路退款",
+        refundReason: options["refund-reason"] || "服务调用端退款申请",
+        operator: requireOption(options, "operator")
+      }
+    };
+  }
+  if (command === "refund-detail") {
+    return {
+      method: "GET",
+      path: `/api/refunds/${encodeURIComponent(requireOption(options, "refund-order-id"))}`
+    };
+  }
+  if (command === "refund-query") {
+    return {
+      method: "POST",
+      path: "/api/refunds/query",
+      data: {
+        refundOrderId: requireOption(options, "refund-order-id"),
+        operator: requireOption(options, "operator")
+      }
+    };
+  }
+  if (command === "refund-retry") {
+    return {
+      method: "POST",
+      path: "/api/refunds/retry",
+      data: {
+        refundOrderId: requireOption(options, "refund-order-id"),
+        operator: requireOption(options, "operator"),
+        ...(options.remark && options.remark.trim() ? { remark: options.remark.trim() } : {})
       }
     };
   }

@@ -74,6 +74,44 @@ test("builds an API submit contract with stable explicit facts", () => {
   assert.equal(request.data.idempotencyKey, "API-PRE-API-1-123");
 });
 
+test("builds refund application and operation contracts", () => {
+  assert.deepEqual(buildRequest("refund-apply", {
+    "payment-order-id": "PAY-REF-1",
+    "refund-amount": "20.00",
+    operator: "api-operator"
+  }, 456), {
+    method: "POST",
+    path: "/api/refunds/apply",
+    data: {
+      paymentOrderId: "PAY-REF-1",
+      idempotencyKey: "API-REFUND-PAY-REF-1-456",
+      refundAmount: "20.00",
+      refundMethod: "原路退款",
+      refundReason: "服务调用端退款申请",
+      operator: "api-operator"
+    }
+  });
+  assert.deepEqual(buildRequest("refund-detail", { "refund-order-id": "REF/1?#" }).path,
+    "/api/refunds/REF%2F1%3F%23");
+  assert.deepEqual(buildRequest("refund-query", {
+    "refund-order-id": "REF-1",
+    operator: "api-operator"
+  }), {
+    method: "POST",
+    path: "/api/refunds/query",
+    data: { refundOrderId: "REF-1", operator: "api-operator" }
+  });
+  assert.deepEqual(buildRequest("refund-retry", {
+    "refund-order-id": "REF-1",
+    operator: "api-operator",
+    remark: "  retry  "
+  }), {
+    method: "POST",
+    path: "/api/refunds/retry",
+    data: { refundOrderId: "REF-1", operator: "api-operator", remark: "retry" }
+  });
+});
+
 test("encodes identifiers as one API path segment", () => {
   assert.equal(
     buildRequest("cashier", { "prepay-order-no": "PRE/1?#" }).path,
