@@ -16760,3 +16760,7 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 在受控回环监听权限下执行 `node --test tools/dev/dlq-compensation-smoke.test.mjs`，7/7 通过，覆盖 payment.success 与 clearing.generated 当前批次重放合同、人工结案、业务单号透传、事件类型校验、非法超时和畸形 JSON 失败；该测试使用 mock 管理 API，不声称 RabbitMQ 已发布、死信任务已入账或下游事实已恢复。
 
 当前 `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` 仍判定 `test -> master=false`、`canCreateRelease=false`：REG-08 缺当前同批次页面冻结和真实 DLQ/replay/下游事实，release 缺候选说明正式化、正式签字、发布后现场核验和 master 稳定观察结束结论。Docker daemon 当前不可连接，因此本轮不填充这些真实治理证据。
+
+## 691. 2026-09-23 提交后 payment-core 全量回归
+
+在提交 `5b84f736` 后，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，Surefire 汇总为 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`。该结果证明当前 payment-core 代码基线可回归，不改变 REG-08、真实 RabbitMQ、生产数据库、渠道资金或 release 治理结论。
