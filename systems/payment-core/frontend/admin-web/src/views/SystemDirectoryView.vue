@@ -48,7 +48,7 @@ function itemsForGroup(group) {
                   <small>{{ item.code }}</small>
                 </td>
                 <td>{{ item.description }}</td>
-                <td><code>{{ item.baseUrl }}</code></td>
+                <td><code>{{ item.kind === "integration" ? "非浏览器工程/命令入口" : item.baseUrl }}</code></td>
                 <td>
                   <span class="badge" :class="item.kind === 'admin' ? 'info' : item.kind === 'terminal' ? 'success' : 'warn'">
                     {{ item.kind === "admin" ? "后台" : item.kind === "terminal" ? "用户端" : "接入端" }}
