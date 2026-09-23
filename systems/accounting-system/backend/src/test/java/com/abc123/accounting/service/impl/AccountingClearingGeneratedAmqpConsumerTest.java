@@ -66,6 +66,24 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         verify(channel).basicAck(43L, false);
     }
 
+    @Test
+    void shouldRouteToRetryWhenEventTypeInBodyIsUnsupported() throws Exception {
+        consumer(3).consume(message(0, "OTHER_EVENT", null, null), channel, 44L);
+
+        verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"), any(Message.class));
+        verify(channel).basicAck(44L, false);
+    }
+
+    @Test
+    void shouldRouteToRetryWhenSchemaVersionHeaderIsUnsupported() throws Exception {
+        consumer(3).consume(message(0, null, null, "2"), channel, 45L);
+
+        verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"), any(Message.class));
+        verify(channel).basicAck(45L, false);
+    }
+
     private AccountingClearingGeneratedAmqpConsumer consumer(int maxRetryCount) {
         return new AccountingClearingGeneratedAmqpConsumer(
                 accountingEventService,
@@ -79,7 +97,14 @@ class AccountingClearingGeneratedAmqpConsumerTest {
     }
 
     private Message message(int retryCount) throws Exception {
+        return message(retryCount, null, null, null);
+    }
+
+    private Message message(int retryCount, String eventType, String schemaVersion, String headerSchemaVersion)
+            throws Exception {
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setEventType(eventType);
+        request.setSchemaVersion(schemaVersion);
         request.setAccountNo("ACT10002");
         request.setClearingOrderNo("CLR-001");
         request.setBizNo("PAY-001");
@@ -89,6 +114,9 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         properties.setMessageId("EVT-001");
         properties.setCorrelationId("EVT-001");
         properties.setHeader("x-retry-count", retryCount);
+        if (headerSchemaVersion != null) {
+            properties.setHeader("schemaVersion", headerSchemaVersion);
+        }
         return new Message(objectMapper.writeValueAsBytes(request), properties);
     }
 }

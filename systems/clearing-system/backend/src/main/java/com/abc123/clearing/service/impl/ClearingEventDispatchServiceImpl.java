@@ -174,6 +174,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             properties.setMessageId(event.getEventNo());
             properties.setCorrelationId(event.getEventNo());
             properties.setHeader("eventType", event.getEventType());
+            properties.setHeader("schemaVersion", "1");
             properties.setHeader("clearingNo", event.getBizNo());
             return message;
         };

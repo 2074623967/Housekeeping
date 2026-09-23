@@ -24,6 +24,11 @@ import org.springframework.stereotype.Component;
 public class AccountingPaymentSuccessAmqpConsumer {
 
     private static final String RETRY_COUNT_HEADER = "x-retry-count";
+    private static final String EVENT_TYPE_HEADER = "eventType";
+    private static final String SCHEMA_VERSION_HEADER = "schemaVersion";
+    private static final String MESSAGE_ID_HEADER = "messageId";
+    private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
+    private static final String PAYMENT_SUCCESS_SCHEMA_VERSION = "1";
 
     private final AccountingEventService accountingEventService;
     private final RabbitTemplate rabbitTemplate;
@@ -59,12 +64,44 @@ public class AccountingPaymentSuccessAmqpConsumer {
                         @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
         try {
             PaymentSuccessEventRequestDTO request = objectMapper.readValue(message.getBody(), PaymentSuccessEventRequestDTO.class);
+            validateEnvelope(message, request);
             accountingEventService.consumePaymentSuccess(request);
         } catch (Exception exception) {
             routeFailure(message, channel, deliveryTag);
             return;
         }
         channel.basicAck(deliveryTag, false);
+    }
+
+    private void validateEnvelope(Message message, PaymentSuccessEventRequestDTO request) {
+        validateOptionalValue(request.getEventType(), PAYMENT_SUCCESS_EVENT_TYPE, "eventType");
+        validateOptionalValue(request.getSchemaVersion(), PAYMENT_SUCCESS_SCHEMA_VERSION, "schemaVersion");
+        validateHeader(message, EVENT_TYPE_HEADER, request.getEventType(), PAYMENT_SUCCESS_EVENT_TYPE);
+        validateHeader(message, SCHEMA_VERSION_HEADER, request.getSchemaVersion(), PAYMENT_SUCCESS_SCHEMA_VERSION);
+        validateHeader(message, MESSAGE_ID_HEADER, request.getEventNo(), null);
+    }
+
+    private void validateOptionalValue(String actual, String expected, String fieldName) {
+        if (actual != null && !actual.trim().isEmpty() && !expected.equals(actual.trim())) {
+            throw new IllegalArgumentException("支付成功事件" + fieldName + "不支持");
+        }
+    }
+
+    private void validateHeader(
+            Message message, String headerName, String bodyValue, String expectedValue) {
+        Object headerValue = MESSAGE_ID_HEADER.equals(headerName)
+                ? message.getMessageProperties().getMessageId()
+                : message.getMessageProperties().getHeaders().get(headerName);
+        if (headerValue == null || String.valueOf(headerValue).trim().isEmpty()) {
+            return;
+        }
+        String normalizedHeader = String.valueOf(headerValue).trim();
+        if (expectedValue != null && !expectedValue.equals(normalizedHeader)) {
+            throw new IllegalArgumentException("支付成功事件消息头不支持");
+        }
+        if (bodyValue != null && !bodyValue.trim().isEmpty() && !bodyValue.trim().equals(normalizedHeader)) {
+            throw new IllegalArgumentException("支付成功事件消息头与载荷不一致");
+        }
     }
 
     private void routeFailure(Message message, Channel channel, long deliveryTag) throws IOException {

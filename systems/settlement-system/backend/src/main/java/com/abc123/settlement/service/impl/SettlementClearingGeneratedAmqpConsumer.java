@@ -21,6 +21,11 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "settlement.amqp.enabled", havingValue = "true")
 public class SettlementClearingGeneratedAmqpConsumer {
     private static final String RETRY_COUNT_HEADER = "x-retry-count";
+    private static final String EVENT_TYPE_HEADER = "eventType";
+    private static final String SCHEMA_VERSION_HEADER = "schemaVersion";
+    private static final String MESSAGE_ID_HEADER = "messageId";
+    private static final String CLEARING_GENERATED_EVENT_TYPE = "CLEARING_GENERATED";
+    private static final String CLEARING_GENERATED_SCHEMA_VERSION = "1";
     private final SettlementEventService settlementEventService;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
@@ -50,12 +55,46 @@ public class SettlementClearingGeneratedAmqpConsumer {
     @RabbitListener(queues = "${settlement.amqp.clearing-generated-queue:settlement.clearing-generated}", ackMode = "MANUAL")
     public void consume(Message message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
         try {
-            settlementEventService.consumeClearingGenerated(objectMapper.readValue(message.getBody(), ClearingGeneratedEventRequestDTO.class));
+            ClearingGeneratedEventRequestDTO request = objectMapper.readValue(
+                    message.getBody(), ClearingGeneratedEventRequestDTO.class);
+            validateEnvelope(message, request);
+            settlementEventService.consumeClearingGenerated(request);
         } catch (Exception exception) {
             routeFailure(message, channel, deliveryTag);
             return;
         }
         channel.basicAck(deliveryTag, false);
+    }
+
+    private void validateEnvelope(Message message, ClearingGeneratedEventRequestDTO request) {
+        validateOptionalValue(request.getEventType(), CLEARING_GENERATED_EVENT_TYPE, "eventType");
+        validateOptionalValue(request.getSchemaVersion(), CLEARING_GENERATED_SCHEMA_VERSION, "schemaVersion");
+        validateHeader(message, EVENT_TYPE_HEADER, request.getEventType(), CLEARING_GENERATED_EVENT_TYPE);
+        validateHeader(message, SCHEMA_VERSION_HEADER, request.getSchemaVersion(), CLEARING_GENERATED_SCHEMA_VERSION);
+        validateHeader(message, MESSAGE_ID_HEADER, request.getEventNo(), null);
+    }
+
+    private void validateOptionalValue(String actual, String expected, String fieldName) {
+        if (actual != null && !actual.trim().isEmpty() && !expected.equals(actual.trim())) {
+            throw new IllegalArgumentException("清分结果事件" + fieldName + "不支持");
+        }
+    }
+
+    private void validateHeader(
+            Message message, String headerName, String bodyValue, String expectedValue) {
+        Object headerValue = MESSAGE_ID_HEADER.equals(headerName)
+                ? message.getMessageProperties().getMessageId()
+                : message.getMessageProperties().getHeaders().get(headerName);
+        if (headerValue == null || String.valueOf(headerValue).trim().isEmpty()) {
+            return;
+        }
+        String normalizedHeader = String.valueOf(headerValue).trim();
+        if (expectedValue != null && !expectedValue.equals(normalizedHeader)) {
+            throw new IllegalArgumentException("清分结果事件消息头不支持");
+        }
+        if (bodyValue != null && !bodyValue.trim().isEmpty() && !bodyValue.trim().equals(normalizedHeader)) {
+            throw new IllegalArgumentException("清分结果事件消息头与载荷不一致");
+        }
     }
 
     private void routeFailure(Message message, Channel channel, long deliveryTag) throws IOException {

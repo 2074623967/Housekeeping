@@ -67,6 +67,40 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         verify(channel).basicAck(23L, false);
     }
 
+    @Test
+    void shouldRouteMismatchedEventTypeToRetry() throws Exception {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10003");
+        request.setPaymentOrderId("PAY-001");
+        request.setEventType("REFUND_SUCCESS");
+        MessageProperties properties = new MessageProperties();
+        properties.setMessageId("EVT-001");
+        properties.setHeader("x-retry-count", 0);
+
+        consumer(3).consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 24L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
+        verify(channel).basicAck(24L, false);
+        verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldRouteMismatchedSchemaVersionHeaderToRetry() throws Exception {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10003");
+        request.setPaymentOrderId("PAY-001");
+        MessageProperties properties = new MessageProperties();
+        properties.setMessageId("EVT-001");
+        properties.setHeader("schemaVersion", "2");
+        properties.setHeader("x-retry-count", 0);
+
+        consumer(3).consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 25L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
+        verify(channel).basicAck(25L, false);
+        verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
     private AccountingPaymentSuccessAmqpConsumer consumer(int maxRetryCount) {
         return new AccountingPaymentSuccessAmqpConsumer(
                 accountingEventService,

@@ -137,6 +137,7 @@ class ClearingEventDispatchServiceImplTest {
         Message message = processorCaptor.getValue().postProcessMessage(new Message(new byte[0], new MessageProperties()));
         assertTrue("EVT-001".equals(message.getMessageProperties().getMessageId()));
         assertTrue("CLR-001".equals(message.getMessageProperties().getHeaders().get("clearingNo")));
+        assertTrue("1".equals(message.getMessageProperties().getHeaders().get("schemaVersion")));
         verify(clearingMemoryStore).markOutboxPublishSuccess("EVT-001");
     }
 

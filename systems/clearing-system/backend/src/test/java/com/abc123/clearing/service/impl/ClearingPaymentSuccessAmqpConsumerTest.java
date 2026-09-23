@@ -86,6 +86,40 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         verify(channel, never()).basicAck(14L, false);
     }
 
+    @Test
+    void shouldRouteUnsupportedSchemaVersionToRetry() throws Exception {
+        ClearingPaymentSuccessAmqpConsumer consumer = consumer(3);
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setPaymentOrderId("PAY-001");
+        request.setSchemaVersion("2");
+        MessageProperties properties = new MessageProperties();
+        properties.setMessageId("EVT-001");
+        properties.setHeader("x-retry-count", 0);
+
+        consumer.consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 15L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
+        verify(channel).basicAck(15L, false);
+        verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldRouteMismatchedEventTypeHeaderToRetry() throws Exception {
+        ClearingPaymentSuccessAmqpConsumer consumer = consumer(3);
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setPaymentOrderId("PAY-001");
+        MessageProperties properties = new MessageProperties();
+        properties.setMessageId("EVT-001");
+        properties.setHeader("eventType", "REFUND_SUCCESS");
+        properties.setHeader("x-retry-count", 0);
+
+        consumer.consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 16L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
+        verify(channel).basicAck(16L, false);
+        verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
     private ClearingPaymentSuccessAmqpConsumer consumer(int maxRetryCount) {
         return new ClearingPaymentSuccessAmqpConsumer(
                 clearingEventService,

@@ -16734,3 +16734,29 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 发现 `systems/payment-core/database/schema.sql` 与应用资源 schema 存在实际交付缺口：缺少 `t_payment_expiry_close_retry`，且把新建支付单尚未产生的 `channel_transaction_no` 设为 `NOT NULL`。本轮补齐数据库基线表、可执行增量迁移 `2026-09-23-align-payment-schema-baseline.sql`，并新增 schema 契约测试，确保应用 schema、交付 schema 和迁移保持一致。
 
 验证结果：schema 契约定向测试通过；payment-core 全量 Maven 回归 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`；`git diff --check` 通过。本轮只修复数据库建库/迁移基线，不代表迁移已在目标生产 MySQL 执行，也不改变真实渠道、资金或发布门禁结论。
+
+## 686. 2026-09-23 支付成功事件消费者版本校验
+
+清分和账务 AMQP 支付成功消费者新增事件信封校验：显式携带的 `eventType` 必须为 `PAYMENT_SUCCESS`、`schemaVersion` 必须为 `1`，消息头中的事件类型、schema 版本和 `messageId` 与 JSON 载荷不一致时进入既有 retry/DLQ 路径；历史消息缺少新增字段时继续兼容消费。新增清分 schema 版本错误、账务事件类型错误用例，覆盖错误消息不进入业务服务。
+
+验证结果：清分定向 `6/6`、账务定向 `5/5`；清分全量 `38/38`、账务全量 `45/45`，失败 `0`、错误 `0`。该校验只增强本地消费者契约和异常闭合，不代表真实 RabbitMQ/DLQ、下游资金事实或发布治理完成。
+
+## 687. 2026-09-23 文档验证基线校正
+
+同步修正 `payment-core/README.md` 与前端 README 的交付口径：payment-core 后端全量基线更新为 `1203` 个测试通过，API client 说明补齐退款申请、审核、详情、主动查单和失败重试命令；并明确版本化支付成功事件消费者已完成本地契约校验。该变更只校正文档与当前代码事实，不新增生产渠道、身份权限或发布治理结论。
+
+## 688. 2026-09-23 支付成功事件消息头边界回归
+
+新增清分消息头 `eventType` 不一致、账务消息头 `schemaVersion` 不一致两条回归用例，验证错误信封不进入业务服务，并按既有 retry 路由确认原消息。定向结果为清分 `6/6`、账务 `5/5`，全量结果为清分 `38/38`、账务 `45/45`，失败 `0`、错误 `0`；本轮不改变 payment-core `1203/1203` 全量基线或真实 broker 结论。
+
+## 689. 2026-09-23 清分生成事件版本化信封补齐
+
+清分系统的 `CLEARING_GENERATED` outbox 载荷现在显式带 `eventNo`、`eventType=CLEARING_GENERATED`、`schemaVersion=1`；AMQP 消息头同步带 schema 版本，并继续以事件号作为 `messageId/correlationId`。账务和结算 AMQP 消费者复用支付成功事件的兼容校验策略：显式信封字段或消息头不支持、互相不一致时不进入业务服务，继续进入既有 retry/DLQ 路径；历史缺少新增字段的清分消息保持兼容消费。
+
+验证结果：账务定向 `5/5`、结算定向 `5/5`、清分派发定向 `5/5`；账务后端全量 `47/47`、结算后端全量 `38/38`、清分后端全量 `38/38`，失败 `0`、错误 `0`。本地持续托管栈当前 12 个后端、15 个前端及代理路径均为 `READY`，但这些结果只证明本地代码、H2/demo 和 HTTP 骨架可运行，不代表真实 RabbitMQ/DLQ、生产数据库、资金事实或发布治理已完成。
+
+## 690. 2026-09-23 DLQ 补偿工具合同复核与门禁现状
+
+在受控回环监听权限下执行 `node --test tools/dev/dlq-compensation-smoke.test.mjs`，7/7 通过，覆盖 payment.success 与 clearing.generated 当前批次重放合同、人工结案、业务单号透传、事件类型校验、非法超时和畸形 JSON 失败；该测试使用 mock 管理 API，不声称 RabbitMQ 已发布、死信任务已入账或下游事实已恢复。
+
+当前 `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` 仍判定 `test -> master=false`、`canCreateRelease=false`：REG-08 缺当前同批次页面冻结和真实 DLQ/replay/下游事实，release 缺候选说明正式化、正式签字、发布后现场核验和 master 稳定观察结束结论。Docker daemon 当前不可连接，因此本轮不填充这些真实治理证据。

@@ -393,7 +393,9 @@ public class ClearingMemoryStore {
         event.setEventType("CLEARING_GENERATED");
         event.setBizNo(clearingOrder.getClearingNo());
         event.setSummary("清分结果已生成，等待结算和账务消费");
-        event.setPayload("{\"accountNo\":\"" + accountingClearingGeneratedAccountNo
+        event.setPayload("{\"eventNo\":\"" + event.getEventNo()
+                + "\",\"eventType\":\"CLEARING_GENERATED\",\"schemaVersion\":\"1\""
+                + ",\"accountNo\":\"" + accountingClearingGeneratedAccountNo
                 + "\",\"clearingNo\":\"" + clearingOrder.getClearingNo()
                 + "\",\"businessChainId\":\"" + clearingOrder.getBusinessChainId()
                 + "\",\"clearingOrderNo\":\"" + clearingOrder.getClearingNo()

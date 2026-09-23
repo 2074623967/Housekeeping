@@ -3474,3 +3474,11 @@
 ### 9.19 2026-09-23 当前批次门禁复核
 
 代码回归完成后重新执行 payment-core gate audit。当前 `REG-08` 仍缺同批次页面冻结截图和补偿/replay/DLQ 闭环证据，故 `test -> master=false`；release 仍缺正式版发布说明、签字审批、发布后现场核验和 master 稳定观察结束结论，故 `canCreateRelease=false`。这些是真实治理缺口，不由本轮代码测试替代。
+
+### 9.20 2026-09-23 支付成功事件消费者版本校验
+
+清分和账务 AMQP 支付成功消费者现在校验 `eventType=PAYMENT_SUCCESS`、`schemaVersion=1`，并校验消息头中的事件类型、schema 版本、`messageId` 与载荷一致；不一致消息复用既有 retry/DLQ 路径，历史缺少新增字段的消息保持兼容。新增消息头不一致回归后，清分定向 `6/6`、账务定向 `5/5` 通过，全量为清分 `38/38`、账务 `45/45`，失败和错误均为 `0`。这只证明本地消费者契约和异常路径可回归，不替代真实 broker/DLQ 闭环、下游业务事实或发布治理证据。
+
+### 9.21 2026-09-23 README 交付口径校正
+
+`payment-core/README.md` 与前端 README 已同步当前代码事实：后端全量基线为 `1203` 个测试通过，API client 的退款申请、审核、详情、主动查单和失败重试入口已列入模块范围。该校正不扩大 payment-core 的资金域边界，也不把本地测试、demo 适配器或事件消费者校验解释成真实渠道、生产 RabbitMQ/MySQL、资金到账或 release 放行事实。
