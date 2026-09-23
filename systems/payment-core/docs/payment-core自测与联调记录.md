@@ -16686,3 +16686,7 @@ node tools/dev/cross-system-happy-path.mjs
 ## 676. 2026-09-23 本地全栈复验后的门禁复判
 
 重新执行 payment-core gate audit 后，`test -> master=false`、`canCreateRelease=false` 保持不变。当前回归包只有 REG-08 仍缺当前批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式候选发布说明、签字审批、发布后现场核验和 master 稳定观察结束结论。本地全栈通过不替代这些真实治理事实。
+
+## 677. 2026-09-23 API client 退款审核命令后的门禁复判
+
+API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无变化：`test -> master=false`、`canCreateRelease=false`。代码层退款申请、审核、查单和重试命令不构成真实退款到账、财务审批或发布治理证据；现有 REG-08 与 release 四项真实阻断继续保留。
