@@ -16764,3 +16764,13 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 ## 691. 2026-09-23 提交后 payment-core 全量回归
 
 在提交 `5b84f736` 后，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，Surefire 汇总为 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`。该结果证明当前 payment-core 代码基线可回归，不改变 REG-08、真实 RabbitMQ、生产数据库、渠道资金或 release 治理结论。
+
+## 692. 2026-09-23 持续托管栈页面运行态核验
+
+在原任务窗口持续托管的本地栈中，对管理端工作台、死信补偿任务页和 App 余额支付入口进行浏览器可访问性核验：
+
+- `http://127.0.0.1:5174/dashboard`：工作台指标、今日重点事项、快捷下钻入口正常渲染；任务中心聚合失败时有明确降级提示语义。
+- `http://127.0.0.1:5174/payment-dead-letter-tasks`：筛选项、空列表态、重放边界提示和“重放不等于下游完成”的风险说明正常渲染。
+- `http://127.0.0.1:5175/balance-pay`：业务入口、客户/金额/业务号表单、创建预付单入口、重置入口和后续真实账户域边界说明正常渲染。
+
+本轮只证明当前受控本地栈的页面可达性、主要空态和入口骨架可用，不代表真实身份权限、真实渠道受理、RabbitMQ/DLQ 消费、资金到账或生产视觉验收完成。当前门禁仍以统一审计为准：`test -> master=false`、`canCreateRelease=false`；REG-08 仍缺当前批次真实页面冻结及补偿/replay/DLQ/下游闭环，release 仍缺正式发布说明、正式签字、发布后现场核验和 master 稳定观察结束结论。
