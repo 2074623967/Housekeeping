@@ -87,14 +87,27 @@ const isWritableDirectory = (directory) => {
   }
 };
 
+const isReadableDirectory = (directory) => {
+  try {
+    accessSync(directory, fsConstants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 let mavenRepo = repoCandidates.find((candidate) =>
   existsSync(candidate) && isWritableDirectory(candidate));
+if (!mavenRepo) {
+  mavenRepo = repoCandidates.find((candidate) =>
+    existsSync(candidate) && isReadableDirectory(candidate));
+}
 if (!mavenRepo) {
   mavenRepo = path.join(rootDir, ".runtime", "maven-repository");
   mkdirSync(mavenRepo, { recursive: true });
 }
-if (!isWritableDirectory(mavenRepo)) {
-  throw new Error(`Maven 仓库不可写：${mavenRepo}，可设置 MAVEN_REPO 或 HSP_MAVEN_REPO`);
+if (!isReadableDirectory(mavenRepo)) {
+  throw new Error(`Maven 仓库不可读：${mavenRepo}，可设置 MAVEN_REPO 或 HSP_MAVEN_REPO`);
 }
 
 const javaEnv = {
