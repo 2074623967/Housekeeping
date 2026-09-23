@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentDeadLetterTaskApi } from "../api/client";
+import { replayActionMessage } from "../utils/deadLetterAction";
 
 const router = useRouter();
 const items = ref([]);
@@ -164,19 +165,25 @@ async function runAction(item, action) {
   successMessage.value = "";
   const payload = { operator: normalizedOperator, resolutionNote: normalizedNote };
   try {
+    let actionResult;
     if (action === "ready") {
-      await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload);
     } else if (action === "resolve") {
-      await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload);
     } else {
-      await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
     }
     if (action === "ready") {
       successMessage.value = `任务 ${item.taskNo} 已通过复核，等待定向重放`;
     } else if (action === "resolve") {
       successMessage.value = `任务 ${item.taskNo} 已人工结案`;
     } else {
-      successMessage.value = `任务 ${item.taskNo} 已执行定向重放，请继续核对目标系统`;
+      const replayMessage = replayActionMessage(actionResult);
+      if (replayMessage.tone === "error") {
+        actionErrorMessage.value = replayMessage.message;
+      } else {
+        successMessage.value = replayMessage.message;
+      }
     }
     const refreshed = await loadTasks(item.taskNo, { ...loadedQuery.value });
     if (!refreshed) {
