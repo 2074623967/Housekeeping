@@ -16527,3 +16527,20 @@ npm run build
 ```
 
 结果：`PaymentMonitorServiceImplTest 3/3`、`PaymentMonitorControllerTest 2/2` 通过；payment-core 后端 `1/1` 模块通过，Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped；admin-web `53/53` 测试通过并构建成功。该结果不代表真实生产指标、外部告警送达、SLO 审批或发布治理完成。
+
+## 660. 2026-09-23 本地回归基线报告脚本
+
+新增 `tools/release/run_local_regression_report.mjs`，统一调用后端回归、管理端回归和 payment-core 门禁审计，并生成可重复的本地自动化基线报告。报告 JSON 只保留命令、状态、信号、错误、日志路径、Surefire/前端测试统计和门禁摘要；完整 stdout/stderr 写入同名 `.log` 文件，避免把大段日志重复嵌入报告。
+
+验证：
+
+```bash
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/release/run_local_regression_report.mjs \
+  --only payment-core \
+  --skip-frontend \
+  --output .runtime/payment-core-current-regression.json
+```
+
+结果：payment-core 后端 `1198/1198` 通过，失败 `0`、错误 `0`、跳过 `0`；门禁摘要仍如实保留当前 evidence pack 的不可放行结论。该报告是本地自动化回归基线，不替代真实渠道、生产 MQ/MySQL、页面冻结、审批签字或发布后观察证据。
