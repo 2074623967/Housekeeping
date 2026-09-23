@@ -18,6 +18,17 @@ function normalizeListPayload(data) {
   return [];
 }
 
+function normalizeSummaryPayload(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { metrics: [], highlights: [] };
+  }
+  return {
+    ...data,
+    metrics: Array.isArray(data.metrics) ? data.metrics : [],
+    highlights: Array.isArray(data.highlights) ? data.highlights : []
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -46,7 +57,7 @@ async function request(url, options = {}) {
 const postJson = (url, payload) => request(url, { method: "POST", body: JSON.stringify(payload) });
 
 export const riskControlApi = {
-  getSummary: () => request("/api/risk-control/summary"),
+  getSummary: () => request("/api/risk-control/summary").then(normalizeSummaryPayload),
   getPolicies: () => request("/api/risk-control/policies").then(normalizeListPayload),
   getLimitRules: () => request("/api/risk-control/limit-rules").then(normalizeListPayload),
   getBlocklists: () => request("/api/risk-control/blocklists").then(normalizeListPayload),

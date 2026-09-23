@@ -7,12 +7,28 @@ test("keeps the ops config service envelope on success", async () => {
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { code: "0", data: { status: "READY" } };
+      return { code: "0", data: { status: "READY", metrics: [], highlights: [] } };
     }
   });
 
   try {
-    assert.deepEqual(await opsConfigApi.getSummary(), { status: "READY" });
+    assert.deepEqual(await opsConfigApi.getSummary(), { status: "READY", metrics: [], highlights: [] });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes nullable ops config summary collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { metrics: null, highlights: null } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await opsConfigApi.getSummary(), { metrics: [], highlights: [] });
   } finally {
     globalThis.fetch = originalFetch;
   }

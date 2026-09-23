@@ -18,6 +18,17 @@ function normalizeListPayload(data) {
   return [];
 }
 
+function normalizeSummaryPayload(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { metrics: [], highlights: [] };
+  }
+  return {
+    ...data,
+    metrics: Array.isArray(data.metrics) ? data.metrics : [],
+    highlights: Array.isArray(data.highlights) ? data.highlights : []
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -46,7 +57,7 @@ async function request(url, options = {}) {
 const postJson = (url, payload) => request(url, { method: "POST", body: JSON.stringify(payload) });
 
 export const gatewayAccessApi = {
-  getSummary: () => request("/api/gateway-access/summary"),
+  getSummary: () => request("/api/gateway-access/summary").then(normalizeSummaryPayload),
   getApplications: () => request("/api/gateway-access/applications").then(normalizeListPayload),
   getGateways: ({ keyword = "", channelType = "全部", status = "全部" } = {}) => {
     const params = new URLSearchParams({ keyword, channelType, status });

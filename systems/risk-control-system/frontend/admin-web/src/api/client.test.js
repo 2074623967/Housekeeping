@@ -7,12 +7,28 @@ test("keeps the risk control service envelope on success", async () => {
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { code: "0", data: { status: "READY" } };
+      return { code: "0", data: { status: "READY", metrics: [], highlights: [] } };
     }
   });
 
   try {
-    assert.deepEqual(await riskControlApi.getSummary(), { status: "READY" });
+    assert.deepEqual(await riskControlApi.getSummary(), { status: "READY", metrics: [], highlights: [] });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes nullable risk control summary collections", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { metrics: null, highlights: null } };
+    }
+  });
+
+  try {
+    assert.deepEqual(await riskControlApi.getSummary(), { metrics: [], highlights: [] });
   } finally {
     globalThis.fetch = originalFetch;
   }

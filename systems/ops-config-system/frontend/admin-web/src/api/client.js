@@ -18,6 +18,17 @@ function normalizeListPayload(data) {
   return [];
 }
 
+function normalizeSummaryPayload(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { metrics: [], highlights: [] };
+  }
+  return {
+    ...data,
+    metrics: Array.isArray(data.metrics) ? data.metrics : [],
+    highlights: Array.isArray(data.highlights) ? data.highlights : []
+  };
+}
+
 async function request(url, options = {}) {
   let response;
   try {
@@ -46,7 +57,7 @@ async function request(url, options = {}) {
 const postJson = (url, payload) => request(url, { method: "POST", body: JSON.stringify(payload) });
 
 export const opsConfigApi = {
-  getSummary: () => request("/api/ops-config/summary"),
+  getSummary: () => request("/api/ops-config/summary").then(normalizeSummaryPayload),
   getAgreementTemplates: () => request("/api/ops-config/agreement-templates").then(normalizeListPayload),
   getBusinessLines: () => request("/api/ops-config/business-lines").then(normalizeListPayload),
   getPaymentTypes: () => request("/api/ops-config/payment-types").then(normalizeListPayload),
