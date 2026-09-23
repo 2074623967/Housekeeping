@@ -16837,3 +16837,9 @@ node tools/dev/backend-regression.mjs
 本轮修复 `tools/dev/local-stack.sh` 和 `tools/dev/backend-regression.mjs` 的本地 Maven 仓库选择：在工作区运行时仓库为空或不可写、但机器已有可读依赖缓存时，优先复用该缓存；本地栈后端/前端启动失败或超时时会清理对应 PID 文件，避免留下 stale 状态。
 
 验证：`bash -n tools/dev/local-stack.sh`、`node --check tools/dev/backend-regression.mjs`、`tools/dev/local-stack.sh doctor backends` 通过；payment-core 后端回归 `1/1` 模块、`1203/1203` 测试通过。当前沙箱仍禁止普通进程监听本地端口，未将受限环境下的 `EPERM` 误记为应用失败；真实端口验证需在允许本地监听的托管环境执行。
+
+## 700. 2026-09-23 全系统后端回归复核
+
+使用修复后的统一 Maven 仓库探测执行 `node tools/dev/backend-regression.mjs`，12 个后端模块串行通过，Surefire 汇总 `1489/1489`，`0` failures、`0` errors、`0` skipped。模块明细为：payment-core `1203`、gateway-access `51`、settlement-system `38`、accounting-system `47`、clearing-system `38`、refund-center `17`、reconciliation-system `14`、risk-control-system `11`、ops-config-system `12`、deposit-system `11`、wallet-account `23`、wallet-system `24`。
+
+该结果证明回归工具链和当前 Java/H2 代码基线可重复执行，不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账或发布治理证据；统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
