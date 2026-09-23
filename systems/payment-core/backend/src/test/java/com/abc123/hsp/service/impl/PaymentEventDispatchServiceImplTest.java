@@ -478,6 +478,9 @@ class PaymentEventDispatchServiceImplTest {
                 processorCaptor.capture()
         );
         verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"eventNo\":\"EVT-001\""));
+        Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"eventType\":\"PAYMENT_SUCCESS\""));
+        Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"schemaVersion\":\"1\""));
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"paymentOrderId\":\"PAY-001\""));
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"accountNo\":\"ACT10003\""));
 
@@ -485,6 +488,7 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("EVT-001", message.getMessageProperties().getMessageId());
         Assertions.assertEquals("EVT-001", message.getMessageProperties().getCorrelationId());
         Assertions.assertEquals("PAYMENT_SUCCESS", message.getMessageProperties().getHeaders().get("eventType"));
+        Assertions.assertEquals("1", message.getMessageProperties().getHeaders().get("schemaVersion"));
         Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());

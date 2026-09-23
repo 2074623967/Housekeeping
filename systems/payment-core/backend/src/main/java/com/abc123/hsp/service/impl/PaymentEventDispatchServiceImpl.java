@@ -39,6 +39,7 @@ import org.springframework.web.client.RestTemplate;
 public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchService {
 
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
+    private static final String PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION = "1";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
     private static final String HTTP_STAGE_PENDING = "PENDING";
     private static final String HTTP_STAGE_CLEARING_ACCEPTED = "CLEARING_ACCEPTED";
@@ -638,7 +639,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                BigDecimal amount) {
         if (HTTP_STAGE_PENDING.equals(stage)) {
             postForSuccess(clearingUrl, buildClearingPayload(
-                    detail.getPaymentOrderId(), orderNo, customerName, workerName, amount));
+                    event.getEventNo(), detail.getPaymentOrderId(), orderNo,
+                    customerName, workerName, amount));
             if (paymentEventMapper.markPaymentSuccessClearingAccepted(event.getEventNo()) != 1) {
                 throw new IllegalStateException("支付成功事件清分受理阶段更新失败");
             }
@@ -646,7 +648,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             throw new IllegalArgumentException("支付成功事件 HTTP 投递阶段非法");
         }
         postForSuccess(accountingUrl, buildAccountingPayload(
-                detail.getPaymentOrderId(), orderNo, customerName, amount));
+                event.getEventNo(), detail.getPaymentOrderId(), orderNo, customerName, amount));
         postReconciliationFact(buildReconciliationFactPayload(
                 detail.getPaymentOrderId(), orderNo, amount));
         if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
@@ -732,7 +734,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         try {
             final String payload = objectMapper.writeValueAsString(
-                    buildAmqpPayload(paymentOrderId, orderNo, customerName, workerName, amount));
+                    buildAmqpPayload(eventNo, paymentOrderId, orderNo, customerName, workerName, amount));
             rabbitTemplate.invoke(operations -> {
                 operations.convertAndSend(
                         paymentSuccessExchange.trim(),
@@ -747,12 +749,16 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
     }
 
-    private Map<String, Object> buildAmqpPayload(String paymentOrderId,
+    private Map<String, Object> buildAmqpPayload(String eventNo,
+                                                 String paymentOrderId,
                                                  String orderNo,
                                                  String customerName,
                                                  String workerName,
                                                  BigDecimal amount) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("eventNo", eventNo);
+        payload.put("eventType", PAYMENT_SUCCESS_EVENT_TYPE);
+        payload.put("schemaVersion", PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION);
         payload.put("businessChainId", businessChainId(paymentOrderId));
         payload.put("accountNo", accountingPaymentSuccessAccountNo);
         payload.put("paymentOrderId", paymentOrderId);
@@ -772,6 +778,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             properties.setMessageId(eventNo);
             properties.setCorrelationId(eventNo);
             properties.setHeader("eventType", PAYMENT_SUCCESS_EVENT_TYPE);
+            properties.setHeader("schemaVersion", PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION);
             properties.setHeader("paymentOrderId", paymentOrderId);
             return message;
         };
@@ -850,12 +857,16 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return "0".equals(code.trim());
     }
 
-    private PaymentSuccessClearingPayload buildClearingPayload(String paymentOrderId,
+    private PaymentSuccessClearingPayload buildClearingPayload(String eventNo,
+                                                               String paymentOrderId,
                                                                String orderNo,
                                                                String customerName,
                                                                String workerName,
                                                                BigDecimal amount) {
         return new PaymentSuccessClearingPayload(
+                eventNo,
+                PAYMENT_SUCCESS_EVENT_TYPE,
+                PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION,
                 businessChainId(paymentOrderId),
                 paymentOrderId,
                 orderNo,
@@ -870,11 +881,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return LocalDate.now(BUSINESS_ZONE_ID).toString();
     }
 
-    private PaymentSuccessAccountingPayload buildAccountingPayload(String paymentOrderId,
+    private PaymentSuccessAccountingPayload buildAccountingPayload(String eventNo,
+                                                                   String paymentOrderId,
                                                                    String orderNo,
                                                                    String customerName,
                                                                    BigDecimal amount) {
         return new PaymentSuccessAccountingPayload(
+                eventNo,
+                PAYMENT_SUCCESS_EVENT_TYPE,
+                PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION,
                 businessChainId(paymentOrderId),
                 accountingPaymentSuccessAccountNo,
                 paymentOrderId,
@@ -943,6 +958,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
      */
     private static class PaymentSuccessClearingPayload {
 
+        private final String eventNo;
+        private final String eventType;
+        private final String schemaVersion;
         private final String businessChainId;
         private final String paymentOrderId;
         private final String orderNo;
@@ -952,7 +970,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         private final String workerName;
         private final BigDecimal amount;
 
-        PaymentSuccessClearingPayload(String businessChainId,
+        PaymentSuccessClearingPayload(String eventNo,
+                                      String eventType,
+                                      String schemaVersion,
+                                      String businessChainId,
                                       String paymentOrderId,
                                       String orderNo,
                                       String batchDate,
@@ -960,6 +981,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                       String merchantName,
                                       String workerName,
                                       BigDecimal amount) {
+            this.eventNo = eventNo;
+            this.eventType = eventType;
+            this.schemaVersion = schemaVersion;
             this.businessChainId = businessChainId;
             this.paymentOrderId = paymentOrderId;
             this.orderNo = orderNo;
@@ -972,6 +996,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
         public String getPaymentOrderId() {
             return paymentOrderId;
+        }
+
+        public String getEventNo() {
+            return eventNo;
+        }
+
+        public String getEventType() {
+            return eventType;
+        }
+
+        public String getSchemaVersion() {
+            return schemaVersion;
         }
 
         public String getBusinessChainId() {
@@ -1008,6 +1044,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
      */
     private static class PaymentSuccessAccountingPayload {
 
+        private final String eventNo;
+        private final String eventType;
+        private final String schemaVersion;
         private final String businessChainId;
         private final String accountNo;
         private final String paymentOrderId;
@@ -1015,12 +1054,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         private final String customerName;
         private final BigDecimal amount;
 
-        PaymentSuccessAccountingPayload(String businessChainId,
+        PaymentSuccessAccountingPayload(String eventNo,
+                                        String eventType,
+                                        String schemaVersion,
+                                        String businessChainId,
                                         String accountNo,
                                         String paymentOrderId,
                                         String orderNo,
                                         String customerName,
                                         BigDecimal amount) {
+            this.eventNo = eventNo;
+            this.eventType = eventType;
+            this.schemaVersion = schemaVersion;
             this.businessChainId = businessChainId;
             this.accountNo = accountNo;
             this.paymentOrderId = paymentOrderId;
@@ -1031,6 +1076,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
         public String getAccountNo() {
             return accountNo;
+        }
+
+        public String getEventNo() {
+            return eventNo;
+        }
+
+        public String getEventType() {
+            return eventType;
+        }
+
+        public String getSchemaVersion() {
+            return schemaVersion;
         }
 
         public String getBusinessChainId() {

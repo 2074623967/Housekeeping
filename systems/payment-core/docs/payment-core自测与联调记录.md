@@ -16716,3 +16716,15 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 ## 682. 2026-09-23 当前批次门禁复判
 
 重新执行 payment-core gate audit：`test -> master=false`、`canCreateRelease=false`。当前回归包仍缺 REG-08 同批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式候选发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论。本轮本地代码、页面构建和跨系统 happy-path 均不替代这些真实治理事实。
+
+## 683. 2026-09-23 支付成功事件版本化载荷契约
+
+支付成功事件出站的 HTTP 与 AMQP 两种模式统一补齐 `eventNo`、`eventType`、`schemaVersion` 三个追踪字段；AMQP 消息头同步携带 `schemaVersion`，继续以 `eventNo` 作为 `messageId/correlationId`。清分和账务的支付成功请求 DTO 显式声明这些字段，保留旧业务字段和历史消费者兼容行为。
+
+本轮新增定向断言覆盖 AMQP JSON 载荷和消息头。该变更只收口本地事件契约和跨系统排障字段，不代表真实 RabbitMQ 消费、DLQ 闭环、下游资金事实或发布治理完成。
+
+## 684. 2026-09-23 版本化事件契约回归与门禁复判
+
+验证结果：payment-core 定向事件派发测试 `54/54` 通过；payment-core 全量 Maven 回归 `1202/1202` 通过；清分、账务全量测试均通过；`git diff --check` 通过。原托管栈当前未提供可访问 HTTP 端口，本轮跨系统 happy-path 返回 `fetch failed`，未将其写成本批次运行态成功证据。
+
+重新执行统一门禁审计，结果仍为 `test -> master=false`、`canCreateRelease=false`。审计明确 REG-08 仍缺当前同批次页面冻结截图和补偿/replay/DLQ 闭环证据，release 仍缺候选说明正式化、正式签字审批、发布后现场核验和 master 稳定观察结束结论；本轮代码回归不替代这些真实治理事实。

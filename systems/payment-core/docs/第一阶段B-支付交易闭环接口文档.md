@@ -438,6 +438,17 @@
 2. 当前主要支撑支付成功、支付关闭、退款等出站事件的可见化与手动补偿入口。
 3. 后续若接入真实消息总线，需要继续补投递批次、订阅确认和死信处理字段。
 
+支付成功事件统一载荷契约（HTTP 与 AMQP 共用语义）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `eventNo` | payment-core 出站事件号，用于跨系统排障和投递幂等追踪 |
+| `eventType` | 事件类型，当前为 `PAYMENT_SUCCESS` |
+| `schemaVersion` | 载荷契约版本，当前为 `1` |
+| `businessChainId` | 跨系统业务链路 ID，当前按 `CHAIN-{paymentOrderId}` 稳定生成 |
+
+HTTP 请求体和 AMQP JSON 消息均保留上述字段及原有业务字段；AMQP 消息头同时携带 `eventType`、`schemaVersion`、`paymentOrderId`，并继续使用 `eventNo` 作为 `messageId/correlationId`。新增字段对历史消费者向后兼容，不能替代真实 broker 订阅确认、生产数据或下游业务事实。
+
 ## 8. 支付单管理查询与导出
 
 查询接口：`GET /api/payments`
