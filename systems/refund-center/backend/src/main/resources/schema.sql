@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS t_refund_outbox_event (
     event_id VARCHAR(64) NOT NULL COMMENT '事件编号',
     event_type VARCHAR(64) NOT NULL COMMENT '事件类型',
     aggregate_id VARCHAR(64) NOT NULL COMMENT '聚合编号',
-    payload_json CLOB NOT NULL COMMENT '事件载荷',
+    payload_json TEXT NOT NULL COMMENT '事件载荷',
     status VARCHAR(32) NOT NULL COMMENT '发送状态',
     retry_count INT NOT NULL DEFAULT 0 COMMENT '重试次数',
     last_error_message VARCHAR(255) COMMENT '最近一次错误信息',
