@@ -16545,6 +16545,24 @@ node tools/release/run_local_regression_report.mjs \
 
 结果：payment-core 后端 `1198/1198` 通过，失败 `0`、错误 `0`、跳过 `0`；门禁摘要仍如实保留当前 evidence pack 的不可放行结论。该报告是本地自动化回归基线，不替代真实渠道、生产 MQ/MySQL、页面冻结、审批签字或发布后观察证据。
 
+## 662. 2026-09-23 本地回归报告纳入用户端
+
+扩展 `tools/release/run_local_regression_report.mjs`：当范围为全部模块或 `--only payment-core` 时，默认追加 `tools/dev/payment-core-user-regression.mjs`，将 API client、App、H5、PC、小程序的测试与构建结果写入 `userFrontend` 摘要；`--skip-user-frontend` 可显式跳过。非 payment-core 的 `--only` 范围不会误跑用户端。
+
+验证：
+
+```bash
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/release/run_local_regression_report.mjs \
+  --only payment-core \
+  --skip-frontend \
+  --skip-gate \
+  --output .runtime/payment-core-full-local-regression.json
+```
+
+结果：payment-core 后端 `1198/1198` 通过，5 个用户端 `5/5` 通过，用户端测试合计 `54`；App/H5/PC 构建通过，小程序和 API client 按无构建脚本规则记录为 accepted。该结果仍只代表本地自动化基线，不代表真实渠道、生产资金或发布放行。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：

@@ -93,6 +93,10 @@ function readFrontendTestCount(output) {
   return [...output.matchAll(/ℹ tests (\d+)/g)].reduce((total, match) => total + Number(match[1]), 0);
 }
 
+function shouldRunUserFrontend(only) {
+  return !hasFlag("--skip-user-frontend") && (!only || only === "payment-core");
+}
+
 function main() {
   const only = getArgValue("--only");
   const outputPath = path.resolve(rootDir, getArgValue("--output", ".runtime/current-regression-report.json"));
@@ -102,10 +106,17 @@ function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     rootDir,
-    scope: { only: only || "all", backend: !hasFlag("--skip-backend"), frontendAdmin: !hasFlag("--skip-frontend"), gate: !hasFlag("--skip-gate") },
+    scope: {
+      only: only || "all",
+      backend: !hasFlag("--skip-backend"),
+      frontendAdmin: !hasFlag("--skip-frontend"),
+      userFrontend: shouldRunUserFrontend(only),
+      gate: !hasFlag("--skip-gate")
+    },
     classification: "local-automation-only",
     backend: null,
     frontendAdmin: null,
+    userFrontend: null,
     gate: null,
     limitations: [
       "本报告只汇总本地自动化测试、构建和门禁脚本输出，不替代真实渠道、生产数据库、RabbitMQ、页面冻结或审批证据。",
@@ -126,6 +137,16 @@ function main() {
       ...summarizeExecution(execution),
       testCount: readFrontendTestCount(`${execution.stdout}${execution.stderr}`),
       appCount: execution.status === 0 ? 12 : null
+    };
+    failed ||= execution.status !== 0;
+  }
+
+  if (shouldRunUserFrontend(only)) {
+    const execution = runNode("payment-core-user", "tools/dev/payment-core-user-regression.mjs", [], `${logStem}.user.log`);
+    report.userFrontend = {
+      ...summarizeExecution(execution),
+      testCount: readFrontendTestCount(`${execution.stdout}${execution.stderr}`),
+      appCount: execution.status === 0 ? 5 : null
     };
     failed ||= execution.status !== 0;
   }
