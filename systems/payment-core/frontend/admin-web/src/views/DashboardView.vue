@@ -1,13 +1,16 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { dashboardApi, paymentMetricsApi } from "../api/client";
+import { dashboardApi, paymentMetricsApi, paymentTaskCenterApi } from "../api/client";
+import { buildDashboardFocusQueue } from "../utils/dashboardFocus";
 
 const router = useRouter();
 const summary = ref([]);
 const isLoading = ref(true);
 const hasLoadedData = ref(false);
 const errorMessage = ref("");
+const taskOverview = ref(null);
+const taskOverviewError = ref("");
 let latestLoadRequestId = 0;
 const metrics = ref({
   totalCount: 0,
@@ -20,32 +23,7 @@ const metrics = ref({
 
 const overviewCards = computed(() => summary.value);
 
-const focusQueue = computed(() => [
-  {
-    title: "待收口支付单",
-    owner: "支付运营",
-    impact: `${metrics.value.pendingCount || 0} 笔需查单 / 核回调`,
-    status: metrics.value.pendingCount > 0 ? "待处理" : "已清空",
-    badgeType: metrics.value.pendingCount > 0 ? "warn" : "success",
-    route: "/payment-issues"
-  },
-  {
-    title: "支付日终批次检查",
-    owner: "财务结算",
-    impact: `${metrics.value.closedCount || 0} 笔已关单待复核`,
-    status: "待复盘",
-    badgeType: "info",
-    route: "/payment-day-end"
-  },
-  {
-    title: "服务者结算状态核对",
-    owner: "资金运营",
-    impact: "支付侧需确认对结算影响",
-    status: "去查看",
-    badgeType: "warn",
-    route: "/worker-settlements"
-  }
-]);
+const focusQueue = computed(() => buildDashboardFocusQueue(metrics.value, taskOverview.value || {}));
 
 const healthRows = computed(() => [
   {
@@ -100,13 +78,25 @@ async function loadDashboard() {
   const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
+  taskOverviewError.value = "";
   try {
-    const [data, metricData] = await Promise.all([dashboardApi.getSummary(), paymentMetricsApi.getSummary()]);
+    const [dashboardResult, metricResult, taskResult] = await Promise.allSettled([
+      dashboardApi.getSummary(),
+      paymentMetricsApi.getSummary(),
+      paymentTaskCenterApi.getOverview()
+    ]);
     if (requestId !== latestLoadRequestId) {
       return;
     }
-    summary.value = data.cards || [];
-    metrics.value = metricData;
+    if (dashboardResult.status === "rejected" || metricResult.status === "rejected") {
+      throw dashboardResult.reason || metricResult.reason;
+    }
+    summary.value = dashboardResult.value?.cards || [];
+    metrics.value = metricResult.value || metrics.value;
+    taskOverviewError.value = taskResult.status === "rejected"
+      ? taskResult.reason?.message || "暂时无法读取任务中心"
+      : "";
+    taskOverview.value = taskResult.status === "fulfilled" ? taskResult.value : null;
     hasLoadedData.value = true;
   } catch (error) {
     if (requestId !== latestLoadRequestId) {
@@ -141,6 +131,10 @@ onMounted(loadDashboard);
 
     <div class="risk-banner">
       当前工作台聚焦支付核心域：优先关注待收口支付、关单复盘、结算影响核对和异常任务处理。
+    </div>
+
+    <div v-if="taskOverviewError" class="risk-banner">
+      任务中心待办读取失败，当前重点事项仅按支付指标降级展示：{{ taskOverviewError }}
     </div>
 
     <div v-if="errorMessage" class="error-banner">

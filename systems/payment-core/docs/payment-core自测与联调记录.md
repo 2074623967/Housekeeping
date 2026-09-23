@@ -16645,3 +16645,13 @@ bash tools/dev/local-stack.sh verify all
 ```
 
 结果：12 个后端、15 个前端及全部代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。本次验证只证明受控 demo/H2/HTTP 本地骨架在最新代码上可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、正式审批、现场核验或 release 放行完成。
+
+## 670. 2026-09-23 工作台接入任务中心实时待办
+
+工作台“今日重点事项”不再使用固定的关单和结算文案，改为读取已有 `GET /api/payment-task-center/overview` 的真实积压数据，按待回调支付、主动查单、SLA 异常、失败事件/死信、失败退款、日终告警和控制策略自检生成可下钻队列。任务中心读取失败时，页面明确提示并降级到支付指标，不把降级结果伪装成实时待办。
+
+验证：新增 `dashboardFocus.test.js` 3 个用例；payment-core admin-web `59/59` 测试通过、生产构建通过；随后执行 `node tools/dev/frontend-admin-regression.mjs`，管理端 `12/12` 工程测试与构建全部通过。该改动只改善运营工作台的实时待办和下钻体验，不替代真实告警通道、值班责任绑定或发布证据。
+
+## 671. 2026-09-23 工作台待办口径与当前门禁复核
+
+修正工作台待办聚合口径：任务中心已返回的 `0` 不再被支付指标旧值覆盖；重叠字段（失败事件/死信、失败退款/待查单、SLA 总数/告警候选）按最大值收敛，避免把同一积压重复计数。重新执行 gate audit 后，`test -> master=false`、`canCreateRelease=false` 仍保持不变，阻断仍是 REG-08 当前批次真实证据和 release 正式治理事实。
