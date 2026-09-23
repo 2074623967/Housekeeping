@@ -16563,6 +16563,18 @@ node tools/release/run_local_regression_report.mjs \
 
 结果：payment-core 后端 `1198/1198` 通过，5 个用户端 `5/5` 通过，用户端测试合计 `54`；App/H5/PC 构建通过，小程序和 API client 按无构建脚本规则记录为 accepted。该结果仍只代表本地自动化基线，不代表真实渠道、生产资金或发布放行。
 
+## 663. 2026-09-23 全量前端回归纳入统一报告
+
+执行：
+
+```bash
+node tools/release/run_local_regression_report.mjs \
+  --skip-backend \
+  --output .runtime/payment-core-full-frontend-regression.json
+```
+
+结果：管理端 `12/12` 工程通过测试与生产构建，测试合计 `120` 个；payment-core 用户端 `5/5` 工程通过，测试合计 `54` 个。报告同时保留当前 payment-core 门禁摘要，门禁仍按现有证据包返回不可放行结论；前端自动化通过不替代真实浏览器、微信开发者工具、渠道或发布证据。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：
