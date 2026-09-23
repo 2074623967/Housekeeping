@@ -3337,6 +3337,13 @@
 3. 新增退款服务回归用例，payment-core 后端全量回归更新为 `1200/1200`，失败 `0`、错误 `0`、跳过 `0`。
 4. 本轮只统一退款详情查询错误码，不改变退款状态机、真实渠道协议、退款到账、生产基础设施或 `test -> master` / `master -> release/*` 门禁结论。
 
+### 8.403 2026-09-23 支付数据库基线 schema 对齐
+
+1. 复核发现 `database/schema.sql` 漏掉应用 schema 已使用的 `t_payment_expiry_close_retry`，并将支付单初始允许为空的 `channel_transaction_no` 错设为 `NOT NULL`；按该文件新建 MySQL 后，超时关单失败退避和新支付单落库均存在结构性风险。
+2. 已补齐交付 schema 的退避表和可空字段，新增 `2026-09-23-align-payment-schema-baseline.sql`：幂等创建退避表，并将既有支付单列调整为 `NULL DEFAULT NULL`。
+3. 新增 schema 契约测试同时读取应用 schema、交付 schema 和迁移，防止关键表或字段可空性再次漂移；payment-core 全量回归 `1203/1203` 通过。
+4. 本轮只补齐建库与迁移脚本的代码基线，不声称目标 MySQL 已执行迁移、历史数据已验证或生产稳定性已完成；真实渠道、资金、审批和发布门禁结论不变。
+
 ## 9. 最终结论
 
 ### 9.1 2026-09-23 当前批次回归总数校正

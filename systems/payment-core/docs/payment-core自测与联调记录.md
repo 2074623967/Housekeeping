@@ -16728,3 +16728,9 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 验证结果：payment-core 定向事件派发测试 `54/54` 通过；payment-core 全量 Maven 回归 `1202/1202` 通过；清分、账务全量测试均通过；`git diff --check` 通过。原托管栈当前未提供可访问 HTTP 端口，本轮跨系统 happy-path 返回 `fetch failed`，未将其写成本批次运行态成功证据。
 
 重新执行统一门禁审计，结果仍为 `test -> master=false`、`canCreateRelease=false`。审计明确 REG-08 仍缺当前同批次页面冻结截图和补偿/replay/DLQ 闭环证据，release 仍缺候选说明正式化、正式签字审批、发布后现场核验和 master 稳定观察结束结论；本轮代码回归不替代这些真实治理事实。
+
+## 685. 2026-09-23 支付数据库基线 schema 对齐
+
+发现 `systems/payment-core/database/schema.sql` 与应用资源 schema 存在实际交付缺口：缺少 `t_payment_expiry_close_retry`，且把新建支付单尚未产生的 `channel_transaction_no` 设为 `NOT NULL`。本轮补齐数据库基线表、可执行增量迁移 `2026-09-23-align-payment-schema-baseline.sql`，并新增 schema 契约测试，确保应用 schema、交付 schema 和迁移保持一致。
+
+验证结果：schema 契约定向测试通过；payment-core 全量 Maven 回归 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`；`git diff --check` 通过。本轮只修复数据库建库/迁移基线，不代表迁移已在目标生产 MySQL 执行，也不改变真实渠道、资金或发布门禁结论。
