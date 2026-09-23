@@ -16876,3 +16876,9 @@ bash tools/dev/local-stack.sh verify all
 在原任务窗口持续托管栈保持运行期间，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 payment-core 死信补偿定向回归：服务 `PaymentDeadLetterTaskServiceImplTest`、控制器 `PaymentDeadLetterTaskControllerTest`、AMQP 监听器 `PaymentDeadLetterTaskAmqpListenerTest` 合计 `26/26` 通过，失败 `0`、错误 `0`、跳过 `0`。
 
 本轮只复核死信入账、脱敏、人工复核、人工结案、定向重放、发布确认、失败闭合和路由监听等可运行骨架，不代表真实 RabbitMQ/DLQ 送达、下游消费、资金事实或当前批次 REG-08 页面冻结证据已形成。统一门禁审计仍保持 `test -> master=false`、`canCreateRelease=false`。
+
+## 705. 2026-09-24 当前 HEAD payment-core 全量回归
+
+在提交 `87efd61f` 后，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，payment-core `1/1` 模块通过，Surefire 汇总 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`。
+
+该结果确认当前 payment-core 代码与已有事件、任务、配置、查询、边界回归基线未漂移；测试日志中的异常样例均为预期失败闭合路径，不代表真实 RabbitMQ/DLQ、生产 MySQL、真实渠道受理、资金到账或发布治理条件已完成。
