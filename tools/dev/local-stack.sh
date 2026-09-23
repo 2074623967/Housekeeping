@@ -73,6 +73,7 @@ resolve_maven_repo() {
     printf '%s' "$HSP_MAVEN_REPO"
     return 0
   fi
+  local readable_repo=""
   for candidate in \
     "$ROOT_DIR/../apache-maven-3.9.16/repository" \
     "/Users/abc123/apache-maven-3.9.16/repository" \
@@ -82,7 +83,14 @@ resolve_maven_repo() {
       printf '%s' "$candidate"
       return 0
     fi
+    if [[ -z "$readable_repo" && -d "$candidate" && -r "$candidate" ]]; then
+      readable_repo="$candidate"
+    fi
   done
+  if [[ -n "$readable_repo" ]]; then
+    printf '%s' "$readable_repo"
+    return 0
+  fi
   if [[ -n "${HOME:-}" && -d "$HOME/.m2/repository" && -w "$HOME/.m2/repository" ]]; then
     printf '%s' "$HOME/.m2/repository"
     return 0
@@ -270,7 +278,10 @@ start_backend() {
     echo $! >"$pid_file"
   )
   pid="$(cat "$pid_file")"
-  wait_until_ready "backend/$name" "$pid" "$health_url" "$log_file"
+  if ! wait_until_ready "backend/$name" "$pid" "$health_url" "$log_file"; then
+    stop_process "backend/$name" "$pid_file" || true
+    return 1
+  fi
 }
 
 start_frontend() {
@@ -317,7 +328,10 @@ start_frontend() {
     echo $! >"$pid_file"
   )
   pid="$(cat "$pid_file")"
-  wait_until_ready "frontend/$name" "$pid" "$page_url" "$log_file"
+  if ! wait_until_ready "frontend/$name" "$pid" "$page_url" "$log_file"; then
+    stop_process "frontend/$name" "$pid_file" || true
+    return 1
+  fi
 }
 
 stop_process() {
@@ -370,6 +384,8 @@ run_doctor() {
     done
     if [[ -d "$MAVEN_REPO" && -w "$MAVEN_REPO" ]]; then
       echo "[OK] Maven repository writable -> $MAVEN_REPO"
+    elif [[ -d "$MAVEN_REPO" && -r "$MAVEN_REPO" ]]; then
+      echo "[OK] Maven repository readable cache -> $MAVEN_REPO"
     else
       echo "[FAIL] Maven repository missing or not writable -> $MAVEN_REPO" >&2
       failures=1
