@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
-import { buildAppWebCashierUrl } from "../router/externalUrls";
+import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
 
@@ -62,6 +62,13 @@ const cashierUrl = computed(() => {
     return "";
   }
   return buildAppWebCashierUrl(detail.value.prepayOrderNo);
+});
+
+const reconciliationChainUrl = computed(() => {
+  if (!detail.value?.businessChainId) {
+    return "";
+  }
+  return buildReconciliationChainUrl(detail.value.businessChainId);
 });
 
 const metricCards = computed(() => {
@@ -189,6 +196,13 @@ function openCashier() {
   window.open(cashierUrl.value, "_blank", "noopener,noreferrer");
 }
 
+function openReconciliationChain() {
+  if (!canUseSnapshot.value || !reconciliationChainUrl.value) {
+    return;
+  }
+  window.open(reconciliationChainUrl.value, "_blank", "noopener,noreferrer");
+}
+
 async function handleQuery() {
   if (!canUseSnapshot.value || !canRunQuery()) {
     actionErrorMessage.value = "当前支付单没有可供渠道查单的提交事实。";
@@ -300,6 +314,9 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
         <button class="button secondary" :disabled="!canUseSnapshot" @click="openRelatedRoute(paymentLogsRoute({ paymentOrderId: detail?.paymentOrderId }))">
           查看处理日志
         </button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !reconciliationChainUrl" @click="openReconciliationChain">
+          跨系统链路
+        </button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
         <button class="button secondary" :disabled="!canUseSnapshot || !canRunQuery()" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
@@ -341,6 +358,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
             <div class="detail-label">跨系统链路 ID</div>
             <div class="detail-value">{{ detail.businessChainId || "-" }}</div>
             <div class="meta">用于对账台查询支付、清分、结算和账务事实</div>
+            <button class="link-button" :disabled="!canUseSnapshot || !reconciliationChainUrl" @click="openReconciliationChain">打开链路诊断</button>
           </div>
           <div class="detail-card">
             <div class="detail-label">预付单号</div>

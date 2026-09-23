@@ -166,7 +166,14 @@ async function inspectCrossSystemChain() {
   }
 }
 
-onMounted(refresh);
+onMounted(() => {
+  const initialChainId = new URLSearchParams(window.location.search).get("businessChainId");
+  if (initialChainId?.trim()) {
+    businessChainId.value = initialChainId.trim();
+    inspectCrossSystemChain();
+  }
+  refresh();
+});
 </script>
 
 <template>

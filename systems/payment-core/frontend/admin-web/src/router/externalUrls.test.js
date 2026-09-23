@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAppWebCashierUrl } from "./externalUrls.js";
+import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "./externalUrls.js";
 
 test("builds configured cashier URLs with encoded identifiers", () => {
   assert.equal(
@@ -17,4 +17,19 @@ test("builds configured cashier URLs with encoded identifiers", () => {
 test("rejects unsafe cashier URL inputs", () => {
   assert.throws(() => buildAppWebCashierUrl(" "), /required/);
   assert.throws(() => buildAppWebCashierUrl("PRE-1", "javascript:alert(1)"), /HTTP or HTTPS/);
+});
+
+test("builds a reconciliation chain diagnostic url", () => {
+  assert.equal(
+    buildReconciliationChainUrl("CHAIN/001?#%", "https://recon.example.com/ops/?stale=1#old"),
+    "https://recon.example.com/ops/?businessChainId=CHAIN%2F001%3F%23%25"
+  );
+  assert.equal(
+    buildReconciliationChainUrl("CHAIN-001"),
+    "http://127.0.0.1:5180/?businessChainId=CHAIN-001"
+  );
+});
+
+test("rejects an empty reconciliation chain id", () => {
+  assert.throws(() => buildReconciliationChainUrl(" "), /required/);
 });

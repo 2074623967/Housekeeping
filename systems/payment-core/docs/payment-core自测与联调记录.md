@@ -16491,3 +16491,21 @@ npm run build
 ```
 
 结果：`PaymentServiceImplTest` 定向回归通过；payment-core 后端 `1/1` 模块通过，Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped；payment-core admin-web `51/51` 测试通过并构建成功。该结果只证明本地 Java/H2 和管理端契约可用，不代表真实渠道、RabbitMQ/DLQ、生产数据库或正式发布治理完成。
+
+## 658. 2026-09-23 支付详情直达对账链路诊断
+
+支付详情页新增“跨系统链路”入口：按 `businessChainId` 打开 reconciliation 管理端，reconciliation 端从 URL 参数自动加载链路事实；手工输入查询仍保留。该入口只改善运营下钻，不新增 payment-core 对账写入职责。
+
+验证：
+
+```bash
+cd systems/payment-core/frontend/admin-web
+npm test
+npm run build
+
+cd ../../../reconciliation-system/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：payment-core admin-web `53/53`、reconciliation admin-web `8/8` 测试通过，两端生产构建成功；`git diff --check` 通过。本地默认跳转地址为 `http://127.0.0.1:5180`，可用 `VITE_RECONCILIATION_ADMIN_BASE_URL` 覆盖。该结果不代表真实权限、生产域名、跨系统事实或发布治理完成。
