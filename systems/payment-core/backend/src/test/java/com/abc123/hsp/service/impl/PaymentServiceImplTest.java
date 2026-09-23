@@ -3387,6 +3387,7 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(result.getRouteLogs().isEmpty());
         org.junit.jupiter.api.Assertions.assertTrue(result.getNotifyLogs().isEmpty());
         org.junit.jupiter.api.Assertions.assertTrue(result.getEventLogs().isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals("CHAIN-PAY-DETAIL-EMPTY", result.getBusinessChainId());
     }
 
     @Test

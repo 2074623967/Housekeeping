@@ -11,6 +11,8 @@ public class PaymentDetailDTO {
 
     /** 支付单号。 */
     private String paymentOrderId;
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    private String businessChainId;
     /** 当前支付单关联的预付单号。 */
     private String prepayOrderNo;
     /** 当前支付单关联的账单号。 */

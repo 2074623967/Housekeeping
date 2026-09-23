@@ -338,6 +338,11 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
             <div class="detail-value">{{ detail.paymentOrderId }}</div>
           </div>
           <div class="detail-card">
+            <div class="detail-label">跨系统链路 ID</div>
+            <div class="detail-value">{{ detail.businessChainId || "-" }}</div>
+            <div class="meta">用于对账台查询支付、清分、结算和账务事实</div>
+          </div>
+          <div class="detail-card">
             <div class="detail-label">预付单号</div>
             <div class="detail-value">{{ detail.prepayOrderNo || "-" }}</div>
           </div>

@@ -16473,3 +16473,21 @@ admin-web 与 app-web 的统一 API client 增加 `10000ms` 请求超时：请�
 本轮复核 `payment-core` 与 `gateway-access` 的退款主动查单链路，确认代码骨架已完整具备：payment-core 提供人工/自动查单、适配器选择、限流、失败历史和状态收口；gateway-access 提供 `POST /api/gateway/refunds/query` 代理，并复用应用、凭证、权限、渠道网关、证书和发布路由治理。仓库默认不配置真实渠道上游和访问凭证，非 demo 环境不会用本地状态伪造渠道结果。
 
 验证结果：两个模块均 `1/1 backend modules passed`，失败数 `0`。本轮只证明本地 Java/H2/受控 HTTP 契约和错误边界可运行，不代表微信、支付宝、银行真实退款协议、签名验签、生产密钥、网络联通、退款到账、渠道对账或财务验收完成。
+
+## 657. 2026-09-23 支付详情跨系统链路 ID 收口
+
+为让支付详情能够直接下钻到已有 reconciliation 跨系统事实查询，本轮在 `PaymentDetailDTO` 增加 `businessChainId`。payment-core 按稳定规则从支付单号派生 `CHAIN-{paymentOrderId}`，管理端详情展示该值及其查询用途；不新增账务、清分、结算或对账写入职责。
+
+验证：
+
+```bash
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/dev/backend-regression.mjs --only payment-core
+
+cd systems/payment-core/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：`PaymentServiceImplTest` 定向回归通过；payment-core 后端 `1/1` 模块通过，Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped；payment-core admin-web `51/51` 测试通过并构建成功。该结果只证明本地 Java/H2 和管理端契约可用，不代表真实渠道、RabbitMQ/DLQ、生产数据库或正式发布治理完成。

@@ -2160,6 +2160,9 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             return null;
         }
+        if (StringUtils.hasText(detail.getPaymentOrderId())) {
+            detail.setBusinessChainId("CHAIN-" + detail.getPaymentOrderId().trim());
+        }
         detail.setRouteLogs(safeList(paymentMapper.findRouteLogs(detail.getPaymentOrderId())));
         detail.setNotifyLogs(safeList(paymentMapper.findNotifyLogs(detail.getPaymentOrderId())));
         detail.setEventLogs(safeList(paymentMapper.findEventItems(detail.getPaymentOrderId())));
