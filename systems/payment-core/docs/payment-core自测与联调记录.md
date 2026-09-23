@@ -16661,3 +16661,7 @@ bash tools/dev/local-stack.sh verify all
 `systems/payment-core/frontend/api-client` 新增四个零依赖命令：`refund-apply`、`refund-detail`、`refund-query` 和 `refund-retry`，分别覆盖退款申请、详情读取、主动查单和失败重试。命令沿用已有统一 JSON 响应、10 秒超时、网络错误归一化和路径参数编码规则；默认操作人和幂等键只用于本地联调，不能替代可信身份或真实退款渠道事实。
 
 验证：API client `npm test` 共 `10/10` 通过，`git diff --check` 通过。本轮不改变 payment-core 后端退款状态机、真实渠道协议、退款中心职责或发布门禁结论。
+
+## 673. 2026-09-23 API 调用端变更后的门禁复核
+
+本轮重新执行 payment-core gate audit：本地代码与接口测试不影响现有治理判断，`test -> master=false`、`canCreateRelease=false` 仍保持不变。当前阻断仍为 REG-08 缺当前同批次页面冻结截图和补偿/replay/DLQ 闭环证据，以及 release 正式发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论。
