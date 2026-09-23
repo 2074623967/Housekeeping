@@ -2,6 +2,8 @@ export {
   businessEntryRoutes,
   cashierRoutePath,
   paymentResultRoutePath,
+  refundProgressRoutePath,
   buildCashierRoute,
-  buildPaymentResultRoute
+  buildPaymentResultRoute,
+  buildRefundProgressRoute
 } from "../../../shared/src/router/terminalRoutes.js";

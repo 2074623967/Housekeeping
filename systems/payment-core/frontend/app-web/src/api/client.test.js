@@ -18,10 +18,12 @@ test("encodes cashier and payment detail identifiers as single path segments", a
 
   await paymentApi.getCashier("PRE/1?#%");
   await paymentApi.getDetail("PAY/1?#%");
+  await paymentApi.getRefundDetail("REF/1?#%");
 
   assert.deepEqual(urls, [
     "/api/payments/cashier/PRE%2F1%3F%23%25",
-    "/api/payments/PAY%2F1%3F%23%25"
+    "/api/payments/PAY%2F1%3F%23%25",
+    "/api/refunds/REF%2F1%3F%23%25"
   ]);
 });
 

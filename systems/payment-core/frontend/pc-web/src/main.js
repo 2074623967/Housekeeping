@@ -3,10 +3,12 @@ import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import "./styles.css";
 import BusinessEntryView from "../../shared/src/views/BusinessEntryView.vue";
+import RefundProgressView from "../../shared/src/views/RefundProgressView.vue";
 import {
   businessEntryRoutes,
   cashierRoutePath,
-  paymentResultRoutePath
+  paymentResultRoutePath,
+  refundProgressRoutePath
 } from "../../shared/src/router/terminalRoutes.js";
 
 const routes = [
@@ -17,7 +19,8 @@ const routes = [
     props: { terminalVariant: "pc", sceneType }
   })),
   { path: cashierRoutePath, name: "cashier", component: () => import("./views/CashierView.vue") },
-  { path: paymentResultRoutePath, name: "payment-result", component: () => import("./views/ResultView.vue") }
+  { path: paymentResultRoutePath, name: "payment-result", component: () => import("./views/ResultView.vue") },
+  { path: refundProgressRoutePath, name: "refund-progress", component: RefundProgressView, props: { terminalVariant: "pc" } }
 ];
 
 const router = createRouter({

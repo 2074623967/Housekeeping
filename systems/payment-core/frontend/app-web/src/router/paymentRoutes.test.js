@@ -4,7 +4,9 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import {
   businessEntryRoutes,
   buildCashierRoute,
-  buildPaymentResultRoute
+  buildPaymentResultRoute,
+  buildRefundProgressRoute,
+  refundProgressRoutePath
 } from "./paymentRoutes.js";
 
 test("keeps App business entry routes complete", () => {
@@ -13,12 +15,17 @@ test("keeps App business entry routes complete", () => {
   ]);
 });
 
+test("keeps the refund progress route available for user terminals", () => {
+  assert.equal(refundProgressRoutePath, "/refund-progress/:refundOrderId");
+});
+
 function createTestRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: "/cashier/:prepayOrderNo", name: "cashier", component: {} },
-      { path: "/payment-result/:paymentOrderId", name: "payment-result", component: {} }
+      { path: "/payment-result/:paymentOrderId", name: "payment-result", component: {} },
+      { path: "/refund-progress/:refundOrderId", name: "refund-progress", component: {} }
     ]
   });
 }
@@ -33,5 +40,13 @@ test("resolves payment identifiers as encoded route parameters", () => {
   assert.equal(
     router.resolve(buildPaymentResultRoute("PAY/1?#%", { prepayOrderNo: "PRE/1?#%" })).href,
     "/payment-result/PAY%2F1%3F%23%25?prepayOrderNo=PRE/1?%23%25"
+  );
+});
+
+test("resolves refund identifiers as encoded route parameters", () => {
+  const router = createTestRouter();
+  assert.equal(
+    router.resolve(buildRefundProgressRoute("REF/1?#%", { terminal: "app" })).href,
+    "/refund-progress/REF%2F1%3F%23%25?terminal=app"
   );
 });

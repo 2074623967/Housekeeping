@@ -4,8 +4,10 @@ import {
   businessEntryRoutes,
   cashierRoutePath,
   paymentResultRoutePath,
+  refundProgressRoutePath,
   buildCashierRoute,
-  buildPaymentResultRoute
+  buildPaymentResultRoute,
+  buildRefundProgressRoute
 } from "../../shared/src/router/terminalRoutes.js";
 
 test("keeps PC business entry routes complete", () => {
@@ -14,6 +16,7 @@ test("keeps PC business entry routes complete", () => {
   ]);
   assert.equal(cashierRoutePath, "/cashier/:prepayOrderNo");
   assert.equal(paymentResultRoutePath, "/payment-result/:paymentOrderId");
+  assert.equal(refundProgressRoutePath, "/refund-progress/:refundOrderId");
 });
 
 test("builds PC payment navigation descriptors", () => {
@@ -26,5 +29,10 @@ test("builds PC payment navigation descriptors", () => {
     name: "payment-result",
     params: { paymentOrderId: "PAY-1" },
     query: { terminal: "pc" }
+  });
+  assert.deepEqual(buildRefundProgressRoute("REF-1"), {
+    name: "refund-progress",
+    params: { refundOrderId: "REF-1" },
+    query: {}
   });
 });

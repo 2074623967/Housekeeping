@@ -4,8 +4,10 @@ import {
   businessEntryRoutes,
   cashierRoutePath,
   paymentResultRoutePath,
+  refundProgressRoutePath,
   buildCashierRoute,
-  buildPaymentResultRoute
+  buildPaymentResultRoute,
+  buildRefundProgressRoute
 } from "../../shared/src/router/terminalRoutes.js";
 
 test("keeps H5 business entry routes complete", () => {
@@ -14,6 +16,7 @@ test("keeps H5 business entry routes complete", () => {
   ]);
   assert.equal(cashierRoutePath, "/cashier/:prepayOrderNo");
   assert.equal(paymentResultRoutePath, "/payment-result/:paymentOrderId");
+  assert.equal(refundProgressRoutePath, "/refund-progress/:refundOrderId");
 });
 
 test("builds encoded H5 payment navigation descriptors", () => {
@@ -26,5 +29,10 @@ test("builds encoded H5 payment navigation descriptors", () => {
     name: "payment-result",
     params: { paymentOrderId: "PAY-1" },
     query: {}
+  });
+  assert.deepEqual(buildRefundProgressRoute("REF-1", { terminal: "h5" }), {
+    name: "refund-progress",
+    params: { refundOrderId: "REF-1" },
+    query: { terminal: "h5" }
   });
 });

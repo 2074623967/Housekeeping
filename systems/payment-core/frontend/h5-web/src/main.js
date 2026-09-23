@@ -5,10 +5,12 @@ import "../../shared/src/styles/terminal.css";
 import BusinessEntryView from "../../shared/src/views/BusinessEntryView.vue";
 import CashierView from "./views/CashierView.vue";
 import ResultView from "./views/ResultView.vue";
+import RefundProgressView from "../../shared/src/views/RefundProgressView.vue";
 import {
   businessEntryRoutes,
   cashierRoutePath,
-  paymentResultRoutePath
+  paymentResultRoutePath,
+  refundProgressRoutePath
 } from "../../shared/src/router/terminalRoutes.js";
 
 const routes = [
@@ -19,7 +21,8 @@ const routes = [
     props: { terminalVariant: "h5", sceneType }
   })),
   { path: cashierRoutePath, name: "cashier", component: CashierView },
-  { path: paymentResultRoutePath, name: "payment-result", component: ResultView }
+  { path: paymentResultRoutePath, name: "payment-result", component: ResultView },
+  { path: refundProgressRoutePath, name: "refund-progress", component: RefundProgressView, props: { terminalVariant: "h5" } }
 ];
 
 const router = createRouter({

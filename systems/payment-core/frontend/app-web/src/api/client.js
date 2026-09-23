@@ -73,6 +73,7 @@ export const paymentApi = {
   prepay: (payload) => postJson("/api/payments/prepay", payload),
   getCashier: (prepayOrderNo) => request(`/api/payments/cashier/${encodeURIComponent(prepayOrderNo)}`),
   getDetail: (paymentOrderId) => request(`/api/payments/${encodeURIComponent(paymentOrderId)}`),
+  getRefundDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`),
   submit: (payload) => postJson("/api/payments/submit", payload),
   query: (payload) => postJson("/api/payments/query", payload),
   close: (payload) => postJson("/api/payments/close", payload)

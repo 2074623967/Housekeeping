@@ -13,6 +13,7 @@
 - PC 收银台
 - PC 支付结果页
 - 与 `app-web / h5-web` 同口径的支付交易闭环联调
+- 退款进度只读查询页（`/refund-progress/:refundOrderId`）
 
 ## 设计原则
 
