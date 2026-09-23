@@ -16671,3 +16671,14 @@ bash tools/dev/local-stack.sh verify all
 修复 `tools/dev/local-stack.sh` 的默认工具链探测：先校验 `command -v mvn` 返回路径确实可执行，并优先选择当前可用的 Maven 3.9.16 与对应本地仓库，避免 PATH 中残留旧 Maven 路径导致启动脚本误选或等待超时。显式传入 `HSP_MAVEN_BIN`、`HSP_MAVEN_REPO` 的行为保持不变。
 
 验证：`bash -n tools/dev/local-stack.sh`、`git diff --check` 通过；受控本机执行 `bash tools/dev/local-stack.sh doctor payment-core` 返回 Maven 3.9.16、JDK 和依赖检查通过。本轮只改善本地运行骨架启动探测，不改变业务状态机、真实渠道或发布门禁。
+
+## 675. 2026-09-23 启动修复后的本地全栈复验
+
+在当前 `test` HEAD 上执行：
+
+```bash
+bash tools/dev/local-stack.sh smoke all
+node tools/dev/cross-system-happy-path.mjs
+```
+
+结果：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只证明受控 demo/H2/HTTP 骨架可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账或正式发布治理完成。
