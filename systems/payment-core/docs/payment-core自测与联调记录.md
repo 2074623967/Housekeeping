@@ -16682,3 +16682,7 @@ node tools/dev/cross-system-happy-path.mjs
 ```
 
 结果：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只证明受控 demo/H2/HTTP 骨架可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账或正式发布治理完成。
+
+## 676. 2026-09-23 本地全栈复验后的门禁复判
+
+重新执行 payment-core gate audit 后，`test -> master=false`、`canCreateRelease=false` 保持不变。当前回归包只有 REG-08 仍缺当前批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式候选发布说明、签字审批、发布后现场核验和 master 稳定观察结束结论。本地全栈通过不替代这些真实治理事实。
