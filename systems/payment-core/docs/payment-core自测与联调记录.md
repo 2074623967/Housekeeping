@@ -16575,6 +16575,27 @@ node tools/release/run_local_regression_report.mjs \
 
 结果：管理端 `12/12` 工程通过测试与生产构建，测试合计 `120` 个；payment-core 用户端 `5/5` 工程通过，测试合计 `54` 个。报告同时保留当前 payment-core 门禁摘要，门禁仍按现有证据包返回不可放行结论；前端自动化通过不替代真实浏览器、微信开发者工具、渠道或发布证据。
 
+## 664. 2026-09-23 DLQ 重放结果状态提示修复
+
+本轮修复 payment-core 管理端死信补偿任务页面的结果提示边界：服务端返回 `REPLAY_FAILED` 时，页面显示重放失败并要求排查消息代理与消费者；只有返回 `REPLAYED` 时才显示消息发布确认，同时继续提示运营核对目标系统。该改动不改变后端重放状态机，也不把发布确认解释为下游消费成功。
+
+验证：
+
+```bash
+cd systems/payment-core/frontend/admin-web
+npm test
+npm run build
+
+node tools/dev/frontend-admin-regression.mjs
+node tools/dev/payment-core-user-regression.mjs
+node tools/release/audit_payment_core_gate.mjs \
+  --root-dir /Users/abc123/workspace/home-service-payment-system \
+  --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression \
+  --stdout-json
+```
+
+结果：payment-core admin-web `56/56` 测试通过并构建成功；全量管理端 `12/12`、用户端 `5/5` 均通过既有测试与构建检查。当前门禁仍为不可放行：REG-08 缺当前批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式签字审批、发布后现场核验和 master 稳定观察结束结论。本轮代码回归不替代这些真实治理事实。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：
