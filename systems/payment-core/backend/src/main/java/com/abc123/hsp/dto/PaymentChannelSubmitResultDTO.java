@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -7,6 +8,11 @@ import lombok.Data;
  */
 @Data
 public class PaymentChannelSubmitResultDTO {
+
+    /**
+     * 原生终端支付参数，仅在渠道已完成签名且允许直接交给客户端时返回；不落库。
+     */
+    private Map<String, String> nativePaymentParams;
 
     /** 渠道交易流水号。 */
     private String channelTransactionNo;

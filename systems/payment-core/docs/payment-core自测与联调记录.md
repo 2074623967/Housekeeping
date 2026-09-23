@@ -16449,3 +16449,15 @@ bash tools/dev/local-stack.sh verify all
 发现渠道下单/查单服务在适配器选择层直接读取请求字段；调用方传入 `null` 时会抛出裸 `NullPointerException`，无法保持 payment-core 统一错误码和脱敏异常语义。本轮在 `PaymentChannelSubmitServiceImpl` 与 `PaymentChannelQueryServiceImpl` 增加显式请求校验，分别返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`、`PAYMENT_CHANNEL_QUERY_FAILED`，不调用适配器或返回码标准化器。
 
 验证结果：渠道服务定向测试 `22/22` 通过；随后执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过，Surefire 汇总 `1196/1196`，`0` failures、`0` errors、`0` skipped。该结果只证明本地 Java/H2 错误边界和回归基线，不代表真实渠道、RabbitMQ/DLQ、生产数据库或发布治理已完成。
+
+## 653. 2026-09-23 浏览器端请求超时边界补强
+
+admin-web 与 app-web 的统一 API client 增加 `10000ms` 请求超时：请求由 `AbortController` 控制，超时统一映射为 `PAYMENT-CLIENT-TIMEOUT`，网络失败继续映射为 `PAYMENT-CLIENT-NETWORK`，并在 `finally` 中清理计时器；H5/PC 复用 app-web 客户端，因此不重复实现。新增 admin-web 与 app-web 超时错误回归用例。
+
+验证结果：payment-core admin-web `51/51`、app-web `24/24` 测试通过，admin-web/app-web/h5-web/pc-web 生产构建通过，`git diff --check` 通过。本轮只改善用户端请求失败可解释性，不改变支付状态机、渠道协议或资金事实。
+
+## 654. 2026-09-23 小程序原生支付参数兼容层
+
+小程序收银台新增条件式原生支付拉起：提交响应包含完整 `timeStamp`、`nonceStr`、`package`、`signType`、`paySign` 时调用 `wx.requestPayment`，取消、失败和运行环境不支持分别映射稳定错误码；响应不含原生参数时继续进入本地 demo 结果页。后端提交结果 DTO 增加临时 `nativePaymentParams` 契约，由渠道结果边界校验完整性和长度，参数只随本次响应透传，不写入预付单。
+
+验证结果：小程序 Node 测试 `15/15`、payment-core 后端全量回归 `1/1` 模块通过；admin-web `51/51`、app-web `24/24`、H5 `2/2`、PC `2/2`、API client `8/8` 通过，四端生产构建通过。当前本地适配器仍不返回真实微信签名参数，因此本批不声称真实微信扣款或渠道资金闭环完成。

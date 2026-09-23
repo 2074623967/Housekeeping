@@ -4,8 +4,10 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /**
@@ -23,6 +25,9 @@ final class PaymentChannelSubmitResultValidator {
     private static final int HANDLING_SUGGESTION_MAX_LENGTH = 256;
     private static final int BOOLEAN_TEXT_MAX_LENGTH = 16;
     private static final int MAPPING_VERSION_MAX_LENGTH = 32;
+    private static final int NATIVE_PAYMENT_PARAM_MAX_LENGTH = 512;
+    private static final List<String> NATIVE_PAYMENT_PARAM_FIELDS = Arrays.asList(
+            "timeStamp", "nonceStr", "package", "signType", "paySign");
     private static final List<String> ATTEMPT_STATUS_TYPES = Arrays.asList(
             "info", "warn", "danger", "success");
 
@@ -56,7 +61,24 @@ final class PaymentChannelSubmitResultValidator {
         result.setManualInterventionRequired(normalizeOptional(
                 result.getManualInterventionRequired(), BOOLEAN_TEXT_MAX_LENGTH));
         result.setMappingVersion(normalizeOptional(result.getMappingVersion(), MAPPING_VERSION_MAX_LENGTH));
+        result.setNativePaymentParams(normalizeNativePaymentParams(result.getNativePaymentParams()));
         return result;
+    }
+
+    private static Map<String, String> normalizeNativePaymentParams(Map<String, String> params) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+        Map<String, String> normalized = new HashMap<>();
+        for (String field : NATIVE_PAYMENT_PARAM_FIELDS) {
+            String value = params.get(field);
+            String normalizedValue = normalizeOptional(value, NATIVE_PAYMENT_PARAM_MAX_LENGTH);
+            if (!StringUtils.hasText(normalizedValue)) {
+                throw invalidResult();
+            }
+            normalized.put(field, normalizedValue);
+        }
+        return normalized;
     }
 
     private static String normalizeRequired(String value, int maxLength) {

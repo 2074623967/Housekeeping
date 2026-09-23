@@ -28,7 +28,7 @@ wx.setStorageSync("paymentApiBaseUrl", "https://your-payment-api.example.com")
 
 ## 当前边界
 
-后端本地渠道适配器只返回支付受理与待回调事实，尚未返回微信 `wx.requestPayment` 所需的签名参数。因此当前小程序可走通预付、提交、结果页有界自动刷新、主动查单和受限关单骨架，但不声称已经完成真实微信扣款。真实接入需由 `gateway-access` 返回受签名保护的微信支付参数，并补齐 AppID/商户绑定、openid、合法域名、证书与回调验签。
+前端已支持在提交响应包含完整微信 `wx.requestPayment` 参数时拉起原生支付；后端本地渠道适配器当前只返回支付受理与待回调事实，因此本地 demo 会跳过原生拉起并继续进入结果页。真实接入需由 `gateway-access` 返回受签名保护的微信支付参数，并补齐 AppID/商户绑定、openid、合法域名、证书与回调验签。
 
 ## 自动化
 

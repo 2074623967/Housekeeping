@@ -7,6 +7,7 @@ const {
   TERMINAL,
   canSubmitPayment,
   createIdempotencyKey,
+  requestNativePayment,
   resolveRemainingSeconds,
   resolveScene
 } = require("../../utils/payment");
@@ -137,6 +138,7 @@ Page({
       if (!result || result.prepayOrderNo !== prepayOrderNo || !result.paymentOrderId) {
         throw new Error("支付提交响应为空或与当前预付单不一致");
       }
+      await requestNativePayment(result);
       wx.redirectTo({
         url: `/pages/result/index?paymentOrderId=${encodeURIComponent(result.paymentOrderId)}`
           + `&prepayOrderNo=${encodeURIComponent(prepayOrderNo)}`

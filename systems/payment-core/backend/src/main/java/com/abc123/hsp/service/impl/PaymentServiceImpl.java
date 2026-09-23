@@ -719,7 +719,8 @@ public class PaymentServiceImpl implements PaymentService {
                             submitResult.getAttemptStatus(),
                             submitResult.getAttemptStatusType());
                 }
-                return paymentMapper.findPrepay(request.getPrepayOrderNo());
+                return attachNativePaymentParams(
+                        paymentMapper.findPrepay(request.getPrepayOrderNo()), submitResult);
             }
             throw new IllegalStateException(
                     "payment channel submit result binding was not applied atomically");
@@ -768,7 +769,16 @@ public class PaymentServiceImpl implements PaymentService {
                 "SUBMIT",
                 "待回调",
                 "warn");
-        return paymentMapper.findPrepay(request.getPrepayOrderNo());
+        return attachNativePaymentParams(
+                paymentMapper.findPrepay(request.getPrepayOrderNo()), submitResult);
+    }
+
+    private PrepayOrderDTO attachNativePaymentParams(
+            PrepayOrderDTO prepayOrder, PaymentChannelSubmitResultDTO submitResult) {
+        if (prepayOrder != null && submitResult != null) {
+            prepayOrder.setNativePaymentParams(submitResult.getNativePaymentParams());
+        }
+        return prepayOrder;
     }
 
     private void markSubmitResultUnknown(

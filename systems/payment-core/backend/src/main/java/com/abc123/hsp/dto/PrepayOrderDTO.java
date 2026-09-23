@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -7,6 +8,11 @@ import lombok.Data;
  */
 @Data
 public class PrepayOrderDTO {
+
+    /**
+     * 原生终端支付参数。仅由本次提交响应临时携带，不作为预付单持久化字段。
+     */
+    private Map<String, String> nativePaymentParams;
 
     /** 预付单号。 */
     private String prepayOrderNo;

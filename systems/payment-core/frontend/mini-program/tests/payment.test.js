@@ -7,6 +7,8 @@ const {
   createIdempotencyKey,
   createOrderNo,
   normalizeAmount,
+  normalizeNativePaymentParams,
+  requestNativePayment,
   resolvePaymentDetailRefreshDelay,
   resolveRemainingSeconds,
   resolveScene,
@@ -55,6 +57,29 @@ test("submits only an unexpired untouched prepay with an allowed channel", () =>
   assert.equal(canSubmitPayment({ ...cashier, latestAttemptStatus: "等待回调" }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, channels: ["支付宝"] }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, expiresAt: "2026-09-14 09:59:59" }, now), false);
+});
+
+test("normalizes complete native payment parameters and ignores incomplete payloads", () => {
+  assert.deepEqual(normalizeNativePaymentParams({
+    nativePaymentParams: {
+      timeStamp: " 1710000000 ",
+      nonceStr: "nonce",
+      package: "prepay_id=wx-prepay",
+      signType: "RSA",
+      paySign: "signature"
+    }
+  }), {
+    timeStamp: "1710000000",
+    nonceStr: "nonce",
+    package: "prepay_id=wx-prepay",
+    signType: "RSA",
+    paySign: "signature"
+  });
+  assert.equal(normalizeNativePaymentParams({ paymentParams: { timeStamp: "1" } }), null);
+});
+
+test("keeps the local demo path when native payment parameters are absent", async () => {
+  assert.deepEqual(await requestNativePayment({ paymentOrderId: "PAY-DEMO" }), { invoked: false });
 });
 
 test("maps payment terminal states without inventing success", () => {

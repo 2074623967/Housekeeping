@@ -18,7 +18,9 @@ import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -151,6 +153,40 @@ class PaymentChannelSubmitServiceImplTest {
     }
 
     @Test
+    void shouldPreserveCompleteNativePaymentParameters() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setNativePaymentParams(nativePaymentParams());
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(any())).thenReturn(result);
+        when(standardizer.standardizeSubmit("wx_h5", result)).thenReturn(result);
+
+        PaymentChannelSubmitResultDTO normalized = new PaymentChannelSubmitServiceImpl(
+                Collections.singletonList(adapter), standardizer).submit(request());
+
+        assertEquals("prepay_id=wx-prepay", normalized.getNativePaymentParams().get("package"));
+    }
+
+    @Test
+    void shouldRejectIncompleteNativePaymentParameters() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setNativePaymentParams(Collections.singletonMap("timeStamp", "1710000000"));
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelSubmitServiceImpl(
+                        Collections.singletonList(adapter), standardizer).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+    }
+
+    @Test
     void shouldRejectInvalidFieldAddedByReturnCodeStandardization() {
         PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
         PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
@@ -237,6 +273,16 @@ class PaymentChannelSubmitServiceImplTest {
         mapping.setManualInterventionRequired("否");
         mapping.setMappingVersion("v1");
         return mapping;
+    }
+
+    private Map<String, String> nativePaymentParams() {
+        Map<String, String> params = new HashMap<>();
+        params.put("timeStamp", "1710000000");
+        params.put("nonceStr", "nonce");
+        params.put("package", "prepay_id=wx-prepay");
+        params.put("signType", "RSA");
+        params.put("paySign", "signature");
+        return params;
     }
 
     private void assertUniqueTransactionNumbers(PaymentChannelSubmitAdapter adapter,

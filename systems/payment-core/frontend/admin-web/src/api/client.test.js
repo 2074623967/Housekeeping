@@ -64,3 +64,18 @@ test("reports network failures with a stable client error", async (context) => {
     (error) => error.code === "PAYMENT-CLIENT-NETWORK"
   );
 });
+
+test("maps aborted admin requests to a stable timeout error", async (context) => {
+  context.mock.method(globalThis, "fetch", async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  });
+
+  const { dashboardApi } = await import("./client.js");
+  await assert.rejects(
+    dashboardApi.getSummary(),
+    (error) => error.code === "PAYMENT-CLIENT-TIMEOUT"
+  );
+});

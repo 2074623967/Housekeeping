@@ -9,6 +9,8 @@ function createBusinessError(payload, fallbackMessage) {
   return error;
 }
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 async function parseResponsePayload(response) {
   try {
     return await response.json();
@@ -31,31 +33,38 @@ export function normalizePagePayload(data) {
 }
 
 async function request(url, options = {}) {
-  let response;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   try {
-    response = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
-      ...options
-    });
-  } catch (error) {
-    const transportCode = error?.name === "AbortError"
-      ? "PAYMENT-CLIENT-TIMEOUT"
-      : "PAYMENT-CLIENT-NETWORK";
-    throw createBusinessError({ code: transportCode }, error?.name === "AbortError" ? "支付服务请求超时" : "无法连接支付服务");
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+        signal: controller.signal
+      });
+    } catch (error) {
+      const transportCode = error?.name === "AbortError"
+        ? "PAYMENT-CLIENT-TIMEOUT"
+        : "PAYMENT-CLIENT-NETWORK";
+      throw createBusinessError({ code: transportCode }, error?.name === "AbortError" ? "支付服务请求超时" : "无法连接支付服务");
+    }
+    let payload;
+    try {
+      payload = await parseResponsePayload(response);
+    } catch (error) {
+      throw createBusinessError({ code: error.code }, `${error.message} [HTTP ${error.status}]`);
+    }
+    if (!response.ok) {
+      throw createBusinessError(payload, `Request failed: ${response.status}`);
+    }
+    if (!payload || payload.code !== "0") {
+      throw createBusinessError(payload, "Request failed");
+    }
+    return normalizePagePayload(payload.data);
+  } finally {
+    clearTimeout(timeoutId);
   }
-  let payload;
-  try {
-    payload = await parseResponsePayload(response);
-  } catch (error) {
-    throw createBusinessError({ code: error.code }, `${error.message} [HTTP ${error.status}]`);
-  }
-  if (!response.ok) {
-    throw createBusinessError(payload, `Request failed: ${response.status}`);
-  }
-  if (!payload || payload.code !== "0") {
-    throw createBusinessError(payload, "Request failed");
-  }
-  return normalizePagePayload(payload.data);
 }
 
 function buildJsonRequestOptions(method, payload) {

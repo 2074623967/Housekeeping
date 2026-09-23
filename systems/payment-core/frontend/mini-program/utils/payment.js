@@ -109,6 +109,47 @@ function canSubmitPayment(cashier, now) {
     && resolveRemainingSeconds(cashier.expiresAt, now) > 0;
 }
 
+function normalizeNativePaymentParams(payload) {
+  const source = payload && (payload.nativePaymentParams || payload.paymentParams);
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+  const requiredFields = ["timeStamp", "nonceStr", "package", "signType", "paySign"];
+  if (requiredFields.some((field) => typeof source[field] !== "string" || !source[field].trim())) {
+    return null;
+  }
+  return requiredFields.reduce((params, field) => {
+    params[field] = source[field].trim();
+    return params;
+  }, {});
+}
+
+function requestNativePayment(payload) {
+  const params = normalizeNativePaymentParams(payload);
+  if (!params) {
+    return Promise.resolve({ invoked: false });
+  }
+  if (typeof wx === "undefined" || typeof wx.requestPayment !== "function") {
+    const error = new Error("当前小程序环境不支持微信原生支付");
+    error.code = "PAYMENT-MINI-NATIVE-UNAVAILABLE";
+    return Promise.reject(error);
+  }
+  return new Promise((resolve, reject) => {
+    wx.requestPayment({
+      ...params,
+      success: () => resolve({ invoked: true }),
+      fail: (failure) => {
+        const errorMessage = failure && failure.errMsg ? failure.errMsg : "微信原生支付未完成";
+        const error = new Error(errorMessage);
+        error.code = /cancel|取消/i.test(errorMessage)
+          ? "PAYMENT-MINI-NATIVE-CANCEL"
+          : "PAYMENT-MINI-NATIVE-FAILED";
+        reject(error);
+      }
+    });
+  });
+}
+
 function canClosePayment(status, channelTransactionNo, latestAttemptStatus) {
   const closeableStatuses = ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"];
   const attemptStatus = typeof latestAttemptStatus === "string" ? latestAttemptStatus.trim() : "";
@@ -169,6 +210,8 @@ module.exports = {
   createIdempotencyKey,
   createOrderNo,
   normalizeAmount,
+  normalizeNativePaymentParams,
+  requestNativePayment,
   resolvePaymentDetailRefreshDelay,
   resolveRemainingSeconds,
   resolveScene,
