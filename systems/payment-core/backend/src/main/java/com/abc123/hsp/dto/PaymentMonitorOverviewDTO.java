@@ -17,4 +17,6 @@ public class PaymentMonitorOverviewDTO {
     private List<PaymentChannelMetricDTO> channelMetrics;
     /** 异常告警列表。 */
     private List<PaymentAlertItemDTO> alerts;
+    /** 指标口径与默认运营门槛。 */
+    private List<PaymentMonitorMetricDefinitionDTO> metricDefinitions;
 }

@@ -1593,6 +1593,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. `trends`：最近 7 天支付趋势，包含日期、总单量、成功单量和成功金额。
 3. `channelMetrics`：按渠道与支付方式统计的总单量、成功率、成功金额和待处理笔数，并补充 `riskLevel`、`riskLevelType`、`riskHint` 便于前端直接展示风险标签和说明。
 4. `alerts`：待处理异常告警列表，当前包括回调待收口、退款失败、渠道停用三类，并补充 `suggestedAction` 和 `actionRoute` 便于前端一键跳转到排障页。
+5. `metricDefinitions`：当前监控页使用的指标字典，包含 `metricCode`、`metricName`、`definition`、`unit`、`defaultThreshold`、`alertLevel`、`owner` 和 `actionRoute`；`defaultThreshold` 是本地默认运营门槛，不等同于生产 SLO 或正式审批结果。
 
 返回示例：
 
@@ -1641,6 +1642,18 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
       "affectedCount": 12,
       "suggestedAction": "进入支付交易异常中心，优先核对待回调支付单、回调日志和查单结果",
       "actionRoute": "/payment-issues?issueType=待回调未收口"
+    }
+  ],
+  "metricDefinitions": [
+    {
+      "metricCode": "payment_success_rate",
+      "metricName": "支付成功率",
+      "definition": "成功支付单量 / 支付单总量",
+      "unit": "%",
+      "defaultThreshold": ">= 95%",
+      "alertLevel": "P1",
+      "owner": "支付运营",
+      "actionRoute": "/payments"
     }
   ]
 }

@@ -30,6 +30,7 @@ let latestLoadRequestId = 0;
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canDrillDown = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 const canExport = computed(() => canDrillDown.value);
+const metricDefinitions = computed(() => overview.value.metricDefinitions || []);
 
 const monitorCards = computed(() => {
   const summary = overview.value.summary || {};
@@ -265,6 +266,40 @@ onMounted(loadOverview);
             <div class="meta">{{ card.hint }}</div>
           </div>
         </div>
+
+        <section class="panel metric-definition-panel">
+          <div class="section-title">
+            <h3>指标口径与处置入口</h3>
+            <span class="meta">当前默认运营门槛，生产 SLO 以正式配置和审批为准</span>
+          </div>
+          <div v-if="!metricDefinitions.length" class="state-box">当前暂无指标口径定义</div>
+          <div v-else class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th>定义</th>
+                  <th>单位</th>
+                  <th>默认门槛</th>
+                  <th>告警</th>
+                  <th>责任方</th>
+                  <th>入口</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in metricDefinitions" :key="item.metricCode">
+                  <td><strong>{{ item.metricName }}</strong><div class="meta">{{ item.metricCode }}</div></td>
+                  <td>{{ item.definition }}</td>
+                  <td>{{ item.unit }}</td>
+                  <td>{{ item.defaultThreshold }}</td>
+                  <td><span class="badge" :class="item.alertLevel === 'P1' ? 'danger' : 'warn'">{{ item.alertLevel }}</span></td>
+                  <td>{{ item.owner }}</td>
+                  <td><button class="link-button" :disabled="!canDrillDown || !item.actionRoute" @click="openAlertRoute(item.actionRoute)">查看</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <section class="panel overview-panel">
           <div class="section-title">

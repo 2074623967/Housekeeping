@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +44,8 @@ class PaymentMonitorServiceImplTest {
 
         assertEquals(Integer.valueOf(2), overview.getSummary().getAlertCount());
         assertEquals(Integer.valueOf(4), overview.getSummary().getProcessingRefundCount());
+        assertEquals(5, overview.getMetricDefinitions().size());
+        assertEquals("payment_success_rate", overview.getMetricDefinitions().get(0).getMetricCode());
         verify(paymentMonitorMapper).findSummary();
         verify(paymentMonitorMapper).findRecentTrends();
         verify(paymentMonitorMapper).findChannelMetrics();
@@ -63,6 +66,7 @@ class PaymentMonitorServiceImplTest {
 
         assertEquals(true, csv.startsWith("section,metric,value,detail\n"));
         assertEquals(true, csv.contains("\"successRate\",\"'=1+1\""));
+        assertTrue(csv.contains("\"metric-definition\",\"payment_success_rate\""));
         verify(paymentMonitorMapper).findSummary();
     }
 

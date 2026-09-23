@@ -16509,3 +16509,21 @@ npm run build
 ```
 
 结果：payment-core admin-web `53/53`、reconciliation admin-web `8/8` 测试通过，两端生产构建成功；`git diff --check` 通过。本地默认跳转地址为 `http://127.0.0.1:5180`，可用 `VITE_RECONCILIATION_ADMIN_BASE_URL` 覆盖。该结果不代表真实权限、生产域名、跨系统事实或发布治理完成。
+
+## 659. 2026-09-23 支付监控指标字典与下钻入口
+
+监控总览新增 `metricDefinitions` 指标字典，统一返回支付成功率、待收口支付、失败退款、停用渠道和 P1 告警的定义、单位、默认运营门槛、告警等级、责任方和处置入口；管理端新增指标口径表，可直接下钻到对应页面。默认门槛只用于当前骨架运营提示，不声称生产 SLO 已审批。
+
+验证：
+
+```bash
+MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/dev/backend-regression.mjs --only payment-core
+
+cd systems/payment-core/frontend/admin-web
+npm test
+npm run build
+```
+
+结果：`PaymentMonitorServiceImplTest 3/3`、`PaymentMonitorControllerTest 2/2` 通过；payment-core 后端 `1/1` 模块通过，Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped；admin-web `53/53` 测试通过并构建成功。该结果不代表真实生产指标、外部告警送达、SLO 审批或发布治理完成。
