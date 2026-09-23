@@ -16443,3 +16443,9 @@ bash tools/dev/local-stack.sh verify all
 本轮将支付单详情不存在统一收口为 `PAYMENT_ORDER_NOT_FOUND`，并将支付单/支付记录详情中的路由、回调、事件轨迹 `NULL` 集合归一为空数组，避免后台详情页收到 `200 + data:null` 或不可迭代集合。
 
 验证结果：`PaymentServiceImplTest 94/94`、`PaymentRecordServiceImplTest 6/6` 通过；随后重新执行 payment-core 后端全量回归，`1/1` 模块通过，`1194/1194` 测试通过，`0` failures、`0` errors、`0` skipped。该结果只证明本地 Java/H2 服务契约和回归基线，不代表真实渠道、生产数据库或发布治理已完成。
+
+## 652. 2026-09-23 渠道服务空请求失败闭合
+
+发现渠道下单/查单服务在适配器选择层直接读取请求字段；调用方传入 `null` 时会抛出裸 `NullPointerException`，无法保持 payment-core 统一错误码和脱敏异常语义。本轮在 `PaymentChannelSubmitServiceImpl` 与 `PaymentChannelQueryServiceImpl` 增加显式请求校验，分别返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`、`PAYMENT_CHANNEL_QUERY_FAILED`，不调用适配器或返回码标准化器。
+
+验证结果：渠道服务定向测试 `22/22` 通过；随后执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过，Surefire 汇总 `1196/1196`，`0` failures、`0` errors、`0` skipped。该结果只证明本地 Java/H2 错误边界和回归基线，不代表真实渠道、RabbitMQ/DLQ、生产数据库或发布治理已完成。

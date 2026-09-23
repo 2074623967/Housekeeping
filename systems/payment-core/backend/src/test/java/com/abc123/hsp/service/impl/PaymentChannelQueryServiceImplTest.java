@@ -24,6 +24,23 @@ import org.mockito.Mockito;
 class PaymentChannelQueryServiceImplTest {
 
     @Test
+    void shouldRejectNullPaymentDetailBeforeSelectingAdapter() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Arrays.asList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(null));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("payment channel query request is invalid", exception.getMessage());
+        verifyNoInteractions(mapper, adapter);
+    }
+
+    @Test
     void shouldSelectWechatQueryAdapterByChannelCode() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setChannel("wx_h5");

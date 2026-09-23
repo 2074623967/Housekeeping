@@ -3320,6 +3320,13 @@
 3. 新增 `PaymentServiceImplTest` 两个场景和 `PaymentRecordServiceImplTest` 一个场景；定向回归为 `PaymentServiceImplTest 94/94`、`PaymentRecordServiceImplTest 6/6`，失败 `0`、错误 `0`。
 4. 本轮只收口 payment-core 查询契约和空数据边界，不改变支付状态机、渠道协议、下游资金事实或发布门禁结论。
 
+### 8.401 2026-09-23 渠道服务空请求失败闭合
+
+1. `PaymentChannelSubmitServiceImpl.submit` 与 `PaymentChannelQueryServiceImpl.query` 在适配器选择前显式拒绝 `null` 请求，避免裸 `NullPointerException` 穿透统一业务异常边界。
+2. 下单空请求返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，查单空请求返回 `PAYMENT_CHANNEL_QUERY_FAILED`；两条路径均不调用适配器、返回码标准化器或外部渠道。
+3. 新增两条服务层回归用例，定向渠道服务测试 `22/22` 通过；payment-core 后端全量回归更新为 `1196/1196`，失败 `0`、错误 `0`、跳过 `0`。
+4. 本轮只补强 payment-core 渠道适配边界和脱敏失败语义，不改变支付状态机、真实渠道协议、资金事实、RabbitMQ/DLQ 或发布门禁结论。
+
 ## 9. 最终结论
 
 ### 9.1 2026-09-23 当前批次回归总数校正

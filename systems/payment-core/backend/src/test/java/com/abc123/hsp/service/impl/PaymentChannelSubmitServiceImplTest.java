@@ -43,6 +43,20 @@ class PaymentChannelSubmitServiceImplTest {
     }
 
     @Test
+    void shouldRejectNullSubmitRequestBeforeSelectingAdapter() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(adapter, mapper).submit(null));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertEquals("payment channel submit request is invalid", exception.getMessage());
+        verifyNoInteractions(mapper, adapter);
+    }
+
+    @Test
     void shouldSelectWechatSubmitAdapterByChannelCode() {
         PaymentChannelSubmitRequestDTO request = new PaymentChannelSubmitRequestDTO();
         request.setResolvedChannelCode("wx_h5");

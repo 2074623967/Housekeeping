@@ -26,6 +26,9 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
 
     @Override
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
+        if (paymentDetail == null) {
+            throw invalidRequest();
+        }
         for (PaymentChannelQueryAdapter adapter : adapters) {
             if (adapter.supports(paymentDetail.getChannel())) {
                 PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
@@ -38,5 +41,11 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
                 ErrorCode.PAYMENT_CHANNEL_QUERY_ADAPTER_MISSING,
                 "no payment channel query adapter available"
         );
+    }
+
+    private BusinessException invalidRequest() {
+        return BusinessException.sanitized(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                "payment channel query request is invalid");
     }
 }

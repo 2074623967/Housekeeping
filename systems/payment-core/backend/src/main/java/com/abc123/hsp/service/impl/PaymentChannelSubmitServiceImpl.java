@@ -36,6 +36,9 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
 
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
+        if (request == null) {
+            throw invalidRequest();
+        }
         for (PaymentChannelSubmitAdapter adapter : adapters) {
             if (adapter.supports(request.getResolvedChannelCode())) {
                 try {
@@ -53,6 +56,12 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
             }
         }
         throw adapterMissing();
+    }
+
+    private BusinessException invalidRequest() {
+        return BusinessException.sanitized(
+                ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                "payment channel submit request is invalid");
     }
 
     private BusinessException adapterMissing() {
