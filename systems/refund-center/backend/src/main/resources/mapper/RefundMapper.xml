@@ -84,11 +84,17 @@
     </select>
 
     <insert id="insertPaymentSource" parameterType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
-        MERGE INTO t_refund_payment_source
+        INSERT INTO t_refund_payment_source
         (payment_order_id, order_no, customer_name, paid_amount, channel_code, paid_at, updated_at)
-        KEY (payment_order_id)
         VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{paidAmount},
                 #{channelCode}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE
+            order_no = VALUES(order_no),
+            customer_name = VALUES(customer_name),
+            paid_amount = VALUES(paid_amount),
+            channel_code = VALUES(channel_code),
+            paid_at = VALUES(paid_at),
+            updated_at = CURRENT_TIMESTAMP
     </insert>
 
     <insert id="insertRefund" parameterType="com.abc123.refund.entity.RefundOrderEntity">

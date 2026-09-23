@@ -69,6 +69,29 @@ class RefundCenterIntegrationTest {
     }
 
     @Test
+    void shouldUpsertRepeatedPaymentSuccessProjection() {
+        String paymentOrderId = "PAY-IT-REPLAY-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-REPLAY");
+        source.setCustomerName("重复投影客户");
+        source.setPaidAmount(new BigDecimal("88.00"));
+        source.setChannelCode("WECHAT");
+
+        refundService.projectPaymentSuccess(source);
+        source.setCustomerName("重复投影客户-更新");
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("18.00"));
+        RefundListItemDTO refund = refundService.apply(apply);
+
+        assertEquals("重复投影客户-更新", refund.getCustomerName());
+        assertEquals("ORDER-IT-REPLAY", refund.getOrderNo());
+    }
+
+    @Test
     void shouldExportRefundDetailSnapshot() {
         String paymentOrderId = "PAY-IT-" + UUID.randomUUID();
         PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
