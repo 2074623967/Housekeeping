@@ -2,7 +2,8 @@
   "pages": [
     "pages/entry/index",
     "pages/cashier/index",
-    "pages/result/index"
+    "pages/result/index",
+    "pages/refund-progress/index"
   ],
   "window": {
     "navigationBarBackgroundColor": "#0f766e",

@@ -2,7 +2,7 @@
 
 ## 定位
 
-原生微信小程序支付骨架，覆盖充值、提现补款、转账补款、余额补款、预付单、收银台、支付提交、结果刷新、主动查单和受限关单。
+原生微信小程序支付骨架，覆盖充值、提现补款、转账补款、余额补款、预付单、收银台、支付提交、结果刷新、主动查单、受限关单和退款进度只读查询。
 
 ## 本地运行
 
@@ -35,3 +35,5 @@ wx.setStorageSync("paymentApiBaseUrl", "https://your-payment-api.example.com")
 ```bash
 npm test
 ```
+
+退款进度页地址为 `/pages/refund-progress/index?refundOrderId=...`，只调用 `GET /api/refunds/{refundOrderId}` 展示状态、渠道退款单号和处理轨迹；审核、主动查单和失败重试仍由运营后台负责。

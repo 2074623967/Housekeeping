@@ -60,6 +60,9 @@ const paymentApi = {
   getDetail(paymentOrderId) {
     return request(`/api/payments/${encodeURIComponent(paymentOrderId)}`);
   },
+  getRefundDetail(refundOrderId) {
+    return request(`/api/refunds/${encodeURIComponent(refundOrderId)}`);
+  },
   submit(payload) {
     return request("/api/payments/submit", { method: "POST", data: payload });
   },
