@@ -16596,6 +16596,21 @@ node tools/release/audit_payment_core_gate.mjs \
 
 结果：payment-core admin-web `56/56` 测试通过并构建成功；全量管理端 `12/12`、用户端 `5/5` 均通过既有测试与构建检查。当前门禁仍为不可放行：REG-08 缺当前批次页面冻结截图和补偿/replay/DLQ 闭环证据；release 仍缺正式签字审批、发布后现场核验和 master 稳定观察结束结论。本轮代码回归不替代这些真实治理事实。
 
+## 665. 2026-09-23 payment-core 后端全量回归复核
+
+本轮使用仓库约定的 Maven 3.9.16 与 JDK 8 环境重新执行 payment-core 后端全量测试，覆盖当前提交后的全部 Java 测试类。
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH \
+/Users/abc123/apache-maven-3.9.16/bin/mvn \
+  -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository \
+  -q -f systems/payment-core/backend/pom.xml test
+```
+
+结果：Surefire 汇总 `1198/1198`，`0` failures、`0` errors、`0` skipped。测试日志中的异常均来自既有失败分支、事务回滚和敏感信息脱敏测试，进程最终退出码为 `0`。该结果证明当前本地 Java/H2 骨架回归通过，不代表真实渠道、生产 MQ/MySQL、资金到账或 release 治理条件完成。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：
