@@ -16460,4 +16460,4 @@ admin-web 与 app-web 的统一 API client 增加 `10000ms` 请求超时：请�
 
 小程序收银台新增条件式原生支付拉起：提交响应包含完整 `timeStamp`、`nonceStr`、`package`、`signType`、`paySign` 时调用 `wx.requestPayment`，取消、失败和运行环境不支持分别映射稳定错误码；响应不含原生参数时继续进入本地 demo 结果页。后端提交结果 DTO 增加临时 `nativePaymentParams` 契约，由渠道结果边界校验完整性和长度，参数只随本次响应透传，不写入预付单。
 
-验证结果：小程序 Node 测试 `15/15`、payment-core 后端全量回归 `1/1` 模块通过；admin-web `51/51`、app-web `24/24`、H5 `2/2`、PC `2/2`、API client `8/8` 通过，四端生产构建通过。当前本地适配器仍不返回真实微信签名参数，因此本批不声称真实微信扣款或渠道资金闭环完成。
+验证结果：小程序 Node 测试 `17/17`、payment-core 后端全量回归 `1/1` 模块通过；admin-web `51/51`、app-web `24/24`、H5 `2/2`、PC `2/2`、API client `8/8` 通过，四端生产构建通过。当前本地适配器仍不返回真实微信签名参数，因此本批不声称真实微信扣款或渠道资金闭环完成。
