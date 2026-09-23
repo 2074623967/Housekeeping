@@ -50,14 +50,18 @@ function itemsForGroup(group) {
                 <td>{{ item.description }}</td>
                 <td><code>{{ item.baseUrl }}</code></td>
                 <td>
-                  <span class="badge" :class="item.kind === 'admin' ? 'info' : 'success'">
-                    {{ item.kind === "admin" ? "后台" : "用户端" }}
+                  <span class="badge" :class="item.kind === 'admin' ? 'info' : item.kind === 'terminal' ? 'success' : 'warn'">
+                    {{ item.kind === "admin" ? "后台" : item.kind === "terminal" ? "用户端" : "接入端" }}
                   </span>
                 </td>
                 <td>
-                  <a class="button secondary system-open-link" :href="item.baseUrl" target="_blank" rel="noreferrer">
+                  <a v-if="item.kind !== 'integration'" class="button secondary system-open-link" :href="item.baseUrl" target="_blank" rel="noreferrer">
                     打开
                   </a>
+                  <div v-else class="integration-entry">
+                    <span>{{ item.entryType === "path" ? "工程路径" : "联调命令" }}</span>
+                    <code>{{ item.entryValue }}</code>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -133,6 +137,19 @@ function itemsForGroup(group) {
 .system-open-link {
   display: inline-flex;
   padding: 7px 12px;
+}
+
+.integration-entry {
+  display: grid;
+  gap: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.integration-entry code {
+  max-width: 360px;
+  overflow-wrap: anywhere;
+  color: #475569;
 }
 
 @media (max-width: 720px) {

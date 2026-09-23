@@ -58,6 +58,24 @@ export const systemCatalog = [
     kind: "terminal"
   },
   {
+    group: "支付核心",
+    code: "payment-mini-program",
+    name: "微信小程序支付端",
+    description: "原生小程序业务入口、支付和退款进度",
+    kind: "integration",
+    entryType: "path",
+    entryValue: "systems/payment-core/frontend/mini-program"
+  },
+  {
+    group: "支付核心",
+    code: "payment-api-client",
+    name: "API 支付调用端",
+    description: "零依赖支付与退款服务调用命令",
+    kind: "integration",
+    entryType: "command",
+    entryValue: "cd systems/payment-core/frontend/api-client && npm test"
+  },
+  {
     group: "资金域",
     code: "wallet-account",
     name: "钱包账户底座",

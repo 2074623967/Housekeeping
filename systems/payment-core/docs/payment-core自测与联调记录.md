@@ -16828,7 +16828,7 @@ node tools/dev/backend-regression.mjs
 
 ## 698. 2026-09-23 可运行骨架阶段口径校正
 
-本轮按“先把架子搭起来、每个入口能打开并完成基本操作，再补生产化细节”的阶段目标复核 payment-core。代码事实已确认：管理端系统总览可到达 12 个后台和 App/H5/PC 用户端；App/H5/PC/小程序已覆盖业务入口、收银台、支付结果和退款进度；API client 覆盖支付与退款的服务调用骨架。同步修正文档中早期“小程序未实现”和“用户端只有收银台/结果页”的旧口径。
+本轮按“先把架子搭起来、每个入口能打开并完成基本操作，再补生产化细节”的阶段目标复核 payment-core。代码事实已确认：管理端系统总览可到达 12 个后台、App/H5/PC 用户端，并提供小程序工程与 API client 联调入口；App/H5/PC/小程序已覆盖业务入口、收银台、支付结果和退款进度；API client 覆盖支付与退款的服务调用骨架。同步修正文档中早期“小程序未实现”和“用户端只有收银台/结果页”的旧口径。
 
 验证：admin-web `63/63`、App `26/26`、H5 `2/2`、PC `2/2`、小程序 `20/20` 通过，`git diff --check` 通过。真实微信/支付宝/银行协议、可信身份权限、生产数据库与 MQ、资金到账、通知送达、现场核验和发布审批仍属于后续阶段，不能由本地 demo 或前端测试替代。
 
@@ -16843,3 +16843,9 @@ node tools/dev/backend-regression.mjs
 使用修复后的统一 Maven 仓库探测执行 `node tools/dev/backend-regression.mjs`，12 个后端模块串行通过，Surefire 汇总 `1489/1489`，`0` failures、`0` errors、`0` skipped。模块明细为：payment-core `1203`、gateway-access `51`、settlement-system `38`、accounting-system `47`、clearing-system `38`、refund-center `17`、reconciliation-system `14`、risk-control-system `11`、ops-config-system `12`、deposit-system `11`、wallet-account `23`、wallet-system `24`。
 
 该结果证明回归工具链和当前 Java/H2 代码基线可重复执行，不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账或发布治理证据；统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
+
+## 701. 2026-09-23 系统总览接入端目录补齐
+
+为让“可运行骨架”覆盖实际联调入口，系统总览目录由 15 项扩展为 17 项：12 个管理后台、3 个浏览器用户端、1 个微信小程序工程入口和 1 个 API client 联调入口。浏览器入口继续以 URL 打开；小程序显示工程路径，API client 显示可直接执行的测试/联调命令，避免把非浏览器工程伪装成可点击网页。
+
+验证：`systemCatalog` 契约测试与 payment-core admin-web 测试共 `63/63` 通过，生产构建通过；API client `10/10` 通过；`git diff --check` 通过。该目录只改善本地骨架发现和联调可达性，不代表微信开发者工具、统一身份权限、真实渠道或生产域名已验收。

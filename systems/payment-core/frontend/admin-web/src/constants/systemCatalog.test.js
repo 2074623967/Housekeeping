@@ -3,10 +3,12 @@ import test from "node:test";
 import { systemCatalog, systemGroups } from "./systemCatalog.js";
 
 test("keeps every local platform entry reachable from the catalog", () => {
-  assert.equal(systemCatalog.length, 15);
+  assert.equal(systemCatalog.length, 17);
   assert.equal(systemCatalog.filter((item) => item.kind === "admin").length, 12);
   assert.equal(systemCatalog.filter((item) => item.kind === "terminal").length, 3);
-  assert.ok(systemCatalog.every((item) => /^https?:\/\//.test(item.baseUrl)));
+  assert.equal(systemCatalog.filter((item) => item.kind === "integration").length, 2);
+  assert.ok(systemCatalog.filter((item) => item.kind !== "integration").every((item) => /^https?:\/\//.test(item.baseUrl)));
+  assert.ok(systemCatalog.filter((item) => item.kind === "integration").every((item) => item.entryValue));
   assert.equal(systemCatalog.filter((item) => item.current).map((item) => item.code).join(","), "payment-core");
 });
 
