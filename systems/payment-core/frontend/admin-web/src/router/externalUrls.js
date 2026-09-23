@@ -25,6 +25,19 @@ export function buildAppWebCashierUrl(
   return url.toString();
 }
 
+export function buildAppWebRefundProgressUrl(
+  refundOrderId,
+  baseUrl = import.meta.env?.VITE_APP_WEB_BASE_URL || DEFAULT_APP_WEB_BASE_URL
+) {
+  if (typeof refundOrderId !== "string" || !refundOrderId.trim()) {
+    throw new TypeError("Refund order number is required");
+  }
+  const url = resolveAppWebBaseUrl(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  url.pathname = `${basePath}/refund-progress/${encodeURIComponent(refundOrderId.trim())}`;
+  return url.toString();
+}
+
 export function buildReconciliationChainUrl(
   businessChainId,
   baseUrl = import.meta.env?.VITE_RECONCILIATION_ADMIN_BASE_URL || DEFAULT_RECONCILIATION_ADMIN_BASE_URL

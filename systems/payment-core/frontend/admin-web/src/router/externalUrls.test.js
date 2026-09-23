@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "./externalUrls.js";
+import {
+  buildAppWebCashierUrl,
+  buildAppWebRefundProgressUrl,
+  buildReconciliationChainUrl
+} from "./externalUrls.js";
 
 test("builds configured cashier URLs with encoded identifiers", () => {
   assert.equal(
@@ -17,6 +21,18 @@ test("builds configured cashier URLs with encoded identifiers", () => {
 test("rejects unsafe cashier URL inputs", () => {
   assert.throws(() => buildAppWebCashierUrl(" "), /required/);
   assert.throws(() => buildAppWebCashierUrl("PRE-1", "javascript:alert(1)"), /HTTP or HTTPS/);
+});
+
+test("builds configured refund progress URLs with encoded identifiers", () => {
+  assert.equal(
+    buildAppWebRefundProgressUrl("REF/1?#%", "https://pay.example.com/app/?stale=1#old"),
+    "https://pay.example.com/app/refund-progress/REF%2F1%3F%23%25"
+  );
+  assert.equal(buildAppWebRefundProgressUrl("REF-1"), "http://127.0.0.1:5175/refund-progress/REF-1");
+});
+
+test("rejects empty refund progress URL inputs", () => {
+  assert.throws(() => buildAppWebRefundProgressUrl(" "), /required/);
 });
 
 test("builds a reconciliation chain diagnostic url", () => {

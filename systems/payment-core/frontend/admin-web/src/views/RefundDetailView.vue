@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { refundApi } from "../api/client";
+import { buildAppWebRefundProgressUrl } from "../router/externalUrls";
 import {
   paymentDetailRoute as buildPaymentDetailRoute,
   paymentRecordDetailRoute as buildPaymentRecordDetailRoute
@@ -57,6 +58,13 @@ const paymentLogRoute = computed(() => {
     return "";
   }
   return buildPaymentLogsRoute({ paymentOrderId: detail.value.paymentOrderId });
+});
+
+const userRefundProgressUrl = computed(() => {
+  if (!detail.value?.refundOrderId) {
+    return "";
+  }
+  return buildAppWebRefundProgressUrl(detail.value.refundOrderId);
 });
 
 const metricCards = computed(() => {
@@ -162,6 +170,13 @@ function openRelatedRoute(targetRoute) {
   router.push(targetRoute);
 }
 
+function openExternalUrl(targetUrl) {
+  if (!canUseSnapshot.value || !targetUrl) {
+    return;
+  }
+  window.open(targetUrl, "_blank", "noopener,noreferrer");
+}
+
 async function runAction(actionName, actionLabel, actionRunner) {
   if (!canUseSnapshot.value || !canRunRefundAction(detail.value?.status, actionName)) {
     actionErrorMessage.value = `当前退款单不满足${actionLabel}条件。`;
@@ -226,6 +241,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
         <button class="button secondary" :disabled="!canUseSnapshot || !paymentDetailRoute" @click="openRelatedRoute(paymentDetailRoute)">查看支付单详情</button>
         <button class="button secondary" :disabled="!canUseSnapshot || !paymentRecordDetailRoute" @click="openRelatedRoute(paymentRecordDetailRoute)">查看支付记录详情</button>
         <button class="button secondary" :disabled="!canUseSnapshot || !paymentLogRoute" @click="openRelatedRoute(paymentLogRoute)">查看处理日志</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !userRefundProgressUrl" @click="openExternalUrl(userRefundProgressUrl)">打开用户退款进度</button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
       </div>
     </div>
@@ -325,6 +341,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
               <button class="link-button" :disabled="!canUseSnapshot || !paymentDetailRoute" @click="openRelatedRoute(paymentDetailRoute)">查看支付单详情</button>
               <button class="link-button" :disabled="!canUseSnapshot || !paymentRecordDetailRoute" @click="openRelatedRoute(paymentRecordDetailRoute)">查看支付记录详情</button>
               <button class="link-button" :disabled="!canUseSnapshot || !paymentLogRoute" @click="openRelatedRoute(paymentLogRoute)">查看支付处理日志</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !userRefundProgressUrl" @click="openExternalUrl(userRefundProgressUrl)">打开用户退款进度</button>
             </div>
           </section>
 
