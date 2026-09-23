@@ -16665,3 +16665,9 @@ bash tools/dev/local-stack.sh verify all
 ## 673. 2026-09-23 API 调用端变更后的门禁复核
 
 本轮重新执行 payment-core gate audit：本地代码与接口测试不影响现有治理判断，`test -> master=false`、`canCreateRelease=false` 仍保持不变。当前阻断仍为 REG-08 缺当前同批次页面冻结截图和补偿/replay/DLQ 闭环证据，以及 release 正式发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论。
+
+## 674. 2026-09-23 本地全栈 Maven 探测修复
+
+修复 `tools/dev/local-stack.sh` 的默认工具链探测：先校验 `command -v mvn` 返回路径确实可执行，并优先选择当前可用的 Maven 3.9.16 与对应本地仓库，避免 PATH 中残留旧 Maven 路径导致启动脚本误选或等待超时。显式传入 `HSP_MAVEN_BIN`、`HSP_MAVEN_REPO` 的行为保持不变。
+
+验证：`bash -n tools/dev/local-stack.sh`、`git diff --check` 通过；受控本机执行 `bash tools/dev/local-stack.sh doctor payment-core` 返回 Maven 3.9.16、JDK 和依赖检查通过。本轮只改善本地运行骨架启动探测，不改变业务状态机、真实渠道或发布门禁。

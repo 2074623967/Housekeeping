@@ -16,13 +16,17 @@ resolve_maven_bin() {
     return 0
   fi
   if command -v mvn >/dev/null 2>&1; then
-    command -v mvn
-    return 0
+    local path_maven_bin
+    path_maven_bin="$(command -v mvn)"
+    if [[ -x "$path_maven_bin" ]]; then
+      printf '%s' "$path_maven_bin"
+      return 0
+    fi
   fi
   for candidate in \
     "$ROOT_DIR/../apache-maven-3.9.16/bin/mvn" \
-    "$ROOT_DIR/../apache-maven-3.9.12/bin/mvn" \
     "/Users/abc123/apache-maven-3.9.16/bin/mvn" \
+    "$ROOT_DIR/../apache-maven-3.9.12/bin/mvn" \
     "/Users/abc123/workspace/apache-maven-3.9.12/bin/mvn"; do
     if [[ -x "$candidate" ]]; then
       printf '%s' "$candidate"
@@ -71,8 +75,8 @@ resolve_maven_repo() {
   fi
   for candidate in \
     "$ROOT_DIR/../apache-maven-3.9.16/repository" \
-    "$ROOT_DIR/../apache-maven-3.9.12/repository" \
     "/Users/abc123/apache-maven-3.9.16/repository" \
+    "$ROOT_DIR/../apache-maven-3.9.12/repository" \
     "/Users/abc123/workspace/apache-maven-3.9.12/repository"; do
     if [[ -d "$candidate" && -w "$candidate" ]]; then
       printf '%s' "$candidate"

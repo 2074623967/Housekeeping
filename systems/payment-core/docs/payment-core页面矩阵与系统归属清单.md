@@ -41,7 +41,7 @@
 3. `h5-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 4. `pc-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 5. `mini-program`：当前原生页面包括四类业务入口、收银台和支付结果
-6. `api-client`：当前命令包括预付、收银台、提交、支付详情、主动查单和关单
+6. `api-client`：当前命令包括预付、收银台、提交、支付详情、主动查单、关单，以及退款申请、退款详情、退款主动查单和失败重试
 
 因此后续做边界判定时，不能只看资料里的“目标页面”，还要同时看当前仓库里“已经先落在 payment-core”的实际页面。下面的归属结论，都是在这个真实路由事实之上做的。
 
@@ -69,7 +69,7 @@
 | 银行卡支付记录 | PC 后台 | `payment-core` | 已补齐原型版 | 按银行卡/银行转账渠道维度查询收款记录，并支持运营筛选与排序 |
 | 收银台 | APP / H5 / PC / 小程序支付端 | `payment-core` | 部分实现 | Web 三端与原生小程序已支持主链路，接入令牌不进入 URL；后续继续补真实渠道参数、可信认证与服务端会话 |
 | 支付结果页 | APP / H5 / PC / 小程序支付端 | `payment-core` | 部分实现 | Web 三端与原生小程序均支持有界只读自动刷新、详情和主动查单；不提供人工回调或制造成功终态的入口 |
-| 支付 API 调用端 | API | `payment-core` | 已实现基础骨架 | 零依赖 CLI 覆盖预付、收银台、提交、详情、查单和关单，正式商户认证与真实渠道待接 |
+| 支付 API 调用端 | API | `payment-core` | 已实现基础骨架 | 零依赖 CLI 覆盖预付、收银台、提交、详情、查单、关单和退款运营动作，正式商户认证与真实渠道待接 |
 
 ### 3.2 保留后端能力
 
