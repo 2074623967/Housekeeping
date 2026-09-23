@@ -1,6 +1,6 @@
 # payment-core API 调用端
 
-面向服务到服务联调的零依赖命令行调用端，覆盖预付、收银台、提交、支付详情、主动查单、受限关单，以及退款申请、退款详情、退款主动查单和失败重试。它直接输出 payment-core 的统一 JSON 响应，不把渠道受理或 `WAIT_CALLBACK` 解释为支付成功。
+面向服务到服务联调的零依赖命令行调用端，覆盖预付、收银台、提交、支付详情、主动查单、受限关单，以及退款申请、审核、详情、主动查单和失败重试。它直接输出 payment-core 的统一 JSON 响应，不把渠道受理或 `WAIT_CALLBACK` 解释为支付成功。
 
 ## 本地使用
 
@@ -54,6 +54,12 @@ node payment-api.mjs refund-apply \
 ```bash
 node payment-api.mjs refund-detail --refund-order-id REF123
 node payment-api.mjs refund-query --refund-order-id REF123 --operator api-operator
+```
+
+审核退款申请：
+
+```bash
+node payment-api.mjs refund-approve --refund-order-id REF123 --operator checker-operator --remark "审核通过"
 ```
 
 失败退款重试：

@@ -11,6 +11,7 @@ const COMMANDS = new Set([
   "close",
   "refund-apply",
   "refund-detail",
+  "refund-approve",
   "refund-query",
   "refund-retry"
 ]);
@@ -18,7 +19,7 @@ const COMMANDS = new Set([
 export function parseArguments(argv) {
   const [command, ...tokens] = argv;
   if (!COMMANDS.has(command)) {
-    throw new Error("命令仅支持 prepay、cashier、submit、detail、query、close、refund-apply、refund-detail、refund-query 或 refund-retry");
+    throw new Error("命令仅支持 prepay、cashier、submit、detail、query、close、refund-apply、refund-detail、refund-approve、refund-query 或 refund-retry");
   }
   const options = {};
   for (let index = 0; index < tokens.length; index += 1) {
@@ -106,6 +107,17 @@ export function buildRequest(command, options, now = Date.now()) {
     return {
       method: "GET",
       path: `/api/refunds/${encodeURIComponent(requireOption(options, "refund-order-id"))}`
+    };
+  }
+  if (command === "refund-approve") {
+    return {
+      method: "POST",
+      path: "/api/refunds/approve",
+      data: {
+        refundOrderId: requireOption(options, "refund-order-id"),
+        operator: requireOption(options, "operator"),
+        ...(options.remark && options.remark.trim() ? { remark: options.remark.trim() } : {})
+      }
     };
   }
   if (command === "refund-query") {

@@ -16658,9 +16658,9 @@ bash tools/dev/local-stack.sh verify all
 
 ## 672. 2026-09-23 API 调用端补齐退款操作骨架
 
-`systems/payment-core/frontend/api-client` 新增四个零依赖命令：`refund-apply`、`refund-detail`、`refund-query` 和 `refund-retry`，分别覆盖退款申请、详情读取、主动查单和失败重试。命令沿用已有统一 JSON 响应、10 秒超时、网络错误归一化和路径参数编码规则；默认操作人和幂等键只用于本地联调，不能替代可信身份或真实退款渠道事实。
+`systems/payment-core/frontend/api-client` 新增五个零依赖命令：`refund-apply`、`refund-detail`、`refund-approve`、`refund-query` 和 `refund-retry`，分别覆盖退款申请、详情读取、审核、主动查单和失败重试。命令沿用已有统一 JSON 响应、10 秒超时、网络错误归一化和路径参数编码规则；默认幂等键只用于本地联调，操作人仍必须由调用方显式传入，不能替代可信身份或真实退款渠道事实。
 
-验证：API client `npm test` 共 `10/10` 通过，`git diff --check` 通过。本轮不改变 payment-core 后端退款状态机、真实渠道协议、退款中心职责或发布门禁结论。
+验证：API client `npm test` 共 `10/10` 通过，新增审核命令契约断言，`git diff --check` 通过。本轮不改变 payment-core 后端退款状态机、真实渠道协议、退款中心职责或发布门禁结论。
 
 ## 673. 2026-09-23 API 调用端变更后的门禁复核
 

@@ -93,6 +93,15 @@ test("builds refund application and operation contracts", () => {
   });
   assert.deepEqual(buildRequest("refund-detail", { "refund-order-id": "REF/1?#" }).path,
     "/api/refunds/REF%2F1%3F%23");
+  assert.deepEqual(buildRequest("refund-approve", {
+    "refund-order-id": "REF-1",
+    operator: "checker-operator",
+    remark: "  approved  "
+  }), {
+    method: "POST",
+    path: "/api/refunds/approve",
+    data: { refundOrderId: "REF-1", operator: "checker-operator", remark: "approved" }
+  });
   assert.deepEqual(buildRequest("refund-query", {
     "refund-order-id": "REF-1",
     operator: "api-operator"
