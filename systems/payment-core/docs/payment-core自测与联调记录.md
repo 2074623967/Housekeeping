@@ -16544,3 +16544,14 @@ node tools/release/run_local_regression_report.mjs \
 ```
 
 结果：payment-core 后端 `1198/1198` 通过，失败 `0`、错误 `0`、跳过 `0`；门禁摘要仍如实保留当前 evidence pack 的不可放行结论。该报告是本地自动化回归基线，不替代真实渠道、生产 MQ/MySQL、页面冻结、审批签字或发布后观察证据。
+
+## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
+
+在当前 `test` HEAD 上执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+bash tools/dev/local-stack.sh verify all
+```
+
+结果：12 个后端、15 个前端及全部代理路径均为 `READY`，HTTP 冒烟通过；跨系统 happy-path 生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。本次验证只证明受控 demo/H2/HTTP 本地骨架在最新代码上可运行，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、正式审批、现场核验或 release 放行完成。

@@ -3431,3 +3431,9 @@
 1. `GET /api/payment-monitor/overview` 新增 `metricDefinitions`，统一返回指标编码、定义、单位、默认运营门槛、告警等级、责任方和下钻入口。
 2. payment-core 监控页新增“指标口径与处置入口”表，点击指标可按 `actionRoute` 进入对应排障页面；页面明确默认门槛不等同于生产 SLO 审批结果。
 3. 该能力补齐 PA-20260809-06 的代码骨架，仍不代表真实生产指标采集、告警平台送达、SLO 审批或现场值班验收完成。
+
+### 9.15 2026-09-23 最新 HEAD 本地全栈验收复核
+
+1. 在当前 `test` HEAD 上再次执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`，12 个后端、15 个前端和全部代理路径均为 `READY`，HTTP 冒烟及跨系统 happy-path 通过。
+2. 本次本地链路实际生成支付、清分、结算、账务、退款和对账事实，对账链路为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+3. 该结果只更新 demo/H2/HTTP 本地骨架的最新运行态证据，不改变真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、正式审批、现场核验、稳定观察或发布门禁结论。
