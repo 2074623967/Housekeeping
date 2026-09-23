@@ -16788,3 +16788,13 @@ node tools/dev/backend-regression.mjs
 结果：`12/12` 个后端模块通过，Surefire 汇总 `1489/1489`，`0` failures、`0` errors、`0` skipped。当前模块明细为：payment-core `1203`、gateway-access `51`、settlement-system `38`、accounting-system `47`、clearing-system `38`、refund-center `17`、reconciliation-system `14`、risk-control-system `11`、ops-config-system `12`、deposit-system `11`、wallet-account `23`、wallet-system `24`。
 
 该结果只更新本地 Java/H2 自动化基线，证明事件契约收口后各后端模块未出现自动化回归；不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账或发布治理事实。统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
+
+## 694. 2026-09-23 前端全量回归与生产构建复核
+
+在同一 `test` HEAD 上执行管理端与 payment-core 用户端回归脚本，结果如下：
+
+- 管理端 `12/12` 个工程均通过 `npm test` 与 `npm run build`；payment-core `admin-web` 为 `61/61`。
+- payment-core 用户端 `5/5` 通过：App `24/24`、H5 `2/2`、PC `2/2`、小程序 `17/17`、API client `10/10`。
+- App、H5、PC 的 Vite 生产构建均通过；小程序和 API client 按包声明执行测试，无独立 build 脚本。
+
+该结果证明当前页面路由、API 边界、错误归一化、业务入口和前端构建基线未因本轮跨系统事件契约收口而回归；不替代真实浏览器多端人工验收、微信开发者工具、可信身份权限、真实渠道签名或生产域名验证。
