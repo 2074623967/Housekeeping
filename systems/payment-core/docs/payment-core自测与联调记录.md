@@ -16708,3 +16708,7 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 ## 680. 2026-09-23 系统总览运行态核验
 
 在原任务窗口持续托管的本地栈中，用受控环境检查 `http://127.0.0.1:5174/system-directory` 和 `http://127.0.0.1:18081/api/dashboard/summary`，页面入口与 payment-core API 均返回 HTTP `200`。该核验确认系统总览不是只有静态构建产物，而是能在当前运行栈中被访问；不代表其他环境域名、统一身份或生产服务可用。
+
+## 681. 2026-09-23 跨系统主链路复核
+
+在同一持续托管栈中执行 `node tools/dev/cross-system-happy-path.mjs`，本地链路重新生成支付、支付成功事件、清分、结算、账务、退款和对账事实。结果为：对账链路 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`；账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`SETTLEMENT_CREATED`、`ACCOUNTING_POSTED`、`REFUND_SUCCESS`。该结果只证明本地 H2/HTTP 骨架跨系统可联调，不代表真实消息代理、资金到账、生产数据库或财务审批。
