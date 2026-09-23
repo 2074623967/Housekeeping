@@ -494,6 +494,20 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldReturnTypedErrorWhenRefundDetailDoesNotExist() {
+        when(refundMapper.findDetailByRefundOrderId("REF-MISSING")).thenReturn(null);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> createService().detail("REF-MISSING"));
+
+        assertEquals(ErrorCode.REFUND_ORDER_NOT_FOUND, exception.getCode());
+        assertEquals("退款单不存在", exception.getMessage());
+        verify(refundMapper).findDetailByRefundOrderId("REF-MISSING");
+        org.mockito.Mockito.verifyNoMoreInteractions(refundMapper);
+    }
+
+    @Test
     void shouldRejectInvalidRefundActionRemarkBeforeStatusUpdate() {
         RefundServiceImpl service = createService();
         RefundActionRequestDTO oversized = new RefundActionRequestDTO();

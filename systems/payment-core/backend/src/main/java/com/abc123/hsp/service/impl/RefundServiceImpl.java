@@ -156,7 +156,7 @@ public class RefundServiceImpl implements RefundService {
         String requiredRefundOrderId = requireRefundOrderId(refundOrderId);
         RefundDetailDTO detail = refundMapper.findDetailByRefundOrderId(requiredRefundOrderId);
         if (detail == null) {
-            throw new IllegalArgumentException("退款单不存在");
+            throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
         }
         RefundDetailDTO outwardDetail = new RefundDetailDTO();
         BeanUtils.copyProperties(detail, outwardDetail);

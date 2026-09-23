@@ -16617,6 +16617,14 @@ PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH 
 
 验证：新增 `PaymentControllerTest.shouldDelegateNullSubmitBodyToServiceValidation`，并重跑 payment-core 后端全量测试，Surefire `1199/1199` 全部通过。
 
+## 667. 2026-09-23 退款详情不存在错误码收口
+
+审查退款运营详情接口时发现，`GET /api/refunds/{refundOrderId}` 在退款单不存在时抛出普通 `IllegalArgumentException`，会被统一异常处理器映射为通用校验错误 `PAYMENT-400`；同一模块已有 `REFUND_ORDER_NOT_FOUND (PAYMENT-1044)` 业务错误码，查询和其他详情入口应保持一致。
+
+本轮将 `RefundServiceImpl.detail` 的不存在分支改为 `BusinessException(REFUND_ORDER_NOT_FOUND, "退款单不存在")`，并新增服务层回归用例，确认不存在详情不会继续查询操作日志或退款尝试。
+
+验证结果：`RefundServiceImplTest` 定向回归通过；随后执行 payment-core 后端全量 Maven 回归，Surefire `1200/1200` 通过，`0` failures、`0` errors、`0` skipped。该修复只统一退款详情错误契约，不改变退款状态机、渠道协议、到账事实或发布门禁。
+
 ## 661. 2026-09-23 最新 HEAD 全套本地骨架验收
 
 在当前 `test` HEAD 上执行：
