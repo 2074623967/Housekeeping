@@ -16704,3 +16704,7 @@ API client 新增 `refund-approve` 后重新执行 gate audit，门禁结论无�
 修复 `tools/dev/backend-regression.mjs` 与 `tools/dev/local-stack.sh` 的工具链偏差：回归脚本现在同时接受 `MAVEN_BIN/HSP_MAVEN_BIN`、`JAVA_HOME/HSP_JAVA_HOME` 和 `MAVEN_REPO/HSP_MAVEN_REPO`，并优先探测 Maven 3.9.16 及其本地仓库，避免 PATH 或旧目录残留导致回归误选 Maven 3.9.12。
 
 验证：`node --check tools/dev/backend-regression.mjs` 通过；使用 Maven 3.9.16、JDK 8 和对应本地仓库执行 `node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过，Surefire 全量测试 `1202/1202`，失败 `0`、错误 `0`、跳过 `0`。该改动只统一本地验收工具链，不改变业务状态机、真实渠道或发布门禁。
+
+## 680. 2026-09-23 系统总览运行态核验
+
+在原任务窗口持续托管的本地栈中，用受控环境检查 `http://127.0.0.1:5174/system-directory` 和 `http://127.0.0.1:18081/api/dashboard/summary`，页面入口与 payment-core API 均返回 HTTP `200`。该核验确认系统总览不是只有静态构建产物，而是能在当前运行栈中被访问；不代表其他环境域名、统一身份或生产服务可用。
