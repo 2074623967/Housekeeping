@@ -19,4 +19,6 @@ public class PrepayRequestDTO {
     private BigDecimal amount;
     /** 收银台标题。 */
     private String cashierTitle;
+    /** 业务说明，写入支付处理日志供运营排查。 */
+    private String remark;
 }

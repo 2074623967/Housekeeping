@@ -10,7 +10,8 @@ function buildForm(scene) {
   return {
     customerName: scene.defaultCustomerName,
     amount: scene.defaultAmount,
-    orderNo: ""
+    orderNo: "",
+    remark: ""
   };
 }
 
@@ -86,7 +87,8 @@ Page({
         payScene: this.data.activeScene.payScene,
         customerName,
         amount,
-        cashierTitle: `${this.data.activeScene.title}收银台`
+        cashierTitle: `${this.data.activeScene.title}收银台`,
+        remark: this.data.form.remark.trim()
       });
       if (!prepay || !prepay.prepayOrderNo) {
         throw new Error("预付单响应为空或缺少预付单号");

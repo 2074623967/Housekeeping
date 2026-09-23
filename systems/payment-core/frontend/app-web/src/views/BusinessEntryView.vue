@@ -180,7 +180,8 @@ async function createPrepay() {
       payScene: sceneMeta.value.paySceneByTerminal[props.terminalVariant],
       customerName: form.value.customerName.trim(),
       amount: normalizedAmount,
-      cashierTitle: sceneMeta.value.cashierTitle
+      cashierTitle: sceneMeta.value.cashierTitle,
+      remark: form.value.remark.trim()
     });
     router.push(buildCashierRoute(prepay.prepayOrderNo, { bizType: props.sceneType }));
   } catch (error) {
@@ -247,7 +248,7 @@ async function createPrepay() {
             </label>
             <label class="entry-field entry-field-full">
               <span>业务说明</span>
-              <textarea v-model="form.remark" rows="4" :placeholder="sceneMeta.placeholders.remark" />
+              <textarea v-model="form.remark" rows="4" maxlength="255" :placeholder="sceneMeta.placeholders.remark" />
             </label>
           </div>
 

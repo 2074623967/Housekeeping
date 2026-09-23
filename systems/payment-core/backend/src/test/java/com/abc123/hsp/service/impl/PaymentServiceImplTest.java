@@ -211,6 +211,8 @@ class PaymentServiceImplTest {
         customerNameRequest.setCustomerName("CUSTOMER\n");
         PrepayRequestDTO cashierTitleRequest = validPrepayRequest();
         cashierTitleRequest.setCashierTitle("CASHIER\n");
+        PrepayRequestDTO remarkRequest = validPrepayRequest();
+        remarkRequest.setRemark("REMARK\n");
 
         assertPaymentRequestInvalid(() -> service.detail("PAY-DETAIL\n"));
         assertPaymentRequestInvalid(() -> service.cashier("PRE-001\n"));
@@ -220,6 +222,7 @@ class PaymentServiceImplTest {
         assertPaymentRequestInvalid(() -> service.prepay(paySceneRequest));
         assertPaymentRequestInvalid(() -> service.prepay(customerNameRequest));
         assertPaymentRequestInvalid(() -> service.prepay(cashierTitleRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(remarkRequest));
 
         verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
     }
@@ -1232,6 +1235,7 @@ class PaymentServiceImplTest {
         request.setCustomerName("张女士");
         request.setAmount(new BigDecimal("99.00"));
         request.setCashierTitle("钱包充值收银台");
+        request.setRemark("会员储值补充");
 
         PrepayOrderDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -1264,6 +1268,11 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("WALLET_RECHARGE_APP"),
                 org.mockito.ArgumentMatchers.eq("钱包充值收银台"),
                 org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper).insertPaymentProcessLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "PREPAY_ORDER".equals(log.getSourceType())
+                        && log.getSourceNo().startsWith("PRE")
+                        && "预付单创建".equals(log.getProcessStage())
+                        && "业务说明=会员储值补充".equals(log.getMessage())));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-VIRTUAL", result.getPrepayOrderNo());
     }
 

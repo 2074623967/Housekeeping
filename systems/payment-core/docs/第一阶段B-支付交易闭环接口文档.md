@@ -471,7 +471,8 @@
 ```json
 {
   "orderNo": "ORD202607190003",
-  "payScene": "HOME_CLEAN"
+  "payScene": "HOME_CLEAN",
+  "remark": "上门服务尾款"
 }
 ```
 
@@ -2420,7 +2421,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 ### 14.49 支付入口标识与创建预付单字段契约
 
 1. `GET /api/payments/{paymentOrderId}`、`GET /api/payments/cashier/{prepayOrderNo}`、`POST /api/payments/query` 和 `POST /api/payments/close` 的业务标识均必填、trim 后不超过 `64` 字符且不得包含 ISO 控制字符；非法请求返回 `PAYMENT-1036`，不进入数据库或查单限流。
-2. `POST /api/payments/prepay` 的 `orderNo/payScene` 必填且分别不超过 `64/32` 字符；可选 `customerName/cashierTitle` 分别不超过 `128/128` 字符。所有非空字符串 trim 后不得包含 ISO 控制字符。
+2. `POST /api/payments/prepay` 的 `orderNo/payScene` 必填且分别不超过 `64/32` 字符；可选 `customerName/cashierTitle/remark` 分别不超过 `128/128/255` 字符。所有非空字符串 trim 后不得包含 ISO 控制字符；`remark` 会作为预付单创建事实写入支付处理日志，不改变订单、账务或钱包状态。
 3. 可选 `amount` 一旦提供必须大于 `0`、最多 `16` 位整数和 `2` 位小数。虚拟支付仍要求客户名称和金额；标准订单只缺一项金额事实返回 `PAYMENT-1011`。
 4. 标准订单剩余应付 `orderAmount - paidAmount <= 0` 时返回 `PAYMENT-1037`，不得创建账单、支付单或预付单。该校验不替代跨服务并发结算、订单锁或生产数据库隔离验证。
 

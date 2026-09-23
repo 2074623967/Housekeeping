@@ -15,6 +15,8 @@ node payment-api.mjs prepay \
   --cashier-title API支付
 ```
 
+`prepay` 还支持可选参数 `--remark`，会作为业务说明写入 payment-core 支付处理日志，便于运营排查。
+
 提交支付宝支付：
 
 ```bash

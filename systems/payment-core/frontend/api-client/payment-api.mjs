@@ -47,7 +47,8 @@ export function buildRequest(command, options, now = Date.now()) {
         payScene: requireOption(options, "pay-scene"),
         customerName: requireOption(options, "customer-name"),
         amount: requireOption(options, "amount"),
-        cashierTitle: requireOption(options, "cashier-title")
+        cashierTitle: requireOption(options, "cashier-title"),
+        ...(options.remark && options.remark.trim() ? { remark: options.remark.trim() } : {})
       }
     };
   }

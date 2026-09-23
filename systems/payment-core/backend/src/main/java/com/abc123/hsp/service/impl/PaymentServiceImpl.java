@@ -72,6 +72,7 @@ public class PaymentServiceImpl implements PaymentService {
     private static final int PREPAY_PAY_SCENE_MAX_LENGTH = 32;
     private static final int PREPAY_CUSTOMER_NAME_MAX_LENGTH = 128;
     private static final int PREPAY_CASHIER_TITLE_MAX_LENGTH = 128;
+    private static final int PREPAY_REMARK_MAX_LENGTH = 255;
     private static final int PAYMENT_LIST_PAYMENT_METHOD_MAX_LENGTH = 32;
     private static final int PAYMENT_LIST_CHANNEL_CODE_MAX_LENGTH = 64;
     private static final int PAYMENT_LIST_STATUS_MAX_LENGTH = 32;
@@ -410,6 +411,7 @@ public class PaymentServiceImpl implements PaymentService {
                 resolveCashierTitle(request),
                 paymentOrderId
         );
+        recordPrepayRemark(request, paymentOrderId, request.getOrderNo(), prepayOrderNo);
         return paymentMapper.findPrepay(prepayOrderNo);
     }
 
@@ -450,7 +452,25 @@ public class PaymentServiceImpl implements PaymentService {
                 cashierTitle,
                 paymentOrderId
         );
+        recordPrepayRemark(request, paymentOrderId, request.getOrderNo(), prepayOrderNo);
         return paymentMapper.findPrepay(prepayOrderNo);
+    }
+
+    private void recordPrepayRemark(
+            PrepayRequestDTO request, String paymentOrderId, String orderNo, String prepayOrderNo) {
+        if (!StringUtils.hasText(request.getRemark())) {
+            return;
+        }
+        recordProcessLog(
+                prepayOrderNo,
+                paymentOrderId,
+                orderNo,
+                null,
+                "PREPAY_ORDER",
+                "预付单创建",
+                "info",
+                "业务说明=" + request.getRemark(),
+                request.getPayScene());
     }
 
     @Override
@@ -1574,6 +1594,8 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getCustomerName(), "客户名称", PREPAY_CUSTOMER_NAME_MAX_LENGTH));
         request.setCashierTitle(normalizeOptionalRequestField(
                 request.getCashierTitle(), "收银台标题", PREPAY_CASHIER_TITLE_MAX_LENGTH));
+        request.setRemark(normalizeOptionalRequestField(
+                request.getRemark(), "业务说明", PREPAY_REMARK_MAX_LENGTH));
         if (request.getAmount() != null) {
             validatePrepayAmount(request.getAmount());
         }

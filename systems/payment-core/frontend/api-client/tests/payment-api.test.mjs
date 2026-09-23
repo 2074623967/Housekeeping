@@ -43,6 +43,26 @@ test("builds a complete prepay contract", () => {
   });
 });
 
+test("passes an optional prepay remark without making it required", () => {
+  const request = buildRequest("prepay", {
+    "order-no": "ORD-API-2",
+    "pay-scene": "SERVICE_ORDER_API",
+    "customer-name": "API 客户",
+    amount: "99.00",
+    "cashier-title": "API 支付",
+    remark: "  会员储值  "
+  });
+  assert.equal(request.data.remark, "会员储值");
+  const withoutRemark = buildRequest("prepay", {
+    "order-no": "ORD-API-3",
+    "pay-scene": "SERVICE_ORDER_API",
+    "customer-name": "API 客户",
+    amount: "99.00",
+    "cashier-title": "API 支付"
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(withoutRemark.data, "remark"), false);
+});
+
 test("builds an API submit contract with stable explicit facts", () => {
   const request = buildRequest("submit", {
     "prepay-order-no": "PRE-API-1",

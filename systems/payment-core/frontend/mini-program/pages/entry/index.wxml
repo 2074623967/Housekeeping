@@ -37,6 +37,10 @@
       <text class="field-label">业务单号</text>
       <input class="field-input" value="{{form.orderNo}}" data-field="orderNo" disabled="{{submitting}}" bindinput="updateField" maxlength="64" placeholder="可留空，系统自动生成" />
     </label>
+    <label class="field">
+      <text class="field-label">业务说明</text>
+      <textarea class="field-textarea" value="{{form.remark}}" data-field="remark" disabled="{{submitting}}" maxlength="255" placeholder="可留空，便于支付后运营排查" />
+    </label>
     <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
 
     <view class="button-row">
