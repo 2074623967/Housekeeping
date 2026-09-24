@@ -17022,3 +17022,9 @@ node tools/release/run_local_regression_report.mjs \
 复核 `admin-web` 分页请求层时发现，列表接口虽已处理 `data: null` 和 `items: null`，但上游若误返回数组或非对象，页面仍可能收到没有 `.items` 的无效响应形状。本轮新增分页响应专用归一化：数组响应按单页列表保留并补齐分页元数据，非对象或缺少 `items` 的响应收敛为空页；详情、概览和集合接口继续保留各自原始语义。
 
 验证结果：payment-core admin-web `69/69` 测试通过，Vite 生产构建通过；payment-core 后端全量 Maven 回归 `1204/1204`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强本地管理端空态和异常响应的可用性，不改变支付状态机、渠道协议、资金事实或发布门禁结论。
+
+## 723. 2026-09-24 当前门禁复判
+
+执行 `node tools/release/audit_payment_core_gate.mjs --root-dir /Users/abc123/workspace/home-service-payment-system --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression --stdout-json`。
+
+结果：回归证据包 `10/10` 完整，缺失样例 `0`、缺失证据 `0`、历史页面 `0`、历史补偿 `0`；`canPromoteTestToMaster=false`、`canCreateRelease=false` 继续保持。当前阻断来自正式治理汇总不放行、候选发布说明未正式化、正式签字审批未形成、发布后现场核验未形成实际记录和 master 稳定观察结束结论未形成，不是 payment-core 代码回归失败。本复判不修改历史证据，不伪造审批、现场核验或发布事实。
