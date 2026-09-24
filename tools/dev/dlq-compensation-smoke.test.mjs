@@ -22,6 +22,12 @@ function startMockServer() {
 
     if (url.pathname.endsWith("/publish")) {
       const messageId = body.properties.message_id;
+      if (!String(body.payload).startsWith("{invalid-")) {
+        const payload = JSON.parse(body.payload);
+        assert.equal(payload.eventNo, messageId);
+        assert.equal(payload.schemaVersion, "1");
+        assert.equal(body.properties.headers.schemaVersion, "1");
+      }
       const eventKind = body.properties.headers.eventType === "CLEARING_GENERATED"
         ? "clearing-generated" : "payment-success";
       const targetSystem = eventKind === "clearing-generated" ? "settlement" : "accounting";

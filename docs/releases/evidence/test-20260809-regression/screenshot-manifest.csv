@@ -12,8 +12,8 @@ payment-core,admin-web,payment-issues,支付交易异常中心,异常聚合与 S
 payment-core,admin-web,cashier-sessions,收银台会话,会话状态与支付单关联,,screenshots/payment-core/admin-web/cashier-sessions.png,CAPTURED,
 payment-core,admin-web,dead-letter-pending-review,死信补偿任务,PENDING_REVIEW,,screenshots/payment-core/admin-web/dead-letter-pending-review.png,CAPTURED,当前基线暂无冻结中的 PENDING_REVIEW 样例，需现场补一笔新任务
 payment-core,admin-web,dead-letter-ready-replay,死信补偿任务,READY_TO_REPLAY,,screenshots/payment-core/admin-web/dead-letter-ready-replay.png,CAPTURED,当前基线暂无 READY_TO_REPLAY 样例，需现场保留重放前状态
-payment-core,admin-web,dead-letter-manual-resolved,死信补偿任务,MANUAL_RESOLVED,DLQa254a62bab904f0d9885,screenshots/payment-core/admin-web/dead-letter-manual-resolved.png,CAPTURED,payment.success clearing 人工结案样例
-payment-core,admin-web,dead-letter-replayed,死信补偿任务,REPLAYED,DLQb151ee3a445c42229730,screenshots/payment-core/admin-web/dead-letter-replayed.png,CAPTURED,payment.success accounting 重放样例
+payment-core,admin-web,dead-letter-manual-resolved,死信补偿任务,MANUAL_RESOLVED,DLQ0677f160ab774a0198c8,screenshots/payment-core/admin-web/dead-letter-manual-resolved.png,CAPTURED,2026-09-24 当前批次非法报文人工结案；页面现场截图同时展示该任务与当前批次 REPLAYED 任务
+payment-core,admin-web,dead-letter-replayed,死信补偿任务,REPLAYED,DLQf3f3da722cbf43968c4f / DLQf8328932093b4732a293,screenshots/payment-core/admin-web/dead-letter-replayed.png,CAPTURED,2026-09-24 当前批次 payment.success -> accounting 与 clearing.generated -> settlement 定向重放；截图来自真实 /payment-dead-letter-tasks 路由
 payment-core,app-web,recharge-entry,充值业务入口,创建预付单入口,,screenshots/payment-core/app-web/recharge-entry.png,CAPTURED,
 payment-core,app-web,withdraw-entry,提现业务入口,创建预付单入口,,screenshots/payment-core/app-web/withdraw-entry.png,CAPTURED,
 payment-core,app-web,transfer-entry,转账业务入口,创建预付单入口,,screenshots/payment-core/app-web/transfer-entry.png,CAPTURED,

@@ -18,19 +18,37 @@
 
 - `GET /api/payment-dead-letter-tasks?messageId=MQ-CLG-DLQ-20260808-*`
 
-## 当前说明
+## 2026-09-24 当前 HEAD 运行态证据
 
-历史运行证据已经证明 `DLQ -> task -> manual resolve / replay` 能跑通，但当前回归包仍缺“2026-08-09 同批次”的最新实操证据。
+本轮使用隔离后缀 `20260924-b`，RabbitMQ、payment-core、accounting、clearing、settlement 均为当前运行实例。以下查询均通过当前 payment-core API 完成：
 
-## 2026-09-23 当前 HEAD 复核
+### 可修复 PAYMENT_SUCCESS
 
-本轮检查了当前工作树和补偿接口代码，确认 API 端点与服务端人工处置状态机仍存在；但未执行新的 DLQ 运行态证据。原因是本机 Docker daemon 未运行，无法启动 `infra/rabbitmq/docker-compose.yml` 提供的 RabbitMQ 管理 API 和 broker。
+- 发布消息：`DLQ-SMOKE-1790223210646-30716`
+- 查询：`GET /api/payment-dead-letter-tasks?messageId=DLQ-SMOKE-1790223210646-30716&pageNo=1&pageSize=20`
+- 任务：`DLQf3f3da722cbf43968c4f`
+- 状态：`REPLAYED`
+- `replayCount=1`
+- 死信路由：`payment.success.accounting.dlq.20260924-b.v1`
+- 重放路由：`payment.success.accounting.replay.20260924-b.v1`
+- 处置说明：当前批次已核对业务字段，允许定向重放
 
-本轮明确未声明：
+### 非法报文人工结案
 
-1. 新消息已发布到 `payment.trade.dlq` 或 `clearing.trade.dlq`；
-2. 新任务已进入 `PENDING_REVIEW`；
-3. 当前 HEAD 的 `READY_TO_REPLAY -> REPLAYED` 已完成；
-4. replay 后下游事实已恢复。
+- 发布消息：`DLQ-MANUAL-SMOKE-1790223210663-30716`
+- 查询：`GET /api/payment-dead-letter-tasks?messageId=DLQ-MANUAL-SMOKE-1790223210663-30716&pageNo=1&pageSize=20`
+- 任务：`DLQ0677f160ab774a0198c8`
+- 状态：`MANUAL_RESOLVED`
+- `replayCount=0`
+- 处置说明：当前批次报文非法，保留审计副本后人工结案
 
-恢复 RabbitMQ 后，必须使用新 `messageId`、新任务号和当前运行实例重复记录上述四项，不能复用本文件的历史编号。
+### 可修复 CLEARING_GENERATED
+
+- 发布消息：`DLQ-SMOKE-1790223184991-30656`
+- 查询：`GET /api/payment-dead-letter-tasks?messageId=DLQ-SMOKE-1790223184991-30656&pageNo=1&pageSize=20`
+- 任务：`DLQf8328932093b4732a293`
+- 状态：`REPLAYED`
+- `replayCount=1`
+- 死信路由：`clearing.generated.settlement.dlq.20260924-b.v1`
+- 重放路由：`clearing.generated.settlement.replay.20260924-b.v1`
+- 处置说明：当前批次已核对业务字段，允许定向重放

@@ -133,7 +133,8 @@ async function publishDeadLetter(messageId, payload, rawPayload = false) {
           content_type: "application/json",
           headers: {
             "x-retry-count": 3,
-            eventType: eventConfig.eventType
+            eventType: eventConfig.eventType,
+            schemaVersion: "1"
           }
         },
         routing_key: config.routingKey,
@@ -167,16 +168,17 @@ function taskFromPage(page, messageId) {
 
 async function replayCurrentBatch() {
   const runId = `${Date.now()}-${process.pid}`;
-  const messageId = `DLQ-SMOKE-${runId}`;
+  const generatedMessageId = `DLQ-SMOKE-${runId}`;
   const defaultBizNo = eventKind === "clearing-generated"
-    ? `CLO-DLQ-SMOKE-${runId}`
+    ? `CLO-DLQ-${runId}`
     : `PAY-DLQ-SMOKE-${runId}`;
   const payload = process.env.HSP_DLQ_PAYLOAD_JSON
     ? parsePayload(process.env.HSP_DLQ_PAYLOAD_JSON)
     : eventKind === "clearing-generated"
       ? {
         eventType: "CLEARING_GENERATED",
-        eventNo: `EVT-DLQ-SMOKE-${runId}`,
+        eventNo: generatedMessageId,
+        schemaVersion: "1",
         businessChainId: `CHAIN-DLQ-SMOKE-${runId}`,
         clearingNo: defaultBizNo,
         clearingOrderNo: defaultBizNo,
@@ -194,7 +196,8 @@ async function replayCurrentBatch() {
       }
       : {
         eventType: "PAYMENT_SUCCESS",
-        eventNo: `EVT-DLQ-SMOKE-${runId}`,
+        eventNo: generatedMessageId,
+        schemaVersion: "1",
         paymentOrderId: defaultBizNo,
         orderNo: `ORD-DLQ-SMOKE-${runId}`,
         accountNo: "ACT10003",
@@ -204,6 +207,10 @@ async function replayCurrentBatch() {
     "DLQ payload must be a JSON object");
   assert(payload.eventType === eventConfig.eventType,
     `DLQ payload eventType must be ${eventConfig.eventType}`);
+  payload.schemaVersion = payload.schemaVersion || "1";
+  payload.eventNo = payload.eventNo || generatedMessageId;
+  const messageId = String(payload.eventNo).trim();
+  assert(messageId, "DLQ payload eventNo must not be empty");
   const bizNo = eventKind === "clearing-generated"
     ? String(payload.clearingOrderNo || payload.clearingNo || "").trim()
     : String(payload.paymentOrderId || "").trim();

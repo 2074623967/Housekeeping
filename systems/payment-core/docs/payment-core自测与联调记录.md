@@ -16962,3 +16962,30 @@ node tools/dev/backend-regression.mjs
 复核小程序支付链路时发现，payment-core 已支持临时携带 `nativePaymentParams`，但 gateway-access 的支付提交结果 DTO 未透传该字段，真实上游即使签名完成，小程序仍无法调用 `wx.requestPayment`。本轮补齐跨系统临时响应契约：只有 `MINI_PROGRAM` 终端可以返回完整的 `timeStamp / nonceStr / package / signType / paySign`，gateway-access 与 payment-core adapter 都执行白名单、完整集合、长度和控制字符校验；参数不落库，非小程序或非法集合拒绝。demo 适配器仍不生成假签名。
 
 验证：payment-core 后端 `1204/1204`、gateway-access 后端 `53/53` 通过，失败 `0`、错误 `0`、跳过 `0`；当前全量后端 `12/12` 模块合计 `1494/1494`，`git diff --check` 通过。该改动只补齐真实上游签名参数的安全传递边界，不代表微信登录、AppID/商户绑定、证书、真实扣款、回调验签、资金到账或真机验收已经完成。
+
+## 718. 2026-09-24 REG-08 当前批次死信补偿证据
+
+在隔离后缀 `20260924-b` 下保持 RabbitMQ、payment-core、accounting、clearing、settlement 运行，完成三类当前批次演练：
+
+| 场景 | messageId | taskNo | 最终状态 | 下游事实 |
+| --- | --- | --- | --- | --- |
+| 非法 PAYMENT_SUCCESS | `DLQ-MANUAL-SMOKE-1790223210663-30716` | `DLQ0677f160ab774a0198c8` | `MANUAL_RESOLVED` | 原始 DLQ 审计副本保留，不向下游重放 |
+| PAYMENT_SUCCESS -> accounting | `DLQ-SMOKE-1790223210646-30716` | `DLQf3f3da722cbf43968c4f` | `REPLAYED`, `replayCount=1` | `EVT50004`, `LDG20007`, `ACT10003`, `¥9.99` |
+| CLEARING_GENERATED -> settlement | `DLQ-SMOKE-1790223184991-30656` | `DLQf8328932093b4732a293` | `REPLAYED`, `replayCount=1` | `SVE70003`, `SLT20004`, `SET10003`, `¥112.00` |
+
+当前真实死信任务页通过无头浏览器从 `/payment-dead-letter-tasks` 采集，截图同时展示当前 `MANUAL_RESOLVED` 与两条 `REPLAYED` 任务。详细查询响应和证据文件见 `docs/releases/evidence/test-20260809-regression/` 下的 API、数据库、事件和截图目录。
+
+## 719. 2026-09-24 REG-08 证据完整后的统一门禁复判
+
+执行：
+
+```bash
+node tools/release/audit_payment_core_gate.mjs \
+  --root-dir /Users/abc123/workspace/home-service-payment-system \
+  --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression \
+  --stdout-json
+```
+
+结果：回归 `scenarioCount=10`、`incomplete=0`、`missingSample=0`、`missingEvidence=0`、`historicalPage=0`、`historicalRollback=0`，`regressionEvidenceReady=true`；`canPromoteTestToMaster=false`、`canCreateRelease=false` 继续保持。当前剩余阻断仅为 test 汇总的保守不放行决策，以及 release 候选说明正式化、正式签字审批、发布后现场核验和 master 稳定观察结束结论，不能用本地测试或 broker 演练替代。
+
+本轮代码/工具验证：payment-core 后端 `1204/1204`，admin-web `68/68` 且生产构建通过；DLQ 演练工具测试 `7/7` 通过，`git diff --check` 通过。

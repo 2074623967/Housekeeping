@@ -3345,6 +3345,18 @@
 3. 新增 schema 契约测试同时读取应用 schema、交付 schema 和迁移，防止关键表或字段可空性再次漂移；payment-core 全量回归 `1203/1203` 通过。
 4. 本轮只补齐建库与迁移脚本的代码基线，不声称目标 MySQL 已执行迁移、历史数据已验证或生产稳定性已完成；真实渠道、资金、审批和发布门禁结论不变。
 
+### 8.404 2026-09-24 REG-08 当前批次补偿证据收口
+
+1. 在隔离后缀 `20260924-b` 下完成当前 broker 运行态复核：非法 `PAYMENT_SUCCESS` 任务 `DLQ0677f160ab774a0198c8` 进入 `MANUAL_RESOLVED`，可修复 `PAYMENT_SUCCESS` 任务 `DLQf3f3da722cbf43968c4f` 定向重放为 `REPLAYED`，`CLEARING_GENERATED` 任务 `DLQf8328932093b4732a293` 定向重放为 `REPLAYED`。
+2. 当前批次下游事实已查询到 accounting `EVT50004 / LDG20007` 与 settlement `SVE70003 / SLT20004 / SET10003`；管理端真实死信页截图已包含当前 `MANUAL_RESOLVED` 与 `REPLAYED` 任务。
+3. `regression-scenarios.csv` 的 REG-08 已从 `HISTORICAL` 改为 `PASS`，回归审计结果为 `evidenceReady=true`、历史页面 `0`、历史补偿 `0`；详细 API、数据库、事件和截图证据分别见回归证据包。
+4. 该运行态证据只关闭当前 test 回归包的 REG-08 缺口，不代表真实渠道、生产 RabbitMQ/MySQL、资金到账、可信权限或正式发布治理完成。
+
+### 8.405 2026-09-24 当前门禁复判
+
+1. `audit_payment_core_gate.mjs` 复判结果为回归证据完整，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`；前者保留当前 test 汇总的“不放行”决策，后者仍受候选发布说明正式化、正式签字审批、发布后现场核验和 master 稳定观察结束结论阻断。
+2. 本轮不修改历史日期章节中的判断，只以最新回归证据包和最新自动审计输出作为当前状态来源，避免旧任务记录覆盖当前事实。
+
 ## 9. 最终结论
 
 ### 9.1 2026-09-23 当前批次回归总数校正

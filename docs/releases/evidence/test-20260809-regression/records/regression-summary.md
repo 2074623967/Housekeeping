@@ -1,7 +1,7 @@
 # test-20260809-regression 回归汇总
 
 - 基线日期：`2026-08-09`
-- 归档状态：`正向回归取证已完成，REG-08 当前同批次补偿证据待补，release 治理仍待闭环`
+- 归档状态：`正向回归与 REG-08 当前批次补偿取证已完成，release 治理仍待闭环`
 
 ## 1. 基线信息
 
@@ -24,13 +24,13 @@
 | REG-05 | 清分结果自动结算 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 clearing.generated -> settlement 当前批次 replay，并生成结算事件 `SVE70003` |
 | REG-06 | 清分结果自动记账 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 replay 后下游补事实收口，并生成账务事件 `EVT50012` |
 | REG-07 | 跨系统链路诊断 | PASS | PASS | PASS | OPTIONAL | N/A | 已完成 | 当前 test 基线已具备代码与自动化闭环 |
-| REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | HISTORICAL | HISTORICAL | 待补当前同批次证据 | 现有死信任务页、replay 和下游事实均为历史样例，不能替代当前 HEAD 的同批次复核 |
+| REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | PASS | PASS | 当前批次 `DLQf3f3da722cbf43968c4f` / `DLQ0677f160ab774a0198c8` / `DLQf8328932093b4732a293` | 当前批次已完成人工结案、定向 replay、下游事件/账务/结算事实和死信任务页冻结截图 |
 | REG-09 | 结算审核与出款 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 `SLT20004 -> PBT50001` 的审核、出款失败与人工重试成功 |
 | REG-10 | 日终处理与运营巡检 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 运行态已完成 REC-DEMO-1001 差异识别、人工结案和工作台回写 |
 
 ## 3. 阻断项
 
-1. REG-08 仍缺当前 HEAD 的 DLQ 入池、人工处置、定向 replay、下游事实和冻结页面同批次证据。
+1. REG-08 当前批次证据已补齐；仍需完成 release 治理所要求的正式版说明、审批签字、回滚演练记录、发布后现场核验和稳定观察结论。
 
 ## 4. 放行结论
 

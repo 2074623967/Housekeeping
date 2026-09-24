@@ -18,6 +18,20 @@
 - `MANUAL_RESOLVED`
 - `REPLAYED`
 
-## 当前说明
+## 2026-09-24 当前 HEAD 运行态事实
 
-历史证据已证明补偿任务账本、人工结案和重放状态流转存在真实记录，但当前回归包仍需补“最新同批次任务号 + 数据库取证”。
+payment-core `GET /api/payment-dead-letter-tasks?pageNo=1&pageSize=20` 返回本批次三条任务，均已闭环：
+
+| taskNo | messageId | targetSystem | taskStatus | replayCount | 关键路由 |
+| --- | --- | --- | --- | ---: | --- |
+| `DLQ0677f160ab774a0198c8` | `DLQ-MANUAL-SMOKE-1790223210663-30716` | `accounting-system` | `MANUAL_RESOLVED` | 0 | `payment.success.accounting.dlq.20260924-b.v1` |
+| `DLQf3f3da722cbf43968c4f` | `DLQ-SMOKE-1790223210646-30716` | `accounting-system` | `REPLAYED` | 1 | `payment.success.accounting.replay.20260924-b.v1` |
+| `DLQf8328932093b4732a293` | `DLQ-SMOKE-1790223184991-30656` | `settlement-system` | `REPLAYED` | 1 | `clearing.generated.settlement.replay.20260924-b.v1` |
+
+下游事实查询结果：
+
+- accounting `GET /api/accounting/events?eventType=PAYMENT_SUCCESS&bizNo=PAY-DLQ-SMOKE-1790223210646-30716`：事件 `EVT50004`，状态“已消费”。
+- accounting `GET /api/accounting/ledgers?accountNo=ACT10003&bizNo=PAY-DLQ-SMOKE-1790223210646-30716`：流水 `LDG20007`，金额 `¥9.99`，状态“已记账”。
+- settlement `GET /api/settlements/events?eventType=CLEARING_GENERATED&bizNo=CLO-DLQ-1790223184991-30656`：事件 `SVE70003`，状态“已消费”。
+- settlement `GET /api/settlements/orders?clearingNo=CLO-DLQ-1790223184991-30656`：结算单 `SLT20004`，批次 `SET10003`，净结算金额 `¥112.00`，状态“待审核”。
+- settlement `GET /api/settlements/batches/SET10003`：批次状态“已完成”，总金额 `¥112.00`。
