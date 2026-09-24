@@ -16908,3 +16908,9 @@ node tools/dev/backend-regression.mjs
 复核 payment-core 的真实渠道接入边界时发现，`gateway-access` 后端列表接口返回 `PageResultDTO`，而管理端客户端曾将响应压平成数组，页面却按 `.records` 读取，导致首次加载后列表状态异常。本轮将客户端统一归一为 `{ records, total, pageNo, pageSize }`，并兼容空响应、数组和 `items` 形状。
 
 验证：gateway-access 后端 `51/51`、管理端前端 `6/6` 通过，生产构建和 `git diff --check` 通过；修复已提交为 `a4c20947`。浏览器人工视觉核验因当前 macOS 锁屏未执行，不登记为通过；本轮只收口本地分页契约，不代表真实渠道、证书轮换、网关探活、灰度发布或生产网络已验收。
+
+## 709. 2026-09-24 风控与运营配置管理台分页契约修复
+
+跨系统扫描发现 `risk-control`、`ops-config` 与 gateway-access 存在同型问题：后端列表接口返回分页对象，客户端却压平成数组，而页面按 `.records` 读取。两套客户端现统一保留 `{ records, total, pageNo, pageSize }`，空库仍返回可渲染的空分页。
+
+验证：risk-control 后端 `11/11`、管理端 `6/6` 通过并完成生产构建；ops-config 后端 `12/12`、管理端 `6/6` 通过并完成生产构建；`git diff --check` 通过。该批只收口本地列表契约，不代表真实风控引擎、配置发布、消息总线或可信权限已验收。

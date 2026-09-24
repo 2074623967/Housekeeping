@@ -44,7 +44,41 @@ test("normalizes nullable risk control collections", async () => {
   });
 
   try {
-    assert.deepEqual(await riskControlApi.getPolicies(), []);
+    assert.deepEqual(await riskControlApi.getPolicies(), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 0
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preserves risk control pagination metadata for list views", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        code: "0",
+        data: {
+          records: [{ policyCode: "RISK-001" }],
+          total: 3,
+          pageNo: 2,
+          pageSize: 1
+        }
+      };
+    }
+  });
+
+  try {
+    assert.deepEqual(await riskControlApi.getPolicies(), {
+      records: [{ policyCode: "RISK-001" }],
+      total: 3,
+      pageNo: 2,
+      pageSize: 1
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

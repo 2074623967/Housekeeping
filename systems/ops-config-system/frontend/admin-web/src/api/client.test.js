@@ -44,7 +44,41 @@ test("normalizes nullable ops config collections", async () => {
   });
 
   try {
-    assert.deepEqual(await opsConfigApi.getBusinessLines(), []);
+    assert.deepEqual(await opsConfigApi.getBusinessLines(), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 0
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preserves ops config pagination metadata for list views", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        code: "0",
+        data: {
+          records: [{ configCode: "ROUTE_HOME" }],
+          total: 2,
+          pageNo: 2,
+          pageSize: 1
+        }
+      };
+    }
+  });
+
+  try {
+    assert.deepEqual(await opsConfigApi.getBusinessLines(), {
+      records: [{ configCode: "ROUTE_HOME" }],
+      total: 2,
+      pageNo: 2,
+      pageSize: 1
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

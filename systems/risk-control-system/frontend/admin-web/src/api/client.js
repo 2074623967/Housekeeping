@@ -6,16 +6,17 @@ function createRequestError(code, message, cause) {
 }
 
 function normalizeListPayload(data) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-  if (Array.isArray(data?.items)) {
-    return data.items;
-  }
-  if (Array.isArray(data?.records)) {
-    return data.records;
-  }
-  return [];
+  const records = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.records)
+      ? data.records
+      : Array.isArray(data?.items)
+        ? data.items
+        : [];
+  const total = Number.isFinite(data?.total) ? data.total : records.length;
+  const pageNo = Number.isInteger(data?.pageNo) && data.pageNo > 0 ? data.pageNo : 1;
+  const pageSize = Number.isInteger(data?.pageSize) && data.pageSize >= 0 ? data.pageSize : records.length;
+  return { records, total, pageNo, pageSize };
 }
 
 function normalizeSummaryPayload(data) {
