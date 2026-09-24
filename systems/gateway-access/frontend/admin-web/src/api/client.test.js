@@ -44,7 +44,41 @@ test("normalizes nullable gateway access collections", async () => {
   });
 
   try {
-    assert.deepEqual(await gatewayAccessApi.getApplications(), []);
+    assert.deepEqual(await gatewayAccessApi.getApplications(), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 0
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preserves gateway access pagination metadata for list views", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        code: "0",
+        data: {
+          records: [{ appCode: "APP_PAY_CORE" }],
+          total: 4,
+          pageNo: 2,
+          pageSize: 1
+        }
+      };
+    }
+  });
+
+  try {
+    assert.deepEqual(await gatewayAccessApi.getApplications(), {
+      records: [{ appCode: "APP_PAY_CORE" }],
+      total: 4,
+      pageNo: 2,
+      pageSize: 1
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
