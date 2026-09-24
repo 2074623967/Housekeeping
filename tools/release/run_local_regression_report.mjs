@@ -150,6 +150,7 @@ function main() {
       backend: !hasFlag("--skip-backend"),
       frontendAdmin: !hasFlag("--skip-frontend"),
       userFrontend: shouldRunUserFrontend(only),
+      runtime: includeRuntime,
       gate: !hasFlag("--skip-gate")
     },
     classification: includeRuntime ? "local-automation-and-controlled-runtime" : "local-automation-only",
@@ -159,7 +160,9 @@ function main() {
     runtime: null,
     gate: null,
     limitations: [
-      "本报告只汇总本地自动化测试、构建和门禁脚本输出，不替代真实渠道、生产数据库、RabbitMQ、页面冻结或审批证据。",
+      includeRuntime
+        ? "本报告汇总本地自动化测试、构建、受控运行态和门禁脚本输出，不替代真实渠道、生产数据库、RabbitMQ、页面冻结或审批证据。"
+        : "本报告只汇总本地自动化测试、构建和门禁脚本输出，不替代真实渠道、生产数据库、RabbitMQ、页面冻结或审批证据。",
       "门禁结论由现有 evidence pack 审计决定，不因本地测试通过而自动放行。"
     ]
   };
