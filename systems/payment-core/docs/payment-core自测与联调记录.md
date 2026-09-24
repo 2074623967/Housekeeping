@@ -16902,3 +16902,9 @@ node tools/dev/backend-regression.mjs
 结果：12/12 个后端模块通过，Surefire 汇总 `1491/1491`，失败 `0`、错误 `0`、跳过 `0`。模块范围覆盖 payment-core、gateway-access、settlement-system、accounting-system、clearing-system、refund-center、reconciliation-system、risk-control-system、ops-config-system、deposit-system、wallet-account 和 wallet-system。
 
 该结果确认当前可运行骨架的全系统 Java/H2 自动化基线未出现回归；不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账、可信身份权限或发布治理证据。统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
+
+## 708. 2026-09-24 gateway-access 管理台分页契约修复
+
+复核 payment-core 的真实渠道接入边界时发现，`gateway-access` 后端列表接口返回 `PageResultDTO`，而管理端客户端曾将响应压平成数组，页面却按 `.records` 读取，导致首次加载后列表状态异常。本轮将客户端统一归一为 `{ records, total, pageNo, pageSize }`，并兼容空响应、数组和 `items` 形状。
+
+验证：gateway-access 后端 `51/51`、管理端前端 `6/6` 通过，生产构建和 `git diff --check` 通过；修复已提交为 `a4c20947`。浏览器人工视觉核验因当前 macOS 锁屏未执行，不登记为通过；本轮只收口本地分页契约，不代表真实渠道、证书轮换、网关探活、灰度发布或生产网络已验收。
