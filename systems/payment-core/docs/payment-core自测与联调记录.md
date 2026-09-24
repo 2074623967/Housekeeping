@@ -17047,3 +17047,9 @@ node tools/release/run_local_regression_report.mjs \
 ### 门禁复核
 
 `audit_payment_core_gate.mjs` 当前结果为：回归证据包 `10/10` 完整，缺失样例 `0`、缺失证据 `0`，`canPromoteTestToMaster=false`、`canCreateRelease=false`。阻断来自 test 汇总未放行、候选发布说明未正式化、正式签字审批未形成、发布后现场核验未形成实际记录和 master 稳定观察结束结论未形成；这些不能用本地测试、H2、demo 渠道或 HTTP happy-path 替代。
+
+## 726. 2026-09-24 原任务窗口持续托管栈运行态复核
+
+在原任务窗口以 `tools/dev/local-stack.sh up all` 持续托管本地 demo 栈：12 个后端和 15 个前端全部 `READY`，全量 HTTP smoke 通过。
+
+随后执行跨系统 happy-path，实际生成支付、清分、结算、退款和账务事实；对账事实包含 `PAYMENT_SUCCESS / CLEARING_GENERATED / SETTLEMENT_CREATED / ACCOUNTING_POSTED / REFUND_SUCCESS`，对账链状态为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。本证据只证明本地 H2/demo/HTTP 骨架可以启动并完成跨系统演示闭环，不代表真实渠道受理、生产 MySQL/RabbitMQ、资金到账、正式财务关账或发布治理条件已完成。
