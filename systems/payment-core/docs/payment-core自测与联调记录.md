@@ -17028,3 +17028,8 @@ node tools/release/run_local_regression_report.mjs \
 执行 `node tools/release/audit_payment_core_gate.mjs --root-dir /Users/abc123/workspace/home-service-payment-system --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression --stdout-json`。
 
 结果：回归证据包 `10/10` 完整，缺失样例 `0`、缺失证据 `0`、历史页面 `0`、历史补偿 `0`；`canPromoteTestToMaster=false`、`canCreateRelease=false` 继续保持。当前阻断来自正式治理汇总不放行、候选发布说明未正式化、正式签字审批未形成、发布后现场核验未形成实际记录和 master 稳定观察结束结论未形成，不是 payment-core 代码回归失败。本复判不修改历史证据，不伪造审批、现场核验或发布事实。
+## 724. 2026-09-24 全量管理端分页边界回归
+
+在退款中心和对账中心补齐畸形分页响应归一化后，重新执行 12 个管理端工程的 `npm test && npm run build`。
+
+验证结果：12/12 个管理端工程测试与生产构建全部通过，当前批次前端用例合计 `145/145`，失败 `0`；其中退款中心 `9/9`、对账中心 `9/9`、网关接入 `6/6`。本轮只证明本地管理端骨架在正常、空数据和畸形响应下可继续渲染与操作，不替代真实浏览器、渠道网络、生产数据库、消息总线、资金事实或正式发布治理。
