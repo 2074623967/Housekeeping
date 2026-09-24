@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePagePayload, refundApi } from "./client.js";
+import { dashboardApi, normalizePagePayload, orderApi, refundApi } from "./client.js";
 
 test("normalizes a null paged items field to an empty array", () => {
   const payload = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -15,6 +15,29 @@ test("keeps non-paged payloads and existing arrays unchanged", () => {
 
   assert.equal(normalizePagePayload(summary), summary);
   assert.equal(normalizePagePayload({ items }).items, items);
+});
+
+test("normalizes a null list response to an empty page", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ code: "0", data: null })
+  }));
+
+  assert.deepEqual(await orderApi.getList(), {
+    items: [],
+    total: 0,
+    pageNo: 1,
+    pageSize: 20
+  });
+});
+
+test("preserves null detail responses", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ code: "0", data: null })
+  }));
+
+  assert.equal(await dashboardApi.getSummary(), null);
 });
 
 test("normalizes nullable refund detail collections", async (context) => {

@@ -33,6 +33,19 @@ export function normalizePagePayload(data) {
 }
 
 async function request(url, options = {}) {
+  return requestInternal(url, options, false);
+}
+
+async function requestPage(url, options = {}) {
+  return requestInternal(url, options, false).then((data) => normalizePagePayload(data || {
+    items: [],
+    total: 0,
+    pageNo: 1,
+    pageSize: 20
+  }));
+}
+
+async function requestInternal(url, options = {}, normalizePage = false) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   try {
@@ -61,7 +74,7 @@ async function request(url, options = {}) {
     if (!payload || payload.code !== "0") {
       throw createBusinessError(payload, "Request failed");
     }
-    return normalizePagePayload(payload.data);
+    return normalizePage ? normalizePagePayload(payload.data) : payload.data;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -114,7 +127,7 @@ export const paymentIssueApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-issues?${params.toString()}`);
+    return requestPage(`/api/payment-issues?${params.toString()}`);
   },
   getResponsibilitySummary: ({
     paymentOrderId = "",
@@ -158,7 +171,7 @@ export const paymentIssueApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-issues/alerts?${params.toString()}`);
+    return requestPage(`/api/payment-issues/alerts?${params.toString()}`);
   },
   buildAlertExportUrl: ({
     alertNo = "",
@@ -221,7 +234,7 @@ export const paymentTaskCenterApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-task-center/task-runs?${params.toString()}`);
+    return requestPage(`/api/payment-task-center/task-runs?${params.toString()}`);
   },
   buildExportUrl: ({
     taskCode = "",
@@ -266,7 +279,7 @@ export const orderApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/orders?${params.toString()}`);
+    return requestPage(`/api/orders?${params.toString()}`);
   },
   buildExportUrl: ({
     orderNo = "",
@@ -322,7 +335,7 @@ export const billApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/bills?${params.toString()}`);
+    return requestPage(`/api/bills?${params.toString()}`);
   },
   buildExportUrl: ({
     billNo = "",
@@ -372,7 +385,7 @@ export const paymentFlowApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-flows?${params.toString()}`);
+    return requestPage(`/api/payment-flows?${params.toString()}`);
   },
   buildExportUrl: ({
     paymentOrderId = "",
@@ -454,7 +467,7 @@ export const paymentRouteApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-routes?${params.toString()}`);
+    return requestPage(`/api/payment-routes?${params.toString()}`);
   },
   buildExportUrl: ({
     paymentOrderId = "",
@@ -527,7 +540,7 @@ export const paymentEventApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-events?${params.toString()}`);
+    return requestPage(`/api/payment-events?${params.toString()}`);
   },
   buildExportUrl: ({
     paymentOrderId = "",
@@ -591,7 +604,7 @@ export const paymentDeadLetterTaskApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-dead-letter-tasks?${params.toString()}`);
+    return requestPage(`/api/payment-dead-letter-tasks?${params.toString()}`);
   },
   markReadyToReplay: (taskNo, payload) => postJson(
     `/api/payment-dead-letter-tasks/${encodeURIComponent(taskNo)}/ready-to-replay`,
@@ -655,7 +668,7 @@ export const cashierSessionApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/cashier-sessions?${params.toString()}`);
+    return requestPage(`/api/cashier-sessions?${params.toString()}`);
   },
   buildExportUrl: ({
     sessionNo = "",
@@ -733,7 +746,7 @@ export const paymentRequestApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-requests?${params.toString()}`);
+    return requestPage(`/api/payment-requests?${params.toString()}`);
   },
   buildExportUrl: ({
     requestNo = "",
@@ -809,7 +822,7 @@ export const paymentLogApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-logs?${params.toString()}`);
+    return requestPage(`/api/payment-logs?${params.toString()}`);
   },
   buildExportUrl: ({
     paymentOrderId = "",
@@ -860,7 +873,7 @@ export const paymentRecordApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payment-records?${params.toString()}`);
+    return requestPage(`/api/payment-records?${params.toString()}`);
   },
   buildExportUrl: ({
     recordType = "ALL",
@@ -906,7 +919,7 @@ export const paymentApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/payments?${params.toString()}`);
+    return requestPage(`/api/payments?${params.toString()}`);
   },
   buildExportUrl: ({
     paymentOrderId = "",
@@ -949,7 +962,7 @@ export const refundApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/refunds?${params.toString()}`);
+    return requestPage(`/api/refunds?${params.toString()}`);
   },
   buildExportUrl: ({
     refundOrderId = "",
@@ -1017,7 +1030,7 @@ export const settlementApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return request(`/api/settlements/workers?${params.toString()}`);
+    return requestPage(`/api/settlements/workers?${params.toString()}`);
   },
   buildWorkerExportUrl: ({
     settlementOrderId = "",

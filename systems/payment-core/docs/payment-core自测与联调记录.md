@@ -16932,3 +16932,9 @@ node tools/dev/backend-regression.mjs
 在 wallet-account 空分页响应修复后重新执行 `node tools/dev/frontend-admin-regression.mjs`：`12/12` 个管理端工程的 `npm test` 与 `npm run build` 均通过，当前批次管理端用例合计 `134/134`，失败 `0`。
 
 该结果更新管理端自动化基线，不替代真实浏览器人工验收、生产身份权限、API 域名或发布治理证据。
+
+## 713. 2026-09-24 payment-core 管理端列表空响应契约修复
+
+复核 payment-core 管理端 API client 时发现，详情/概览与分页列表共用请求归一化逻辑；当列表接口返回 `data: null` 时，页面直接读取 `result.items` 会触发运行时错误，而详情接口又必须保留原始 `null` 语义。本轮新增列表专用 `requestPage()`，仅对分页列表提供 `{ items: [], total: 0, pageNo: 1, pageSize: 20 }` 空页兜底，并将订单、支付、退款、流水、事件、任务、会话、结算等列表入口切换到该入口；详情、概览和操作接口继续返回原始 `data`。
+
+验证：payment-core admin-web `65/65` 测试通过，生产构建通过，新增列表 `data: null` 空页和详情 `data: null` 语义回归用例。该改动只保证本地管理端骨架在空库/空响应下可渲染，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、身份权限或发布治理证据已经完成。
