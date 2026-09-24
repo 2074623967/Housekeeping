@@ -16888,3 +16888,17 @@ bash tools/dev/local-stack.sh verify all
 在同一 `test` HEAD 上执行管理端与 payment-core 用户端回归脚本：全量管理端 `12/12` 个工程均通过 `npm test` 与 `npm run build`；payment-core 用户端 App `26/26`、H5 `2/2`、PC `2/2`、小程序 `20/20`、API client `10/10` 通过，App/H5/PC 生产构建通过。
 
 该结果确认当前管理端目录、用户端业务入口、收银台、支付结果、退款进度、小程序模型和 API client 契约没有前端回归；不替代真实浏览器多端验收、微信开发者工具/真机、统一身份权限、真实渠道签名或生产域名验证。
+
+## 707. 2026-09-24 全系统后端回归复核
+
+在原任务窗口持续托管的本地栈上下文中，使用 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行：
+
+```bash
+HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
+HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
+node tools/dev/backend-regression.mjs
+```
+
+结果：12/12 个后端模块通过，Surefire 汇总 `1491/1491`，失败 `0`、错误 `0`、跳过 `0`。模块范围覆盖 payment-core、gateway-access、settlement-system、accounting-system、clearing-system、refund-center、reconciliation-system、risk-control-system、ops-config-system、deposit-system、wallet-account 和 wallet-system。
+
+该结果确认当前可运行骨架的全系统 Java/H2 自动化基线未出现回归；不替代真实 RabbitMQ/DLQ、生产 MySQL、多实例调度、真实渠道受理、资金到账、可信身份权限或发布治理证据。统一门禁仍保持 `test -> master=false`、`canCreateRelease=false`。
