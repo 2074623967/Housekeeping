@@ -45,6 +45,14 @@ async function requestPage(url, options = {}) {
   }));
 }
 
+function normalizeCollectionPayload(data) {
+  return Array.isArray(data) ? data : [];
+}
+
+function requestCollection(url, options = {}) {
+  return request(url, options).then(normalizeCollectionPayload);
+}
+
 async function requestInternal(url, options = {}, normalizePage = false) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
@@ -89,6 +97,10 @@ function buildJsonRequestOptions(method, payload) {
 
 function postJson(url, payload) {
   return request(url, buildJsonRequestOptions("POST", payload));
+}
+
+function postCollection(url, payload) {
+  return requestCollection(url, buildJsonRequestOptions("POST", payload));
 }
 
 export const dashboardApi = {
@@ -1049,137 +1061,137 @@ export const settlementApi = {
 };
 
 export const paymentConfigApi = {
-  getOverview: () => request("/api/payment-config"),
+  getOverview: () => request("/api/payment-config").then((data) => data || {}),
   buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
-  submitChannelStatusReview: (payload) => postJson("/api/payment-config/channels/toggle", payload),
-  submitChannelReview: (payload) => postJson("/api/payment-config/channels/reviews", payload),
-  getChannelReviews: () => request("/api/payment-config/channels/reviews"),
-  approveChannelReview: (requestNo, payload) => postJson(
+  submitChannelStatusReview: (payload) => postCollection("/api/payment-config/channels/toggle", payload),
+  submitChannelReview: (payload) => postCollection("/api/payment-config/channels/reviews", payload),
+  getChannelReviews: () => requestCollection("/api/payment-config/channels/reviews"),
+  approveChannelReview: (requestNo, payload) => postCollection(
     `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectChannelReview: (requestNo, payload) => postJson(
+  rejectChannelReview: (requestNo, payload) => postCollection(
     `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  getChannelVersions: (channelCode) => request(
+  getChannelVersions: (channelCode) => requestCollection(
     `/api/payment-config/channels/${encodeURIComponent(channelCode)}/versions`
   ),
-  rollbackChannel: (channelCode, payload) => postJson(
+  rollbackChannel: (channelCode, payload) => postCollection(
     `/api/payment-config/channels/${encodeURIComponent(channelCode)}/rollback`,
     payload
   ),
-  getGatewayVersions: (gatewayCode) => request(
+  getGatewayVersions: (gatewayCode) => requestCollection(
     `/api/payment-config/gateways/${encodeURIComponent(gatewayCode)}/versions`
   ),
-  rollbackGateway: (gatewayCode, payload) => postJson(
+  rollbackGateway: (gatewayCode, payload) => postCollection(
     `/api/payment-config/gateways/${encodeURIComponent(gatewayCode)}/rollback`,
     payload
   ),
-  submitRouteRuleStatusReview: (payload) => postJson("/api/payment-config/route-rules/toggle", payload),
+  submitRouteRuleStatusReview: (payload) => postCollection("/api/payment-config/route-rules/toggle", payload),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
-  getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),
-  getRouteRuleReviews: () => request("/api/payment-config/route-rules/reviews"),
-  submitRouteRuleReview: (payload) => postJson("/api/payment-config/route-rules/reviews", payload),
-  approveRouteRuleReview: (requestNo, payload) => postJson(
+  getRouteRuleConflicts: () => requestCollection("/api/payment-config/route-rules/conflicts"),
+  getRouteRuleReviews: () => requestCollection("/api/payment-config/route-rules/reviews"),
+  submitRouteRuleReview: (payload) => postCollection("/api/payment-config/route-rules/reviews", payload),
+  approveRouteRuleReview: (requestNo, payload) => postCollection(
     `/api/payment-config/route-rules/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectRouteRuleReview: (requestNo, payload) => postJson(
+  rejectRouteRuleReview: (requestNo, payload) => postCollection(
     `/api/payment-config/route-rules/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  getRouteRuleVersions: (ruleCode) => request(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/versions`),
-  submitRouteRuleRollbackReview: (ruleCode, payload) => postJson(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/rollback`, payload),
-  getProtocolReviews: () => request("/api/payment-config/protocols/reviews"),
-  submitProtocolReview: (payload) => postJson("/api/payment-config/protocols/reviews", payload),
-  approveProtocolReview: (requestNo, payload) => postJson(
+  getRouteRuleVersions: (ruleCode) => requestCollection(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/versions`),
+  submitRouteRuleRollbackReview: (ruleCode, payload) => postCollection(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/rollback`, payload),
+  getProtocolReviews: () => requestCollection("/api/payment-config/protocols/reviews"),
+  submitProtocolReview: (payload) => postCollection("/api/payment-config/protocols/reviews", payload),
+  approveProtocolReview: (requestNo, payload) => postCollection(
     `/api/payment-config/protocols/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectProtocolReview: (requestNo, payload) => postJson(
+  rejectProtocolReview: (requestNo, payload) => postCollection(
     `/api/payment-config/protocols/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  toggleProtocol: (payload) => postJson("/api/payment-config/protocols/toggle", payload),
-  getProtocolVersions: (protocolCode) => request(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/versions`),
-  rollbackProtocol: (protocolCode, payload) => postJson(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/rollback`, payload),
-  createIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters", payload),
-  updateIssueDutyRoster: (rosterCode, payload) => request(`/api/payment-config/issue-duty-rosters/${encodeURIComponent(rosterCode)}`, buildJsonRequestOptions("PUT", payload)),
-  getIssueDutyRosterReviews: () => request("/api/payment-config/issue-duty-rosters/reviews"),
-  approveIssueDutyRosterReview: (requestNo, payload) => postJson(
+  toggleProtocol: (payload) => postCollection("/api/payment-config/protocols/toggle", payload),
+  getProtocolVersions: (protocolCode) => requestCollection(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/versions`),
+  rollbackProtocol: (protocolCode, payload) => postCollection(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/rollback`, payload),
+  createIssueDutyRoster: (payload) => postCollection("/api/payment-config/issue-duty-rosters", payload),
+  updateIssueDutyRoster: (rosterCode, payload) => requestCollection(`/api/payment-config/issue-duty-rosters/${encodeURIComponent(rosterCode)}`, buildJsonRequestOptions("PUT", payload)),
+  getIssueDutyRosterReviews: () => requestCollection("/api/payment-config/issue-duty-rosters/reviews"),
+  approveIssueDutyRosterReview: (requestNo, payload) => postCollection(
     `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectIssueDutyRosterReview: (requestNo, payload) => postJson(
+  rejectIssueDutyRosterReview: (requestNo, payload) => postCollection(
     `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  createAlertProvider: (payload) => postJson("/api/payment-config/alert-providers", payload),
-  updateAlertProvider: (providerCode, payload) => request(
+  createAlertProvider: (payload) => postCollection("/api/payment-config/alert-providers", payload),
+  updateAlertProvider: (providerCode, payload) => requestCollection(
     `/api/payment-config/alert-providers/${encodeURIComponent(providerCode)}`,
     buildJsonRequestOptions("PUT", payload)
   ),
-  getAlertProviderReviews: () => request("/api/payment-config/alert-providers/reviews"),
-  approveAlertProviderReview: (requestNo, payload) => postJson(
+  getAlertProviderReviews: () => requestCollection("/api/payment-config/alert-providers/reviews"),
+  approveAlertProviderReview: (requestNo, payload) => postCollection(
     `/api/payment-config/alert-providers/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectAlertProviderReview: (requestNo, payload) => postJson(
+  rejectAlertProviderReview: (requestNo, payload) => postCollection(
     `/api/payment-config/alert-providers/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  submitReturnCodeStatusReview: (payload) => postJson("/api/payment-config/return-codes/toggle", payload),
-  getReturnCodeReviews: () => request("/api/payment-config/return-codes/reviews"),
-  approveReturnCodeReview: (requestNo, payload) => postJson(
+  submitReturnCodeStatusReview: (payload) => postCollection("/api/payment-config/return-codes/toggle", payload),
+  getReturnCodeReviews: () => requestCollection("/api/payment-config/return-codes/reviews"),
+  approveReturnCodeReview: (requestNo, payload) => postCollection(
     `/api/payment-config/return-codes/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectReturnCodeReview: (requestNo, payload) => postJson(
+  rejectReturnCodeReview: (requestNo, payload) => postCollection(
     `/api/payment-config/return-codes/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
   previewReturnCodeImport: (payload) => postJson("/api/payment-config/return-codes/import/preview", payload),
-  getReturnCodeImportReviews: () => request("/api/payment-config/return-codes/import/reviews"),
-  submitReturnCodeImportReview: (payload) => postJson("/api/payment-config/return-codes/import/reviews", payload),
-  approveReturnCodeImportReview: (requestNo, payload) => postJson(
+  getReturnCodeImportReviews: () => requestCollection("/api/payment-config/return-codes/import/reviews"),
+  submitReturnCodeImportReview: (payload) => postCollection("/api/payment-config/return-codes/import/reviews", payload),
+  approveReturnCodeImportReview: (requestNo, payload) => postCollection(
     `/api/payment-config/return-codes/import/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectReturnCodeImportReview: (requestNo, payload) => postJson(
+  rejectReturnCodeImportReview: (requestNo, payload) => postCollection(
     `/api/payment-config/return-codes/import/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  submitGatewayStatusReview: (payload) => postJson("/api/payment-config/gateways/toggle", payload),
-  getGatewayReviews: () => request("/api/payment-config/gateways/reviews"),
-  submitGatewayReview: (payload) => postJson("/api/payment-config/gateways/reviews", payload),
-  approveGatewayReview: (requestNo, payload) => postJson(
+  submitGatewayStatusReview: (payload) => postCollection("/api/payment-config/gateways/toggle", payload),
+  getGatewayReviews: () => requestCollection("/api/payment-config/gateways/reviews"),
+  submitGatewayReview: (payload) => postCollection("/api/payment-config/gateways/reviews", payload),
+  approveGatewayReview: (requestNo, payload) => postCollection(
     `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectGatewayReview: (requestNo, payload) => postJson(
+  rejectGatewayReview: (requestNo, payload) => postCollection(
     `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  submitControlPolicyStatusReview: (payload) => postJson("/api/payment-config/control-policies/toggle", payload),
-  getControlPolicyReviews: () => request("/api/payment-config/control-policies/reviews"),
-  submitControlPolicyReview: (payload) => postJson("/api/payment-config/control-policies/reviews", payload),
-  approveControlPolicyReview: (requestNo, payload) => postJson(
+  submitControlPolicyStatusReview: (payload) => postCollection("/api/payment-config/control-policies/toggle", payload),
+  getControlPolicyReviews: () => requestCollection("/api/payment-config/control-policies/reviews"),
+  submitControlPolicyReview: (payload) => postCollection("/api/payment-config/control-policies/reviews", payload),
+  approveControlPolicyReview: (requestNo, payload) => postCollection(
     `/api/payment-config/control-policies/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload
   ),
-  rejectControlPolicyReview: (requestNo, payload) => postJson(
+  rejectControlPolicyReview: (requestNo, payload) => postCollection(
     `/api/payment-config/control-policies/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  getControlPolicyVersions: (sourceAppId) => request(
+  getControlPolicyVersions: (sourceAppId) => requestCollection(
     `/api/payment-config/control-policies/${encodeURIComponent(sourceAppId)}/versions`
   ),
-  rollbackControlPolicy: (sourceAppId, payload) => postJson(
+  rollbackControlPolicy: (sourceAppId, payload) => postCollection(
     `/api/payment-config/control-policies/${encodeURIComponent(sourceAppId)}/rollback`,
     payload
   ),
-  toggleAlertProvider: (payload) => postJson("/api/payment-config/alert-providers/toggle", payload),
-  toggleIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters/toggle", payload),
+  toggleAlertProvider: (payload) => postCollection("/api/payment-config/alert-providers/toggle", payload),
+  toggleIssueDutyRoster: (payload) => postCollection("/api/payment-config/issue-duty-rosters/toggle", payload),
   runControlPolicySelfCheck: (configCode) => postJson("/api/payment-config/control-policies/self-check", { configCode })
 };

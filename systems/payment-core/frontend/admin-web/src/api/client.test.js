@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dashboardApi, normalizePagePayload, orderApi, refundApi } from "./client.js";
+import {
+  dashboardApi,
+  normalizePagePayload,
+  orderApi,
+  paymentConfigApi,
+  refundApi
+} from "./client.js";
 
 test("normalizes a null paged items field to an empty array", () => {
   const payload = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -38,6 +44,17 @@ test("preserves null detail responses", async (context) => {
   }));
 
   assert.equal(await dashboardApi.getSummary(), null);
+});
+
+test("normalizes nullable payment configuration collections", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ code: "0", data: null })
+  }));
+
+  assert.deepEqual(await paymentConfigApi.getChannelReviews(), []);
+  assert.deepEqual(await paymentConfigApi.submitChannelStatusReview({}), []);
+  assert.deepEqual(await paymentConfigApi.getOverview(), {});
 });
 
 test("normalizes nullable refund detail collections", async (context) => {
