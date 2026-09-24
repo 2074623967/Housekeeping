@@ -16882,3 +16882,9 @@ bash tools/dev/local-stack.sh verify all
 在提交 `87efd61f` 后，以 Maven 3.9.16、JDK 8 和已有本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，payment-core `1/1` 模块通过，Surefire 汇总 `1203/1203`，失败 `0`、错误 `0`、跳过 `0`。
 
 该结果确认当前 payment-core 代码与已有事件、任务、配置、查询、边界回归基线未漂移；测试日志中的异常样例均为预期失败闭合路径，不代表真实 RabbitMQ/DLQ、生产 MySQL、真实渠道受理、资金到账或发布治理条件已完成。
+
+## 706. 2026-09-24 当前 HEAD 前端矩阵回归
+
+在同一 `test` HEAD 上执行管理端与 payment-core 用户端回归脚本：全量管理端 `12/12` 个工程均通过 `npm test` 与 `npm run build`；payment-core 用户端 App `26/26`、H5 `2/2`、PC `2/2`、小程序 `20/20`、API client `10/10` 通过，App/H5/PC 生产构建通过。
+
+该结果确认当前管理端目录、用户端业务入口、收银台、支付结果、退款进度、小程序模型和 API client 契约没有前端回归；不替代真实浏览器多端验收、微信开发者工具/真机、统一身份权限、真实渠道签名或生产域名验证。
