@@ -16914,3 +16914,9 @@ node tools/dev/backend-regression.mjs
 跨系统扫描发现 `risk-control`、`ops-config` 与 gateway-access 存在同型问题：后端列表接口返回分页对象，客户端却压平成数组，而页面按 `.records` 读取。两套客户端现统一保留 `{ records, total, pageNo, pageSize }`，空库仍返回可渲染的空分页。
 
 验证：risk-control 后端 `11/11`、管理端 `6/6` 通过并完成生产构建；ops-config 后端 `12/12`、管理端 `6/6` 通过并完成生产构建；`git diff --check` 通过。该批只收口本地列表契约，不代表真实风控引擎、配置发布、消息总线或可信权限已验收。
+
+## 710. 2026-09-24 全量管理端回归复核
+
+在 `gateway-access`、`risk-control`、`ops-config` 管理台分页契约修复后，重新执行 `node tools/dev/frontend-admin-regression.mjs`。结果：`12/12` 个管理端工程的 `npm test` 与 `npm run build` 均通过，当前批次管理端用例合计 `133/133`，失败 `0`。
+
+该结果确认本轮跨系统客户端归一化没有破坏其他后台页面和构建；不替代真实浏览器多端人工验收、可信身份权限、生产 API 域名或发布治理证据。
