@@ -16997,3 +16997,22 @@ node tools/release/audit_payment_core_gate.mjs \
 本轮修正报告脚本，将门禁子命令非零状态纳入最终退出码，并新增 `tools/release/run_local_regression_report.test.mjs` 固定该契约：当前 REG-08 证据完整但 test/release 仍不可放行时，报告返回 `1`，同时保留 `gate.status=2`、`canPromoteTestToMaster=false` 和 `canCreateRelease=false`。
 
 验证：报告退出码修复测试 `1/1` 通过；实际门禁-only 报告按预期返回 `1`。该修复只校正本地回归报告的失败传播，不改变门禁决策，也不把发布治理阻断解释成代码测试失败。
+
+## 721. 2026-09-24 受控运行态纳入本地回归报告
+
+现有 `run_local_regression_report.mjs` 默认只执行代码回归和门禁审计；本轮新增显式 `--include-runtime` 与 `--runtime-scope`，在已有 `local-stack.sh up` 托管会话上追加 HTTP smoke 和跨系统 `happy-path`，并将 smoke 状态、happy-path 日志及解析后的订单号、支付单号、事件类型、对账链状态和 `financialCloseable` 写入 `runtime` 节点。
+
+该选项不负责启动或停止本地服务；运行态失败或 happy-path 没有事实 JSON 时报告失败退出。运行态证据仍只属于受控 demo/H2/HTTP 骨架，不替代真实渠道、生产 RabbitMQ/MySQL、资金到账、正式审批、页面冻结或发布后观察。
+
+验证命令：
+
+```bash
+node tools/release/run_local_regression_report.mjs \
+  --only payment-core \
+  --skip-backend --skip-frontend --skip-user-frontend \
+  --include-runtime --runtime-scope all \
+  --skip-gate \
+  --output .runtime/payment-core-runtime-regression.json
+```
+
+本轮实际组合验证：runtime smoke 与 happy-path 均返回 `0`；报告中的 `runtime.happyPath.facts` 已记录 `PAYMENT_SUCCESS / CLEARING_GENERATED / SETTLEMENT_CREATED / ACCOUNTING_POSTED / REFUND_SUCCESS`，对账链 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。同一报告的统一门禁返回 `status=2`，主进程返回 `1`，并保留 `canPromoteTestToMaster=false`、`canCreateRelease=false`；这证明运行态证据接入没有绕过正式发布门禁。

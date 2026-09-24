@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const backendApps = [
@@ -61,6 +61,43 @@ function runNode(label, script, args, logPath) {
   };
 }
 
+function runShell(label, script, args, logPath) {
+  const command = ["bash", script, ...args];
+  const result = spawnSync("bash", [script, ...args], {
+    cwd: rootDir,
+    env: process.env,
+    encoding: "utf8"
+  });
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  fs.writeFileSync(logPath, `${stdout}${stderr}`, "utf8");
+  const status = result.error ? 1 : (result.status ?? 1);
+  console.log(`[local-regression] ${label}: ${status === 0 ? "passed" : "failed"} (log: ${path.relative(rootDir, logPath)})`);
+  return {
+    command: command.join(" "),
+    status,
+    signal: result.signal || "",
+    error: result.error ? result.error.message : "",
+    stdout,
+    stderr,
+    logPath: path.relative(rootDir, logPath)
+  };
+}
+
+function parseLastJsonObject(output) {
+  for (let index = output.lastIndexOf("{"); index >= 0; index = output.lastIndexOf("{", index - 1)) {
+    try {
+      const parsed = JSON.parse(output.slice(index));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Keep searching for the outermost JSON object in mixed command output.
+    }
+  }
+  return null;
+}
+
 function summarizeExecution(execution) {
   const { stdout, stderr, ...summary } = execution;
   return summary;
@@ -99,6 +136,8 @@ function shouldRunUserFrontend(only) {
 
 function main() {
   const only = getArgValue("--only");
+  const runtimeScope = getArgValue("--runtime-scope", "all");
+  const includeRuntime = hasFlag("--include-runtime");
   const outputPath = path.resolve(rootDir, getArgValue("--output", ".runtime/current-regression-report.json"));
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const logStem = outputPath.replace(/\.json$/i, "");
@@ -113,10 +152,11 @@ function main() {
       userFrontend: shouldRunUserFrontend(only),
       gate: !hasFlag("--skip-gate")
     },
-    classification: "local-automation-only",
+    classification: includeRuntime ? "local-automation-and-controlled-runtime" : "local-automation-only",
     backend: null,
     frontendAdmin: null,
     userFrontend: null,
+    runtime: null,
     gate: null,
     limitations: [
       "本报告只汇总本地自动化测试、构建和门禁脚本输出，不替代真实渠道、生产数据库、RabbitMQ、页面冻结或审批证据。",
@@ -151,6 +191,37 @@ function main() {
     failed ||= execution.status !== 0;
   }
 
+  if (includeRuntime) {
+    const smoke = runShell(
+      "runtime-smoke",
+      "tools/dev/local-stack.sh",
+      ["smoke", runtimeScope],
+      `${logStem}.runtime-smoke.log`
+    );
+    const happyPath = runShell(
+      "runtime-happy-path",
+      "tools/dev/local-stack.sh",
+      ["happy-path"],
+      `${logStem}.runtime-happy-path.log`
+    );
+    const happyPathFacts = parseLastJsonObject(`${happyPath.stdout}\n${happyPath.stderr}`);
+    report.runtime = {
+      scope: runtimeScope,
+      smoke: summarizeExecution(smoke),
+      happyPath: {
+        ...summarizeExecution(happyPath),
+        facts: happyPathFacts,
+        parseError: happyPath.status === 0 && !happyPathFacts
+          ? "happy-path 没有返回可解析的事实 JSON"
+          : ""
+      },
+      limitations: [
+        "运行态证据只代表当前受控 demo/H2/HTTP 环境，不替代真实渠道、生产 RabbitMQ/MySQL、资金到账或财务审批。"
+      ]
+    };
+    failed ||= smoke.status !== 0 || happyPath.status !== 0 || !happyPathFacts;
+  }
+
   if (!hasFlag("--skip-gate")) {
     const execution = runNode(
       "payment-core-gate",
@@ -173,4 +244,8 @@ function main() {
   process.exitCode = failed ? 1 : 0;
 }
 
-main();
+export { parseLastJsonObject };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
