@@ -9,8 +9,12 @@ import com.abc123.gatewayaccess.service.PaymentOrderSubmitService;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +33,9 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
     private static final Logger LOGGER = LoggerFactory.getLogger(PaymentOrderSubmitServiceImpl.class);
     private static final Set<String> STATUS_TYPES = new HashSet<>(
             Arrays.asList("info", "warn", "danger", "success"));
+    private static final Set<String> NATIVE_PAYMENT_PARAM_KEYS = Collections.unmodifiableSet(
+            new LinkedHashSet<>(Arrays.asList(
+                    "timeStamp", "nonceStr", "package", "signType", "paySign")));
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final GatewayTransactionAccessService accessService;
@@ -63,7 +70,7 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
             upstreamInvoked = true;
             UpstreamPaymentSubmitResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamPaymentSubmitResponseDTO.class);
-            PaymentOrderSubmitResultDTO result = validateUpstreamResponse(response);
+            PaymentOrderSubmitResultDTO result = validateUpstreamResponse(response, request);
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.PAYMENT_SUBMIT,
                     "SUCCESS", "success", "支付请求已由配置的真实上游明确受理");
@@ -113,7 +120,8 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
         }
     }
 
-    private PaymentOrderSubmitResultDTO validateUpstreamResponse(UpstreamPaymentSubmitResponseDTO response) {
+    private PaymentOrderSubmitResultDTO validateUpstreamResponse(
+            UpstreamPaymentSubmitResponseDTO response, PaymentOrderSubmitRequestDTO request) {
         if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment submit upstream returned no definitive acceptance result");
@@ -130,7 +138,26 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment submit upstream returned an invalid attemptStatusType");
         }
+        result.setNativePaymentParams(normalizeNativePaymentParams(
+                result.getNativePaymentParams(), request.getTerminal()));
         return result;
+    }
+
+    private Map<String, String> normalizeNativePaymentParams(
+            Map<String, String> params, String terminal) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+        if (!"MINI_PROGRAM".equalsIgnoreCase(terminal)
+                || !NATIVE_PAYMENT_PARAM_KEYS.equals(params.keySet())) {
+            throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
+                    "payment submit upstream returned an invalid native payment parameter set");
+        }
+        Map<String, String> normalized = new LinkedHashMap<>();
+        for (String key : NATIVE_PAYMENT_PARAM_KEYS) {
+            normalized.put(key, requiredResponse(params.get(key), key, 512));
+        }
+        return normalized;
     }
 
     private String required(String value, String fieldName, int maxLength) {

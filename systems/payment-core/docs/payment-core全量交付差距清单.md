@@ -20,7 +20,7 @@
 
 ## 2. 当前结论
 
-截至 `2026-09-23`，当前 `payment-core` 的真实状态应调整为：
+截至 `2026-09-24`，当前 `payment-core` 的真实状态应调整为：
 
 1. 已完成 `支付交易闭环 V1` 的可运行前后端骨架
 2. 已完成管理端核心查询与处理页，以及 App/H5/PC/小程序/API 用户接入端的基础联调
@@ -3483,3 +3483,10 @@
 ### 9.21 2026-09-23 README 交付口径校正
 
 `payment-core/README.md` 与前端 README 已同步当前代码事实：后端全量基线为 `1203` 个测试通过，API client 的退款申请、审核、详情、主动查单和失败重试入口已列入模块范围。该校正不扩大 payment-core 的资金域边界，也不把本地测试、demo 适配器或事件消费者校验解释成真实渠道、生产 RabbitMQ/MySQL、资金到账或 release 放行事实。
+
+### 9.22 2026-09-24 小程序原生支付参数跨网关代理契约
+
+1. payment-core 原有 `nativePaymentParams` 临时响应契约已贯通 gateway-access：真实上游在小程序终端完成签名后，可透传 `timeStamp / nonceStr / package / signType / paySign`，供小程序条件式调用 `wx.requestPayment`。
+2. gateway-access 和 payment-core adapter 双层执行终端边界、五字段精确白名单、必填、长度和控制字符校验；参数不进入支付尝试、预付单、审计或任何持久化字段，非小程序或非法集合失败闭合。
+3. payment-core `1204/1204`、gateway-access `53/53`，全量后端 `12/12` 合计 `1494/1494` 通过；本地 demo 仍不返回真实签名参数。
+4. 本轮只补齐真实上游签名参数的安全传递骨架，不代表微信登录态、AppID/商户绑定、真实证书、扣款、回调验签、资金到账、真机验收或发布治理已经完成。

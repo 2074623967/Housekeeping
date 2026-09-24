@@ -4773,7 +4773,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 小程序支付提交固定使用来源 `housekeeping-mini-program`、支付方式 `微信支付`、demo 渠道 `WX_H5`、商户 `MCH_WX_10001` 和终端 `MINI_PROGRAM`；生产令牌、用户身份及设备上下文必须由正式认证与受控配置替换。
 3. 只有收银台仍为待支付、支付单为 `PREPAY_CREATED`、没有渠道尝试、微信通道可用且 `expiresAt` 未到期时允许提交；幂等键在单次提交期间不可变，重复操作必须互斥。
 4. 收银台摘要没有 `channelTransactionNo`，不得仅凭摘要判断可关单；客户端必须读取完整支付详情，并仅在未提交渠道且服务端状态允许时展示关单动作，服务端仍执行最终校验。
-5. 当前响应没有微信支付签名参数，小程序不得调用空参数 `wx.requestPayment` 或把 `WAIT_CALLBACK` 渲染为支付成功；该缺口补齐前只属于本地功能联调骨架。
+5. 小程序提交响应可在真实网关已完成签名时临时携带白名单 `nativePaymentParams`（`timeStamp / nonceStr / package / signType / paySign`），只允许小程序终端使用且不落库；本地 demo 适配器仍不返回真实签名参数，小程序不得调用空参数 `wx.requestPayment` 或把 `WAIT_CALLBACK` 渲染为支付成功，因此本地仍只属于联调骨架。
 
 ### 14.351 服务端 API 支付调用契约
 

@@ -18,6 +18,8 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -49,6 +51,7 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
         data.setChannelReturnCode("USERPAYING");
+        data.setNativePaymentParams(nativePaymentParams());
         GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
                 new GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse();
         response.setCode("0");
@@ -58,10 +61,13 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
                 eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class)))
                 .thenReturn(ResponseEntity.ok(response));
 
-        PaymentChannelSubmitResultDTO result = adapter(restTemplate).submit(request());
+        PaymentChannelSubmitRequestDTO miniProgramRequest = request();
+        miniProgramRequest.setTerminal("MINI_PROGRAM");
+        PaymentChannelSubmitResultDTO result = adapter(restTemplate).submit(miniProgramRequest);
 
         assertEquals("WX-1001", result.getChannelTransactionNo());
         assertEquals("USERPAYING", result.getChannelReturnCode());
+        assertEquals("prepay_id=wx-prepay", result.getNativePaymentParams().get("package"));
         assertTrue(result.getResponsePayload().contains("\"source\":\"gateway-access\""));
         assertFalse(result.getResponsePayload().contains("secret"));
     }
@@ -171,6 +177,30 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
     }
 
+    @Test
+    void shouldRejectNativePaymentParamsForNonMiniProgramTerminal() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        data.setNativePaymentParams(nativePaymentParams());
+        GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
+                new GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adapter(restTemplate).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+    }
+
     private GatewayAccessPaymentChannelSubmitAdapter adapter(RestTemplate restTemplate) {
         return new GatewayAccessPaymentChannelSubmitAdapter(
                 true, "http://gateway/submit", "wx_h5", "APP_PAY_CORE", "secret", restTemplate);
@@ -214,6 +244,16 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
                     sentRequest.set(entity.getBody());
                     return ResponseEntity.ok(response);
                 });
+    }
+
+    private Map<String, String> nativePaymentParams() {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("timeStamp", "1710000000");
+        params.put("nonceStr", "nonce");
+        params.put("package", "prepay_id=wx-prepay");
+        params.put("signType", "RSA");
+        params.put("paySign", "signature");
+        return params;
     }
 
     private void assertInvalidRequest(BusinessException exception) {

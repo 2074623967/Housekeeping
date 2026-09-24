@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import lombok.Data;
@@ -33,6 +35,9 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final Set<String> STATUS_TYPES = new HashSet<>(
             Arrays.asList("info", "warn", "danger", "success"));
+    private static final Set<String> NATIVE_PAYMENT_PARAM_KEYS = Collections.unmodifiableSet(
+            new java.util.LinkedHashSet<>(Arrays.asList(
+                    "timeStamp", "nonceStr", "package", "signType", "paySign")));
 
     private final boolean enabled;
     private final String submitUrl;
@@ -89,7 +94,7 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
                 throw submitFailed("gateway-access rejected payment submit");
             }
             PaymentChannelSubmitResultDTO result = response.getData();
-            normalizeAndValidate(result);
+            normalizeAndValidate(result, normalizedRequest);
             result.setResponsePayload(buildResponsePayload(normalizedRequest.getResolvedChannelCode(), result));
             return result;
         } catch (BusinessException exception) {
@@ -152,7 +157,8 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
         return normalized;
     }
 
-    private void normalizeAndValidate(PaymentChannelSubmitResultDTO result) {
+    private void normalizeAndValidate(
+            PaymentChannelSubmitResultDTO result, PaymentChannelSubmitRequestDTO request) {
         result.setChannelTransactionNo(required(
                 result.getChannelTransactionNo(), "channel transaction number", 128));
         result.setAttemptStatus(required(result.getAttemptStatus(), "attempt status", 32));
@@ -162,6 +168,24 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
         if (!STATUS_TYPES.contains(result.getAttemptStatusType())) {
             throw submitFailed("gateway-access returned an invalid attempt status type");
         }
+        result.setNativePaymentParams(normalizeNativePaymentParams(
+                result.getNativePaymentParams(), request.getTerminal()));
+    }
+
+    private Map<String, String> normalizeNativePaymentParams(
+            Map<String, String> params, String terminal) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+        if (!"MINI_PROGRAM".equalsIgnoreCase(terminal)
+                || !NATIVE_PAYMENT_PARAM_KEYS.equals(params.keySet())) {
+            throw submitFailed("gateway-access returned invalid native payment parameters");
+        }
+        Map<String, String> normalized = new LinkedHashMap<>();
+        for (String key : NATIVE_PAYMENT_PARAM_KEYS) {
+            normalized.put(key, required(params.get(key), key, 512));
+        }
+        return normalized;
     }
 
     private String required(String value, String fieldName, int maxLength) {

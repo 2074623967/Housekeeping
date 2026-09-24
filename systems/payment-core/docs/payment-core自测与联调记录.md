@@ -16956,3 +16956,9 @@ node tools/dev/backend-regression.mjs
 继续按“先把骨架搭起来、空库也能用”的目标复核监控分析、任务中心和支付日终三类总览页面：成功响应 `data: null` 时，页面原先可能直接覆盖默认快照，导致嵌套字段或数组读取异常。本轮新增对象总览专用归一化；监控、任务中心、日终页面在载入和操作回写时均保留默认字段结构，并对趋势、告警、渠道、批次等集合回退为空数组；详情接口仍保留原始 `null` 语义。
 
 验证：payment-core admin-web `68/68` 测试通过，生产构建通过；随后执行 `node tools/dev/frontend-admin-regression.mjs`，全量管理端 `12/12` 工程测试与生产构建通过，`git diff --check` 通过。该改动只保证总览空态和空库骨架可继续操作，不代表真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、身份权限或发布治理证据已经完成。
+
+## 717. 2026-09-24 小程序原生支付参数跨网关代理契约
+
+复核小程序支付链路时发现，payment-core 已支持临时携带 `nativePaymentParams`，但 gateway-access 的支付提交结果 DTO 未透传该字段，真实上游即使签名完成，小程序仍无法调用 `wx.requestPayment`。本轮补齐跨系统临时响应契约：只有 `MINI_PROGRAM` 终端可以返回完整的 `timeStamp / nonceStr / package / signType / paySign`，gateway-access 与 payment-core adapter 都执行白名单、完整集合、长度和控制字符校验；参数不落库，非小程序或非法集合拒绝。demo 适配器仍不生成假签名。
+
+验证：payment-core 后端 `1204/1204`、gateway-access 后端 `53/53` 通过，失败 `0`、错误 `0`、跳过 `0`；当前全量后端 `12/12` 模块合计 `1494/1494`，`git diff --check` 通过。该改动只补齐真实上游签名参数的安全传递边界，不代表微信登录、AppID/商户绑定、证书、真实扣款、回调验签、资金到账或真机验收已经完成。

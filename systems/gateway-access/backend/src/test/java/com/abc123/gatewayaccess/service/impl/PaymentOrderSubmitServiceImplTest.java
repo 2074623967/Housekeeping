@@ -22,6 +22,8 @@ import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -69,6 +71,7 @@ class PaymentOrderSubmitServiceImplTest {
         data.setAttemptStatus(" 处理中 ");
         data.setAttemptStatusType(" INFO ");
         data.setChannelReturnCode(" USERPAYING ");
+        data.setNativePaymentParams(nativePaymentParams());
         UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
         response.setCode("0");
         response.setData(data);
@@ -77,13 +80,16 @@ class PaymentOrderSubmitServiceImplTest {
                 any(PaymentOrderSubmitRequestDTO.class),
                 eq(UpstreamPaymentSubmitResponseDTO.class))).thenReturn(response);
 
+        PaymentOrderSubmitRequestDTO miniProgramRequest = request();
+        miniProgramRequest.setTerminal("MINI_PROGRAM");
         PaymentOrderSubmitResultDTO result = service().submit(
-                "APP_PAY_CORE", "secret", "127.0.0.1", request());
+                "APP_PAY_CORE", "secret", "127.0.0.1", miniProgramRequest);
 
         assertEquals("WX-1001", result.getChannelTransactionNo());
         assertEquals("处理中", result.getAttemptStatus());
         assertEquals("info", result.getAttemptStatusType());
         assertEquals("USERPAYING", result.getChannelReturnCode());
+        assertEquals("prepay_id=wx-prepay", result.getNativePaymentParams().get("package"));
         ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
         verify(mapper).insertAuditLog(captor.capture());
         assertEquals("PAYMENT_SUBMIT", captor.getValue().getOperationType());
@@ -111,6 +117,50 @@ class PaymentOrderSubmitServiceImplTest {
         verify(mapper).insertAuditLog(captor.capture());
         assertEquals("UNKNOWN", captor.getValue().getResultStatus());
         assertEquals("warn", captor.getValue().getResultStatusType());
+    }
+
+    @Test
+    void shouldRejectNativePaymentParamsForNonMiniProgramTerminal() {
+        configureEnabledGovernance();
+        PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        data.setNativePaymentParams(nativePaymentParams());
+        UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectPartialNativePaymentParamsFromUpstream() {
+        configureEnabledGovernance();
+        PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("timeStamp", "1710000000");
+        data.setNativePaymentParams(params);
+        UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
     }
 
     @Test
@@ -173,5 +223,15 @@ class PaymentOrderSubmitServiceImplTest {
         GatewayReleaseRouteDTO route = new GatewayReleaseRouteDTO();
         route.setTrafficPercent(100);
         when(mapper.findEnabledReleaseRoute("GW_WX", "PROD")).thenReturn(route);
+    }
+
+    private Map<String, String> nativePaymentParams() {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("timeStamp", "1710000000");
+        params.put("nonceStr", "nonce");
+        params.put("package", "prepay_id=wx-prepay");
+        params.put("signType", "RSA");
+        params.put("paySign", "signature");
+        return params;
     }
 }
