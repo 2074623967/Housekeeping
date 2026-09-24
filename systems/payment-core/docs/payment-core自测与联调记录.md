@@ -16920,3 +16920,9 @@ node tools/dev/backend-regression.mjs
 在 `gateway-access`、`risk-control`、`ops-config` 管理台分页契约修复后，重新执行 `node tools/dev/frontend-admin-regression.mjs`。结果：`12/12` 个管理端工程的 `npm test` 与 `npm run build` 均通过，当前批次管理端用例合计 `133/133`，失败 `0`。
 
 该结果确认本轮跨系统客户端归一化没有破坏其他后台页面和构建；不替代真实浏览器多端人工验收、可信身份权限、生产 API 域名或发布治理证据。
+
+## 711. 2026-09-24 wallet-account 管理端空分页响应修复
+
+复核其他资金子系统管理台时发现，`wallet-account` 的账户、流水和导出任务分页入口在 `data: null` 时会把空值传给页面，页面读取 `.records`/`.total` 存在运行时风险。本轮仅对三个分页入口归一空页，详情与批量余额接口保持原始空响应语义。
+
+验证：wallet-account admin-web `6/6` 测试通过，生产构建和 `git diff --check` 通过；本轮不改变钱包账户状态、余额、导出任务或真实资金事实。

@@ -35,13 +35,14 @@ async function request(path, options = {}) {
     businessError.code = code;
     throw businessError;
   }
-  return normalizePagePayload(payload.data);
+  return payload.data;
 }
 
-function normalizePagePayload(data) {
-  if (data && typeof data === "object"
-      && Object.prototype.hasOwnProperty.call(data, "records")
-      && !Array.isArray(data.records)) {
+function normalizePagePayload(data, defaultPageSize = 20) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { records: [], total: 0, pageNo: 1, pageSize: defaultPageSize };
+  }
+  if (!Array.isArray(data.records)) {
     return { ...data, records: [] };
   }
   return data;
@@ -67,7 +68,7 @@ export async function fetchWalletAccounts(params) {
   }
   query.set("pageNo", String(params.pageNo || 1));
   query.set("pageSize", String(params.pageSize || 20));
-  return request(`/api/wallet/accounts?${query.toString()}`);
+  return normalizePagePayload(await request(`/api/wallet/accounts?${query.toString()}`));
 }
 
 export async function fetchWalletAccountDetail(walletAccountNo) {
@@ -100,7 +101,7 @@ export async function fetchWalletFlows(params) {
   }
   query.set("pageNo", String(params.pageNo || 1));
   query.set("pageSize", String(params.pageSize || 20));
-  return request(`/api/wallet/flows?${query.toString()}`);
+  return normalizePagePayload(await request(`/api/wallet/flows?${query.toString()}`));
 }
 
 export async function openWalletAccount(payload) {
@@ -126,7 +127,7 @@ export async function fetchWalletFlowExportTasks(params) {
   query.set("operatorRole", params.operatorRole || "FINANCE");
   query.set("pageNo", String(params.pageNo || 1));
   query.set("pageSize", String(params.pageSize || 10));
-  return request(`/api/wallet/flows/export-tasks?${query.toString()}`);
+  return normalizePagePayload(await request(`/api/wallet/flows/export-tasks?${query.toString()}`), 10);
 }
 
 export function buildWalletFlowExportDownloadUrl(exportTaskNo, operatorRole = "FINANCE") {

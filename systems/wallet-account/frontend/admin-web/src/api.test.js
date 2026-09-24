@@ -36,6 +36,43 @@ test("normalizes null wallet account page records", async () => {
   }
 });
 
+test("normalizes null wallet account page responses without changing detail semantics", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: null
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const {
+      fetchWalletAccounts,
+      fetchWalletAccountDetail,
+      fetchWalletFlows,
+      fetchWalletFlowExportTasks
+    } = await import(`./api.js?null-page=${Date.now()}`);
+    assert.deepEqual(await fetchWalletAccounts({}), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 20
+    });
+    assert.deepEqual(await fetchWalletFlows({}), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 20
+    });
+    assert.deepEqual(await fetchWalletFlowExportTasks({}), {
+      records: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 10
+    });
+    assert.equal(await fetchWalletAccountDetail("WAL-404"), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("normalizes nullable wallet detail collections and batch balances", async () => {
   const originalFetch = globalThis.fetch;
   let call = 0;
