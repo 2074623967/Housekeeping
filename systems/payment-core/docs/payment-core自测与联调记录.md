@@ -16926,3 +16926,9 @@ node tools/dev/backend-regression.mjs
 复核其他资金子系统管理台时发现，`wallet-account` 的账户、流水和导出任务分页入口在 `data: null` 时会把空值传给页面，页面读取 `.records`/`.total` 存在运行时风险。本轮仅对三个分页入口归一空页，详情与批量余额接口保持原始空响应语义。
 
 验证：wallet-account admin-web `6/6` 测试通过，生产构建和 `git diff --check` 通过；本轮不改变钱包账户状态、余额、导出任务或真实资金事实。
+
+## 712. 2026-09-24 管理端全量回归复核（含 wallet-account 修复）
+
+在 wallet-account 空分页响应修复后重新执行 `node tools/dev/frontend-admin-regression.mjs`：`12/12` 个管理端工程的 `npm test` 与 `npm run build` 均通过，当前批次管理端用例合计 `134/134`，失败 `0`。
+
+该结果更新管理端自动化基线，不替代真实浏览器人工验收、生产身份权限、API 域名或发布治理证据。
