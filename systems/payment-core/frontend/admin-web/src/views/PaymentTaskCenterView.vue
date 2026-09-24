@@ -122,7 +122,13 @@ async function loadOverview() {
         || taskRunsRequestId !== latestTaskRunsRequestId) {
       return false;
     }
-    overview.value = overviewResult;
+    overview.value = {
+      ...overview.value,
+      ...overviewResult,
+      queryTrends: Array.isArray(overviewResult.queryTrends) ? overviewResult.queryTrends : [],
+      focusAlerts: Array.isArray(overviewResult.focusAlerts) ? overviewResult.focusAlerts : [],
+      recentTaskRuns: Array.isArray(overviewResult.recentTaskRuns) ? overviewResult.recentTaskRuns : []
+    };
     taskRuns.value = taskRunResult.items;
     total.value = taskRunResult.total;
     pageNo.value = query.pageNo;
@@ -252,8 +258,20 @@ async function runTask(taskCode, taskName, candidateCount, actionRunner) {
   actionResultMessage.value = "";
   const query = { ...loadedTaskRunsQuery.value };
   try {
-    const result = await actionRunner({ operator: taskOperator.value.trim() });
-    overview.value = result.overview;
+    const result = (await actionRunner({ operator: taskOperator.value.trim() })) || {};
+    overview.value = {
+      ...overview.value,
+      ...(result.overview || {}),
+      queryTrends: Array.isArray(result.overview?.queryTrends)
+        ? result.overview.queryTrends
+        : [],
+      focusAlerts: Array.isArray(result.overview?.focusAlerts)
+        ? result.overview.focusAlerts
+        : [],
+      recentTaskRuns: Array.isArray(result.overview?.recentTaskRuns)
+        ? result.overview.recentTaskRuns
+        : []
+    };
     actionResultMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
     await loadTaskRuns(query, true);
   } catch (error) {

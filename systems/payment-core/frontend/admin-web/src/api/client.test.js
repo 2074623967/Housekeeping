@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import {
   dashboardApi,
   normalizePagePayload,
+  normalizeObjectPayload,
   orderApi,
+  paymentDayEndApi,
   paymentConfigApi,
   paymentIssueApi,
+  paymentMonitorApi,
+  paymentTaskCenterApi,
   refundApi
 } from "./client.js";
 
@@ -22,6 +26,23 @@ test("keeps non-paged payloads and existing arrays unchanged", () => {
 
   assert.equal(normalizePagePayload(summary), summary);
   assert.equal(normalizePagePayload({ items }).items, items);
+});
+
+test("normalizes nullable object overviews without changing detail null semantics", async (context) => {
+  assert.deepEqual(normalizeObjectPayload(null), {});
+  assert.deepEqual(normalizeObjectPayload([]), {});
+  const overview = { totalCount: 3 };
+  assert.equal(normalizeObjectPayload(overview), overview);
+
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ code: "0", data: null })
+  }));
+
+  assert.deepEqual(await paymentMonitorApi.getOverview(), {});
+  assert.deepEqual(await paymentTaskCenterApi.getOverview(), {});
+  assert.deepEqual(await paymentDayEndApi.getOverview(), {});
+  assert.equal(await dashboardApi.getSummary(), null);
 });
 
 test("normalizes a null list response to an empty page", async (context) => {

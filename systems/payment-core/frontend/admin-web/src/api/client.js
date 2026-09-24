@@ -32,6 +32,10 @@ export function normalizePagePayload(data) {
   return data;
 }
 
+export function normalizeObjectPayload(data) {
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+
 async function request(url, options = {}) {
   return requestInternal(url, options, false);
 }
@@ -51,6 +55,10 @@ function normalizeCollectionPayload(data) {
 
 function requestCollection(url, options = {}) {
   return request(url, options).then(normalizeCollectionPayload);
+}
+
+function requestObject(url, options = {}) {
+  return request(url, options).then(normalizeObjectPayload);
 }
 
 async function requestInternal(url, options = {}, normalizePage = false) {
@@ -112,7 +120,7 @@ export const paymentMetricsApi = {
 };
 
 export const paymentMonitorApi = {
-  getOverview: () => request("/api/payment-monitor/overview"),
+  getOverview: () => requestObject("/api/payment-monitor/overview"),
   buildExportUrl: () => "/api/payment-monitor/export"
 };
 
@@ -219,14 +227,14 @@ export const paymentIssueApi = {
 };
 
 export const paymentDayEndApi = {
-  getOverview: () => request("/api/payment-day-end/overview"),
+  getOverview: () => requestObject("/api/payment-day-end/overview"),
   getDetail: (batchNo) => request(`/api/payment-day-end/batches/${encodeURIComponent(batchNo)}`),
-  runBatch: (payload) => postJson("/api/payment-day-end/run", payload),
+  runBatch: (payload) => requestObject("/api/payment-day-end/run", buildJsonRequestOptions("POST", payload)),
   buildExportUrl: () => "/api/payment-day-end/export"
 };
 
 export const paymentTaskCenterApi = {
-  getOverview: () => request("/api/payment-task-center/overview"),
+  getOverview: () => requestObject("/api/payment-task-center/overview"),
   getTaskRunDetail: (taskLogNo) => request(`/api/payment-task-center/task-runs/${encodeURIComponent(taskLogNo)}`),
   getTaskRuns: ({
     taskCode = "",

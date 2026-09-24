@@ -53,7 +53,13 @@ async function loadOverview() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    overview.value = await paymentDayEndApi.getOverview();
+    const result = await paymentDayEndApi.getOverview();
+    overview.value = {
+      ...overview.value,
+      ...result,
+      alerts: Array.isArray(result.alerts) ? result.alerts : [],
+      recentBatches: Array.isArray(result.recentBatches) ? result.recentBatches : []
+    };
     hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
@@ -86,7 +92,13 @@ async function runBatch() {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    overview.value = await paymentDayEndApi.runBatch({ ...runForm.value, triggeredBy });
+    const result = await paymentDayEndApi.runBatch({ ...runForm.value, triggeredBy });
+    overview.value = {
+      ...overview.value,
+      ...result,
+      alerts: Array.isArray(result.alerts) ? result.alerts : [],
+      recentBatches: Array.isArray(result.recentBatches) ? result.recentBatches : []
+    };
     hasLoadedData.value = true;
     actionResultMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
   } catch (error) {

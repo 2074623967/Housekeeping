@@ -157,9 +157,17 @@ async function loadOverview() {
     if (requestId !== latestLoadRequestId) {
       return;
     }
-    overview.value = result;
-    selectedAlert.value = result.alerts?.[0] || null;
-    selectedChannel.value = result.channelMetrics?.[0] || null;
+    overview.value = {
+      ...overview.value,
+      ...result,
+      summary: { ...overview.value.summary, ...(result.summary || {}) },
+      trends: Array.isArray(result.trends) ? result.trends : [],
+      channelMetrics: Array.isArray(result.channelMetrics) ? result.channelMetrics : [],
+      alerts: Array.isArray(result.alerts) ? result.alerts : [],
+      metricDefinitions: Array.isArray(result.metricDefinitions) ? result.metricDefinitions : []
+    };
+    selectedAlert.value = overview.value.alerts[0] || null;
+    selectedChannel.value = overview.value.channelMetrics[0] || null;
     hasLoadedData.value = true;
   } catch (error) {
     if (requestId !== latestLoadRequestId) {
