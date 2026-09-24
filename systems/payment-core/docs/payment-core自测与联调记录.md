@@ -17016,3 +17016,9 @@ node tools/release/run_local_regression_report.mjs \
 ```
 
 本轮实际组合验证：runtime smoke 与 happy-path 均返回 `0`；报告中的 `runtime.happyPath.facts` 已记录 `PAYMENT_SUCCESS / CLEARING_GENERATED / SETTLEMENT_CREATED / ACCOUNTING_POSTED / REFUND_SUCCESS`，对账链 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。同一报告的统一门禁返回 `status=2`，主进程返回 `1`，并保留 `canPromoteTestToMaster=false`、`canCreateRelease=false`；这证明运行态证据接入没有绕过正式发布门禁。
+
+## 722. 2026-09-24 管理端畸形分页响应边界补强
+
+复核 `admin-web` 分页请求层时发现，列表接口虽已处理 `data: null` 和 `items: null`，但上游若误返回数组或非对象，页面仍可能收到没有 `.items` 的无效响应形状。本轮新增分页响应专用归一化：数组响应按单页列表保留并补齐分页元数据，非对象或缺少 `items` 的响应收敛为空页；详情、概览和集合接口继续保留各自原始语义。
+
+验证结果：payment-core admin-web `69/69` 测试通过，Vite 生产构建通过；payment-core 后端全量 Maven 回归 `1204/1204`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强本地管理端空态和异常响应的可用性，不改变支付状态机、渠道协议、资金事实或发布门禁结论。

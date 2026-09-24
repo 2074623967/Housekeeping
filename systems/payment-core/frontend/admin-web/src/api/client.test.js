@@ -59,6 +59,30 @@ test("normalizes a null list response to an empty page", async (context) => {
   });
 });
 
+test("normalizes malformed list responses without leaking an invalid page shape", async (context) => {
+  let call = 0;
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({
+      code: "0",
+      data: call++ === 0 ? [{ orderNo: "ORD-001" }] : "unexpected"
+    })
+  }));
+
+  assert.deepEqual(await orderApi.getList(), {
+    items: [{ orderNo: "ORD-001" }],
+    total: 1,
+    pageNo: 1,
+    pageSize: 20
+  });
+  assert.deepEqual(await orderApi.getList(), {
+    items: [],
+    total: 0,
+    pageNo: 1,
+    pageSize: 20
+  });
+});
+
 test("preserves null detail responses", async (context) => {
   context.mock.method(globalThis, "fetch", async () => ({
     ok: true,

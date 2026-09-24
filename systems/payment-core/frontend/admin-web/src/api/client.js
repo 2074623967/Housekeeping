@@ -32,6 +32,30 @@ export function normalizePagePayload(data) {
   return data;
 }
 
+function normalizePageResponse(data) {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      total: data.length,
+      pageNo: 1,
+      pageSize: 20
+    };
+  }
+  if (!data || typeof data !== "object") {
+    return {
+      items: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: 20
+    };
+  }
+  const normalized = normalizePagePayload(data);
+  if (!Object.prototype.hasOwnProperty.call(normalized, "items")) {
+    return { ...normalized, items: [] };
+  }
+  return normalized;
+}
+
 export function normalizeObjectPayload(data) {
   return data && typeof data === "object" && !Array.isArray(data) ? data : {};
 }
@@ -41,12 +65,7 @@ async function request(url, options = {}) {
 }
 
 async function requestPage(url, options = {}) {
-  return requestInternal(url, options, false).then((data) => normalizePagePayload(data || {
-    items: [],
-    total: 0,
-    pageNo: 1,
-    pageSize: 20
-  }));
+  return requestInternal(url, options, false).then(normalizePageResponse);
 }
 
 function normalizeCollectionPayload(data) {
