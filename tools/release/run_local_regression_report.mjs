@@ -165,7 +165,7 @@ function main() {
       audit = { parseError: "门禁脚本没有返回可解析 JSON" };
     }
     report.gate = { ...summarizeExecution(execution), summary: audit?.summary || null, blockers: audit?.blockers || [] };
-    failed ||= Boolean(audit?.parseError);
+    failed ||= execution.status !== 0 || Boolean(audit?.parseError);
   }
 
   fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");

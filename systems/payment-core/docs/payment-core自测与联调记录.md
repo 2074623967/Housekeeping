@@ -16989,3 +16989,11 @@ node tools/release/audit_payment_core_gate.mjs \
 结果：回归 `scenarioCount=10`、`incomplete=0`、`missingSample=0`、`missingEvidence=0`、`historicalPage=0`、`historicalRollback=0`，`regressionEvidenceReady=true`；`canPromoteTestToMaster=false`、`canCreateRelease=false` 继续保持。当前剩余阻断仅为 test 汇总的保守不放行决策，以及 release 候选说明正式化、正式签字审批、发布后现场核验和 master 稳定观察结束结论，不能用本地测试或 broker 演练替代。
 
 本轮代码/工具验证：payment-core 后端 `1204/1204`，admin-web `68/68` 且生产构建通过；DLQ 演练工具测试 `7/7` 通过，`git diff --check` 通过。
+
+## 720. 2026-09-24 本地回归报告门禁退出码修复
+
+执行 `node tools/release/run_local_regression_report.mjs --only payment-core --skip-backend --skip-frontend --skip-user-frontend` 时，发现报告文件虽然记录了门禁子命令 `status=2`，主进程却错误返回 `0`，会让 CI 把不可放行状态误判为报告成功。
+
+本轮修正报告脚本，将门禁子命令非零状态纳入最终退出码，并新增 `tools/release/run_local_regression_report.test.mjs` 固定该契约：当前 REG-08 证据完整但 test/release 仍不可放行时，报告返回 `1`，同时保留 `gate.status=2`、`canPromoteTestToMaster=false` 和 `canCreateRelease=false`。
+
+验证：报告退出码修复测试 `1/1` 通过；实际门禁-only 报告按预期返回 `1`。该修复只校正本地回归报告的失败传播，不改变门禁决策，也不把发布治理阻断解释成代码测试失败。
