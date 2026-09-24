@@ -52,11 +52,17 @@ export const getDifferences = (query = {}) => {
 };
 
 const normalizePage = (page, pageNo = 1, pageSize = 20) => ({
-  ...page,
-  items: Array.isArray(page?.items) ? page.items : [],
-  total: Number.isFinite(Number(page?.total)) ? Number(page.total) : 0,
-  pageNo: Number.isInteger(Number(page?.pageNo)) ? Number(page.pageNo) : Number(pageNo) || 1,
-  pageSize: Number.isInteger(Number(page?.pageSize)) ? Number(page.pageSize) : Number(pageSize) || 20
+  ...(Array.isArray(page) ? {} : page && typeof page === "object" ? page : {}),
+  items: Array.isArray(page) ? page : Array.isArray(page?.items) ? page.items : [],
+  total: Array.isArray(page)
+    ? page.length
+    : Number.isFinite(Number(page?.total)) ? Number(page.total) : 0,
+  pageNo: Number.isInteger(Number(page?.pageNo)) && Number(page.pageNo) > 0
+    ? Number(page.pageNo)
+    : Number.isInteger(Number(pageNo)) && Number(pageNo) > 0 ? Number(pageNo) : 1,
+  pageSize: Number.isInteger(Number(page?.pageSize)) && Number(page.pageSize) > 0
+    ? Number(page.pageSize)
+    : Number.isInteger(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 20
 });
 
 const normalizeBatchDetail = (detail) => {

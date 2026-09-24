@@ -16,6 +16,44 @@ test("normalizes null refund page items", async () => {
   }
 });
 
+test("normalizes array refund pages without leaking array indexes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: [{ refundOrderId: "REF-001" }]
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { getRefunds } = await import(`./api.js?array-page=${Date.now()}`);
+    assert.deepEqual(await getRefunds({ pageNo: 2, pageSize: 10 }), {
+      items: [{ refundOrderId: "REF-001" }],
+      total: 1,
+      pageNo: 2,
+      pageSize: 10
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("normalizes malformed refund pages to the requested empty page", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: "not-a-page"
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { getRefunds } = await import(`./api.js?malformed-page=${Date.now()}`);
+    assert.deepEqual(await getRefunds({ pageNo: 3, pageSize: 10 }), {
+      items: [],
+      total: 0,
+      pageNo: 3,
+      pageSize: 10
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("normalizes null refund outbox page items", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -85,6 +123,23 @@ test("reports non-JSON refund responses with a stable client error", async () =>
     await assert.rejects(
       getOverview(),
       (error) => error.code === "REFUND-CLIENT-INVALID-RESPONSE"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("reports null refund envelopes with a stable client error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("null", {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+  try {
+    const { getOverview } = await import(`./api.js?null-envelope=${Date.now()}`);
+    await assert.rejects(
+      getOverview(),
+      (error) => error.code === "REFUND-CLIENT-HTTP-200"
     );
   } finally {
     globalThis.fetch = originalFetch;

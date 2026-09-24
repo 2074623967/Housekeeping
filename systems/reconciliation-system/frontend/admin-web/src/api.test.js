@@ -161,3 +161,22 @@ test("normalizes empty reconciliation pages for the admin view", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("normalizes array reconciliation pages without leaking array indexes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: [{ batchNo: "REC-001" }]
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { getBatches } = await import(`./api.js?array-page=${Date.now()}`);
+    assert.deepEqual(await getBatches({ pageNo: 2, pageSize: 10 }), {
+      items: [{ batchNo: "REC-001" }],
+      total: 1,
+      pageNo: 2,
+      pageSize: 10
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
