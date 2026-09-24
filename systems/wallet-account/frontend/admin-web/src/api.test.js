@@ -36,6 +36,34 @@ test("normalizes null wallet account page records", async () => {
   }
 });
 
+test("sends wallet account type and external reference filters", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify({
+      code: "0",
+      data: { records: [], total: 0, pageNo: 1, pageSize: 20 }
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const { fetchWalletAccounts } = await import(`./api.js?filters=${Date.now()}`);
+    await fetchWalletAccounts({
+      accountType: "MAIN",
+      extRefNo: "USER-001",
+      pageNo: 2,
+      pageSize: 50
+    });
+    const query = new URL(requestedUrl, "http://wallet-account.test").searchParams;
+    assert.equal(query.get("accountType"), "MAIN");
+    assert.equal(query.get("extRefNo"), "USER-001");
+    assert.equal(query.get("pageNo"), "2");
+    assert.equal(query.get("pageSize"), "50");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("normalizes null wallet account page responses without changing detail semantics", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

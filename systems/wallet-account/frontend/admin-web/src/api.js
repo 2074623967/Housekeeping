@@ -63,8 +63,14 @@ export async function fetchWalletAccounts(params) {
   if (params.ownerType) {
     query.set("ownerType", params.ownerType);
   }
+  if (params.accountType) {
+    query.set("accountType", params.accountType);
+  }
   if (params.accountStatus) {
     query.set("accountStatus", params.accountStatus);
+  }
+  if (params.extRefNo) {
+    query.set("extRefNo", params.extRefNo);
   }
   query.set("pageNo", String(params.pageNo || 1));
   query.set("pageSize", String(params.pageSize || 20));
