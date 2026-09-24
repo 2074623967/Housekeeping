@@ -157,7 +157,7 @@ export const paymentIssueApi = {
       channelCode,
       paymentMethod
     });
-    return request(`/api/payment-issues/responsibility-summary?${params.toString()}`);
+    return requestCollection(`/api/payment-issues/responsibility-summary?${params.toString()}`);
   },
   getAlertLogs: ({
     alertNo = "",

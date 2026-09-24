@@ -5,6 +5,7 @@ import {
   normalizePagePayload,
   orderApi,
   paymentConfigApi,
+  paymentIssueApi,
   refundApi
 } from "./client.js";
 
@@ -55,6 +56,15 @@ test("normalizes nullable payment configuration collections", async (context) =>
   assert.deepEqual(await paymentConfigApi.getChannelReviews(), []);
   assert.deepEqual(await paymentConfigApi.submitChannelStatusReview({}), []);
   assert.deepEqual(await paymentConfigApi.getOverview(), {});
+});
+
+test("normalizes a nullable payment issue responsibility summary", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({ code: "0", data: null })
+  }));
+
+  assert.deepEqual(await paymentIssueApi.getResponsibilitySummary(), []);
 });
 
 test("normalizes nullable refund detail collections", async (context) => {
