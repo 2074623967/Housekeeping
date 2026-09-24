@@ -16949,4 +16949,4 @@ node tools/dev/backend-regression.mjs
 
 按 payment-core 控制器返回类型逐项核对管理端 API client，发现异常中心的 `responsibility-summary` 是唯一仍直接返回列表的非分页接口；页面会对结果执行 `.length`、`.reduce` 和循环渲染，成功响应 `data: null` 时会触发运行时错误。本轮将该接口切换到集合专用归一化，空响应稳定返回空数组。
 
-验证：新增 `data: null` 责任汇总回归用例；payment-core admin-web 测试与生产构建将在本轮全量管理端回归中复核。该改动只保证异常中心空态可渲染，不改变异常事实、责任组统计或告警处理状态。
+验证：新增 `data: null` 责任汇总回归用例；payment-core admin-web `67/67` 测试通过，生产构建通过；全量管理端 `12/12` 工程测试与生产构建通过。该改动只保证异常中心空态可渲染，不改变异常事实、责任组统计或告警处理状态。
