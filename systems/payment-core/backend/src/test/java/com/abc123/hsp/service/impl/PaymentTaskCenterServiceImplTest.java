@@ -2,6 +2,8 @@ package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -1618,6 +1620,22 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals("P2", result.getSeverityLevel());
         Assertions.assertEquals("纳入当班跟进", result.getEscalationStatus());
         verify(paymentTaskCenterMapper).findTaskRunByNo("TASK-LOG-001");
+    }
+
+    @Test
+    void shouldRejectRawOverlongTaskLogNoBeforeTrim() {
+        String overlongTaskLogNo = repeat("T", 64) + " ";
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).taskRunDetail(overlongTaskLogNo));
+
+        verify(paymentTaskCenterMapper, never()).findTaskRunByNo(any());
     }
 
     @Test

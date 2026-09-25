@@ -102,7 +102,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     @Override
     public PaymentDayEndBatchListItemDTO detail(String batchNo) {
-        if (!StringUtils.hasText(batchNo) || batchNo.trim().length() > 64
+        if (!StringUtils.hasText(batchNo) || batchNo.length() > 64
                 || batchNo.indexOf('\n') >= 0 || batchNo.indexOf('\r') >= 0) {
             throw new IllegalArgumentException("批次号非法");
         }

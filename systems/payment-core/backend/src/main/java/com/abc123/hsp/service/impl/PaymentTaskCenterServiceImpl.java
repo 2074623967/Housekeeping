@@ -402,7 +402,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     public PaymentTaskRunLogItemDTO taskRunDetail(String taskLogNo) {
-        if (taskLogNo == null || taskLogNo.trim().isEmpty() || taskLogNo.trim().length() > 64
+        if (taskLogNo == null || taskLogNo.trim().isEmpty() || taskLogNo.length() > 64
                 || taskLogNo.indexOf('\n') >= 0 || taskLogNo.indexOf('\r') >= 0) {
             throw new IllegalArgumentException("任务日志号非法");
         }

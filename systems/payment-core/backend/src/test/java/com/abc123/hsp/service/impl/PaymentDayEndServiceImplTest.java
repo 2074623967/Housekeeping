@@ -159,6 +159,15 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldRejectRawOverlongBatchNoBeforeTrim() {
+        String overlongBatchNo = repeat('B', 64) + " ";
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new PaymentDayEndServiceImpl(paymentDayEndMapper).detail(overlongBatchNo));
+        verify(paymentDayEndMapper, org.mockito.Mockito.never()).findBatchByNo(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldExportPaymentDayEndBatchesCsv() {
         PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
         batch.setBatchNo("DEB001");
@@ -204,6 +213,14 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("退款失败单量,退款失败金额"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("支付成功事实不一致"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("BLOCKED"));
+    }
+
+    private String repeat(char value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 
     @Test
