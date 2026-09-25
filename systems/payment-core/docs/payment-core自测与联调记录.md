@@ -17073,3 +17073,9 @@ node tools/release/run_local_regression_report.mjs \
 ## 730. 2026-09-25 其他运营端分页元数据边界补强
 
 gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收敛异常分页数字字段，并保持各模块摘要、详情和空列表的既有契约。新增异常分页回归后，四模块分别为 `7/7`、`7/7`、`7/7`、`8/8`；全量管理端 `12/12` 工程测试与生产构建通过，当前批次合计 `155/155` 用例通过。本轮只增强本地运营骨架的异常响应可用性，不改变真实渠道、风控策略、钱包账务、生产基础设施或发布门禁结论。
+
+## 731. 2026-09-25 payment-core 后端当前 HEAD 全量回归
+
+使用仓库内 Maven 3.9.16、JDK 8 和本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`。结果为 `1/1` 后端模块通过，Surefire 汇总 `1204/1204`，失败 `0`、错误 `0`、跳过 `0`。
+
+测试日志中的回滚和失败异常来自既有故障路径用例的主动注入，命令最终退出码为 `0`；该基线只证明本地 Java/H2 自动化回归，不替代真实渠道、RabbitMQ、生产 MySQL、资金到账或发布治理事实。
