@@ -113,44 +113,46 @@ async function loadOverview() {
   taskRunsErrorMessage.value = "";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
-  try {
-    const [overviewResult, taskRunResult] = await Promise.all([
-      paymentTaskCenterApi.getOverview(),
-      fetchTaskRuns(query)
-    ]);
-    if (overviewRequestId !== latestOverviewRequestId
-        || taskRunsRequestId !== latestTaskRunsRequestId) {
-      return false;
-    }
+  const [overviewResult, taskRunResult] = await Promise.allSettled([
+    paymentTaskCenterApi.getOverview(),
+    fetchTaskRuns(query)
+  ]);
+  if (overviewRequestId !== latestOverviewRequestId
+      || taskRunsRequestId !== latestTaskRunsRequestId) {
+    return false;
+  }
+  if (overviewResult.status === "fulfilled") {
     overview.value = {
       ...overview.value,
-      ...overviewResult,
-      queryTrends: Array.isArray(overviewResult.queryTrends) ? overviewResult.queryTrends : [],
-      focusAlerts: Array.isArray(overviewResult.focusAlerts) ? overviewResult.focusAlerts : [],
-      recentTaskRuns: Array.isArray(overviewResult.recentTaskRuns) ? overviewResult.recentTaskRuns : []
+      ...overviewResult.value,
+      queryTrends: Array.isArray(overviewResult.value.queryTrends)
+        ? overviewResult.value.queryTrends
+        : [],
+      focusAlerts: Array.isArray(overviewResult.value.focusAlerts)
+        ? overviewResult.value.focusAlerts
+        : [],
+      recentTaskRuns: Array.isArray(overviewResult.value.recentTaskRuns)
+        ? overviewResult.value.recentTaskRuns
+        : []
     };
-    taskRuns.value = taskRunResult.items;
-    total.value = taskRunResult.total;
+    hasLoadedData.value = true;
+  } else {
+    errorMessage.value = overviewResult.reason?.message || "支付任务中心总览加载失败";
+  }
+  if (taskRunResult.status === "fulfilled") {
+    taskRuns.value = taskRunResult.value.items;
+    total.value = taskRunResult.value.total;
     pageNo.value = query.pageNo;
     loadedTaskRunsPageNo.value = query.pageNo;
     loadedTaskRunsQuery.value = { ...query };
-    hasLoadedData.value = true;
-    return true;
-  } catch (error) {
-    if (overviewRequestId !== latestOverviewRequestId
-        || taskRunsRequestId !== latestTaskRunsRequestId) {
-      return false;
-    }
-    errorMessage.value = error.message;
+  } else {
+    taskRunsErrorMessage.value = taskRunResult.reason?.message || "任务执行日志加载失败";
     if (hasLoadedData.value) {
       pageNo.value = loadedTaskRunsPageNo.value;
     }
-    return false;
-  } finally {
-    if (overviewRequestId === latestOverviewRequestId) {
-      isLoading.value = false;
-    }
   }
+  isLoading.value = false;
+  return overviewResult.status === "fulfilled" && taskRunResult.status === "fulfilled";
 }
 
 function fetchTaskRuns(query = buildTaskRunsQuery()) {
