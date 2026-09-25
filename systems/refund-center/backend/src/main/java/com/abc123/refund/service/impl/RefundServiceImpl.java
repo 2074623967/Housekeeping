@@ -97,7 +97,7 @@ public class RefundServiceImpl implements RefundService {
     public PageResultDTO<RefundListItemDTO> list(RefundQueryDTO query) {
         query = normalize(query);
         return new PageResultDTO<>(
-                refundDao.findList(query),
+                safeList(refundDao.findList(query)),
                 refundDao.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -192,7 +192,7 @@ public class RefundServiceImpl implements RefundService {
     public PageResultDTO<RefundOutboxItemDTO> listOutbox(RefundOutboxQueryDTO query) {
         query = normalize(query);
         return new PageResultDTO<>(
-                refundDao.findOutboxList(query),
+                safeList(refundDao.findOutboxList(query)),
                 refundDao.countOutbox(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -436,7 +436,10 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return values.stream().filter(value -> value != null).collect(java.util.stream.Collectors.toList());
     }
 
     private String required(String value, String message) {

@@ -23,6 +23,7 @@ import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class RefundServiceImplTest {
 
     @Test
     void shouldNormalizeNullListsAtRefundBoundaries() {
-        when(refundDao.findList(any(RefundQueryDTO.class))).thenReturn(null);
+        when(refundDao.findList(any(RefundQueryDTO.class))).thenReturn(Arrays.asList((RefundListItemDTO) null));
         when(refundDao.count(any(RefundQueryDTO.class))).thenReturn(0L);
         PageResultDTO<RefundListItemDTO> page = service.list(new RefundQueryDTO());
 
@@ -72,8 +73,8 @@ class RefundServiceImplTest {
         RefundListItemDTO item = new RefundListItemDTO();
         item.setRefundOrderId("REF-EMPTY");
         when(refundDao.findByRefundOrderId("REF-EMPTY")).thenReturn(item);
-        when(refundDao.findLogs("REF-EMPTY")).thenReturn(null);
-        when(refundDao.findOutboxList(any())).thenReturn(null);
+        when(refundDao.findLogs("REF-EMPTY")).thenReturn(Arrays.asList((com.abc123.refund.dto.RefundOperationLogDTO) null));
+        when(refundDao.findOutboxList(any())).thenReturn(Arrays.asList((RefundOutboxItemDTO) null));
 
         byte[] snapshot = service.exportDetailSnapshot("REF-EMPTY");
         assertTrue(new String(snapshot, java.nio.charset.StandardCharsets.UTF_8).contains("操作日志"));
