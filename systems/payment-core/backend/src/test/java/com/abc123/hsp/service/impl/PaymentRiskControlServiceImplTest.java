@@ -72,7 +72,7 @@ class PaymentRiskControlServiceImplTest {
                 () -> service.evaluateSubmitRisk(invalidOptional)));
 
         PaymentRiskDecisionRequestDTO oversized = validRequest();
-        oversized.setMerchantNo(repeat("M", 129));
+        oversized.setMerchantNo(repeat("M", 128) + " ");
         assertInvalidRiskRequest(assertThrows(
                 BusinessException.class,
                 () -> service.evaluateSubmitRisk(oversized)));
@@ -340,7 +340,7 @@ class PaymentRiskControlServiceImplTest {
         assertInvalidRiskResult(controlException);
 
         PaymentRiskDecisionResultDTO oversized = decision("PASS", "success");
-        oversized.setRiskTag(repeat("A", 129));
+        oversized.setRiskTag(repeat("A", 128) + " ");
         stubResponse(restTemplate, "0", oversized);
         BusinessException oversizedException = assertThrows(
                 BusinessException.class,

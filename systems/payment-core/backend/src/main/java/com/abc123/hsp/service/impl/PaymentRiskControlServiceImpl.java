@@ -136,10 +136,10 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw invalidRequest();
         }
+        String normalized = value.trim();
         return normalized;
     }
 
@@ -239,10 +239,10 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw invalidResult();
         }
+        String normalized = value.trim();
         return normalized;
     }
 

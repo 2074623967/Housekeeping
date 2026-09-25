@@ -114,7 +114,7 @@ class PaymentOpsConfigServiceImplTest {
         assertNull(service(restTemplate).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP"));
 
         PaymentOpsConfigSnapshotDTO oversized = snapshot();
-        oversized.getEnabledSystemControls().get(0).setControlName(repeat("A", 129));
+        oversized.getEnabledSystemControls().get(0).setControlName(repeat("A", 128) + " ");
         stubResponse(restTemplate, "0", oversized);
         assertNull(service(restTemplate).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP"));
 

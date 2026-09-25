@@ -185,11 +185,14 @@ public class PaymentOpsConfigServiceImpl implements PaymentOpsConfigService {
                 return null;
             }
         }
+        if (value.length() > maxLength) {
+            return null;
+        }
         if (!StringUtils.hasText(value)) {
             return null;
         }
         String normalized = value.trim();
-        return normalized.length() <= maxLength ? normalized : null;
+        return normalized;
     }
 
     /**
