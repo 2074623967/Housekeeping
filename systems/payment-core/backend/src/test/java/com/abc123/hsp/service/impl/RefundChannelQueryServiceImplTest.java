@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -107,6 +108,22 @@ class RefundChannelQueryServiceImplTest {
         assertEquals(0, exception.getStackTrace().length);
         exception.addSuppressed(new IllegalStateException(sensitiveDetail));
         assertEquals(0, exception.getSuppressed().length);
+    }
+
+    @Test
+    void shouldSanitizeAdapterSelectionFailure() {
+        RefundCallbackSourceDTO refund = refund("wx_h5");
+        RefundChannelQueryAdapter adapter = mock(RefundChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenThrow(new IllegalStateException("refund-query-secret"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new RefundChannelQueryServiceImpl(Collections.singletonList(adapter)).query(refund));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("refund channel query adapter selection failed; query before retrying", exception.getMessage());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
     }
 
     private RefundCallbackSourceDTO refund(String channel) {

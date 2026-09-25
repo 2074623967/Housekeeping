@@ -258,6 +258,21 @@ class PaymentChannelSubmitServiceImplTest {
         verifyNoInteractions(mapper);
     }
 
+    @Test
+    void shouldSanitizeAdapterSelectionFailure() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        when(adapter.supports("wx_h5")).thenThrow(new IllegalStateException("submit-secret"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(adapter, Mockito.mock(PaymentConfigMapper.class)).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertEquals("payment channel submit adapter selection failed; query before retrying", exception.getMessage());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+    }
+
     private PaymentChannelSubmitServiceImpl buildService() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         Mockito.when(mapper.findActiveReturnCodeMapping("wx_h5", "USERPAYING"))

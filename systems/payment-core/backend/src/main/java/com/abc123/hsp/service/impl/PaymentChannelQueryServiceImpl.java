@@ -34,19 +34,28 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
             throw invalidRequest();
         }
         for (PaymentChannelQueryAdapter adapter : adapters) {
-            if (adapter.supports(paymentDetail.getChannel())) {
-                try {
-                    PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
-                            adapter.query(paymentDetail));
-                    return PaymentChannelQueryResultValidator.validateAndNormalize(
-                            returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result));
-                } catch (BusinessException exception) {
-                    throw exception;
-                } catch (RuntimeException exception) {
-                    throw BusinessException.sanitized(
-                            ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
-                            "payment channel query failed unexpectedly; query before retrying");
-                }
+            boolean supported;
+            try {
+                supported = adapter.supports(paymentDetail.getChannel());
+            } catch (RuntimeException exception) {
+                throw BusinessException.sanitized(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "payment channel query adapter selection failed; query before retrying");
+            }
+            if (!supported) {
+                continue;
+            }
+            try {
+                PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
+                        adapter.query(paymentDetail));
+                return PaymentChannelQueryResultValidator.validateAndNormalize(
+                        returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result));
+            } catch (BusinessException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                throw BusinessException.sanitized(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "payment channel query failed unexpectedly; query before retrying");
             }
         }
         throw new BusinessException(

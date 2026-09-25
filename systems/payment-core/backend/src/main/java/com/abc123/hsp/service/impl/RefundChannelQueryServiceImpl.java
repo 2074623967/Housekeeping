@@ -31,16 +31,25 @@ public class RefundChannelQueryServiceImpl implements RefundChannelQueryService 
             throw invalidRequest();
         }
         for (RefundChannelQueryAdapter adapter : adapters) {
-            if (adapter.supports(refund.getChannelCode())) {
-                try {
-                    return RefundChannelQueryResultValidator.validateAndNormalize(adapter.query(refund));
-                } catch (BusinessException exception) {
-                    throw exception;
-                } catch (RuntimeException exception) {
-                    throw BusinessException.sanitized(
-                            ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
-                            "refund channel query failed unexpectedly; query before retrying");
-                }
+            boolean supported;
+            try {
+                supported = adapter.supports(refund.getChannelCode());
+            } catch (RuntimeException exception) {
+                throw BusinessException.sanitized(
+                        ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                        "refund channel query adapter selection failed; query before retrying");
+            }
+            if (!supported) {
+                continue;
+            }
+            try {
+                return RefundChannelQueryResultValidator.validateAndNormalize(adapter.query(refund));
+            } catch (BusinessException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                throw BusinessException.sanitized(
+                        ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                        "refund channel query failed unexpectedly; query before retrying");
             }
         }
         throw new BusinessException(

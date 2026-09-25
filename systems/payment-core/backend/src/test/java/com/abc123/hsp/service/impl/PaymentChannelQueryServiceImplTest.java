@@ -196,6 +196,25 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldSanitizeAdapterSelectionFailure() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenThrow(new IllegalStateException("query-secret"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Collections.singletonList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(
+                                Mockito.mock(PaymentConfigMapper.class), new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("payment channel query adapter selection failed; query before retrying", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+    }
+
+    @Test
     void shouldNormalizeSupportedRawTradeStatusBeforeStandardization() {
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
         PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
