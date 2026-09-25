@@ -1425,6 +1425,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (value == null) {
             return null;
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException("回执查询适配器返回字段超过容量限制");
+        }
         String normalized = value.trim();
         if (!StringUtils.hasText(normalized)) {
             return null;

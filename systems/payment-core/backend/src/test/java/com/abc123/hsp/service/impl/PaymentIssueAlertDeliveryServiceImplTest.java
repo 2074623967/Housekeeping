@@ -1786,6 +1786,36 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldRejectReceiptQueryMessageWhenRawValueExceedsCapacityBeforeTrim() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(30, 100))
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
+                eq("PIA-IM-001"), eq("PIA-OUTBOX-001"), eq("ISSUE-001"),
+                eq(1), eq("QUERY_ERROR"), eq(60), eq(10)))
+                .thenReturn(1);
+        when(receiptQueryAdapter.supports("IM")).thenReturn(true);
+        when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
+                buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", repeated("M", 255) + " ", ""));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter)
+        ).reconcileDeliveryReceipts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 1,
+                "QUERY_ERROR", 60, 10);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
     void shouldRejectReceiptQueryResultsThatDoNotConfirmDelivery() {
         PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
         when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(30, 100))
