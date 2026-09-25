@@ -152,6 +152,9 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
                 () -> adapter(restTemplate).submit(request()));
 
         assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        assertEquals(0, exception.getSuppressed().length);
     }
 
     @Test

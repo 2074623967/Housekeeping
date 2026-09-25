@@ -91,7 +91,7 @@ final class PaymentChannelQueryResultValidator {
     }
 
     private static BusinessException invalidResult() {
-        return new BusinessException(
+        return BusinessException.sanitized(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                 "payment channel query returned invalid result");
     }

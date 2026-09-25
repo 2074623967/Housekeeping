@@ -239,7 +239,7 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
     }
 
     private BusinessException submitFailed(String message) {
-        return new BusinessException(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, message);
+        return BusinessException.sanitized(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, message);
     }
 
     private BusinessException invalidRequest() {

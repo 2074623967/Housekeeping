@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -139,6 +140,9 @@ class GatewayAccessPaymentChannelQueryAdapterTest {
                         .query(paymentDetail()));
 
         assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        assertEquals(0, exception.getSuppressed().length);
     }
 
     @Test

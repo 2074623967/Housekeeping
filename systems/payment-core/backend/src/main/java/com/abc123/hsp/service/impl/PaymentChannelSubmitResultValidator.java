@@ -109,7 +109,7 @@ final class PaymentChannelSubmitResultValidator {
     }
 
     private static BusinessException invalidResult() {
-        return new BusinessException(
+        return BusinessException.sanitized(
                 ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
                 "payment channel submit result is invalid");
     }

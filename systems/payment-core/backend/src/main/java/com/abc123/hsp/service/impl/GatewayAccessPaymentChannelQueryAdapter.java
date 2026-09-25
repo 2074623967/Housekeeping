@@ -93,13 +93,13 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
                     queryUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers), GatewayQueryResponse.class);
             GatewayQueryResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode())) {
-                throw new BusinessException(
+                throw BusinessException.sanitized(
                         ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                         "gateway-access rejected payment query");
             }
             PaymentChannelQueryResultDTO result = response.getData();
             if (result == null) {
-                throw new BusinessException(
+                throw BusinessException.sanitized(
                         ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                         "gateway-access returned no definitive trade status");
             }
@@ -110,7 +110,7 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new BusinessException(
+            throw BusinessException.sanitized(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                     "gateway-access query failed, please retry later");
         }
@@ -156,7 +156,7 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
     }
 
     private BusinessException invalidRequest() {
-        return new BusinessException(
+        return BusinessException.sanitized(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                 "gateway-access payment query request is invalid");
     }
