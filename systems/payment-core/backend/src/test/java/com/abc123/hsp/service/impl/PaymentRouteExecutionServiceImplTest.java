@@ -63,10 +63,13 @@ class PaymentRouteExecutionServiceImplTest {
         BusinessException control = assertThrows(BusinessException.class, () -> service.detail("ROUTE-001\n"));
         BusinessException oversized = assertThrows(BusinessException.class,
                 () -> service.detail(repeat("R", 65)));
+        BusinessException oversizedAfterTrim = assertThrows(BusinessException.class,
+                () -> service.detail(repeat("R", 64) + " "));
 
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversizedAfterTrim.getCode());
         verifyNoInteractions(paymentRouteExecutionMapper);
     }
 

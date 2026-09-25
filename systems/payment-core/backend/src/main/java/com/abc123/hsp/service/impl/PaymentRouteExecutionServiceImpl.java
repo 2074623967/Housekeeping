@@ -225,6 +225,9 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
@@ -240,6 +243,9 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
             if (Character.isISOControl(routeNo.charAt(index))) {
                 throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "路由记录号不能包含控制字符");
             }
+        }
+        if (routeNo.length() > ROUTE_NO_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "路由记录号不能超过64个字符");
         }
         String normalized = routeNo.trim();
         if (normalized.length() > ROUTE_NO_MAX_LENGTH) {

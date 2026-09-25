@@ -327,6 +327,9 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 throw new IllegalArgumentException("日终处理触发人不能包含控制字符");
             }
         }
+        if (triggeredBy.length() > TRIGGERED_BY_MAX_LENGTH) {
+            throw new IllegalArgumentException("日终处理触发人不能超过64个字符");
+        }
         String normalized = triggeredBy.trim();
         if (normalized.length() > TRIGGERED_BY_MAX_LENGTH) {
             throw new IllegalArgumentException("日终处理触发人不能超过64个字符");
