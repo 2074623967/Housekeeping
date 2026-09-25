@@ -13,9 +13,12 @@ function normalizeListPayload(data) {
       : Array.isArray(data?.items)
         ? data.items
         : [];
-  const total = Number.isFinite(data?.total) ? data.total : records.length;
-  const pageNo = Number.isInteger(data?.pageNo) && data.pageNo > 0 ? data.pageNo : 1;
-  const pageSize = Number.isInteger(data?.pageSize) && data.pageSize >= 0 ? data.pageSize : records.length;
+  const totalValue = Number(data?.total);
+  const pageNoValue = Number(data?.pageNo);
+  const pageSizeValue = Number(data?.pageSize);
+  const total = Number.isFinite(totalValue) && totalValue >= 0 ? totalValue : records.length;
+  const pageNo = Number.isInteger(pageNoValue) && pageNoValue > 0 ? pageNoValue : 1;
+  const pageSize = Number.isInteger(pageSizeValue) && pageSizeValue >= 0 ? pageSizeValue : records.length;
   return { records, total, pageNo, pageSize };
 }
 

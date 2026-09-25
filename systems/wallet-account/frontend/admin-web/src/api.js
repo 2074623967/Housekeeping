@@ -42,10 +42,17 @@ function normalizePagePayload(data, defaultPageSize = 20) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { records: [], total: 0, pageNo: 1, pageSize: defaultPageSize };
   }
-  if (!Array.isArray(data.records)) {
-    return { ...data, records: [] };
-  }
-  return data;
+  const records = Array.isArray(data.records) ? data.records : [];
+  const totalValue = Number(data.total);
+  const pageNoValue = Number(data.pageNo);
+  const pageSizeValue = Number(data.pageSize);
+  return {
+    ...data,
+    records,
+    total: Number.isInteger(totalValue) && totalValue >= 0 ? totalValue : records.length,
+    pageNo: Number.isInteger(pageNoValue) && pageNoValue > 0 ? pageNoValue : 1,
+    pageSize: Number.isInteger(pageSizeValue) && pageSizeValue > 0 ? pageSizeValue : defaultPageSize
+  };
 }
 
 async function post(path, body) {

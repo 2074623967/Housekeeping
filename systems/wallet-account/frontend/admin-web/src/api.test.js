@@ -36,6 +36,22 @@ test("normalizes null wallet account page records", async () => {
   }
 });
 
+test("normalizes malformed wallet account pagination metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "0",
+    data: { records: [{ walletAccountNo: "WAL-002" }], total: "invalid", pageNo: 0, pageSize: -1 }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const { fetchWalletAccounts } = await import(`./api.js?malformed-page=${Date.now()}`);
+    assert.deepEqual(await fetchWalletAccounts({}), {
+      records: [{ walletAccountNo: "WAL-002" }], total: 1, pageNo: 1, pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("sends wallet account type and external reference filters", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl;
