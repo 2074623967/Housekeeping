@@ -747,6 +747,28 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInRefundDetailCollections() {
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-NULL-ROW");
+        RefundOperationLogItemDTO logItem = new RefundOperationLogItemDTO();
+        logItem.setLogNo("ROL-NULL-ROW");
+        RefundAttemptItemDTO attemptItem = new RefundAttemptItemDTO();
+        attemptItem.setRefundAttemptNo("RFA-NULL-ROW");
+        when(refundMapper.findDetailByRefundOrderId("REF-NULL-ROW")).thenReturn(detail);
+        when(refundMapper.findOperationLogs("REF-NULL-ROW"))
+                .thenReturn(Arrays.asList(null, logItem));
+        when(refundMapper.findAttempts("REF-NULL-ROW"))
+                .thenReturn(Arrays.asList(null, attemptItem));
+
+        RefundDetailDTO result = createService().detail("REF-NULL-ROW");
+
+        assertEquals(1, result.getOperationLogs().size());
+        assertEquals("ROL-NULL-ROW", result.getOperationLogs().get(0).getLogNo());
+        assertEquals(1, result.getAttempts().size());
+        assertEquals("RFA-NULL-ROW", result.getAttempts().get(0).getRefundAttemptNo());
+    }
+
+    @Test
     void shouldFinalizeTrustedSuccessfulRefundCallback() {
         RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
         RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
