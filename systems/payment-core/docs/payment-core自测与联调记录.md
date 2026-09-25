@@ -17339,3 +17339,7 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 ## 768. 2026-09-25 当前 HEAD 本地全栈联调复核
 
 执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟与跨系统 happy-path 通过；本地链路实际生成支付、清分、结算、账务、退款和对账事实，对账链为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只属于受控 H2/demo/HTTP 本地骨架，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收或正式发布治理证据。
+
+## 769. 2026-09-25 README 与当前交付口径校正
+
+README 的旧批次回归数字已更新为当前可验证基线：payment-core 后端 `1232/1232`，管理端 `12/12`，用户端 `5/5`；同时补充当前受控全栈 `12` 个后端、`15` 个前端及代理 `READY`、HTTP 冒烟和跨系统 happy-path 证据。历史章节保持原样，仅在交付差距清单中明确 8.75 的退款查单代理描述属于历史批次，当前实现以 8.76 和现行代码为准。
