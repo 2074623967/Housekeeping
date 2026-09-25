@@ -15,6 +15,7 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -38,6 +39,35 @@ class PaymentChannelQueryServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
         assertEquals("payment channel query request is invalid", exception.getMessage());
         verifyNoInteractions(mapper, adapter);
+    }
+
+    @Test
+    void shouldTreatNullQueryAdapterCollectionAsMissingAdapter() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        null,
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_ADAPTER_MISSING, exception.getCode());
+    }
+
+    @Test
+    void shouldIgnoreNullQueryAdapterRows() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        PaymentChannelQueryResultDTO result = queryResult();
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.query(any())).thenReturn(result);
+        when(standardizer.standardizeQuery("wx_h5", result)).thenReturn(result);
+
+        PaymentChannelQueryResultDTO actual = new PaymentChannelQueryServiceImpl(
+                Arrays.asList(null, adapter), standardizer).query(paymentDetail());
+
+        assertEquals(result, actual);
     }
 
     @Test

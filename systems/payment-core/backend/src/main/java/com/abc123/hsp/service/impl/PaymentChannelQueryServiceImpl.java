@@ -6,7 +6,9 @@ import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,7 +22,9 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
 
     public PaymentChannelQueryServiceImpl(List<PaymentChannelQueryAdapter> adapters,
                                           PaymentChannelReturnCodeStandardizer returnCodeStandardizer) {
-        this.adapters = adapters;
+        this.adapters = adapters == null
+                ? Collections.emptyList()
+                : adapters.stream().filter(adapter -> adapter != null).collect(Collectors.toList());
         this.returnCodeStandardizer = returnCodeStandardizer;
     }
 

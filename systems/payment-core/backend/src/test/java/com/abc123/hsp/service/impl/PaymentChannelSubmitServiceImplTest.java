@@ -59,6 +59,35 @@ class PaymentChannelSubmitServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullSubmitAdapterCollectionAsMissingAdapter() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelSubmitServiceImpl(
+                        null,
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING, exception.getCode());
+    }
+
+    @Test
+    void shouldIgnoreNullSubmitAdapterRows() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelSubmitResultDTO result = validResult();
+        when(adapter.submit(any())).thenReturn(result);
+        when(standardizer.standardizeSubmit("wx_h5", result)).thenReturn(result);
+
+        PaymentChannelSubmitResultDTO actual = new PaymentChannelSubmitServiceImpl(
+                Arrays.asList(null, adapter), standardizer).submit(request());
+
+        assertEquals(result, actual);
+    }
+
+    @Test
     void shouldSelectWechatSubmitAdapterByChannelCode() {
         PaymentChannelSubmitRequestDTO request = new PaymentChannelSubmitRequestDTO();
         request.setResolvedChannelCode("wx_h5");

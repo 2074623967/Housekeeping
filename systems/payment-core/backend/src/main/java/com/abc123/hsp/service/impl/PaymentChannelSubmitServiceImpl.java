@@ -6,7 +6,9 @@ import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,7 +22,9 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
 
     public PaymentChannelSubmitServiceImpl(List<PaymentChannelSubmitAdapter> adapters,
                                            PaymentChannelReturnCodeStandardizer returnCodeStandardizer) {
-        this.adapters = adapters;
+        this.adapters = adapters == null
+                ? Collections.emptyList()
+                : adapters.stream().filter(adapter -> adapter != null).collect(Collectors.toList());
         this.returnCodeStandardizer = returnCodeStandardizer;
     }
 
