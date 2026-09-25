@@ -179,6 +179,37 @@ class PaymentOrderSubmitServiceImplTest {
         assertEquals("warn", captor.getValue().getResultStatusType());
     }
 
+    @Test
+    void shouldRejectControlCharacterBeforeTrimmingRequestFields() {
+        PaymentOrderSubmitRequestDTO request = request();
+        request.setOrderNo("ORD-1001\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectControlCharacterBeforeTrimmingUpstreamFields() {
+        configureEnabledGovernance();
+        PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001\n");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
     private PaymentOrderSubmitServiceImpl service() {
         return new PaymentOrderSubmitServiceImpl(accessService, restTemplate);
     }

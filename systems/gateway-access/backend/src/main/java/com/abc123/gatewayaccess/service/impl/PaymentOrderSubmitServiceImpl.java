@@ -164,14 +164,14 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
         if (!StringUtils.hasText(value)) {
             throw invalid(fieldName + " is required");
         }
-        return validateText(value.trim(), fieldName, maxLength, true);
+        return validateText(value, fieldName, maxLength, true);
     }
 
     private String optional(String value, String fieldName, int maxLength) {
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        return validateText(value.trim(), fieldName, maxLength, true);
+        return validateText(value, fieldName, maxLength, true);
     }
 
     private String requiredResponse(String value, String fieldName, int maxLength) {
@@ -179,7 +179,7 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment submit upstream omitted " + fieldName);
         }
-        return validateText(value.trim(), fieldName, maxLength, false);
+        return validateText(value, fieldName, maxLength, false);
     }
 
     private String validateText(String value, String fieldName, int maxLength, boolean requestField) {
@@ -190,7 +190,7 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment submit upstream returned invalid " + fieldName);
         }
-        return value;
+        return value.trim();
     }
 
     private boolean containsIsoControl(String value) {
