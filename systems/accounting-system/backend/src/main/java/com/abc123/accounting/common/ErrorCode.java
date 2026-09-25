@@ -11,4 +11,5 @@ public final class ErrorCode {
     public static final String VALIDATION_ERROR = "ACCOUNTING-400";
     public static final String SYSTEM_ERROR = "ACCOUNTING-500";
     public static final String ACCOUNT_NOT_FOUND = "ACCOUNTING-1001";
+    public static final String BALANCE_UPDATE_CONFLICT = "ACCOUNTING-1002";
 }

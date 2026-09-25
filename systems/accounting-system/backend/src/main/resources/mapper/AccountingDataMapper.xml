@@ -135,6 +135,11 @@
             in_transit_amount = #{inTransitAmount},
             updated_at = #{updatedAt}
         WHERE account_no = #{accountNo}
+          AND available_amount = #{expectedAvailableAmount}
+          AND frozen_amount = #{expectedFrozenAmount}
+          AND in_transit_amount = #{expectedInTransitAmount}
+          AND #{availableAmount} >= 0
+          AND #{frozenAmount} >= 0
     </update>
 
     <select id="findLedgers" resultType="com.abc123.accounting.entity.AccountLedgerEntity">

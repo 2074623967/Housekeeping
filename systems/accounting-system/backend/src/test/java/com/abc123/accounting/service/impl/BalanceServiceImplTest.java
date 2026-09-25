@@ -46,4 +46,22 @@ class BalanceServiceImplTest {
         assertEquals(ErrorCode.ACCOUNT_NOT_FOUND, exception.getCode());
         assertEquals("账户不存在", exception.getMessage());
     }
+
+    @Test
+    void shouldRejectFreezeWhenAvailableBalanceIsInsufficient() {
+        BalanceOperationRequestDTO request = new BalanceOperationRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setBizNo("ORD-INSUFFICIENT");
+        request.setAmount(new BigDecimal("101.00"));
+        request.setOperatorName("运营小王");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> balanceService.freeze(request));
+
+        assertEquals(ErrorCode.BALANCE_UPDATE_CONFLICT, exception.getCode());
+        assertEquals("账户余额已发生变化或余额不足，请重试", exception.getMessage());
+        assertEquals("¥100.00", balanceService.detail("ACT10001").getAvailableAmount());
+        assertEquals("¥68.00", balanceService.detail("ACT10001").getFrozenAmount());
+    }
 }

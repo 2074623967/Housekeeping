@@ -7,6 +7,8 @@ import com.abc123.accounting.entity.AccountEventEntity;
 import com.abc123.accounting.entity.AccountFreezeEntity;
 import com.abc123.accounting.entity.AccountLedgerEntity;
 import com.abc123.accounting.entity.AccountSubjectEntity;
+import com.abc123.accounting.common.BusinessException;
+import com.abc123.accounting.common.ErrorCode;
 import com.abc123.accounting.mapper.AccountingDataMapper;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
@@ -135,7 +137,7 @@ public class AccountingMemoryStore {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
-        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
+        updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
         AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "贷方", amount, before, after, operatorName);
         accountingDataMapper.insertLedger(entity);
@@ -147,7 +149,7 @@ public class AccountingMemoryStore {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.subtract(amount);
-        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
+        updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
         AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "借方", amount, before, after, operatorName);
         accountingDataMapper.insertLedger(entity);
@@ -189,7 +191,7 @@ public class AccountingMemoryStore {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.subtract(amount);
-        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount().add(amount), balance.getInTransitAmount(), now());
+        updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount().add(amount), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
 
         AccountLedgerEntity entity = buildLedger(accountNo, "BALANCE_FREEZE", bizNo, "借方", amount, before, after, operatorName);
@@ -225,7 +227,7 @@ public class AccountingMemoryStore {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
-        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount().subtract(amount), balance.getInTransitAmount(), now());
+        updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount().subtract(amount), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
 
         AccountLedgerEntity entity = buildLedger(accountNo, "BALANCE_UNFREEZE", bizNo, "贷方", amount, before, after, operatorName);
@@ -267,7 +269,7 @@ public class AccountingMemoryStore {
         BigDecimal amount = entity.getAdjustAmount();
         BigDecimal after = "贷方".equals(entity.getAdjustDirection()) ? before.add(amount) : before.subtract(amount);
         AccountBalanceEntity balance = findBalance(entity.getAccountNo());
-        accountingDataMapper.updateBalance(entity.getAccountNo(), after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
+        updateBalanceOrThrow(entity.getAccountNo(), balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(entity.getAccountNo());
         accountingDataMapper.insertLedger(buildLedger(
                 entity.getAccountNo(),
@@ -348,6 +350,22 @@ public class AccountingMemoryStore {
 
     private void updateAccountChangeTime(String accountNo) {
         accountingDataMapper.updateAccountChangeTime(accountNo, now());
+    }
+
+    private void updateBalanceOrThrow(String accountNo, AccountBalanceEntity before,
+            BigDecimal availableAmount, BigDecimal frozenAmount, BigDecimal inTransitAmount) {
+        int updated = accountingDataMapper.updateBalance(
+                accountNo,
+                before.getAvailableAmount(),
+                before.getFrozenAmount(),
+                before.getInTransitAmount(),
+                availableAmount,
+                frozenAmount,
+                inTransitAmount,
+                now());
+        if (updated != 1) {
+            throw new BusinessException(ErrorCode.BALANCE_UPDATE_CONFLICT, "账户余额已发生变化或余额不足，请重试");
+        }
     }
 
     private String nextNo(String prefix, AtomicLong sequence) {

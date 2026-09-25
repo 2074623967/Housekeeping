@@ -70,6 +70,9 @@ public interface AccountingDataMapper {
      * 更新余额快照。
      */
     int updateBalance(@Param("accountNo") String accountNo,
+                      @Param("expectedAvailableAmount") BigDecimal expectedAvailableAmount,
+                      @Param("expectedFrozenAmount") BigDecimal expectedFrozenAmount,
+                      @Param("expectedInTransitAmount") BigDecimal expectedInTransitAmount,
                       @Param("availableAmount") BigDecimal availableAmount,
                       @Param("frozenAmount") BigDecimal frozenAmount,
                       @Param("inTransitAmount") BigDecimal inTransitAmount,
