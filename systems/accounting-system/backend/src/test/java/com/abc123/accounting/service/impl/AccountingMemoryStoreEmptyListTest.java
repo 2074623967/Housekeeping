@@ -47,6 +47,20 @@ class AccountingMemoryStoreEmptyListTest {
         assertTrue(store.subjects().get(0) == valid);
     }
 
+    @Test
+    void shouldKeepLedgerRowsWhenCreatedAtIsNull() {
+        AccountingDataMapper mapper = mock(AccountingDataMapper.class);
+        com.abc123.accounting.entity.AccountLedgerEntity first =
+                mock(com.abc123.accounting.entity.AccountLedgerEntity.class);
+        com.abc123.accounting.entity.AccountLedgerEntity second =
+                mock(com.abc123.accounting.entity.AccountLedgerEntity.class);
+        when(mapper.findLedgers()).thenReturn(Arrays.asList(first, second));
+
+        AccountingMemoryStore store = new AccountingMemoryStore(mapper);
+
+        assertTrue(store.ledgers().size() == 2);
+    }
+
     private void assertEmpty(List<?> values) {
         assertTrue(values != null && values.isEmpty());
     }

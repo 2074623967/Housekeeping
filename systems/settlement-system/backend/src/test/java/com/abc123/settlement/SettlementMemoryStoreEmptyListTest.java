@@ -27,4 +27,16 @@ class SettlementMemoryStoreEmptyListTest {
         assertTrue(store.batches().size() == 1);
         assertSame(valid, store.batches().get(0));
     }
+
+    @Test
+    void shouldKeepBatchesWhenCreatedAtIsNull() {
+        SettlementDataMapper mapper = mock(SettlementDataMapper.class);
+        SettlementBatchEntity first = mock(SettlementBatchEntity.class);
+        SettlementBatchEntity second = mock(SettlementBatchEntity.class);
+        when(mapper.findBatches()).thenReturn(Arrays.asList(first, second));
+
+        SettlementMemoryStore store = new SettlementMemoryStore(mapper);
+
+        assertTrue(store.batches().size() == 2);
+    }
 }

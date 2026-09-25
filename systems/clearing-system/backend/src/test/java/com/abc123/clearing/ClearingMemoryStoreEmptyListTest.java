@@ -49,4 +49,16 @@ class ClearingMemoryStoreEmptyListTest {
         assertTrue(store.batches().size() == 1);
         assertTrue(store.batches().get(0) == valid);
     }
+
+    @Test
+    void shouldKeepBatchesWhenCreatedAtIsNull() {
+        ClearingDataMapper mapper = mock(ClearingDataMapper.class);
+        ClearingBatchEntity first = mock(ClearingBatchEntity.class);
+        ClearingBatchEntity second = mock(ClearingBatchEntity.class);
+        when(mapper.findBatches()).thenReturn(Arrays.asList(first, second));
+
+        ClearingMemoryStore store = new ClearingMemoryStore(mapper, "ACT10002");
+
+        assertTrue(store.batches().size() == 2);
+    }
 }
