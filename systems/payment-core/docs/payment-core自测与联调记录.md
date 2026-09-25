@@ -17325,3 +17325,9 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 `GatewayAccessPaymentChannelSubmitAdapter`、`GatewayAccessPaymentChannelQueryAdapter` 及支付提交/查单结果校验器现在统一使用 `BusinessException.sanitized(...)` 生成固定业务失败，避免网关拒绝、响应字段非法、请求校验失败和标准化失败把内部堆栈带入事务日志或异常链；新增提交与查单适配器脱敏断言。
 
 验证结果：网关支付提交/查单定向测试通过；payment-core 后端全量回归为 `1232/1232`，失败 `0`、错误 `0`、跳过 `0`。本轮只收口网关边界异常的安全失败契约，不改变渠道订单绑定、支付状态机、真实网关受理、资金到账或正式发布治理结论。
+
+## 766. 2026-09-25 退款网关查单异常脱敏
+
+`GatewayAccessRefundChannelQueryAdapter` 与 `RefundChannelQueryResultValidator` 现在统一以脱敏 `BusinessException` 闭合网关拒绝、请求非法和退款状态/字段非法响应，保持未知退款主动查单、`PROCESSING/SUCCESS/FAIL` 状态校验及查询来源语义不变；新增退款查单异常脱敏断言。
+
+验证结果：退款网关查单定向测试通过；payment-core 后端全量回归为 `1232/1232`，失败 `0`、错误 `0`、跳过 `0`。本轮只补强退款查单边界安全失败，不改变退款状态机、渠道退款到账、真实网关或正式发布治理结论。

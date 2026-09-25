@@ -51,6 +51,6 @@ final class RefundChannelQueryResultValidator {
     }
 
     private static BusinessException queryFailed(String message) {
-        return new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, message);
+        return BusinessException.sanitized(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, message);
     }
 }

@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -183,6 +184,9 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                         true, "http://gateway/refunds/query", "wx_h5",
                         "APP_PAY_CORE", "secret", restTemplate).query(refund()));
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, empty.getCode());
+        assertNull(empty.getCause());
+        assertEquals(0, empty.getStackTrace().length);
+        assertEquals(0, empty.getSuppressed().length);
 
         when(restTemplate.exchange(
                 eq("http://gateway/refunds/query"),
@@ -194,6 +198,9 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                         true, "http://gateway/refunds/query", "wx_h5",
                         "APP_PAY_CORE", "secret", restTemplate).query(refund()));
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, failed.getCode());
+        assertNull(failed.getCause());
+        assertEquals(0, failed.getStackTrace().length);
+        assertEquals(0, failed.getSuppressed().length);
     }
 
     @Test
@@ -219,6 +226,9 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                         "APP_PAY_CORE", "secret", restTemplate).query(refund()));
 
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        assertEquals(0, exception.getSuppressed().length);
     }
 
     private RefundCallbackSourceDTO refund() {
