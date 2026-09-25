@@ -284,6 +284,10 @@ class PaymentEventDispatchServiceImplTest {
         IllegalArgumentException oversizedPaymentOrderId = Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> service.publishPaymentSuccess("EVT-001", oversizedIdentifier));
+        String oversizedAfterTrimIdentifier = String.join("", java.util.Collections.nCopies(64, "A")) + " ";
+        IllegalArgumentException oversizedAfterTrimEventNo = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.republish(oversizedAfterTrimIdentifier, "finance-ops"));
         IllegalArgumentException controlRefundOrderId = Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> service.publishRefundSubmit("EVTR-001", "REF-001\n", "finance-ops"));
@@ -292,6 +296,7 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("事件号长度不能超过64字符", oversizedEventNo.getMessage());
         Assertions.assertEquals("事件号不能包含控制字符", controlEventNo.getMessage());
         Assertions.assertEquals("支付单号长度不能超过64字符", oversizedPaymentOrderId.getMessage());
+        Assertions.assertEquals("事件号长度不能超过64字符", oversizedAfterTrimEventNo.getMessage());
         Assertions.assertEquals("退款尝试号不能包含控制字符", controlRefundOrderId.getMessage());
         org.mockito.Mockito.verifyNoInteractions(
                 paymentMapper, paymentEventMapper, refundMapper, refundChannelSubmitService);

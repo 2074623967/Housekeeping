@@ -17447,3 +17447,11 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.92 2026-09-25 日终批次与任务日志详情原文长度边界补强
 
 日终批次详情和任务执行日志详情现在均在 `trim` 前校验 64 字符上限，避免尾部空格绕过详情定位边界；新增两条详情回归，payment-core 当前 HEAD 临时副本全量回归为 `1240` tests、`0` failures、`0` errors、`0` skipped。本轮只强化运营详情查询契约，不改变日终事实、任务状态机、补偿语义或正式发布治理结论。
+
+### 9.93 2026-09-26 配置与事件标识原文长度边界补强
+
+支付渠道回调验签密钥、公钥，以及支付事件派发的事件号、支付单号、退款尝试号现在均在 `trim` 前校验原文长度和控制字符，避免“达到上限 + 尾部空格”绕过配置写入或下游事件定位边界。新增渠道复核和事件派发回归；在排除仓库现有 `target` 的临时副本中使用 Maven 3.9.16、JDK 8 执行 payment-core 后端全量测试，Surefire 汇总为 `1241` tests、`0` failures、`0` errors、`0` skipped。本轮只强化配置和事件投递输入契约，不改变支付状态机、清分账务事实、真实渠道或正式发布治理结论。
+
+### 9.94 2026-09-26 payment-core 门禁复判
+
+重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `10/10` 完整，缺失样本和缺失证据均为 `0`；`releaseMaterialsReady=true`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前仍阻断于回归汇总未放行 `test -> master`、正式签字审批未形成、发布后现场核验未形成实际记录及 master 稳定观察结束结论未形成。本轮不执行分支合并、创建 `release/*` 或补写治理事实。

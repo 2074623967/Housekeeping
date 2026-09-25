@@ -404,6 +404,19 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldRejectChannelSecretWhenRawValueExceedsCapacityBeforeTrim() {
+        PaymentChannelUpsertRequestDTO candidate = channelRequest(
+                "NEW_H5", String.join("", Collections.nCopies(256, "x")) + " ");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(candidate)));
+
+        assertTrue(exception.getMessage().contains("回调验签密钥"));
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
+    @Test
     void shouldValidateChannelDailyLimitCapacity() {
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 

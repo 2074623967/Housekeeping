@@ -521,6 +521,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
