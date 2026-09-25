@@ -147,8 +147,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                         int dispatchBatchSize) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.notifiers = notifiers;
-        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.notifiers = safeList(notifiers);
+        this.receiptQueryAdapters = safeList(receiptQueryAdapters);
         this.deliveryRateLimitService = deliveryRateLimitService;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
@@ -199,8 +199,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                          List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.notifiers = notifiers;
-        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.notifiers = safeList(notifiers);
+        this.receiptQueryAdapters = safeList(receiptQueryAdapters);
         this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = (channelCode, alertNo) -> { };
         this.itemTransactionTemplate = null;
@@ -213,8 +213,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.notifiers = notifiers;
-        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.notifiers = safeList(notifiers);
+        this.receiptQueryAdapters = safeList(receiptQueryAdapters);
         this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = null;
@@ -225,7 +225,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                          PaymentIssueAlertDeliveryRateLimitService deliveryRateLimitService) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.notifiers = notifiers;
+        this.notifiers = safeList(notifiers);
         this.receiptQueryAdapters = new ArrayList<PaymentIssueAlertReceiptQueryAdapter>();
         this.deliveryRateLimitService = deliveryRateLimitService;
         this.receiptQueryRateLimitService = (channelCode, alertNo) -> { };
@@ -257,8 +257,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PlatformTransactionManager transactionManager) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.notifiers = notifiers;
-        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.notifiers = safeList(notifiers);
+        this.receiptQueryAdapters = safeList(receiptQueryAdapters);
         this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);

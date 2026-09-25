@@ -3728,3 +3728,9 @@ README 与当前交付记录已更新为最新可验证基线：payment-core 后
 ### 9.76 2026-09-25 payment-core 统一门禁复判
 
 重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `evidenceReady=true`，场景 `10/10` 完整，缺失样本和缺失证据均为 `0`；release 材料结构完整，但当前 `canPromoteTestToMaster=false`、`canCreateRelease=false`。`test -> master` 继续遵循回归汇总中的未放行结论；release 正式条件仍缺正式签字审批、发布后现场核验记录和 master 稳定观察结束结论。本次复判不替代真实治理动作，也不执行分支合并或创建 `release/*`。
+
+### 9.77 2026-09-25 告警派发依赖集合空元素边界补强
+
+告警派发服务的通知器和回执查询适配器依赖现在在所有构造器入口统一归一化为安全列表，`null` 列表或混入 `null` 元素时按无可用依赖处理，不再在通知器映射或回执适配器遍历阶段抛出空指针。告警派发定向测试通过 `59/59`；临时构建副本中的 payment-core 后端全量回归保持 `1235/1235`，失败 `0`、错误 `0`、跳过 `0`。
+
+本轮只增强告警通知骨架的依赖装配容错，不改变告警生成、供应商送达、回执确认、真实通知渠道或正式发布治理结论。

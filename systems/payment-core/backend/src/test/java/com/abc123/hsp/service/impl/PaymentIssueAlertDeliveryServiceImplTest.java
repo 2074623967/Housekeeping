@@ -94,7 +94,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
-                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+                Arrays.asList(null, imNotifier, smsNotifier, emailNotifier)
         ).dispatchPendingAlerts("支付运营");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
@@ -1765,7 +1765,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
-                Collections.singletonList(receiptQueryAdapter)
+                Arrays.asList(null, receiptQueryAdapter)
         );
 
         PaymentTaskActionResultDTO unknownResult = service.reconcileDeliveryReceipts("payment-core-admin");
