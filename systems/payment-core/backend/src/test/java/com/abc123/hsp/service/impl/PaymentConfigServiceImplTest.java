@@ -1225,14 +1225,14 @@ class PaymentConfigServiceImplTest {
     void shouldIgnoreNullRowsWhenLoadingConfigurationOverview() {
         PaymentChannelConfigDTO channel = buildChannel("wx_h5", "微信支付", "MCH-WX", "ENABLED");
         when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(null, channel));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findProtocols()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findGateways()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findControlPolicies()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findAlertProviders()).thenReturn(Arrays.asList(null));
-        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findAlertProviders()).thenReturn(Collections.singletonList(null));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.singletonList(null));
 
         PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper).overview();
 

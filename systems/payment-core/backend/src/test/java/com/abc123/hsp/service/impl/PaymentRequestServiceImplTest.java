@@ -9,11 +9,13 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.mapper.PaymentRequestMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -210,6 +212,21 @@ class PaymentRequestServiceImplTest {
         assertTrue(resultItem.getResponsePayload().contains("138****8000"));
         assertEquals("10.20.30.40", item.getClientIp());
         assertTrue(item.getRequestPayload().contains("张三"));
+    }
+
+    @Test
+    void shouldIgnoreNullRowsWhenListingPaymentRequests() {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        PaymentRequestListItemDTO item = new PaymentRequestListItemDTO();
+        item.setRequestNo("REQ-001");
+        when(paymentRequestMapper.findAll(query)).thenReturn(Arrays.asList(null, item));
+        when(paymentRequestMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<PaymentRequestListItemDTO> result =
+                new PaymentRequestServiceImpl(paymentRequestMapper).list(query);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals("REQ-001", result.getItems().get(0).getRequestNo());
     }
 
     @Test
