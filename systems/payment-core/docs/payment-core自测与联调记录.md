@@ -17235,3 +17235,9 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 在同一当前 HEAD、JDK 8 和 Maven 3.9.16 受控环境下执行 `node tools/dev/backend-regression.mjs`，`12/12` 后端模块通过：payment-core `1221/1221`、gateway-access `53/53`、settlement `38/38`、accounting `47/47`、clearing `38/38`、refund-center `18/18`、reconciliation `15/15`、risk-control `11/11`、ops-config `12/12`、deposit `11/11`、wallet-account `23/23`、wallet-system `24/24`；全部 `0` failures、`0` errors、`0` skipped。
 
 该矩阵只证明各模块本地 Maven/H2 或测试数据库回归通过，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账、审批签字、现场核验或正式发布门禁。
+
+## 759. 2026-09-25 当前 HEAD 前端矩阵回归复核
+
+执行 `node tools/dev/frontend-admin-regression.mjs`，12/12 管理端工程的 `npm test` 与生产构建全部通过；执行 `node tools/dev/payment-core-user-regression.mjs`，5/5 用户端通过：API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、小程序 `21/21`，App/H5/PC 生产构建通过。
+
+该结果只证明本地前端测试、构建和 API 客户端骨架可用，不替代真实浏览器组合、微信开发者工具/真机、统一身份权限、真实渠道签名、生产域名或发布治理证据。
