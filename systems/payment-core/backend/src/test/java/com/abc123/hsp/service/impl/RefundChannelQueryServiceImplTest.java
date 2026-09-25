@@ -87,6 +87,28 @@ class RefundChannelQueryServiceImplTest {
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
     }
 
+    @Test
+    void shouldSanitizeUnexpectedAdapterFailure() {
+        RefundCallbackSourceDTO refund = refund("wx_h5");
+        RefundChannelQueryAdapter adapter = mock(RefundChannelQueryAdapter.class);
+        String sensitiveDetail = "jdbc:mysql://internal/payment?password=refund-query-secret\n"
+                + "select * from refund_order where token='refund-query-token'";
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.query(refund)).thenThrow(new IllegalStateException(sensitiveDetail));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new RefundChannelQueryServiceImpl(Collections.singletonList(adapter)).query(refund));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("refund channel query failed unexpectedly; query before retrying", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        assertEquals(0, exception.getSuppressed().length);
+    }
+
     private RefundCallbackSourceDTO refund(String channel) {
         RefundCallbackSourceDTO refund = new RefundCallbackSourceDTO();
         refund.setRefundOrderId("REF-001");
