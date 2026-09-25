@@ -639,6 +639,27 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectRawOverlongDownstreamUrlBeforeHttpDispatch() {
+        String overlongUrl = "http://" + repeat('a', 2041) + " ";
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                overlongUrl,
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-URL-LIMIT", "PAY-001");
+
+        verify(restTemplate, never()).postForEntity(
+                any(String.class), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(paymentEventMapper).markPublishFailed("EVT-URL-LIMIT");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-URL-LIMIT");
+    }
+
+    @Test
     void shouldRejectMissingPaymentSuccessAmountBeforeCallingDownstream() {
         PaymentDetailDTO detail = buildPaymentDetail();
         detail.setAmount(null);
@@ -1516,6 +1537,14 @@ class PaymentEventDispatchServiceImplTest {
 
     private ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse> successResponse() {
         return response("0", HttpStatus.OK);
+    }
+
+    private String repeat(char value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 
     private ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse> response(

@@ -807,7 +807,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private boolean isValidConfiguredText(String value, int maxLength) {
-        if (!StringUtils.hasText(value) || value.trim().length() > maxLength) {
+        if (!StringUtils.hasText(value) || value.length() > maxLength) {
             return false;
         }
         for (int index = 0; index < value.length(); index++) {
