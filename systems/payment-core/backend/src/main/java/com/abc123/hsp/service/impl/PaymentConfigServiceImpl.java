@@ -4514,8 +4514,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             List<PaymentChannelReturnCodeConfigDTO> currentMappings,
             Set<String> availableChannels) {
         String csvContent = normalizeCsvContent(request == null ? null : request.getCsvContent());
-        List<PaymentChannelReturnCodeConfigDTO> safeCurrentMappings = currentMappings == null
-                ? Collections.emptyList() : currentMappings;
+        List<PaymentChannelReturnCodeConfigDTO> safeCurrentMappings = safeList(currentMappings);
         Map<String, PaymentChannelReturnCodeConfigDTO> currentByKey = new LinkedHashMap<>();
         for (PaymentChannelReturnCodeConfigDTO mapping : safeCurrentMappings) {
             currentByKey.put(returnCodeMappingKey(mapping.getChannelCode(), mapping.getChannelReturnCode()), mapping);
@@ -4735,8 +4734,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String fingerprintReturnCodeMappings(List<PaymentChannelReturnCodeConfigDTO> mappings) {
-        List<PaymentChannelReturnCodeConfigDTO> sortedMappings = new ArrayList<>(
-                mappings == null ? Collections.emptyList() : mappings);
+        List<PaymentChannelReturnCodeConfigDTO> sortedMappings = new ArrayList<>(safeList(mappings));
         sortedMappings.sort(Comparator
                 .comparing((PaymentChannelReturnCodeConfigDTO mapping) ->
                         normalizeImportValue(mapping.getChannelCode()).toLowerCase(Locale.ROOT))

@@ -35,6 +35,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentAlertProviderConfigEntity;
@@ -1240,6 +1243,24 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(overview.getRouteRules().isEmpty());
         org.junit.jupiter.api.Assertions.assertTrue(overview.getProtocols().isEmpty());
         org.junit.jupiter.api.Assertions.assertTrue(overview.getGateways().isEmpty());
+    }
+
+    @Test
+    void shouldIgnoreNullMappingsWhenPreviewingReturnCodeImport() {
+        PaymentChannelConfigDTO channel = buildChannel("wx_h5", "微信支付", "MCH-WX", "ENABLED");
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Arrays.asList((PaymentChannelReturnCodeConfigDTO) null));
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.singletonList(channel));
+
+        PaymentReturnCodeImportRequestDTO request = new PaymentReturnCodeImportRequestDTO();
+        request.setCsvContent("channelCode,channelReturnCode,standardizedCode,standardizedMessage,"
+                + "handlingSuggestion,retryable,manualInterventionRequired,mappingVersion,status,priority\n"
+                + "wx_h5,SUCCESS,SUCCESS,支付成功,,false,false,1,ENABLED,1\n");
+
+        PaymentReturnCodeImportResultDTO result = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .previewReturnCodeImport(request);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getBaselineFingerprint());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getBaselineFingerprint().length() > 0);
     }
 
     @Test
