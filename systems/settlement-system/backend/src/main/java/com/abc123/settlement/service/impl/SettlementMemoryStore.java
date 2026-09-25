@@ -67,7 +67,8 @@ public class SettlementMemoryStore {
 
     public List<SettlementBatchEntity> batches() {
         List<SettlementBatchEntity> items = new ArrayList<>(safeList(settlementDataMapper.findBatches()));
-        items.sort(Comparator.comparing(SettlementBatchEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(SettlementBatchEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -102,7 +103,8 @@ public class SettlementMemoryStore {
 
     public List<SettlementOrderEntity> orders() {
         List<SettlementOrderEntity> items = new ArrayList<>(safeList(settlementDataMapper.findOrders()));
-        items.sort(Comparator.comparing(SettlementOrderEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(SettlementOrderEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -186,7 +188,8 @@ public class SettlementMemoryStore {
 
     public List<PayoutBatchEntity> payoutBatches() {
         List<PayoutBatchEntity> items = new ArrayList<>(safeList(settlementDataMapper.findPayoutBatches()));
-        items.sort(Comparator.comparing(PayoutBatchEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(PayoutBatchEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -313,7 +316,8 @@ public class SettlementMemoryStore {
 
     public List<SettlementEventEntity> events() {
         List<SettlementEventEntity> items = new ArrayList<>(safeList(settlementDataMapper.findEvents()));
-        items.sort(Comparator.comparing(SettlementEventEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(SettlementEventEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 

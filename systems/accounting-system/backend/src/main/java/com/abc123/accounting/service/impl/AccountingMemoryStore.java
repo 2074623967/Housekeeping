@@ -125,7 +125,8 @@ public class AccountingMemoryStore {
 
     public List<AccountLedgerEntity> ledgers() {
         List<AccountLedgerEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findLedgers()));
-        copied.sort(Comparator.comparing(AccountLedgerEntity::getCreatedAt).reversed());
+        copied.sort(Comparator.comparing(AccountLedgerEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return copied;
     }
 
@@ -160,7 +161,8 @@ public class AccountingMemoryStore {
 
     public List<AccountFreezeEntity> freezes() {
         List<AccountFreezeEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findFreezes()));
-        copied.sort(Comparator.comparing(AccountFreezeEntity::getCreatedAt).reversed());
+        copied.sort(Comparator.comparing(AccountFreezeEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return copied;
     }
 
@@ -233,7 +235,8 @@ public class AccountingMemoryStore {
 
     public List<AccountAdjustmentEntity> adjustments() {
         List<AccountAdjustmentEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findAdjustments()));
-        copied.sort(Comparator.comparing(AccountAdjustmentEntity::getCreatedAt).reversed());
+        copied.sort(Comparator.comparing(AccountAdjustmentEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return copied;
     }
 

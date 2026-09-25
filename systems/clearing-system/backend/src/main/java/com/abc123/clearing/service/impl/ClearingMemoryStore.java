@@ -63,7 +63,8 @@ public class ClearingMemoryStore {
 
     public List<ClearingBatchEntity> batches() {
         List<ClearingBatchEntity> items = new ArrayList<>(safeList(clearingDataMapper.findBatches()));
-        items.sort(Comparator.comparing(ClearingBatchEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ClearingBatchEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -132,7 +133,8 @@ public class ClearingMemoryStore {
 
     public List<ClearingOrderEntity> orders() {
         List<ClearingOrderEntity> items = new ArrayList<>(safeList(clearingDataMapper.findOrders()));
-        items.sort(Comparator.comparing(ClearingOrderEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ClearingOrderEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -142,7 +144,8 @@ public class ClearingMemoryStore {
 
     public List<ClearingRuleEntity> rules() {
         List<ClearingRuleEntity> items = new ArrayList<>(safeList(clearingDataMapper.findRules()));
-        items.sort(Comparator.comparing(ClearingRuleEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ClearingRuleEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -173,7 +176,8 @@ public class ClearingMemoryStore {
 
     public List<FeeRuleEntity> feeRules() {
         List<FeeRuleEntity> items = new ArrayList<>(safeList(clearingDataMapper.findFeeRules()));
-        items.sort(Comparator.comparing(FeeRuleEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(FeeRuleEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
@@ -195,19 +199,22 @@ public class ClearingMemoryStore {
 
     public List<ShareItemEntity> shares() {
         List<ShareItemEntity> items = new ArrayList<>(safeList(clearingDataMapper.findShares()));
-        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
     public List<ShareItemEntity> sharesByClearingNo(String clearingNo) {
         List<ShareItemEntity> items = new ArrayList<>(safeList(clearingDataMapper.findSharesByClearingNo(clearingNo)));
-        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
     public List<ClearingEventEntity> events() {
         List<ClearingEventEntity> items = new ArrayList<>(safeList(clearingDataMapper.findEvents()));
-        items.sort(Comparator.comparing(ClearingEventEntity::getCreatedAt).reversed());
+        items.sort(Comparator.comparing(ClearingEventEntity::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return items;
     }
 
