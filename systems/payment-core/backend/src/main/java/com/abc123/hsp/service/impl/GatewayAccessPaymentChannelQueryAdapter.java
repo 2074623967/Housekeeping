@@ -148,10 +148,10 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw invalidRequest();
         }
+        String normalized = value.trim();
         return normalized;
     }
 

@@ -82,7 +82,7 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
                 RefundChannelSubmitException.class, () -> adapter.submit(invalidOptional)));
 
         RefundChannelSubmitRequestDTO oversized = request();
-        oversized.setRefundMethod(repeat("M", 33));
+        oversized.setRefundMethod(repeat("M", 32) + " ");
         assertInvalidRequest(assertThrows(
                 RefundChannelSubmitException.class, () -> adapter.submit(oversized)));
 

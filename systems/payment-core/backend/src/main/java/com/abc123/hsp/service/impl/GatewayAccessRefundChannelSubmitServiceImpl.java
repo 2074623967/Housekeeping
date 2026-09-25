@@ -150,10 +150,10 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw invalidRequest();
         }
+        String normalized = value.trim();
         return normalized;
     }
 
@@ -181,10 +181,10 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         if (containsIsoControl(value)) {
             throw submitFailed("gateway-access returned an invalid " + fieldName, true);
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw submitFailed("gateway-access returned an invalid " + fieldName, true);
         }
+        String normalized = value.trim();
         return normalized;
     }
 

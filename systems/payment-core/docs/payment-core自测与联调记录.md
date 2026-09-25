@@ -17399,3 +17399,7 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.80 2026-09-25 payment-core 当前 HEAD 全量回归
 
 在排除仓库现有 `target` 的临时副本中执行 payment-core 后端 Maven 全量测试，Surefire 汇总为 `1235` tests、`0` failures、`0` errors、`0` skipped。测试日志中的异常均来自既有故障注入和脱敏分支断言，未形成测试失败；该结果只证明本地 H2/demo 测试链路，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账或正式发布治理证据。
+
+### 9.81 2026-09-25 gateway-access 适配器原文长度边界补强
+
+支付提交、支付查单、退款提交、退款查单四个 gateway-access 适配器现在均在 trim 前校验原文长度，拒绝“超长内容 + 尾部空格”被清洗后绕过上限；定向回归通过，payment-core 当前 HEAD 临时副本全量回归为 `1235` tests、`0` failures、`0` errors、`0` skipped。本轮只强化跨系统输入契约，不改变真实渠道受理、退款到账、生产基础设施或正式发布治理结论。

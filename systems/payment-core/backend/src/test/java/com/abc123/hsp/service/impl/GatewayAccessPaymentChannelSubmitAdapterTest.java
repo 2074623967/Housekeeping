@@ -90,7 +90,7 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
                 BusinessException.class, () -> adapter.submit(invalidOptional)));
 
         PaymentChannelSubmitRequestDTO oversized = request();
-        oversized.setPaymentMethod(repeat("M", 33));
+        oversized.setPaymentMethod(repeat("M", 32) + " ");
         assertInvalidRequest(assertThrows(
                 BusinessException.class, () -> adapter.submit(oversized)));
 
