@@ -170,6 +170,32 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldSanitizeUnexpectedAdapterFailure() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        String sensitiveDetail = "jdbc:mysql://internal/payment?password=query-secret\n"
+                + "select * from payment_order where token='query-token'";
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.query(any())).thenThrow(new IllegalStateException(sensitiveDetail));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Collections.singletonList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("payment channel query failed unexpectedly; query before retrying", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        assertEquals(0, exception.getSuppressed().length);
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
     void shouldNormalizeSupportedRawTradeStatusBeforeStandardization() {
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
         PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(

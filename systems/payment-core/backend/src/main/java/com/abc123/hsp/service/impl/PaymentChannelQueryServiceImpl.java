@@ -35,10 +35,18 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
         }
         for (PaymentChannelQueryAdapter adapter : adapters) {
             if (adapter.supports(paymentDetail.getChannel())) {
-                PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
-                        adapter.query(paymentDetail));
-                return PaymentChannelQueryResultValidator.validateAndNormalize(
-                        returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result));
+                try {
+                    PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
+                            adapter.query(paymentDetail));
+                    return PaymentChannelQueryResultValidator.validateAndNormalize(
+                            returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result));
+                } catch (BusinessException exception) {
+                    throw exception;
+                } catch (RuntimeException exception) {
+                    throw BusinessException.sanitized(
+                            ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                            "payment channel query failed unexpectedly; query before retrying");
+                }
             }
         }
         throw new BusinessException(
