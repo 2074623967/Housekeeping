@@ -452,7 +452,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
                 </tr>
               </tbody>
             </table>
-            <div v-if="!detail.operationLogs.length" class="state-box">当前暂无退款操作日志</div>
+            <div v-if="!(detail.operationLogs || []).length" class="state-box">当前暂无退款操作日志</div>
           </div>
         </div>
       </template>

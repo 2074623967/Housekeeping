@@ -100,6 +100,23 @@ test("normalizes malformed pagination metadata for list consumers", async (conte
   });
 });
 
+test("filters null rows from paged list responses", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({
+      code: "0",
+      data: { items: [null, { orderNo: "ORD-003" }], total: 2, pageNo: 1, pageSize: 20 }
+    })
+  }));
+
+  assert.deepEqual(await orderApi.getList(), {
+    items: [{ orderNo: "ORD-003" }],
+    total: 2,
+    pageNo: 1,
+    pageSize: 20
+  });
+});
+
 test("preserves null detail responses", async (context) => {
   context.mock.method(globalThis, "fetch", async () => ({
     ok: true,
@@ -143,6 +160,24 @@ test("normalizes nullable refund detail collections", async (context) => {
     attempts: [],
     operationLogs: []
   });
+});
+
+test("filters null rows from refund detail and collection responses", async (context) => {
+  let call = 0;
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({
+      code: "0",
+      data: call++ === 0
+        ? { refundOrderId: "REF-002", attempts: [null, { attemptNo: "A-1" }], operationLogs: [null, { logNo: "L-1" }] }
+        : [null, { reviewNo: "REV-1" }]
+    })
+  }));
+
+  const detail = await refundApi.getDetail("REF-002");
+  assert.deepEqual(detail.attempts, [{ attemptNo: "A-1" }]);
+  assert.deepEqual(detail.operationLogs, [{ logNo: "L-1" }]);
+  assert.deepEqual(await paymentConfigApi.getChannelReviews(), [{ reviewNo: "REV-1" }]);
 });
 
 test("reports non-JSON upstream responses with a stable client error", async (context) => {

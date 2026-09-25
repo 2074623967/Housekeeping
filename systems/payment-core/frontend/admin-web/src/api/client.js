@@ -50,7 +50,9 @@ function normalizePageResponse(data) {
     };
   }
   const normalized = normalizePagePayload(data);
-  const items = Array.isArray(normalized.items) ? normalized.items : [];
+  const items = Array.isArray(normalized.items)
+    ? normalized.items.filter((item) => item != null)
+    : [];
   const total = Number(normalized.total);
   const pageNo = Number(normalized.pageNo);
   const pageSize = Number(normalized.pageSize);
@@ -76,7 +78,7 @@ async function requestPage(url, options = {}) {
 }
 
 function normalizeCollectionPayload(data) {
-  return Array.isArray(data) ? data : [];
+  return Array.isArray(data) ? data.filter((item) => item != null) : [];
 }
 
 function requestCollection(url, options = {}) {
@@ -1040,8 +1042,10 @@ function normalizeRefundDetail(detail) {
   }
   return {
     ...detail,
-    attempts: Array.isArray(detail.attempts) ? detail.attempts : [],
-    operationLogs: Array.isArray(detail.operationLogs) ? detail.operationLogs : []
+    attempts: Array.isArray(detail.attempts) ? detail.attempts.filter((item) => item != null) : [],
+    operationLogs: Array.isArray(detail.operationLogs)
+      ? detail.operationLogs.filter((item) => item != null)
+      : []
   };
 }
 
