@@ -3526,3 +3526,7 @@
 ### 9.26 2026-09-25 payment-core 后端全量回归复核
 
 当前 `test` HEAD 的 payment-core 后端使用受控 Maven 仓库和 JDK 8 完成全量回归：`1/1` 模块通过，Surefire `1204/1204`，失败 `0`、错误 `0`、跳过 `0`。日志中的异常为故障路径测试主动注入并已正确回滚，不构成回归失败；该结果仍不替代真实渠道、生产基础设施、资金事实或正式发布治理。
+
+### 9.27 2026-09-25 当前 HEAD 受控本地栈复核
+
+`tools/dev/local-stack.sh verify all` 在受控权限下完成：12 个后端、15 个前端及代理路径全部 `READY`，HTTP smoke 和跨系统 happy-path 通过；对账链 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该运行态只属于本地 H2/demo/HTTP 骨架证据，不改变真实渠道、生产基础设施、资金事实或正式发布门禁结论。

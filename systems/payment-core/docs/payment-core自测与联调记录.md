@@ -17079,3 +17079,9 @@ gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收
 使用仓库内 Maven 3.9.16、JDK 8 和本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`。结果为 `1/1` 后端模块通过，Surefire 汇总 `1204/1204`，失败 `0`、错误 `0`、跳过 `0`。
 
 测试日志中的回滚和失败异常来自既有故障路径用例的主动注入，命令最终退出码为 `0`；该基线只证明本地 Java/H2 自动化回归，不替代真实渠道、RabbitMQ、生产 MySQL、资金到账或发布治理事实。
+
+## 732. 2026-09-25 当前 HEAD 受控本地栈运行态复核
+
+在受控权限下执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP smoke 通过，跨系统 happy-path 通过。
+
+本次链路事实包含支付、清分、结算、账务、退款及对账事实；对账链状态为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。该证据仅证明本地 H2/demo/HTTP 骨架在当前托管会话可运行，不代表真实渠道受理、生产 RabbitMQ/MySQL、资金到账、正式财务关账、审批签字或发布后观察完成。
