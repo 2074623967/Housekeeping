@@ -156,6 +156,9 @@ public class PaymentLogServiceImpl implements PaymentLogService {
             throw invalidLog("日志编号不能为空");
         }
         rejectControlCharacters(logNo, "日志编号不能包含控制字符");
+        if (logNo.length() > LOG_NO_MAX_LENGTH) {
+            throw invalidLog("日志编号不能超过64个字符");
+        }
         String normalized = logNo.trim();
         if (normalized.length() > LOG_NO_MAX_LENGTH) {
             throw invalidLog("日志编号不能超过64个字符");

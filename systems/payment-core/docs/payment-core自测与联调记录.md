@@ -17455,3 +17455,7 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.94 2026-09-26 payment-core 门禁复判
 
 重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `10/10` 完整，缺失样本和缺失证据均为 `0`；`releaseMaterialsReady=true`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前仍阻断于回归汇总未放行 `test -> master`、正式签字审批未形成、发布后现场核验未形成实际记录及 master 稳定观察结束结论未形成。本轮不执行分支合并、创建 `release/*` 或补写治理事实。
+
+### 9.95 2026-09-26 支付日志号与订单号原文长度边界补强
+
+支付处理日志详情和订单详情的定位编号现在均在 `trim` 前校验原文长度，避免“达到上限 + 尾部空格”绕过运营查询边界；现有日志和订单详情回归已覆盖该场景。payment-core 临时副本全量回归为 `1241` tests、`0` failures、`0` errors、`0` skipped。本轮只强化运营查询输入契约，不改变支付事实、订单状态或正式发布治理结论。

@@ -58,6 +58,8 @@ class OrderServiceImplTest {
                 BusinessException.class, () -> service.detail("ORDER-001\n"));
         BusinessException oversized = assertThrows(
                 BusinessException.class, () -> service.detail(repeat("O", 65)));
+        BusinessException oversizedAfterTrim = assertThrows(
+                BusinessException.class, () -> service.detail(repeat("O", 64) + " "));
         when(orderMapper.findDetail("ORDER-MISSING")).thenReturn(null);
         BusinessException missing = assertThrows(
                 BusinessException.class, () -> service.detail("ORDER-MISSING"));
@@ -65,6 +67,7 @@ class OrderServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversized.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversizedAfterTrim.getCode());
         assertEquals(ErrorCode.ORDER_NOT_FOUND, missing.getCode());
     }
 

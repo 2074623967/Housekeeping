@@ -155,6 +155,10 @@ public class OrderServiceImpl implements OrderService {
                         ErrorCode.PAYMENT_REQUEST_INVALID, "订单号不能包含控制字符");
             }
         }
+        if (orderNo.length() > ORDER_NO_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "订单号长度不能超过 64 个字符");
+        }
         String normalized = orderNo.trim();
         if (normalized.length() > ORDER_NO_MAX_LENGTH) {
             throw new BusinessException(
