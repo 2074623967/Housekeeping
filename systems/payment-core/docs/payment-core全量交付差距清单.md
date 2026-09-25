@@ -3628,3 +3628,7 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 执行 `node --test tools/dev/dlq-compensation-smoke.test.mjs`（受控权限允许本地 mock 端口）通过 `7/7`，覆盖 `payment.success` 与 `clearing.generated` 的 replay、人工解决、业务号提取、非法事件类型、非法超时、非法 JSON 和 RabbitMQ 管理端不可用分支。
 
 本轮只证明 smoke 工具的参数校验、API 编排和失败闭合契约可回归；没有 RabbitMQ 管理端和隔离拓扑的真实运行态取证，因此不将该结果登记为 `REG-08` 当前批次证据，也不改变 `test -> master` 或 release 门禁结论。
+
+### 9.52 2026-09-25 当前 HEAD payment-core 全量回归复核
+
+使用仓库 Maven 3.9.16、JDK 8 和受控本地依赖仓库执行 payment-core 全量回归，`1/1` 模块通过；当前 Surefire 汇总为 `1221/1221`，`0` failures、`0` errors、`0` skipped。历史章节中的更高测试数保留为当时批次证据，不代表当前测试集合；本轮不改变真实渠道、生产基础设施、资金事实或发布门禁判断。
