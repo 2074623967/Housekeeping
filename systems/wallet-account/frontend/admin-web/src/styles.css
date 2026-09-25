@@ -114,6 +114,14 @@ input, select {
   background: #fff;
 }
 
+.date-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 textarea,
 .batch-textarea {
   width: 100%;
@@ -362,6 +370,16 @@ th {
   .toolbar select,
   .toolbar .button {
     width: 100%;
+  }
+
+  .toolbar .date-filter {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .toolbar .date-filter input {
+    width: auto;
+    flex: 1;
   }
 
   .kpi-grid,

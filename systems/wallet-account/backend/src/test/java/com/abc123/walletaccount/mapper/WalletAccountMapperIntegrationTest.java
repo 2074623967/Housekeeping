@@ -15,14 +15,14 @@ class WalletAccountMapperIntegrationTest {
 
     @Test
     void shouldApplyExternalReferenceFilterToCountAndRecords() {
-        long total = walletAccountMapper.countAccounts(null, null, null, null, "U10001");
+        long total = walletAccountMapper.countAccounts(null, null, null, null, "U10001", null, null, null, null);
 
         assertEquals(1L, total);
-        assertFalse(walletAccountMapper.listAccounts(null, null, null, null, "U10001", 0, 20).isEmpty());
+        assertFalse(walletAccountMapper.listAccounts(null, null, null, null, "U10001", null, null, null, null, 0, 20).isEmpty());
     }
 
     @Test
     void shouldListAccountsWithoutExternalReferenceFilter() {
-        assertFalse(walletAccountMapper.listAccounts(null, null, null, null, null, 0, 20).isEmpty());
+        assertFalse(walletAccountMapper.listAccounts(null, null, null, null, null, null, null, null, null, 0, 20).isEmpty());
     }
 }

@@ -37,7 +37,7 @@
 | 分类 | 冻结文档口径 | 当前实现 | 结论 | 建议动作 |
 | --- | --- | --- | --- | --- |
 | 账户列表筛选 | PRD 要求支持账户编号、主体类型、外部主体编号、账户类型、账户状态 | 已支持 `keyword / ownerType / accountType / accountStatus / extRefNo` | 已收口 | `accountType / extRefNo` 已在 2026-08-06 补齐，剩余时间类筛选进入后续迭代 |
-| 账户列表 OpenAPI | OpenAPI 声明 `walletAccountNo / extRefNo / accountType / bizLineCode / tenantCode / openedStartTime / openedEndTime` | 当前已支持 `walletAccountNo(keyword) / extRefNo / accountType`，`bizLineCode / tenantCode / 时间区间` 仍未补 | 部分不一致 | 当前先收口高频筛选项，其余进入后续迭代，不再视为本轮阻断 |
+| 账户列表 OpenAPI | OpenAPI 声明 `walletAccountNo / extRefNo / accountType / bizLineCode / tenantCode / openedStartTime / openedEndTime` | 已支持 `walletAccountNo(keyword) / extRefNo / accountType / bizLineCode / tenantCode / openedStartTime / openedEndTime` | 已收口 | 2026-09-26 已补齐业务线、租户和开户时间范围筛选 |
 | 流水列表筛选 | OpenAPI 声明 `flowNo / walletOwnerId / flowType / bizType / occurredStartTime / occurredEndTime` | 当前仅支持 `walletAccountNo / sourceSystem / sourceBizNo` | 不一致 | 若本阶段不做，需明确写入非目标或后续迭代 |
 | 账户详情形态 | PRD 写“详情抽屉” | 当前为页面右侧卡片区 | 部分不一致 | 若不改 UI，则文档口径要改为“详情卡片区 / 侧栏区” |
 | 状态变更交互 | PRD 写“状态变更弹窗” | 当前为列表按钮 + 浏览器确认框 | 不一致 | 建议补标准弹窗，至少补操作原因与确认文案 |
@@ -85,3 +85,7 @@
 截至 2026-08-02，`wallet-account` 不是“功能完全没做”，而是已经到了“需要做范围收口和冻结一致性治理”的阶段。
 
 这意味着后续最值当的工作，不是盲目再铺更多能力，而是先把当前这一轮交付包收成可晋级的版本。
+
+## 6. 2026-09-26 增量对齐记录
+
+账户列表 OpenAPI 声明的 `bizLineCode`、`tenantCode`、`openedStartTime`、`openedEndTime` 已补齐：后端 DTO 使用 ISO `LocalDateTime` 绑定，Mapper count/list SQL 使用相同的租户、业务线和开户时间边界，管理端页面和 API client 已同步提供筛选控件。流水列表仍保留当前真实建模的 `walletAccountNo / sourceSystem / sourceBizNo`，OpenAPI 中尚未落到数据库事实的 `flowNo / walletOwnerId / flowType / bizType / occurredStartTime / occurredEndTime` 不在本轮虚构实现。

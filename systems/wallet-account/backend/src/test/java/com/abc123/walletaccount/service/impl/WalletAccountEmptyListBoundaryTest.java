@@ -21,7 +21,7 @@ class WalletAccountEmptyListBoundaryTest {
     @Test
     void shouldNormalizeNullDaoListsAndMissingQueries() {
         WalletAccountDao dao = mock(WalletAccountDao.class);
-        when(dao.listAccounts(null, null, null, null, null, 0, 20))
+        when(dao.listAccounts(null, null, null, null, null, null, null, null, null, 0, 20))
                 .thenReturn(Arrays.asList((WalletAccountEntity) null));
         when(dao.listFlows(null, null, null, 0, 20))
                 .thenReturn(Arrays.asList((WalletFlowEntity) null));

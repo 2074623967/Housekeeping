@@ -48,7 +48,9 @@ class WalletAccountControllerTest {
         resultDTO.setRecords(Collections.singletonList(accountDTO));
         when(walletAccountService.pageAccounts(any())).thenReturn(resultDTO);
 
-        mockMvc.perform(get("/api/wallet/accounts?keyword=WA-001&ownerType=USER&accountType=MAIN&accountStatus=ACTIVE&extRefNo=EXT-001"))
+        mockMvc.perform(get("/api/wallet/accounts?keyword=WA-001&ownerType=USER&accountType=MAIN&accountStatus=ACTIVE"
+                + "&extRefNo=EXT-001&bizLineCode=HOME_SERVICE&tenantCode=DEFAULT"
+                + "&openedStartTime=2026-01-01T00:00:00&openedEndTime=2026-01-31T23:59:59"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.total").value(1))
@@ -62,6 +64,10 @@ class WalletAccountControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals("MAIN", queryDTO.getAccountType());
         org.junit.jupiter.api.Assertions.assertEquals("ACTIVE", queryDTO.getAccountStatus());
         org.junit.jupiter.api.Assertions.assertEquals("EXT-001", queryDTO.getExtRefNo());
+        org.junit.jupiter.api.Assertions.assertEquals("HOME_SERVICE", queryDTO.getBizLineCode());
+        org.junit.jupiter.api.Assertions.assertEquals("DEFAULT", queryDTO.getTenantCode());
+        org.junit.jupiter.api.Assertions.assertEquals(java.time.LocalDateTime.of(2026, 1, 1, 0, 0), queryDTO.getOpenedStartTime());
+        org.junit.jupiter.api.Assertions.assertEquals(java.time.LocalDateTime.of(2026, 1, 31, 23, 59, 59), queryDTO.getOpenedEndTime());
     }
 
     @Test

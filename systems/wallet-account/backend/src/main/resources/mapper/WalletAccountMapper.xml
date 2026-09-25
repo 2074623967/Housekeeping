@@ -114,6 +114,18 @@
             <if test="extRefNo != null and extRefNo != ''">
                 AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
             </if>
+            <if test="bizLineCode != null and bizLineCode != ''">
+                AND o.biz_line_code = #{bizLineCode}
+            </if>
+            <if test="tenantCode != null and tenantCode != ''">
+                AND o.tenant_code = #{tenantCode}
+            </if>
+            <if test="openedStartTime != null">
+                AND a.opened_at &gt;= #{openedStartTime}
+            </if>
+            <if test="openedEndTime != null">
+                AND a.opened_at &lt;= #{openedEndTime}
+            </if>
         </where>
     </select>
 
@@ -136,6 +148,18 @@
             </if>
             <if test="extRefNo != null and extRefNo != ''">
                 AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
+            </if>
+            <if test="bizLineCode != null and bizLineCode != ''">
+                AND o.biz_line_code = #{bizLineCode}
+            </if>
+            <if test="tenantCode != null and tenantCode != ''">
+                AND o.tenant_code = #{tenantCode}
+            </if>
+            <if test="openedStartTime != null">
+                AND a.opened_at &gt;= #{openedStartTime}
+            </if>
+            <if test="openedEndTime != null">
+                AND a.opened_at &lt;= #{openedEndTime}
             </if>
         </where>
         ORDER BY a.created_at DESC

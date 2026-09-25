@@ -16,10 +16,12 @@ import java.util.List;
  */
 public interface WalletAccountDao {
 
-    long countAccounts(String keyword, String ownerType, String accountType, String accountStatus, String extRefNo);
+    long countAccounts(String keyword, String ownerType, String accountType, String accountStatus, String extRefNo,
+            String bizLineCode, String tenantCode, LocalDateTime openedStartTime, LocalDateTime openedEndTime);
 
     List<WalletAccountEntity> listAccounts(String keyword, String ownerType, String accountType,
-            String accountStatus, String extRefNo, int offset, int limit);
+            String accountStatus, String extRefNo, String bizLineCode, String tenantCode,
+            LocalDateTime openedStartTime, LocalDateTime openedEndTime, int offset, int limit);
 
     WalletAccountEntity findAccountByNo(String walletAccountNo);
 

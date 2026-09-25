@@ -67,12 +67,20 @@ test("sends wallet account type and external reference filters", async () => {
     await fetchWalletAccounts({
       accountType: "MAIN",
       extRefNo: "USER-001",
+      bizLineCode: "HOME_SERVICE",
+      tenantCode: "DEFAULT",
+      openedStartTime: "2026-01-01T00:00",
+      openedEndTime: "2026-01-31T23:59",
       pageNo: 2,
       pageSize: 50
     });
     const query = new URL(requestedUrl, "http://wallet-account.test").searchParams;
     assert.equal(query.get("accountType"), "MAIN");
     assert.equal(query.get("extRefNo"), "USER-001");
+    assert.equal(query.get("bizLineCode"), "HOME_SERVICE");
+    assert.equal(query.get("tenantCode"), "DEFAULT");
+    assert.equal(query.get("openedStartTime"), "2026-01-01T00:00");
+    assert.equal(query.get("openedEndTime"), "2026-01-31T23:59");
     assert.equal(query.get("pageNo"), "2");
     assert.equal(query.get("pageSize"), "50");
   } finally {

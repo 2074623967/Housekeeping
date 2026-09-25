@@ -55,10 +55,12 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         PageResultDTO<WalletAccountDTO> pageResultDTO = new PageResultDTO<WalletAccountDTO>();
         pageResultDTO.setTotal(walletAccountDao.countAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(),
-                queryDTO.getAccountStatus(), queryDTO.getExtRefNo()));
+                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), queryDTO.getBizLineCode(),
+                queryDTO.getTenantCode(), queryDTO.getOpenedStartTime(), queryDTO.getOpenedEndTime()));
         pageResultDTO.setRecords(safeList(walletAccountDao.listAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(),
-                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), offset, pageSize))
+                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), queryDTO.getBizLineCode(),
+                queryDTO.getTenantCode(), queryDTO.getOpenedStartTime(), queryDTO.getOpenedEndTime(), offset, pageSize))
                 .stream()
                 .map(this::toAccountDTO)
                 .collect(Collectors.toList()));

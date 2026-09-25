@@ -18,13 +18,21 @@ public interface WalletAccountMapper {
             @Param("ownerType") String ownerType,
             @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus,
-            @Param("extRefNo") String extRefNo);
+            @Param("extRefNo") String extRefNo,
+            @Param("bizLineCode") String bizLineCode,
+            @Param("tenantCode") String tenantCode,
+            @Param("openedStartTime") LocalDateTime openedStartTime,
+            @Param("openedEndTime") LocalDateTime openedEndTime);
 
     List<WalletAccountEntity> listAccounts(@Param("keyword") String keyword,
             @Param("ownerType") String ownerType,
             @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus,
             @Param("extRefNo") String extRefNo,
+            @Param("bizLineCode") String bizLineCode,
+            @Param("tenantCode") String tenantCode,
+            @Param("openedStartTime") LocalDateTime openedStartTime,
+            @Param("openedEndTime") LocalDateTime openedEndTime,
             @Param("offset") int offset,
             @Param("limit") int limit);
 

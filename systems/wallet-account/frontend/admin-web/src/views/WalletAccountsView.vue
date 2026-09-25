@@ -14,6 +14,10 @@ const query = reactive({
   accountType: "",
   accountStatus: "",
   extRefNo: "",
+  bizLineCode: "",
+  tenantCode: "",
+  openedStartTime: "",
+  openedEndTime: "",
   pageNo: 1,
   pageSize: 20
 });
@@ -277,6 +281,10 @@ onMounted(() => {
             <option value="CLOSED">CLOSED</option>
           </select>
           <input v-model="query.extRefNo" placeholder="外部主体编号" />
+          <input v-model="query.bizLineCode" placeholder="业务线编码" />
+          <input v-model="query.tenantCode" placeholder="租户编码" />
+          <label class="date-filter">开户起始<input v-model="query.openedStartTime" type="datetime-local" /></label>
+          <label class="date-filter">开户结束<input v-model="query.openedEndTime" type="datetime-local" /></label>
           <button class="button" :disabled="loading" @click="loadAccounts">{{ loading ? "查询中..." : "查询" }}</button>
           <button class="button button--light" type="button" @click="startOpenAccount">新增开户</button>
         </div>

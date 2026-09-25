@@ -23,6 +23,7 @@ import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
@@ -195,15 +196,23 @@ class WalletAccountServiceImplTest {
         queryDTO.setAccountType("MAIN");
         queryDTO.setAccountStatus("ACTIVE");
         queryDTO.setExtRefNo("EXT-001");
-        when(dao.countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001")).thenReturn(1L);
-        when(dao.listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20))
+        queryDTO.setBizLineCode("HOME_SERVICE");
+        queryDTO.setTenantCode("DEFAULT");
+        queryDTO.setOpenedStartTime(LocalDateTime.of(2026, 1, 1, 0, 0));
+        queryDTO.setOpenedEndTime(LocalDateTime.of(2026, 1, 31, 23, 59, 59));
+        when(dao.countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", "HOME_SERVICE", "DEFAULT",
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59, 59))).thenReturn(1L);
+        when(dao.listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", "HOME_SERVICE", "DEFAULT",
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59, 59), 0, 20))
                 .thenReturn(Collections.singletonList(createAccount("WA-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00")));
 
         PageResultDTO<com.abc123.walletaccount.dto.WalletAccountDTO> resultDTO = service.pageAccounts(queryDTO);
 
         assertEquals(1L, resultDTO.getTotal());
-        verify(dao).countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001");
-        verify(dao).listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20);
+        verify(dao).countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", "HOME_SERVICE", "DEFAULT",
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59, 59));
+        verify(dao).listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", "HOME_SERVICE", "DEFAULT",
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 31, 23, 59, 59), 0, 20);
     }
 
     @Test

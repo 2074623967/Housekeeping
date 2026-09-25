@@ -79,6 +79,18 @@ export async function fetchWalletAccounts(params) {
   if (params.extRefNo) {
     query.set("extRefNo", params.extRefNo);
   }
+  if (params.bizLineCode) {
+    query.set("bizLineCode", params.bizLineCode);
+  }
+  if (params.tenantCode) {
+    query.set("tenantCode", params.tenantCode);
+  }
+  if (params.openedStartTime) {
+    query.set("openedStartTime", params.openedStartTime);
+  }
+  if (params.openedEndTime) {
+    query.set("openedEndTime", params.openedEndTime);
+  }
   query.set("pageNo", String(params.pageNo || 1));
   query.set("pageSize", String(params.pageSize || 20));
   return normalizePagePayload(await request(`/api/wallet/accounts?${query.toString()}`));
