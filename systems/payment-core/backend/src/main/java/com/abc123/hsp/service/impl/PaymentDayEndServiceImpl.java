@@ -657,7 +657,16 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     private <T> java.util.List<T> safeList(java.util.List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        java.util.List<T> result = new java.util.ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private Integer defaultZero(Integer value) {

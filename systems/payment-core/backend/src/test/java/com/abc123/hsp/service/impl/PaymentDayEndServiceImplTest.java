@@ -106,6 +106,26 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInRecentBatches() {
+        PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
+        batch.setBatchNo("DAY-END-NULL-ROW");
+        batch.setPendingPaymentCount(0);
+        batch.setMissingPaymentSuccessTimeCount(0);
+        batch.setPaymentSuccessFactMismatchCount(0);
+        batch.setRefundFailCount(0);
+        batch.setMissingRefundSuccessTimeCount(0);
+        batch.setRefundTerminalFactMismatchCount(0);
+        when(paymentDayEndMapper.findOverviewSummary()).thenReturn(null);
+        when(paymentDayEndMapper.findRecentBatches()).thenReturn(Arrays.asList(null, batch));
+
+        PaymentDayEndOverviewDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper).overview();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getRecentBatches().size());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "READY", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
+    }
+
+    @Test
     void shouldReturnBatchDetailAndReadiness() {
         PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
         batch.setBatchNo("DAY-END-001");
