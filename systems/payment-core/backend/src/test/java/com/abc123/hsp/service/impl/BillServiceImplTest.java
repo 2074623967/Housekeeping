@@ -55,7 +55,7 @@ class BillServiceImplTest {
         BusinessException control = assertThrows(
                 BusinessException.class, () -> service.detail("BILL-001\n"));
         BusinessException oversized = assertThrows(
-                BusinessException.class, () -> service.detail(repeat("B", 65)));
+                BusinessException.class, () -> service.detail(repeat("B", 64) + " "));
         when(billMapper.findDetail("BILL-MISSING")).thenReturn(null);
         BusinessException missing = assertThrows(
                 BusinessException.class, () -> service.detail("BILL-MISSING"));

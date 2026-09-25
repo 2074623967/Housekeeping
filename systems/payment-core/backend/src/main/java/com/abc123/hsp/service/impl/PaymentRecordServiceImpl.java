@@ -169,11 +169,10 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
             return defaultValue;
         }
         rejectControlCharacters(value, fieldName);
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
-        return normalized;
+        return value.trim();
     }
 
     private String normalizePaymentOrderId(String paymentOrderId) {
@@ -186,12 +185,11 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                         ErrorCode.PAYMENT_REQUEST_INVALID, "支付单号不能包含控制字符");
             }
         }
-        String normalized = paymentOrderId.trim();
-        if (normalized.length() > PAYMENT_ORDER_ID_MAX_LENGTH) {
+        if (paymentOrderId.length() > PAYMENT_ORDER_ID_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_REQUEST_INVALID, "支付单号长度不能超过 64 个字符");
         }
-        return normalized;
+        return paymentOrderId.trim();
     }
 
     private void rejectControlCharacters(String value, String fieldName) {

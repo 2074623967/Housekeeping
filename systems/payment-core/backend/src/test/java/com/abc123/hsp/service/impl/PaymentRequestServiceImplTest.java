@@ -62,7 +62,7 @@ class PaymentRequestServiceImplTest {
         BusinessException control = assertThrows(
                 BusinessException.class, () -> service.detail("REQ-001\n"));
         BusinessException oversized = assertThrows(
-                BusinessException.class, () -> service.detail(repeat("R", 65)));
+                BusinessException.class, () -> service.detail(repeat("R", 64) + " "));
 
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blank.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());

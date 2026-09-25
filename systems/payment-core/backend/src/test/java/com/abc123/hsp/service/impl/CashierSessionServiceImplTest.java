@@ -55,7 +55,7 @@ class CashierSessionServiceImplTest {
         BusinessException control = assertThrows(
                 BusinessException.class, () -> service.detail("PRE-001\n"));
         BusinessException oversized = assertThrows(
-                BusinessException.class, () -> service.detail(repeat("S", 65)));
+                BusinessException.class, () -> service.detail(repeat("S", 64) + " "));
 
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, empty.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, control.getCode());

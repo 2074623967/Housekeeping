@@ -169,11 +169,10 @@ public class BillServiceImpl implements BillService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
-        return normalized;
+        return value.trim();
     }
 
     private String normalizeRequiredBillNo(String billNo) {
@@ -186,12 +185,11 @@ public class BillServiceImpl implements BillService {
                         ErrorCode.PAYMENT_REQUEST_INVALID, "账单号不能包含控制字符");
             }
         }
-        String normalized = billNo.trim();
-        if (normalized.length() > BILL_NO_MAX_LENGTH) {
+        if (billNo.length() > BILL_NO_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_REQUEST_INVALID, "账单号长度不能超过 64 个字符");
         }
-        return normalized;
+        return billNo.trim();
     }
 
     private String csvCell(String value) {

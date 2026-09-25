@@ -197,11 +197,10 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
-        return normalized;
+        return value.trim();
     }
 
     private String normalizeRequestStatus(String requestStatus) {
@@ -222,12 +221,11 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
                         ErrorCode.PAYMENT_REQUEST_INVALID, "支付请求编号不能包含控制字符");
             }
         }
-        String normalized = requestNo.trim();
-        if (normalized.length() > REQUEST_NO_MAX_LENGTH) {
+        if (requestNo.length() > REQUEST_NO_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_REQUEST_INVALID, "支付请求编号长度不能超过 64 个字符");
         }
-        return normalized;
+        return requestNo.trim();
     }
 
     private static Map<String, String> buildRequestStatusAliases() {

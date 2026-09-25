@@ -179,11 +179,10 @@ public class CashierSessionServiceImpl implements CashierSessionService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
-        return normalized;
+        return value.trim();
     }
 
     private String normalizeRequiredSessionNo(String sessionNo) {
@@ -196,12 +195,11 @@ public class CashierSessionServiceImpl implements CashierSessionService {
                         ErrorCode.PAYMENT_REQUEST_INVALID, "会话号不能包含控制字符");
             }
         }
-        String normalized = sessionNo.trim();
-        if (normalized.length() > SESSION_NO_MAX_LENGTH) {
+        if (sessionNo.length() > SESSION_NO_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_REQUEST_INVALID, "会话号长度不能超过 64 个字符");
         }
-        return normalized;
+        return sessionNo.trim();
     }
 
     private String csvCell(String value) {

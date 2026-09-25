@@ -58,7 +58,7 @@ class PaymentRecordServiceImplTest {
                 BusinessException.class, () -> service.detail("PAY-001\n"));
         BusinessException oversizedException = assertThrows(
                 BusinessException.class,
-                () -> service.detail(String.join("", Collections.nCopies(65, "P"))));
+                () -> service.detail(String.join("", Collections.nCopies(64, "P")) + " "));
 
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blankException.getCode());
         assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, controlException.getCode());
