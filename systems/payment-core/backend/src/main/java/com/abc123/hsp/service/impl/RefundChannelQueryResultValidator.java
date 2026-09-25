@@ -43,11 +43,10 @@ final class RefundChannelQueryResultValidator {
                 throw queryFailed("refund channel query field contains control characters");
             }
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw queryFailed("refund channel query field is too long");
         }
-        return normalized;
+        return value.trim();
     }
 
     private static BusinessException queryFailed(String message) {

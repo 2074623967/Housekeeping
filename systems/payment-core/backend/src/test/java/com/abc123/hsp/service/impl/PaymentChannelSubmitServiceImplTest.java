@@ -166,6 +166,22 @@ class PaymentChannelSubmitServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedRawReturnCodeBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setChannelReturnCode(repeat('R', 64) + " ");
+        when(adapter.submit(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service(adapter, mapper).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
     void shouldRejectUnknownAttemptStatusTypeBeforeStandardizationLookup() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
@@ -348,5 +364,11 @@ class PaymentChannelSubmitServiceImplTest {
 
     private PaymentChannelSubmitAdapter ordered(PaymentChannelSubmitAdapter adapter) {
         return adapter;
+    }
+
+    private String repeat(char value, int count) {
+        char[] values = new char[count];
+        java.util.Arrays.fill(values, value);
+        return new String(values);
     }
 }

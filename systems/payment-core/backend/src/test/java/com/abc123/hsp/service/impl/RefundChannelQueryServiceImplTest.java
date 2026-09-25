@@ -89,6 +89,20 @@ class RefundChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedRawChannelQueryFieldsBeforeNormalization() {
+        RefundCallbackSourceDTO refund = refund("wx_h5");
+        RefundChannelQueryAdapter adapter = mock(RefundChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.query(refund)).thenReturn(
+                result("SUCCESS", repeat('R', 128) + " ", "TEST"));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new RefundChannelQueryServiceImpl(Collections.singletonList(adapter)).query(refund));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
     void shouldSanitizeUnexpectedAdapterFailure() {
         RefundCallbackSourceDTO refund = refund("wx_h5");
         RefundChannelQueryAdapter adapter = mock(RefundChannelQueryAdapter.class);
@@ -141,5 +155,11 @@ class RefundChannelQueryServiceImplTest {
         result.setChannelRefundNo(channelRefundNo);
         result.setQuerySource(source);
         return result;
+    }
+
+    private String repeat(char value, int count) {
+        char[] values = new char[count];
+        java.util.Arrays.fill(values, value);
+        return new String(values);
     }
 }

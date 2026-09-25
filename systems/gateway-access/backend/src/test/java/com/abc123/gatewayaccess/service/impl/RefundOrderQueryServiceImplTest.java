@@ -21,6 +21,7 @@ import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
 import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.time.LocalDate;
+import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -144,6 +145,18 @@ class RefundOrderQueryServiceImplTest {
     void shouldRejectControlCharactersInOptionalChannelRefundNumber() {
         RefundOrderQueryRequestDTO request = request();
         request.setChannelRefundNo("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper).insertAuditLog(any(GatewayAuditLogEntity.class));
+    }
+
+    @Test
+    void shouldRejectRawOversizedRefundOrderNumberBeforeAuthorization() {
+        RefundOrderQueryRequestDTO request = request();
+        request.setRefundOrderId(String.join("", Collections.nCopies(64, "R")) + " ");
 
         GatewayAccessException exception = assertThrows(GatewayAccessException.class,
                 () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));

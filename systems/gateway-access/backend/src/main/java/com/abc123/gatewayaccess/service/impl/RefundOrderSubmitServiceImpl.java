@@ -145,7 +145,7 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
 
     private String validateText(String value, String fieldName, int maxLength, boolean requestField) {
         String normalized = value.trim();
-        if (normalized.length() > maxLength || containsIsoControl(value)) {
+        if (value.length() > maxLength || containsIsoControl(value)) {
             if (requestField) {
                 throw invalid(fieldName + " is invalid");
             }

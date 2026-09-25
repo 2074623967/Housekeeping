@@ -22,6 +22,7 @@ import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -133,6 +134,17 @@ class RefundOrderSubmitServiceImplTest {
     void shouldRejectInvalidAmountBeforeAuthorization() {
         RefundOrderSubmitRequestDTO request = request();
         request.setRefundAmount(new BigDecimal("1.001"));
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectRawOversizedRefundMethodBeforeAuthorization() {
+        RefundOrderSubmitRequestDTO request = request();
+        request.setRefundMethod(String.join("", Collections.nCopies(64, "M")) + " ");
 
         GatewayAccessException exception = assertThrows(GatewayAccessException.class,
                 () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));

@@ -117,7 +117,7 @@ class PaymentChannelQueryServiceImplTest {
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
         when(adapter.supports("wx_h5")).thenReturn(true);
         PaymentChannelQueryResultDTO result = queryResult();
-        result.setChannelReturnCode(repeat('R', 65));
+        result.setChannelReturnCode(repeat('R', 64) + " ");
         when(adapter.query(any())).thenReturn(result);
 
         BusinessException exception = assertThrows(
