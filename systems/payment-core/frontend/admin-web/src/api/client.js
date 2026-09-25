@@ -50,10 +50,17 @@ function normalizePageResponse(data) {
     };
   }
   const normalized = normalizePagePayload(data);
-  if (!Object.prototype.hasOwnProperty.call(normalized, "items")) {
-    return { ...normalized, items: [] };
-  }
-  return normalized;
+  const items = Array.isArray(normalized.items) ? normalized.items : [];
+  const total = Number(normalized.total);
+  const pageNo = Number(normalized.pageNo);
+  const pageSize = Number(normalized.pageSize);
+  return {
+    ...normalized,
+    items,
+    total: Number.isInteger(total) && total >= 0 ? total : items.length,
+    pageNo: Number.isInteger(pageNo) && pageNo > 0 ? pageNo : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 20
+  };
 }
 
 export function normalizeObjectPayload(data) {

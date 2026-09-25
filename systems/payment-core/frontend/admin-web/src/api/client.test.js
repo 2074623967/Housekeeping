@@ -83,6 +83,23 @@ test("normalizes malformed list responses without leaking an invalid page shape"
   });
 });
 
+test("normalizes malformed pagination metadata for list consumers", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({
+      code: "0",
+      data: { items: [{ orderNo: "ORD-002" }], total: "invalid", pageNo: 0, pageSize: -1 }
+    })
+  }));
+
+  assert.deepEqual(await orderApi.getList(), {
+    items: [{ orderNo: "ORD-002" }],
+    total: 1,
+    pageNo: 1,
+    pageSize: 20
+  });
+});
+
 test("preserves null detail responses", async (context) => {
   context.mock.method(globalThis, "fetch", async () => ({
     ok: true,
