@@ -17431,3 +17431,7 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.88 2026-09-25 当前 HEAD 本地全栈联调复核
 
 执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟和跨系统 happy-path 通过；本地链路生成支付、清分、结算、账务、退款和对账事实，对账链 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只证明受控 H2/demo/HTTP 本地骨架可联调，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收或正式发布治理证据。
+
+### 9.89 2026-09-25 当前 HEAD payment-core 后端全量回归
+
+在排除仓库现有 `target` 的临时副本中使用 Maven 3.9.16、JDK 8 执行 payment-core 后端全量测试，Surefire 汇总为 `1237` tests、`0` failures、`0` errors、`0` skipped。测试日志中的异常来自既有故障注入和脱敏分支断言，未形成测试失败；该结果只证明本地 H2/demo 测试链路，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账或正式发布治理证据。
