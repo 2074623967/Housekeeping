@@ -17229,3 +17229,9 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 使用仓库 Maven 3.9.16、JDK 8 和受控本地依赖仓库执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs --only payment-core`，`1/1` 模块通过；当前 Surefire 汇总为 `1221/1221`，`0` failures、`0` errors、`0` skipped。
 
 历史章节中的更高测试数保留为当时批次证据，不代表当前测试集合；本轮只更新当前 HEAD 计数，不改变真实渠道、生产基础设施、资金事实或发布门禁判断。
+
+## 758. 2026-09-25 全支付后端矩阵回归复核
+
+在同一当前 HEAD、JDK 8 和 Maven 3.9.16 受控环境下执行 `node tools/dev/backend-regression.mjs`，`12/12` 后端模块通过：payment-core `1221/1221`、gateway-access `53/53`、settlement `38/38`、accounting `47/47`、clearing `38/38`、refund-center `18/18`、reconciliation `15/15`、risk-control `11/11`、ops-config `12/12`、deposit `11/11`、wallet-account `23/23`、wallet-system `24/24`；全部 `0` failures、`0` errors、`0` skipped。
+
+该矩阵只证明各模块本地 Maven/H2 或测试数据库回归通过，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账、审批签字、现场核验或正式发布门禁。

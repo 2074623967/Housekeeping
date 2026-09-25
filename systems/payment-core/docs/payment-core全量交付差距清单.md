@@ -3632,3 +3632,7 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 ### 9.52 2026-09-25 当前 HEAD payment-core 全量回归复核
 
 使用仓库 Maven 3.9.16、JDK 8 和受控本地依赖仓库执行 payment-core 全量回归，`1/1` 模块通过；当前 Surefire 汇总为 `1221/1221`，`0` failures、`0` errors、`0` skipped。历史章节中的更高测试数保留为当时批次证据，不代表当前测试集合；本轮不改变真实渠道、生产基础设施、资金事实或发布门禁判断。
+
+### 9.53 2026-09-25 全支付后端矩阵回归复核
+
+在同一当前 HEAD、JDK 8 和 Maven 3.9.16 受控环境下执行全量后端回归，`12/12` 模块通过：payment-core `1221/1221`、gateway-access `53/53`、settlement `38/38`、accounting `47/47`、clearing `38/38`、refund-center `18/18`、reconciliation `15/15`、risk-control `11/11`、ops-config `12/12`、deposit `11/11`、wallet-account `23/23`、wallet-system `24/24`；全部 `0` failures、`0` errors、`0` skipped。该矩阵只证明本地自动化回归通过，不替代真实基础设施、渠道、资金、审批或发布门禁事实。
