@@ -10,6 +10,8 @@ import com.abc123.hsp.mapper.PaymentMonitorMapper;
 import com.abc123.hsp.service.PaymentMonitorService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -125,6 +127,15 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? java.util.Collections.<T>emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 }

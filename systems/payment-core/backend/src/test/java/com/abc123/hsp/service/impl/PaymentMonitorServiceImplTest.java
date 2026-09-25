@@ -85,4 +85,20 @@ class PaymentMonitorServiceImplTest {
         assertEquals(0, overview.getChannelMetrics().size());
         assertEquals(0, overview.getAlerts().size());
     }
+
+    @Test
+    void shouldIgnoreNullRowsInMonitorSources() {
+        PaymentMonitorSummaryDTO summary = new PaymentMonitorSummaryDTO();
+        when(paymentMonitorMapper.findSummary()).thenReturn(summary);
+        when(paymentMonitorMapper.findRecentTrends()).thenReturn(Arrays.asList(null, new PaymentTrendPointDTO()));
+        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Arrays.asList(null, new PaymentChannelMetricDTO()));
+        when(paymentMonitorMapper.findAlerts()).thenReturn(Arrays.asList(null, new PaymentAlertItemDTO()));
+
+        PaymentMonitorOverviewDTO overview = new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
+
+        assertEquals(1, overview.getTrends().size());
+        assertEquals(1, overview.getChannelMetrics().size());
+        assertEquals(1, overview.getAlerts().size());
+        assertEquals(Integer.valueOf(1), overview.getSummary().getAlertCount());
+    }
 }

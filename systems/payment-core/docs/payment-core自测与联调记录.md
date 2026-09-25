@@ -17091,3 +17091,9 @@ gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收
 当前仓库事实为：`master` 是 `test` 的祖先，当前 `test` 仍包含尚未合入 `master` 的提交；因此当前 HEAD 尚未完成 `test -> master` 实际合入。回归证据包中保留的“历史冻结基线已合入”只描述历史批次，不能替代当前分支关系。
 
 统一门禁仍据此保持 `canPromoteTestToMaster=false`、`canCreateRelease=false`。该结论不代表代码回归失败，也不伪造新的合并、审批或发布事实。
+
+## 734. 2026-09-25 监控分析空元素边界补强
+
+`PaymentMonitorServiceImpl` 现在会在服务边界过滤监控趋势、渠道指标和告警列表中的 `null` 元素，避免脏数据导致概览或 CSV 导出整体失败。新增 `PaymentMonitorServiceImplTest` 空元素回归。
+
+验证结果：监控服务定向测试通过；payment-core 后端全量回归更新为 `1205/1205`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强本地监控页面和导出的异常数据容错，不改变告警事实、指标口径或正式发布门禁。
