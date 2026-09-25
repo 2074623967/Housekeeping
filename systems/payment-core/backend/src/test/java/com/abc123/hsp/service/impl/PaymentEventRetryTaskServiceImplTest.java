@@ -121,6 +121,22 @@ class PaymentEventRetryTaskServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullEventCandidates() {
+        when(paymentEventMapper.findDueFailedEventNos(100)).thenReturn(Arrays.asList(null, "EVT-VALID"));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        when(paymentEventDispatchService.republish("EVT-VALID", "payment-event-scheduler")).thenReturn(false);
+
+        PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
+                paymentEventMapper, paymentEventDispatchService, transactionManager)
+                .retryFailedEvents(true, "payment-event-scheduler");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        verify(paymentEventDispatchService).republish("EVT-VALID", "payment-event-scheduler");
+    }
+
+    @Test
     void shouldRejectInvalidOperatorBeforeReadingCandidates() {
         PaymentEventRetryTaskServiceImpl service = new PaymentEventRetryTaskServiceImpl(
                 paymentEventMapper, paymentEventDispatchService, transactionManager);

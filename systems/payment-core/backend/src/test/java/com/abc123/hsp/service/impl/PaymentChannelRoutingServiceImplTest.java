@@ -227,6 +227,21 @@ class PaymentChannelRoutingServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullQueryHealthRowsWhenHealthRoutingIsEnabled() {
+        PaymentChannelRoutingConfigDTO channel = buildChannel("wx_h5", "微信支付");
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(channel));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.findRecentChannelQueryHealth(24)).thenReturn(Arrays.asList(null, new PaymentChannelQueryHealthDTO()));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper, paymentMapper, true, 24, 5, 30, 10)
+                .resolve(buildContext("微信支付", "WX_H5", "HOME_CLEAN", "APP_H5", "张女士", new BigDecimal("68.00")));
+
+        assertEquals("wx_h5", decision.getChannelCode());
+    }
+
+    @Test
     void shouldRejectExplicitRequestedChannelWhenHealthCircuitIsOpen() {
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
                 buildChannel("wx_h5", "微信支付")

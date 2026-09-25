@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.RefundQueryTaskService;
 import com.abc123.hsp.service.RefundService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import org.springframework.beans.factory.annotation.Value;
@@ -100,6 +101,15 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 }

@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,7 +84,16 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private static final class SanitizedRefundRetryTransactionException extends RuntimeException {

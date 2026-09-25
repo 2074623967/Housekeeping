@@ -110,4 +110,19 @@ class RefundRetryTaskServiceImplTest {
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());
     }
+
+    @Test
+    void shouldIgnoreNullRefundRetryCandidates() {
+        when(refundMapper.findFailedRefundOrderIds(100)).thenReturn(Arrays.asList(null, "REF-VALID"));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        RefundRetryResultDTO result = new RefundRetryTaskServiceImpl(
+                refundMapper, refundService, transactionManager)
+                .retryFailedRefunds("refund-retry-scheduler");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        org.mockito.Mockito.verify(refundService).retryForTask("REF-VALID", "refund-retry-scheduler");
+    }
 }

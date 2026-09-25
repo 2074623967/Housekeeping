@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,7 +115,16 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private static final class SanitizedEventRetryTransactionException extends RuntimeException {
