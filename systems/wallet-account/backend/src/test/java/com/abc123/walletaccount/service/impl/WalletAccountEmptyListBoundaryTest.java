@@ -9,6 +9,9 @@ import com.abc123.walletaccount.dao.WalletAccountDao;
 import com.abc123.walletaccount.dto.WalletAccountQueryDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskQueryDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
+import com.abc123.walletaccount.entity.WalletAccountEntity;
+import com.abc123.walletaccount.entity.WalletFlowEntity;
+import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +21,14 @@ class WalletAccountEmptyListBoundaryTest {
     @Test
     void shouldNormalizeNullDaoListsAndMissingQueries() {
         WalletAccountDao dao = mock(WalletAccountDao.class);
-        when(dao.listAccounts(null, null, null, null, null, 0, 20)).thenReturn(null);
-        when(dao.listFlows(null, null, null, 0, 20)).thenReturn(null);
-        when(dao.listBalancesByAccountNos(Arrays.asList("WA-EMPTY"))).thenReturn(null);
-        when(dao.listExportTasks(null, null, 0, 10)).thenReturn(null);
+        when(dao.listAccounts(null, null, null, null, null, 0, 20))
+                .thenReturn(Arrays.asList((WalletAccountEntity) null));
+        when(dao.listFlows(null, null, null, 0, 20))
+                .thenReturn(Arrays.asList((WalletFlowEntity) null));
+        when(dao.listBalancesByAccountNos(Arrays.asList("WA-EMPTY")))
+                .thenReturn(Arrays.asList((WalletAccountEntity) null));
+        when(dao.listExportTasks(null, null, 0, 10))
+                .thenReturn(Arrays.asList((WalletFlowExportTaskEntity) null));
 
         WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
 

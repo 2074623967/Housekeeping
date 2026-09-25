@@ -569,7 +569,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? new ArrayList<>() : values;
+        if (values == null || values.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 
     private String decimalValue(BigDecimal value) {
