@@ -32,7 +32,9 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         }
         String rechargeNo = "RCH" + new Date().getTime();
         walletMapper.insertRechargeOrder(rechargeNo, request.getAccountNo(), request.getBizNo(), request.getAmount(), "SUCCESS");
-        walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount());
+        if (walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount()) != 1) {
+            throw new IllegalArgumentException("钱包账户状态已变化");
+        }
         walletMapper.insertLedger("LED" + new Date().getTime(), request.getAccountNo(), "RECHARGE", request.getBizNo(), request.getAmount(), "IN");
         WalletRechargeOrderEntity entity = walletMapper.findRechargeOrderByNo(rechargeNo);
         return toDTO(entity);

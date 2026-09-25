@@ -50,8 +50,12 @@ public class WalletTransferServiceImpl implements WalletTransferService {
                 request.getBizNo(),
                 request.getAmount(),
                 "SUCCESS");
-        walletMapper.updateAccountAmount(request.getSourceAccountNo(), request.getAmount().negate());
-        walletMapper.updateAccountAmount(request.getTargetAccountNo(), request.getAmount());
+        if (walletMapper.updateAccountAmount(request.getSourceAccountNo(), request.getAmount().negate()) != 1) {
+            throw new IllegalArgumentException("转出余额不足或账户状态已变化");
+        }
+        if (walletMapper.updateAccountAmount(request.getTargetAccountNo(), request.getAmount()) != 1) {
+            throw new IllegalArgumentException("转入账户状态已变化");
+        }
         walletMapper.insertLedger("LED" + new Date().getTime(),
                 request.getSourceAccountNo(),
                 "TRANSFER_OUT",

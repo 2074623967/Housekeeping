@@ -68,6 +68,7 @@
         UPDATE t_wallet_account
         SET available_amount = available_amount + #{amount}
         WHERE account_no = #{accountNo}
+          AND available_amount + #{amount} &gt;= 0
     </update>
 
     <insert id="insertRechargeOrder">

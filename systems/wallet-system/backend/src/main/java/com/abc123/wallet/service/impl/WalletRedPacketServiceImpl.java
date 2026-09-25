@@ -61,7 +61,9 @@ public class WalletRedPacketServiceImpl implements WalletRedPacketService {
                 request.getPacketCount(),
                 status);
         if ("ISSUED".equals(status)) {
-            walletMapper.updateAccountAmount(request.getAccountNo(), request.getTotalAmount().negate());
+            if (walletMapper.updateAccountAmount(request.getAccountNo(), request.getTotalAmount().negate()) != 1) {
+                throw new IllegalArgumentException("营销资金余额不足或账户状态已变化");
+            }
             walletMapper.insertLedger(
                     "LED" + new Date().getTime(),
                     request.getAccountNo(),

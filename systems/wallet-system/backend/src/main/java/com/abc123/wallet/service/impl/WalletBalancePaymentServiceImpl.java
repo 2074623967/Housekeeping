@@ -36,7 +36,9 @@ public class WalletBalancePaymentServiceImpl implements WalletBalancePaymentServ
         }
         String balancePaymentNo = "WBP" + new Date().getTime();
         walletMapper.insertBalancePaymentOrder(balancePaymentNo, request.getAccountNo(), request.getBizNo(), request.getAmount(), "SUCCESS");
-        walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount().negate());
+        if (walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount().negate()) != 1) {
+            throw new IllegalArgumentException("钱包余额不足或账户状态已变化");
+        }
         walletMapper.insertLedger("LED" + new Date().getTime(), request.getAccountNo(), "BALANCE_PAY", request.getBizNo(), request.getAmount(), "OUT");
         WalletBalancePaymentOrderEntity entity = walletMapper.findBalancePaymentOrderByNo(balancePaymentNo);
         return toDTO(entity);

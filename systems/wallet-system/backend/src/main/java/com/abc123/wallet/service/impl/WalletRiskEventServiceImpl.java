@@ -57,7 +57,10 @@ public class WalletRiskEventServiceImpl implements WalletRiskEventService {
             WalletRedPacketEntity redPacket = walletMapper.findRedPacketByNo(event.getBizNo());
             if (redPacket != null && "PENDING_APPROVAL".equals(redPacket.getStatus())) {
                 walletMapper.updateRedPacketStatus(redPacket.getRedPacketNo(), "ISSUED");
-                walletMapper.updateAccountAmount(redPacket.getAccountNo(), new BigDecimal(redPacket.getTotalAmount()).negate());
+                if (walletMapper.updateAccountAmount(redPacket.getAccountNo(),
+                        new BigDecimal(redPacket.getTotalAmount()).negate()) != 1) {
+                    throw new IllegalArgumentException("营销资金余额不足或账户状态已变化");
+                }
                 walletMapper.insertLedger(
                         "LED" + System.currentTimeMillis(),
                         redPacket.getAccountNo(),

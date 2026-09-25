@@ -36,7 +36,9 @@ public class WalletWithdrawServiceImpl implements WalletWithdrawService {
         }
         String withdrawNo = "WTH" + new Date().getTime();
         walletMapper.insertWithdrawOrder(withdrawNo, request.getAccountNo(), request.getBizNo(), request.getAmount(), "SUCCESS");
-        walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount().negate());
+        if (walletMapper.updateAccountAmount(request.getAccountNo(), request.getAmount().negate()) != 1) {
+            throw new IllegalArgumentException("余额不足或账户状态已变化");
+        }
         walletMapper.insertLedger("LED" + new Date().getTime(), request.getAccountNo(), "WITHDRAW", request.getBizNo(), request.getAmount(), "OUT");
         WalletWithdrawOrderEntity entity = walletMapper.findWithdrawOrderByNo(withdrawNo);
         return toDTO(entity);

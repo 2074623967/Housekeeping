@@ -33,6 +33,7 @@ class WalletCoreFundsServiceImplTest {
         request.setBizNo("ORDER-001");
         request.setAmount(new BigDecimal("88.00"));
         when(walletMapper.findAccountByNo("WALLET-001")).thenReturn(createAccount("WALLET-001", "100.00"));
+        when(walletMapper.updateAccountAmount("WALLET-001", new BigDecimal("-88.00"))).thenReturn(1);
         when(walletMapper.findBalancePaymentOrderByNo(anyString())).thenReturn(createBalancePaymentOrder());
 
         service.pay(request);
@@ -72,6 +73,8 @@ class WalletCoreFundsServiceImplTest {
         request.setBizNo("TRANSFER-001");
         request.setAmount(new BigDecimal("50.00"));
         when(walletMapper.findAccountByNo("WALLET-001")).thenReturn(createAccount("WALLET-001", "100.00"));
+        when(walletMapper.updateAccountAmount("WALLET-001", new BigDecimal("-50.00"))).thenReturn(1);
+        when(walletMapper.updateAccountAmount("WALLET-002", new BigDecimal("50.00"))).thenReturn(1);
         when(walletMapper.findAccountByNo("WALLET-002")).thenReturn(createAccount("WALLET-002", "10.00"));
         when(walletMapper.findTransferOrderByNo(anyString())).thenReturn(createTransferOrder());
 
@@ -117,6 +120,25 @@ class WalletCoreFundsServiceImplTest {
         assertEquals("余额不足", error.getMessage());
         verify(walletMapper, never()).insertWithdrawOrder(
                 anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any(BigDecimal.class), anyString());
+    }
+
+    @Test
+    void shouldFailClosedWhenAtomicDebitLosesRace() {
+        WalletMapper walletMapper = mock(WalletMapper.class);
+        WalletBalancePaymentServiceImpl service = new WalletBalancePaymentServiceImpl(walletMapper);
+        WalletBalancePaymentRequestDTO request = new WalletBalancePaymentRequestDTO();
+        request.setAccountNo("WALLET-001");
+        request.setBizNo("ORDER-001");
+        request.setAmount(new BigDecimal("88.00"));
+        when(walletMapper.findAccountByNo("WALLET-001")).thenReturn(createAccount("WALLET-001", "100.00"));
+        when(walletMapper.updateAccountAmount("WALLET-001", new BigDecimal("-88.00"))).thenReturn(0);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.pay(request));
+
+        assertEquals("钱包余额不足或账户状态已变化", error.getMessage());
+        verify(walletMapper).updateAccountAmount("WALLET-001", new BigDecimal("-88.00"));
+        verify(walletMapper, never()).insertLedger(anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(BigDecimal.class), anyString());
     }
 
     private WalletAccountEntity createAccount(String accountNo, String availableAmount) {
