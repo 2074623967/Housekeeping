@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.abc123.accounting.mapper.AccountingDataMapper;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,19 @@ class AccountingMemoryStoreEmptyListTest {
         assertEmpty(store.freezes());
         assertEmpty(store.adjustments());
         assertEmpty(store.events());
+    }
+
+    @Test
+    void shouldFilterNullRowsAndKeepValidSubjects() {
+        AccountingDataMapper mapper = mock(AccountingDataMapper.class);
+        com.abc123.accounting.entity.AccountSubjectEntity valid =
+                mock(com.abc123.accounting.entity.AccountSubjectEntity.class);
+        when(mapper.findSubjects()).thenReturn(Arrays.asList(null, valid, null));
+
+        AccountingMemoryStore store = new AccountingMemoryStore(mapper);
+
+        assertTrue(store.subjects().size() == 1);
+        assertTrue(store.subjects().get(0) == valid);
     }
 
     private void assertEmpty(List<?> values) {

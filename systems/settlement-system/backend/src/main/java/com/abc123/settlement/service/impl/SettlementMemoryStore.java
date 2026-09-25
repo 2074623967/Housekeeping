@@ -318,7 +318,9 @@ public class SettlementMemoryStore {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 
     public SettlementOrderEntity findOrderByClearingTarget(String clearingNo, String targetType, String targetNo) {

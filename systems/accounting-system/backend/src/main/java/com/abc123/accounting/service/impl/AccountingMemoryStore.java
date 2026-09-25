@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -355,6 +356,8 @@ public class AccountingMemoryStore {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 }

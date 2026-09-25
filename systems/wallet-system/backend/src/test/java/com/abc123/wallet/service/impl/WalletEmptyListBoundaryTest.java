@@ -5,6 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.abc123.wallet.mapper.WalletMapper;
+import com.abc123.wallet.entity.WalletAccountEntity;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -35,5 +37,14 @@ class WalletEmptyListBoundaryTest {
 
         assertTrue(new WalletRedPacketServiceImpl(mapper).listRedPackets().isEmpty());
         assertTrue(new WalletRiskEventServiceImpl(mapper).listRiskEvents().isEmpty());
+    }
+
+    @Test
+    void shouldFilterNullRowsAndKeepValidAccounts() {
+        WalletMapper mapper = mock(WalletMapper.class);
+        WalletAccountEntity valid = mock(WalletAccountEntity.class);
+        when(mapper.findAccounts()).thenReturn(Arrays.asList(null, valid, null));
+
+        assertTrue(new WalletServiceImpl(mapper).listAccounts().size() == 1);
     }
 }

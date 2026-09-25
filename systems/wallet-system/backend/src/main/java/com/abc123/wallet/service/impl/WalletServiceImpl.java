@@ -135,7 +135,9 @@ public class WalletServiceImpl implements WalletService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 
     private String formatAmount(BigDecimal amount) {

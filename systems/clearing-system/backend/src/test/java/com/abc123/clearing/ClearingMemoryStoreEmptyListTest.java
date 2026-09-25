@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.clearing.mapper.ClearingDataMapper;
 import com.abc123.clearing.service.impl.ClearingMemoryStore;
+import com.abc123.clearing.entity.ClearingBatchEntity;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -34,5 +36,17 @@ class ClearingMemoryStoreEmptyListTest {
         assertTrue(store.sharesByClearingNo("CLR-EMPTY").isEmpty());
         assertTrue(store.events().isEmpty());
         assertTrue(store.dueFailedClearingGeneratedEvents(1).isEmpty());
+    }
+
+    @Test
+    void shouldFilterNullRowsAndKeepValidBatches() {
+        ClearingDataMapper mapper = mock(ClearingDataMapper.class);
+        ClearingBatchEntity valid = mock(ClearingBatchEntity.class);
+        when(mapper.findBatches()).thenReturn(Arrays.asList(null, valid, null));
+
+        ClearingMemoryStore store = new ClearingMemoryStore(mapper, "ACT10002");
+
+        assertTrue(store.batches().size() == 1);
+        assertTrue(store.batches().get(0) == valid);
     }
 }

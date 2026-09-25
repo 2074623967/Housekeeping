@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.math.BigDecimal;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,6 +86,8 @@ public class WalletRiskEventServiceImpl implements WalletRiskEventService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 }
