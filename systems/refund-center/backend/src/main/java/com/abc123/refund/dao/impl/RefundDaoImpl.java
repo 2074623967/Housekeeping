@@ -12,6 +12,8 @@ import com.abc123.refund.entity.RefundOrderEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.abc123.refund.mapper.RefundMapper;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Repository;
 
@@ -29,7 +31,7 @@ public class RefundDaoImpl implements RefundDao {
 
     @Override
     public List<RefundListItemDTO> findList(RefundQueryDTO query) {
-        return refundMapper.findList(query);
+        return safeList(refundMapper.findList(query));
     }
 
     @Override
@@ -49,7 +51,7 @@ public class RefundDaoImpl implements RefundDao {
 
     @Override
     public List<RefundOperationLogDTO> findLogs(String refundOrderId) {
-        return refundMapper.findLogs(refundOrderId);
+        return safeList(refundMapper.findLogs(refundOrderId));
     }
 
     @Override
@@ -101,7 +103,7 @@ public class RefundDaoImpl implements RefundDao {
 
     @Override
     public List<RefundOutboxItemDTO> findOutboxList(RefundOutboxQueryDTO query) {
-        return refundMapper.findOutboxList(query);
+        return safeList(refundMapper.findOutboxList(query));
     }
 
     @Override
@@ -122,5 +124,18 @@ public class RefundDaoImpl implements RefundDao {
     @Override
     public int markOutboxFailed(String eventId, String lastErrorMessage) {
         return refundMapper.markOutboxFailed(eventId, lastErrorMessage);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 }
