@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
@@ -49,6 +50,28 @@ class RefundChannelQueryServiceImplTest {
         BusinessException invalid = assertThrows(BusinessException.class,
                 () -> new RefundChannelQueryServiceImpl(Collections.singletonList(adapter)).query(refund));
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, invalid.getCode());
+    }
+
+    @Test
+    void shouldRejectNullRefundBeforeSelectingAdapter() {
+        RefundChannelQueryAdapter adapter = mock(RefundChannelQueryAdapter.class);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new RefundChannelQueryServiceImpl(Arrays.asList(null, adapter)).query(null));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("refund channel query request is invalid", exception.getMessage());
+        verifyNoInteractions(adapter);
+    }
+
+    @Test
+    void shouldTreatNullAdapterCollectionAsMissingAdapter() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new RefundChannelQueryServiceImpl(null).query(refund("wx_h5")));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_ADAPTER_MISSING, exception.getCode());
     }
 
     @Test

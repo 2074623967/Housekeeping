@@ -3656,3 +3656,7 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 ### 9.58 2026-09-25 当前 HEAD 全支付后端矩阵复核
 
 执行仓库标准后端回归脚本，`12/12` 模块通过。当前各模块 Surefire 计数为：payment-core `1221`、gateway-access `53`、settlement `39`、accounting `48`、clearing `39`、refund-center `18`、reconciliation `16`、risk-control `12`、ops-config `13`、deposit `11`、wallet-account `23`、wallet-system `25`；全部 `0` failures、`0` errors、`0` skipped。该矩阵只证明当前本地自动化链路可回归，不替代真实基础设施、渠道、资金、审批或正式发布门禁事实。
+
+### 9.59 2026-09-25 退款渠道查单请求失败闭合
+
+退款渠道查单服务现在与支付查单保持一致：`null` 请求在选择适配器前返回 `REFUND_CHANNEL_QUERY_FAILED`，适配器集合为 `null` 或包含空元素时按“无可用适配器”处理，不再泄漏 `NullPointerException`。新增两条服务层回归后，payment-core 后端全量回归为 `1223/1223`，失败 `0`、错误 `0`、跳过 `0`。本轮只收口退款查单服务的输入和装配边界，不改变真实渠道协议、退款到账、生产网关或发布治理结论。
