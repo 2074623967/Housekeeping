@@ -17387,3 +17387,11 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 告警派发服务的通知器和回执查询适配器依赖现在在所有构造器入口统一归一化为安全列表，`null` 列表或混入 `null` 元素时按无可用依赖处理，不再在通知器映射或回执适配器遍历阶段抛出空指针。告警派发定向测试通过 `59/59`；临时构建副本中的 payment-core 后端全量回归保持 `1235/1235`，失败 `0`、错误 `0`、跳过 `0`。
 
 本轮只增强告警通知骨架的依赖装配容错，不改变告警生成、供应商送达、回执确认、真实通知渠道或正式发布治理结论。
+
+### 9.78 2026-09-25 gateway-access 支付提交原文校验边界补强
+
+支付核心依赖的 gateway-access 支付提交代理现在对请求字段及上游响应字段统一执行原文控制字符/长度校验，再进行 trim 规范化；新增尾部控制字符回归，gateway-access 后端临时副本全量测试通过。本轮只强化跨系统支付提交安全边界，不替代真实渠道受理、生产凭证、网络白名单、资金到账或正式发布治理证据。
+
+### 9.79 2026-09-25 payment-core 门禁复判
+
+重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `10/10` 完整、缺失样本和证据均为 `0`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前仍真实阻断于回归汇总未放行 `test -> master`、正式签字审批未形成、发布后现场核验未形成实际记录及 master 稳定观察结束结论未形成；本轮不执行分支合并、创建 release 或补写治理事实。
