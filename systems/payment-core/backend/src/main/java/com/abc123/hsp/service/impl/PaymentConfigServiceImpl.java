@@ -2824,7 +2824,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentRouteRuleConfigDTO candidateDto = toConfigDto(candidate);
         List<PaymentRouteRuleConflictDTO> candidateConflicts = findCandidateConflicts(
-                candidateDto, paymentConfigMapper.findRouteRulesForConflictCheckForUpdate());
+                candidateDto, safeList(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate()));
         String priorityCollisionMessage = null;
         for (PaymentRouteRuleConflictDTO conflict : candidateConflicts) {
             if ("BLOCKER".equals(conflict.getSeverity())) {

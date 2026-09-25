@@ -464,7 +464,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
-                .thenReturn(Arrays.asList(laterCollision, earlierCollision));
+                .thenReturn(Arrays.asList(null, laterCollision, earlierCollision));
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "配置与风险检查通过",
                 Boolean.TRUE, Boolean.TRUE, "[\"RULE_A_APP\",\"RULE_Z_APP\"]"))
@@ -550,7 +550,7 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
-                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+                .thenReturn(null);
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
