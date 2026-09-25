@@ -13,6 +13,7 @@ import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import com.abc123.opsconfig.mapper.OpsConfigMapper;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -221,6 +222,8 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 }

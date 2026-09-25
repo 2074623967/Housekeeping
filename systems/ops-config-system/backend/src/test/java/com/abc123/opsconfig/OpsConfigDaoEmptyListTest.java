@@ -1,11 +1,14 @@
 package com.abc123.opsconfig;
 
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.abc123.opsconfig.dao.impl.OpsConfigDaoImpl;
+import com.abc123.opsconfig.dto.AgreementTemplateDTO;
 import com.abc123.opsconfig.mapper.OpsConfigMapper;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -39,5 +42,17 @@ class OpsConfigDaoEmptyListTest {
         assertTrue(dao.findEnabledSystemControls().isEmpty());
         assertTrue(dao.findConfigChanges().isEmpty());
         assertTrue(dao.findRefreshEvents().isEmpty());
+    }
+
+    @Test
+    void shouldFilterNullRowsWithoutDroppingValidRows() {
+        OpsConfigMapper mapper = mock(OpsConfigMapper.class);
+        AgreementTemplateDTO valid = mock(AgreementTemplateDTO.class);
+        when(mapper.findAgreementTemplates()).thenReturn(Arrays.asList(null, valid, null));
+
+        OpsConfigDaoImpl dao = new OpsConfigDaoImpl(mapper);
+
+        assertSame(valid, dao.findAgreementTemplates().get(0));
+        assertTrue(dao.findAgreementTemplates().size() == 1);
     }
 }
