@@ -1968,7 +1968,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private List<PaymentTaskRunLogItemDTO> enrichTaskRuns(List<PaymentTaskRunLogItemDTO> items) {
-        for (PaymentTaskRunLogItemDTO item : items) {
+        List<PaymentTaskRunLogItemDTO> safeItems = safeList(items);
+        for (PaymentTaskRunLogItemDTO item : safeItems) {
             item.setSeverityLevel(resolveSeverityLevel(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setSeverityLevelType(resolveSeverityType(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setEscalationStatus(resolveEscalationStatus(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
@@ -1976,7 +1977,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             item.setSuggestedAction(resolveSuggestedAction(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setRecommendedRoute(resolveRecommendedRoute(item.getTaskCode()));
         }
-        return items;
+        return safeItems;
     }
 
     private <T> List<T> safeList(List<T> values) {

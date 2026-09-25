@@ -610,7 +610,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
      * 为最近批次补齐对账准入结论，方便按批次复盘。
      */
     private java.util.List<PaymentDayEndBatchListItemDTO> enrichRecentBatches(java.util.List<PaymentDayEndBatchListItemDTO> batches) {
-        for (PaymentDayEndBatchListItemDTO batch : batches) {
+        java.util.List<PaymentDayEndBatchListItemDTO> safeBatches = safeList(batches);
+        for (PaymentDayEndBatchListItemDTO batch : safeBatches) {
             if (batch.getPendingPaymentCount() == null
                     || batch.getMissingPaymentSuccessTimeCount() == null
                     || batch.getPaymentSuccessFactMismatchCount() == null
@@ -653,7 +654,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             batch.setReconciliationReadinessType("success");
             batch.setReconciliationReadinessSummary("前置事实已收口，可进入正式对账。");
         }
-        return batches;
+        return safeBatches;
     }
 
     private <T> java.util.List<T> safeList(java.util.List<T> values) {

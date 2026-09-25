@@ -192,7 +192,7 @@ class PaymentDayEndServiceImplTest {
         batch.setTriggeredBy("finance-ops");
         batch.setCreatedAt("2026-08-03 09:00:00");
         batch.setCompletedAt("2026-08-03 09:01:00");
-        when(paymentDayEndMapper.findAllBatchesForExport()).thenReturn(Collections.singletonList(batch));
+        when(paymentDayEndMapper.findAllBatchesForExport()).thenReturn(Arrays.asList(null, batch));
 
         String csv = new PaymentDayEndServiceImpl(paymentDayEndMapper).exportBatchesCsv();
 

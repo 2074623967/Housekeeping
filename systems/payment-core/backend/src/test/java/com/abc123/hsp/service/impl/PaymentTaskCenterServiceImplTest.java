@@ -682,7 +682,7 @@ class PaymentTaskCenterServiceImplTest {
         item.setStartedAt("2026-08-03 10:00:00");
         item.setCompletedAt("2026-08-03 10:00:03");
         when(paymentTaskCenterMapper.findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class)))
-                .thenReturn(Collections.singletonList(item));
+                .thenReturn(Arrays.asList(null, item));
 
         String csv = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
