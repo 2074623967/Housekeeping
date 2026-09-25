@@ -2187,7 +2187,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        return items.stream().map(this::maskedPaymentItemCopy).collect(Collectors.toList());
+        return items.stream()
+                .filter(item -> item != null)
+                .map(this::maskedPaymentItemCopy)
+                .collect(Collectors.toList());
     }
 
     private PaymentListItemDTO maskedPaymentItemCopy(PaymentListItemDTO item) {

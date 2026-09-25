@@ -3463,7 +3463,8 @@ class PaymentServiceImplTest {
         item.setPaymentOrderId("PAY-001");
         item.setCustomerName("张女士");
         item.setLatestAttemptStatus("处理中");
-        when(paymentMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(paymentMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((PaymentListItemDTO) null, item));
         when(paymentMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<PaymentListItemDTO> result = new PaymentServiceImpl(

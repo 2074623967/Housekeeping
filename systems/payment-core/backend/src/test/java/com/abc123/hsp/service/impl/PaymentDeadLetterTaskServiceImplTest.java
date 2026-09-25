@@ -156,7 +156,7 @@ class PaymentDeadLetterTaskServiceImplTest {
     void shouldMaskListSnapshotsWithoutChangingMapperEntity() {
         PaymentDeadLetterTaskEntity task = replayTask();
         when(paymentDeadLetterTaskMapper.findAll(any(PaymentDeadLetterTaskQueryDTO.class)))
-                .thenReturn(Collections.singletonList(task));
+                .thenReturn(java.util.Arrays.asList((PaymentDeadLetterTaskEntity) null, task));
         when(paymentDeadLetterTaskMapper.count(any(PaymentDeadLetterTaskQueryDTO.class))).thenReturn(1L);
 
         PageResultDTO<PaymentDeadLetterTaskEntity> result = service().list(new PaymentDeadLetterTaskQueryDTO());

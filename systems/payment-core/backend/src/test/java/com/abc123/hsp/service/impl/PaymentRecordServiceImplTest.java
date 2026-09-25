@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
@@ -139,6 +140,22 @@ class PaymentRecordServiceImplTest {
         assertEquals(Arrays.asList("ROUTE-1"), result.getRouteLogs());
         assertEquals(Arrays.asList("NOTIFY-1"), result.getNotifyLogs());
         assertEquals(Arrays.asList("EVENT-1"), result.getEventLogs());
+    }
+
+    @Test
+    void shouldIgnoreNullRowsWhenListingPaymentRecords() {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        PaymentRecordRowDTO row = new PaymentRecordRowDTO();
+        row.setPaymentOrderId("PAY-001");
+        when(paymentRecordMapper.findAll(query))
+                .thenReturn(Arrays.asList(null, row));
+        when(paymentRecordMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<PaymentRecordRowDTO> result =
+                new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).list(query);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals("PAY-001", result.getItems().get(0).getPaymentOrderId());
     }
 
     @Test

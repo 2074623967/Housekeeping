@@ -366,7 +366,10 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (tasks == null || tasks.isEmpty()) {
             return Collections.emptyList();
         }
-        return tasks.stream().map(this::maskedTaskCopy).collect(java.util.stream.Collectors.toList());
+        return tasks.stream()
+                .filter(task -> task != null)
+                .map(this::maskedTaskCopy)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     private PaymentDeadLetterTaskEntity maskedTaskCopy(PaymentDeadLetterTaskEntity task) {

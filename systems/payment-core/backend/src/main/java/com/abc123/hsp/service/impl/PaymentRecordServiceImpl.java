@@ -206,7 +206,10 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
         if (rows == null || rows.isEmpty()) {
             return Collections.emptyList();
         }
-        return rows.stream().map(this::maskedRowCopy).collect(Collectors.toList());
+        return rows.stream()
+                .filter(row -> row != null)
+                .map(this::maskedRowCopy)
+                .collect(Collectors.toList());
     }
 
     private PaymentRecordRowDTO maskedRowCopy(PaymentRecordRowDTO row) {
