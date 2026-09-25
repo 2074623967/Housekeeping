@@ -16,6 +16,7 @@ const isLoading = ref(true);
 const isSummaryLoading = ref(true);
 const hasLoadedData = ref(false);
 const loadErrorMessage = ref("");
+const summaryErrorMessage = ref("");
 const actionRefreshErrorMessage = ref("");
 const actionErrorMessage = ref("");
 const actionResultMessage = ref("");
@@ -105,19 +106,25 @@ async function loadIssues(afterAction = false, query = buildQuery()) {
   isLoading.value = true;
   isSummaryLoading.value = true;
   loadErrorMessage.value = "";
+  summaryErrorMessage.value = "";
   actionRefreshErrorMessage.value = "";
-  try {
-    const summaryPromise = paymentIssueApi.getResponsibilitySummary(buildSummaryQuery(query));
-    const listPromise = paymentIssueApi.getList(query);
-    const [summaryResult, result] = await Promise.all([summaryPromise, listPromise]);
-    if (requestId !== latestLoadRequestId) {
-      return false;
-    }
-    responsibilitySummaries.value = summaryResult;
-    items.value = result.items;
-    total.value = result.total;
+  const [summaryResult, listResult] = await Promise.allSettled([
+    paymentIssueApi.getResponsibilitySummary(buildSummaryQuery(query)),
+    paymentIssueApi.getList(query)
+  ]);
+  if (requestId !== latestLoadRequestId) {
+    return false;
+  }
+  if (summaryResult.status === "fulfilled") {
+    responsibilitySummaries.value = summaryResult.value;
+  } else {
+    summaryErrorMessage.value = summaryResult.reason?.message || "责任组统计加载失败";
+  }
+  if (listResult.status === "fulfilled") {
+    items.value = listResult.value.items;
+    total.value = listResult.value.total;
     selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
-      result.items.some((item) => item.issueNo === issueNo)
+      listResult.value.items.some((item) => item.issueNo === issueNo)
     );
     pageNo.value = query.pageNo;
     loadedPageNo.value = query.pageNo;
@@ -127,27 +134,21 @@ async function loadIssues(afterAction = false, query = buildQuery()) {
       actionErrorMessage.value = "";
       actionResultMessage.value = "";
     }
-    return true;
-  } catch (error) {
-    if (requestId !== latestLoadRequestId) {
-      return false;
-    }
+  } else {
+    const errorMessage = listResult.reason?.message || "支付交易异常列表加载失败";
     if (afterAction) {
-      actionRefreshErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = errorMessage;
     } else {
-      loadErrorMessage.value = error.message;
+      loadErrorMessage.value = errorMessage;
       actionRefreshErrorMessage.value = "";
     }
     if (hasLoadedData.value) {
       pageNo.value = loadedPageNo.value;
     }
-    return false;
-  } finally {
-    if (requestId === latestLoadRequestId) {
-      isLoading.value = false;
-      isSummaryLoading.value = false;
-    }
   }
+  isLoading.value = false;
+  isSummaryLoading.value = false;
+  return summaryResult.status === "fulfilled" && listResult.status === "fulfilled";
 }
 
 function goToPage(nextPage) {
@@ -277,7 +278,10 @@ watch(
         {{ hasLoadedData ? "支付交易异常刷新失败，当前展示上次成功快照：" : "支付交易异常加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        批量处理结果已确认，但异常列表与责任组统计刷新失败，当前展示上次成功快照：{{ actionRefreshErrorMessage }}
+        批量处理结果已确认，但异常列表刷新失败，当前展示上次成功列表快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="summaryErrorMessage" class="error-banner">
+        责任组统计刷新失败，当前展示上次成功统计快照：{{ summaryErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">
         {{ actionErrorMessage }}
