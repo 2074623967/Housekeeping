@@ -1035,11 +1035,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
         int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
-        List<PaymentIssueAlertCandidateDTO> alertCandidates =
-                paymentTaskCenterMapper.findOverdueIssueAlertCandidates(issueSlaCandidateBatchSize);
-        List<PaymentIssueAlertCandidateDTO> escalationCandidates =
+        List<PaymentIssueAlertCandidateDTO> alertCandidates = safeList(
+                paymentTaskCenterMapper.findOverdueIssueAlertCandidates(issueSlaCandidateBatchSize));
+        List<PaymentIssueAlertCandidateDTO> escalationCandidates = safeList(
                 paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(
-                        issueSlaCandidateBatchSize);
+                        issueSlaCandidateBatchSize));
         int generatedAlertCount = 0;
         int duplicateAlertCount = 0;
         int failCount = 0;

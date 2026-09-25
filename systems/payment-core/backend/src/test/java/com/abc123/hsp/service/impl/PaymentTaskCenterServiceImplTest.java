@@ -1339,8 +1339,8 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldRunAutoIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(null);
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(null);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_ISSUE_ESCALATE"), leaseOwner("payment-issue-sla-scheduler"), eq(120))).thenReturn(1);
