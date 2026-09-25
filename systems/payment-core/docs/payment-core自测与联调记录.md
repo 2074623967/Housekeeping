@@ -17097,3 +17097,9 @@ gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收
 `PaymentMonitorServiceImpl` 现在会在服务边界过滤监控趋势、渠道指标和告警列表中的 `null` 元素，避免脏数据导致概览或 CSV 导出整体失败。新增 `PaymentMonitorServiceImplTest` 空元素回归。
 
 验证结果：监控服务定向测试通过；payment-core 后端全量回归更新为 `1205/1205`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强本地监控页面和导出的异常数据容错，不改变告警事实、指标口径或正式发布门禁。
+
+## 735. 2026-09-25 支付详情日志空元素边界补强
+
+`PaymentServiceImpl` 和 `PaymentRecordServiceImpl` 现在会在详情服务边界过滤路由日志、通知日志和事件日志中的 `null` 元素，避免单条脏数据导致支付详情或收款记录详情整体失败。新增 `PaymentServiceImplTest`、`PaymentRecordServiceImplTest` 空元素回归。
+
+验证结果：两组详情定向测试通过；payment-core 后端全量回归更新为 `1207/1207`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强运营排障详情的异常数据容错，不改变支付事实、脱敏契约或正式发布门禁。

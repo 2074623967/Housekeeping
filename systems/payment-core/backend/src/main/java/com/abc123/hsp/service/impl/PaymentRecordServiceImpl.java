@@ -13,6 +13,7 @@ import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -150,7 +151,16 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private String normalizeOptionalQueryField(

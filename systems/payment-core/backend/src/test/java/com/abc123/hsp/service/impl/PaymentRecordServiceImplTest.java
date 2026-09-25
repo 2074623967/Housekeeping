@@ -125,6 +125,23 @@ class PaymentRecordServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInPaymentRecordDetailCollections() {
+        PaymentRecordDetailDTO detail = new PaymentRecordDetailDTO();
+        detail.setPaymentOrderId("PAY-DETAIL-NULL-ROW");
+        when(paymentRecordMapper.findDetail("PAY-DETAIL-NULL-ROW")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "ROUTE-1"));
+        when(paymentMapper.findNotifyLogs("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "NOTIFY-1"));
+        when(paymentMapper.findEventItems("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "EVENT-1"));
+
+        PaymentRecordDetailDTO result = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper)
+                .detail("PAY-DETAIL-NULL-ROW");
+
+        assertEquals(Arrays.asList("ROUTE-1"), result.getRouteLogs());
+        assertEquals(Arrays.asList("NOTIFY-1"), result.getNotifyLogs());
+        assertEquals(Arrays.asList("EVENT-1"), result.getEventLogs());
+    }
+
+    @Test
     void shouldExportMaskedAndSpreadsheetSafePaymentRecords() {
         PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
         query.setRecordType(" ALL ");

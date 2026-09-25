@@ -3391,6 +3391,28 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInPaymentDetailCollections() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-DETAIL-NULL-ROW");
+        when(paymentMapper.findDetail("PAY-DETAIL-NULL-ROW")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "ROUTE-1"));
+        when(paymentMapper.findNotifyLogs("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "NOTIFY-1"));
+        when(paymentMapper.findEventItems("PAY-DETAIL-NULL-ROW")).thenReturn(Arrays.asList(null, "EVENT-1"));
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .detail("PAY-DETAIL-NULL-ROW");
+
+        org.junit.jupiter.api.Assertions.assertEquals(Arrays.asList("ROUTE-1"), result.getRouteLogs());
+        org.junit.jupiter.api.Assertions.assertEquals(Arrays.asList("NOTIFY-1"), result.getNotifyLogs());
+        org.junit.jupiter.api.Assertions.assertEquals(Arrays.asList("EVENT-1"), result.getEventLogs());
+    }
+
+    @Test
     void shouldKeepLatestAttemptContextWhenLoadingPaymentDetail() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-DETAIL-100");
