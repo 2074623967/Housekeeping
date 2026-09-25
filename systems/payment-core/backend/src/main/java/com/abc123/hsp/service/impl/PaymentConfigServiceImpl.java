@@ -1895,7 +1895,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         List<PaymentChannelConfigDTO> channels = safeList(paymentConfigMapper.findChannels());
         Set<String> enabledChannelCodes = new HashSet<String>();
         Set<String> enabledPaymentMethods = new HashSet<String>();
-        for (PaymentChannelConfigDTO channel : channels) {
+        for (PaymentChannelConfigDTO channel : safeList(channels)) {
             if ("ENABLED".equals(channel.getStatus()) && allowedChannels.contains(channel.getChannelCode())) {
                 enabledChannelCodes.add(channel.getChannelCode());
                 enabledPaymentMethods.add(normalizePaymentMethod(channel.getPaymentMethod()));
@@ -2038,7 +2038,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "CHANNELS") || channels == null) {
             return;
         }
-        for (PaymentChannelConfigDTO channel : channels) {
+        for (PaymentChannelConfigDTO channel : safeList(channels)) {
             appendCsvRow(builder,
                     "支付渠道",
                     channel.getChannelCode(),
@@ -2070,7 +2070,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "ROUTE_RULES") || routeRules == null) {
             return;
         }
-        for (PaymentRouteRuleConfigDTO routeRule : routeRules) {
+        for (PaymentRouteRuleConfigDTO routeRule : safeList(routeRules)) {
             appendCsvRow(builder,
                     "路由规则",
                     routeRule.getRuleCode(),
@@ -2097,7 +2097,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "PROTOCOLS") || protocols == null) {
             return;
         }
-        for (PaymentProtocolConfigDTO protocol : protocols) {
+        for (PaymentProtocolConfigDTO protocol : safeList(protocols)) {
             appendCsvRow(builder,
                     "支付协议",
                     protocol.getProtocolCode(),
@@ -2127,7 +2127,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "RETURN_CODES") || returnCodeMappings == null) {
             return;
         }
-        for (PaymentChannelReturnCodeConfigDTO mapping : returnCodeMappings) {
+        for (PaymentChannelReturnCodeConfigDTO mapping : safeList(returnCodeMappings)) {
             appendCsvRow(builder,
                     "返回码映射",
                     mapping.getChannelCode(),
@@ -2152,7 +2152,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "GATEWAYS") || gateways == null) {
             return;
         }
-        for (PaymentGatewayConfigDTO gateway : gateways) {
+        for (PaymentGatewayConfigDTO gateway : safeList(gateways)) {
             appendCsvRow(builder,
                     "支付网关",
                     gateway.getGatewayCode(),
@@ -2182,7 +2182,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "CONTROL_POLICIES") || controlPolicies == null) {
             return;
         }
-        for (PaymentControlPolicyDTO controlPolicy : controlPolicies) {
+        for (PaymentControlPolicyDTO controlPolicy : safeList(controlPolicies)) {
             appendCsvRow(builder,
                     "支付控制策略",
                     controlPolicy.getSourceAppId(),
@@ -2211,7 +2211,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "ALERT_PROVIDERS") || alertProviders == null) {
             return;
         }
-        for (PaymentAlertProviderConfigDTO alertProvider : alertProviders) {
+        for (PaymentAlertProviderConfigDTO alertProvider : safeList(alertProviders)) {
             appendCsvRow(builder,
                     "告警供应商",
                     alertProvider.getProviderCode(),
@@ -2238,7 +2238,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!shouldExportSection(section, "ISSUE_DUTY_ROSTERS") || issueDutyRosters == null) {
             return;
         }
-        for (PaymentIssueDutyRosterDTO issueDutyRoster : issueDutyRosters) {
+        for (PaymentIssueDutyRosterDTO issueDutyRoster : safeList(issueDutyRosters)) {
             appendCsvRow(builder,
                     "值班路由",
                     issueDutyRoster.getRosterCode(),

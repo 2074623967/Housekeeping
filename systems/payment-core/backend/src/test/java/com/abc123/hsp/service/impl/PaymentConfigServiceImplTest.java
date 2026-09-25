@@ -1351,6 +1351,22 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsWhenExportingGovernanceSnapshot() {
+        PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
+        channel.setChannelCode("wx_h5");
+        channel.setChannelName("微信H5支付");
+        channel.setStatus("ENABLED");
+        when(paymentConfigMapper.findChannelsForExport()).thenReturn(Arrays.asList(null, channel));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("CHANNELS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("wx_h5"));
+        verify(paymentConfigMapper).findChannelsForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
     void shouldExportAllGovernanceSectionsWithoutQueryingProtocolOptions() {
         new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("ALL");
 
