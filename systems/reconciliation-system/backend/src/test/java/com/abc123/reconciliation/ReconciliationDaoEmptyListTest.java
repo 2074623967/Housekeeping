@@ -1,11 +1,13 @@
 package com.abc123.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.abc123.reconciliation.dao.impl.ReconciliationDaoImpl;
 import com.abc123.reconciliation.dto.BatchQueryDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.mapper.ReconciliationMapper;
 import org.junit.jupiter.api.Test;
 
@@ -36,5 +38,18 @@ class ReconciliationDaoEmptyListTest {
         assertTrue(dao.findDifferences(null).isEmpty());
         assertTrue(dao.findDifferencesByBatch("BATCH-EMPTY").isEmpty());
         assertTrue(dao.findCrossSystemFacts("CHAIN-EMPTY").isEmpty());
+    }
+
+    @Test
+    void shouldFilterNullMapperRowsWithoutDroppingValidRows() {
+        ReconciliationMapper mapper = mock(ReconciliationMapper.class);
+        ReconciliationBatchListItemDTO validBatch = new ReconciliationBatchListItemDTO();
+        when(mapper.findBatches(org.mockito.ArgumentMatchers.any(BatchQueryDTO.class)))
+                .thenReturn(java.util.Arrays.asList(null, validBatch, null));
+
+        ReconciliationDaoImpl dao = new ReconciliationDaoImpl(mapper);
+
+        assertEquals(java.util.Collections.singletonList(validBatch),
+                dao.findBatches(new BatchQueryDTO()));
     }
 }

@@ -16,6 +16,7 @@ import com.abc123.reconciliation.mapper.ReconciliationMapper;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -154,6 +155,8 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        return values == null
+                ? Collections.emptyList()
+                : values.stream().filter(value -> value != null).collect(Collectors.toList());
     }
 }
