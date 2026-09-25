@@ -201,6 +201,13 @@
         WHERE event_id = #{eventId}
     </select>
 
+    <update id="markOutboxDispatching">
+        UPDATE t_refund_outbox_event
+        SET status = 'DISPATCHING'
+        WHERE event_id = #{eventId}
+          AND status IN ('PENDING', 'FAIL')
+    </update>
+
     <update id="markOutboxSent">
         UPDATE t_refund_outbox_event
         SET status = 'SENT',
@@ -208,7 +215,7 @@
             last_relay_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE event_id = #{eventId}
-          AND status IN ('PENDING', 'FAIL')
+          AND status = 'DISPATCHING'
     </update>
 
     <update id="markOutboxFailed">
@@ -219,6 +226,6 @@
             last_relay_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE event_id = #{eventId}
-          AND status IN ('PENDING', 'FAIL')
+          AND status = 'DISPATCHING'
     </update>
 </mapper>

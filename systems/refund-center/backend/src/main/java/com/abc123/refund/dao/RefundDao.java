@@ -52,6 +52,8 @@ public interface RefundDao {
 
     RefundOutboxEventEntity findOutboxByEventId(String eventId);
 
+    int markOutboxDispatching(String eventId);
+
     int markOutboxSent(String eventId);
 
     int markOutboxFailed(String eventId, String lastErrorMessage);

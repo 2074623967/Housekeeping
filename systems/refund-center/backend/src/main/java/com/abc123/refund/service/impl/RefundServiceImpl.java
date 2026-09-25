@@ -307,6 +307,9 @@ public class RefundServiceImpl implements RefundService {
         if (OUTBOX_SENT.equals(existing.getStatus())) {
             return loadSingleOutbox(id);
         }
+        if (refundDao.markOutboxDispatching(id) != 1) {
+            throw new BusinessException("退款成功事件正在派发，请稍后重试");
+        }
         String simulateResult = request == null ? null : trim(request.getSimulateResult());
         String remark = request == null ? null : trim(request.getRemark());
         if (OUTBOX_DISPATCH_FAIL.equalsIgnoreCase(simulateResult)) {

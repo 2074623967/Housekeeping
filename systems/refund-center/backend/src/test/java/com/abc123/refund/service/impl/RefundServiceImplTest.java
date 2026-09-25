@@ -202,6 +202,7 @@ class RefundServiceImplTest {
         event.setStatus("PENDING");
         when(refundDao.findOutboxByEventId("REVT-1")).thenReturn(event);
         when(refundDao.markOutboxSent("REVT-1")).thenReturn(1);
+        when(refundDao.markOutboxDispatching("REVT-1")).thenReturn(1);
         RefundOutboxItemDTO item = new RefundOutboxItemDTO();
         item.setEventId("REVT-1");
         item.setStatus("SENT");
@@ -221,6 +222,7 @@ class RefundServiceImplTest {
         event.setStatus("PENDING");
         when(refundDao.findOutboxByEventId("REVT-2")).thenReturn(event);
         when(refundDao.markOutboxFailed("REVT-2", "账务系统暂不可用")).thenReturn(1);
+        when(refundDao.markOutboxDispatching("REVT-2")).thenReturn(1);
         RefundOutboxItemDTO item = new RefundOutboxItemDTO();
         item.setEventId("REVT-2");
         item.setStatus("FAIL");
@@ -249,6 +251,7 @@ class RefundServiceImplTest {
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
                 .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
         when(refundDao.markOutboxSent("REVT-3")).thenReturn(1);
+        when(refundDao.markOutboxDispatching("REVT-3")).thenReturn(1);
         RefundOutboxItemDTO sent = new RefundOutboxItemDTO();
         sent.setEventId("REVT-3");
         sent.setStatus("SENT");
@@ -275,6 +278,7 @@ class RefundServiceImplTest {
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
                 .thenThrow(new IllegalStateException("downstream unavailable"));
         when(refundDao.markOutboxFailed("REVT-4", "下游派发失败:IllegalStateException")).thenReturn(1);
+        when(refundDao.markOutboxDispatching("REVT-4")).thenReturn(1);
         RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
         failed.setEventId("REVT-4");
         failed.setStatus("FAIL");
@@ -299,6 +303,7 @@ class RefundServiceImplTest {
         when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
                 .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "ACCOUNTING_ERROR")));
         when(refundDao.markOutboxFailed("REVT-5", "下游派发失败:IllegalStateException")).thenReturn(1);
+        when(refundDao.markOutboxDispatching("REVT-5")).thenReturn(1);
         RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
         failed.setEventId("REVT-5");
         failed.setStatus("FAIL");

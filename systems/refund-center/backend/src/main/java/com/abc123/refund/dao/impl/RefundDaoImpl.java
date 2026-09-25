@@ -117,6 +117,11 @@ public class RefundDaoImpl implements RefundDao {
     }
 
     @Override
+    public int markOutboxDispatching(String eventId) {
+        return refundMapper.markOutboxDispatching(eventId);
+    }
+
+    @Override
     public int markOutboxSent(String eventId) {
         return refundMapper.markOutboxSent(eventId);
     }

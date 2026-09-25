@@ -68,6 +68,8 @@ public interface RefundMapper {
 
     RefundOutboxEventEntity findOutboxByEventId(@Param("eventId") String eventId);
 
+    int markOutboxDispatching(@Param("eventId") String eventId);
+
     int markOutboxSent(@Param("eventId") String eventId);
 
     int markOutboxFailed(@Param("eventId") String eventId,
