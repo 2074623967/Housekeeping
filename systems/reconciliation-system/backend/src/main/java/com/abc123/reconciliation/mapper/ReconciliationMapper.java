@@ -45,6 +45,11 @@ public interface ReconciliationMapper {
 
     int updateBatchStatus(@Param("batchNo") String batchNo, @Param("status") String status);
 
+    /**
+     * 原子认领对账批次执行权，避免并发重算同一批次。
+     */
+    int claimBatchRun(@Param("batchNo") String batchNo);
+
     int resetBatchResults(@Param("batchNo") String batchNo);
 
     int insertDifference(@Param("differenceNo") String differenceNo, @Param("batchNo") String batchNo,

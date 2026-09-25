@@ -87,6 +87,11 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
+    public int claimBatchRun(String batchNo) {
+        return mapper.claimBatchRun(batchNo);
+    }
+
+    @Override
     public int resetBatchResults(String batchNo) {
         return mapper.resetBatchResults(batchNo);
     }

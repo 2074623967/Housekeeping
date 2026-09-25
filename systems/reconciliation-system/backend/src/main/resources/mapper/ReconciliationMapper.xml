@@ -76,6 +76,13 @@
         WHERE batch_no = #{batchNo}
     </update>
 
+    <update id="claimBatchRun">
+        UPDATE t_reconciliation_batch
+        SET status = 'RUNNING', updated_at = CURRENT_TIMESTAMP
+        WHERE batch_no = #{batchNo}
+          AND status &lt;&gt; 'RUNNING'
+    </update>
+
     <delete id="resetBatchResults">
         DELETE FROM t_reconciliation_difference WHERE batch_no = #{batchNo}
     </delete>

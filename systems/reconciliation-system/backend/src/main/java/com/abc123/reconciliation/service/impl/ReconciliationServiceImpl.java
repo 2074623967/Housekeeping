@@ -138,7 +138,9 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         if (!READINESS_READY.equals(readiness.getReadinessStatus())) {
             throw new BusinessException("对账准入未通过：" + readiness.getReadinessSummary());
         }
-        markBatchStatus(batchNo, RUNNING);
+        if (dao.claimBatchRun(batchNo) == 0) {
+            throw new BusinessException("对账批次正在执行");
+        }
         return transactionTemplate.execute(status -> executeRun(batchNo));
     }
 
@@ -603,12 +605,6 @@ public class ReconciliationServiceImpl implements ReconciliationService {
             throw new BusinessException(message);
         }
         return value.trim();
-    }
-
-    private void markBatchStatus(String batchNo, String status) {
-        if (dao.updateBatchStatus(batchNo, status) == 0) {
-            throw new BusinessException("对账批次不存在");
-        }
     }
 
     private String csv(String value) {

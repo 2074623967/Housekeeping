@@ -42,6 +42,8 @@ public interface ReconciliationDao {
 
     int updateBatchStatus(String batchNo, String status);
 
+    int claimBatchRun(String batchNo);
+
     int resetBatchResults(String batchNo);
 
     int insertDifference(String differenceNo, String batchNo, String differenceType, String paymentOrderId,
