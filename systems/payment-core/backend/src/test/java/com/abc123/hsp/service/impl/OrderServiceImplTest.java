@@ -127,7 +127,8 @@ class OrderServiceImplTest {
         OrderListItemDTO item = new OrderListItemDTO();
         item.setCustomerName("王阿姨");
         item.setWorkerName("李师傅");
-        when(orderMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(orderMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((OrderListItemDTO) null, item));
         when(orderMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<OrderListItemDTO> result = new OrderServiceImpl(orderMapper).list(query);

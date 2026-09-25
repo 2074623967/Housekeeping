@@ -134,7 +134,8 @@ class BillServiceImplTest {
         BillQueryDTO query = new BillQueryDTO();
         BillListItemDTO item = new BillListItemDTO();
         item.setCustomerName("张女士");
-        when(billMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(billMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((BillListItemDTO) null, item));
         when(billMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<BillListItemDTO> result = new BillServiceImpl(billMapper).list(query);

@@ -157,7 +157,8 @@ class CashierSessionServiceImplTest {
         CashierSessionQueryDTO query = new CashierSessionQueryDTO();
         CashierSessionListItemDTO item = new CashierSessionListItemDTO();
         item.setCustomerName("王先生");
-        when(cashierSessionMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(cashierSessionMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((CashierSessionListItemDTO) null, item));
         when(cashierSessionMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<CashierSessionListItemDTO> result =

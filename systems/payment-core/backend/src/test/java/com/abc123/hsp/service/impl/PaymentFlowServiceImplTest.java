@@ -158,7 +158,8 @@ class PaymentFlowServiceImplTest {
         PaymentFlowListItemDTO item = buildItem("FLOW-001", "方式=微信 / 状态=处理中", 0);
         item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
         item.setRequestPayload("{\"payerPhone\":\"13800138000\",\"nested\":{\"clientDeviceId\":\"DEVICE-12345678\"}}");
-        when(paymentFlowMapper.findAll(listQuery)).thenReturn(Collections.singletonList(item));
+        when(paymentFlowMapper.findAll(listQuery))
+                .thenReturn(java.util.Arrays.asList((PaymentFlowListItemDTO) null, item));
         when(paymentFlowMapper.count(listQuery)).thenReturn(1L);
 
         PaymentFlowListItemDTO result = new PaymentFlowServiceImpl(paymentFlowMapper)

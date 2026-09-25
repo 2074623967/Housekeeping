@@ -91,7 +91,8 @@ class RefundServiceImplTest {
         RefundQueryDTO query = new RefundQueryDTO();
         RefundListItemDTO item = new RefundListItemDTO();
         item.setCustomerName("张女士");
-        when(refundMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(refundMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((RefundListItemDTO) null, item));
         when(refundMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<RefundListItemDTO> result =

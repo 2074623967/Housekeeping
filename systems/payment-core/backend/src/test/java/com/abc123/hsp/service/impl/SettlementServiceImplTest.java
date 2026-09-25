@@ -91,7 +91,8 @@ class SettlementServiceImplTest {
         WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
         WorkerSettlementListItemDTO item = new WorkerSettlementListItemDTO();
         item.setWorkerName("李师傅");
-        when(settlementMapper.findWorkerSettlements(query)).thenReturn(Collections.singletonList(item));
+        when(settlementMapper.findWorkerSettlements(query))
+                .thenReturn(java.util.Arrays.asList((WorkerSettlementListItemDTO) null, item));
         when(settlementMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<WorkerSettlementListItemDTO> result =

@@ -127,7 +127,10 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+        return items.stream()
+                .filter(item -> item != null)
+                .map(this::maskedCopy)
+                .collect(Collectors.toList());
     }
 
     private PaymentRouteExecutionListItemDTO maskedCopy(PaymentRouteExecutionListItemDTO item) {

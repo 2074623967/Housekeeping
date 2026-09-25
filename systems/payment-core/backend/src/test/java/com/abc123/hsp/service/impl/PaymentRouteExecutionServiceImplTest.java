@@ -217,7 +217,7 @@ class PaymentRouteExecutionServiceImplTest {
         item.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
         item.setResponsePayload("{\"cardNo\":\"6222021234567890123\"}");
         org.mockito.Mockito.when(paymentRouteExecutionMapper.findAll(query))
-                .thenReturn(Collections.singletonList(item));
+                .thenReturn(java.util.Arrays.asList((PaymentRouteExecutionListItemDTO) null, item));
         org.mockito.Mockito.when(paymentRouteExecutionMapper.count(query)).thenReturn(1L);
 
         PaymentRouteExecutionListItemDTO result = new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper)
