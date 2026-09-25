@@ -17335,3 +17335,7 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 ## 767. 2026-09-25 payment-core 用户端与管理端矩阵复核
 
 重新执行前端回归矩阵：管理端 `12/12` 工程的测试与生产构建通过；用户端 `5/5` 通过，其中 API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、微信小程序 `21/21`，App/H5/PC 生产构建通过。首次用户端构建因既有 `node_modules/.vite-temp` 权限失败，受控权限下重跑后通过；本节只记录本地前端骨架证据，不替代真实浏览器组合、微信开发者工具/真机、统一身份权限、渠道签名或生产域名验收。
+
+## 768. 2026-09-25 当前 HEAD 本地全栈联调复核
+
+执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟与跨系统 happy-path 通过；本地链路实际生成支付、清分、结算、账务、退款和对账事实，对账链为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只属于受控 H2/demo/HTTP 本地骨架，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收或正式发布治理证据。
