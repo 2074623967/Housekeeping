@@ -63,6 +63,8 @@ class PaymentFlowServiceImplTest {
     void shouldRejectOversizedPaymentFlowQueryBeforeMapperAccess() {
         PaymentFlowQueryDTO paymentOrderQuery = new PaymentFlowQueryDTO();
         paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentFlowQueryDTO paymentOrderAfterTrimQuery = new PaymentFlowQueryDTO();
+        paymentOrderAfterTrimQuery.setPaymentOrderId(repeat("P", 64) + " ");
         PaymentFlowQueryDTO orderQuery = new PaymentFlowQueryDTO();
         orderQuery.setOrderNo(repeat("O", 65));
         PaymentFlowQueryDTO flowTypeQuery = new PaymentFlowQueryDTO();
@@ -78,6 +80,7 @@ class PaymentFlowServiceImplTest {
         PaymentFlowServiceImpl service = new PaymentFlowServiceImpl(paymentFlowMapper);
 
         assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderAfterTrimQuery));
         assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
         assertThrows(IllegalArgumentException.class, () -> service.list(flowTypeQuery));
         assertThrows(IllegalArgumentException.class, () -> service.exportCsv(channelQuery));
@@ -203,6 +206,8 @@ class PaymentFlowServiceImplTest {
         assertThrows(BusinessException.class, () -> service.detail("UNKNOWN", "FLOW-001"));
         assertThrows(BusinessException.class, () -> service.detail("PAYMENT_ATTEMPT", "FLOW-001\n"));
         assertThrows(BusinessException.class, () -> service.detail("PAYMENT_ATTEMPT", repeat("F", 65)));
+        assertThrows(BusinessException.class,
+                () -> service.detail("PAYMENT_ATTEMPT", repeat("F", 64) + " "));
 
         when(paymentFlowMapper.findDetail("BUSINESS_EVENT", "MISSING")).thenReturn(null);
         BusinessException exception = assertThrows(

@@ -172,6 +172,9 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
@@ -196,6 +199,9 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
             throw invalidFlow("支付流水编号不能为空");
         }
         rejectControlCharacters(flowNo, "支付流水编号不能包含控制字符");
+        if (flowNo.length() > FLOW_NO_MAX_LENGTH) {
+            throw invalidFlow("支付流水编号长度不能超过 64 个字符");
+        }
         String normalized = flowNo.trim();
         if (normalized.length() > FLOW_NO_MAX_LENGTH) {
             throw invalidFlow("支付流水编号长度不能超过 64 个字符");

@@ -52,6 +52,8 @@ class SettlementServiceImplTest {
     void shouldRejectOversizedWorkerSettlementQueryBeforeMapperAccess() {
         WorkerSettlementQueryDTO settlementOrderQuery = new WorkerSettlementQueryDTO();
         settlementOrderQuery.setSettlementOrderId(repeat("S", 65));
+        WorkerSettlementQueryDTO settlementOrderAfterTrimQuery = new WorkerSettlementQueryDTO();
+        settlementOrderAfterTrimQuery.setSettlementOrderId(repeat("S", 64) + " ");
         WorkerSettlementQueryDTO workerQuery = new WorkerSettlementQueryDTO();
         workerQuery.setWorkerKeyword(repeat("李", 129));
         WorkerSettlementQueryDTO settlementStatusQuery = new WorkerSettlementQueryDTO();
@@ -61,6 +63,7 @@ class SettlementServiceImplTest {
         SettlementServiceImpl service = new SettlementServiceImpl(settlementMapper);
 
         assertThrows(IllegalArgumentException.class, () -> service.workerList(settlementOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.workerList(settlementOrderAfterTrimQuery));
         assertThrows(IllegalArgumentException.class, () -> service.workerOverview(workerQuery));
         assertThrows(IllegalArgumentException.class, () -> service.exportCsv(settlementStatusQuery));
         assertThrows(IllegalArgumentException.class, () -> service.workerList(payoutStatusQuery));

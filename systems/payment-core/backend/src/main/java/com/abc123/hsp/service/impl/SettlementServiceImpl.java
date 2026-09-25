@@ -152,6 +152,9 @@ public class SettlementServiceImpl implements SettlementService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
