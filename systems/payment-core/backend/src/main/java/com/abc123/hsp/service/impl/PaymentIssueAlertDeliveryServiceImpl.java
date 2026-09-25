@@ -342,7 +342,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private PaymentTaskActionResultDTO dispatchPendingAlertsByMode(String runMode, String triggeredBy) {
         List<PaymentIssueAlertDispatchItemDTO> pendingAlerts =
-                paymentTaskCenterMapper.findPendingOutboxAlerts(dispatchBatchSize);
+                safeList(paymentTaskCenterMapper.findPendingOutboxAlerts(dispatchBatchSize));
         Map<String, PaymentIssueAlertNotifier> notifierMap = notifiers.stream()
                 .collect(Collectors.toMap(PaymentIssueAlertNotifier::channelCode, notifier -> notifier, (left, right) -> left));
 
@@ -1015,11 +1015,27 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return matchedProviders;
         }
         for (PaymentAlertProviderConfigDTO providerConfig : providerConfigs) {
+            if (providerConfig == null) {
+                continue;
+            }
             if (matchesRouteRule(providerConfig.getRouteRule(), item)) {
                 matchedProviders.add(providerConfig);
             }
         }
         return matchedProviders;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<T>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private boolean matchesRouteRule(String routeRule, PaymentIssueAlertDispatchItemDTO item) {
@@ -1261,13 +1277,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private PaymentTaskActionResultDTO reconcileDeliveryReceiptsByMode(String runMode, String triggeredBy) {
         List<PaymentIssueAlertLogEntity> acceptedLogs = RUN_MODE_AUTO.equals(runMode)
-                ? paymentTaskCenterMapper.findDueAcceptedIssueAlertDeliveryLogs(
+                ? safeList(paymentTaskCenterMapper.findDueAcceptedIssueAlertDeliveryLogs(
                         receiptQueryMinAgeSeconds,
                         receiptQueryMaxAttempts,
                         receiptQueryClaimTimeoutSeconds,
-                        receiptQueryBatchSize)
-                : paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(
-                        receiptQueryClaimTimeoutSeconds, receiptQueryBatchSize);
+                        receiptQueryBatchSize))
+                : safeList(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(
+                        receiptQueryClaimTimeoutSeconds, receiptQueryBatchSize));
         return reconcileDeliveryReceipts(acceptedLogs, runMode, triggeredBy);
     }
 

@@ -1881,7 +1881,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
     @Test
     void shouldReturnZeroWhenNoAcceptedReceiptsNeedReconcile() {
-        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(30, 100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(30, 100))
+                .thenReturn(Arrays.asList((PaymentIssueAlertLogEntity) null));
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -1896,7 +1897,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
     @Test
     void shouldGenerateUniqueTaskLogNumbersWithoutMillisecondCollision() {
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Arrays.asList((PaymentIssueAlertDispatchItemDTO) null));
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
