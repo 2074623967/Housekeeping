@@ -149,6 +149,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "SMS")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "EMAIL")).thenReturn(false);
         when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                null,
                 buildProvider("ALERT_IM_WECOM_P1", "企业微信告警机器人-P1", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_P1_V1", "severity=P1", 10),
                 buildProvider("ALERT_IM_WECOM_DEFAULT", "企业微信告警机器人-默认", "wecom-bot-alerts-default", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)
         ));
