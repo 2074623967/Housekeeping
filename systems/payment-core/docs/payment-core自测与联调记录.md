@@ -17109,3 +17109,9 @@ gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收
 `PaymentChannelRoutingServiceImpl`、`PaymentEventRetryTaskServiceImpl`、`RefundQueryTaskServiceImpl` 和 `RefundRetryTaskServiceImpl` 现在会在服务边界过滤候选列表中的 `null` 元素，避免脏候选触发支付路由、事件重发或退款补偿批次异常。新增四条服务层回归，覆盖健康路由、事件重发、退款主动查单和失败退款重试。
 
 验证结果：四组定向测试通过；payment-core 后端全量回归更新为 `1211/1211`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强主链路和补偿任务的异常数据容错，不改变路由规则、任务状态机、真实渠道或正式发布门禁。
+
+## 737. 2026-09-25 配置治理总览空元素边界补强
+
+`PaymentConfigServiceImpl` 现在会在配置总览、配置自检和路由冲突检测共用的服务边界过滤渠道、路由、协议、网关、控制策略、告警供应商和值班路由列表中的 `null` 元素，避免单条脏行导致运营配置页面或自检失败。新增 `PaymentConfigServiceImplTest` 总览空元素回归。
+
+验证结果：配置治理定向测试通过；payment-core 后端全量回归更新为 `1212/1212`，失败 `0`、错误 `0`、跳过 `0`。本轮只增强配置控制面的异常数据容错，不改变复核、版本或发布门禁语义。

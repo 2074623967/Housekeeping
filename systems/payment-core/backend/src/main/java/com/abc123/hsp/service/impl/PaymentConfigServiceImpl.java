@@ -185,7 +185,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     @Override

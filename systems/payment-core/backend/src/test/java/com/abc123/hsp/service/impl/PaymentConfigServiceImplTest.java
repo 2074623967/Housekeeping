@@ -1222,6 +1222,27 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsWhenLoadingConfigurationOverview() {
+        PaymentChannelConfigDTO channel = buildChannel("wx_h5", "微信支付", "MCH-WX", "ENABLED");
+        when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(null, channel));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findProtocols()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findGateways()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findAlertProviders()).thenReturn(Arrays.asList(null));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Arrays.asList(null));
+
+        PaymentConfigOverviewDTO overview = new PaymentConfigServiceImpl(paymentConfigMapper).overview();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, overview.getChannels().size());
+        org.junit.jupiter.api.Assertions.assertTrue(overview.getRouteRules().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(overview.getProtocols().isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(overview.getGateways().isEmpty());
+    }
+
+    @Test
     void shouldExposeIssueDutyRosterInOverview() {
         PaymentIssueDutyRosterDTO roster = new PaymentIssueDutyRosterDTO();
         roster.setRosterCode("DUTY_WAIT_CALLBACK_P1");
