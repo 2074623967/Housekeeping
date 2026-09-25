@@ -257,7 +257,8 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        return items.stream().map(this::maskedEventCopy).collect(Collectors.toList());
+        return items.stream().filter(item -> item != null)
+                .map(this::maskedEventCopy).collect(Collectors.toList());
     }
 
     private PaymentEventListItemDTO maskedEventCopy(PaymentEventListItemDTO item) {

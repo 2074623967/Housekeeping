@@ -18,6 +18,7 @@ import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -105,6 +106,20 @@ class PaymentEventServiceImplTest {
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("retryCount", query.getSortField());
         assertEquals("asc", query.getSortOrder());
+    }
+
+    @Test
+    void shouldIgnoreNullRowsWhenListingPaymentEvents() {
+        PaymentEventListItemDTO item = new PaymentEventListItemDTO();
+        item.setEventNo("EVT-002");
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        when(paymentEventMapper.findAll(query)).thenReturn(Arrays.asList(null, item));
+        when(paymentEventMapper.count(query)).thenReturn(2L);
+
+        PageResultDTO<PaymentEventListItemDTO> page = new PaymentEventServiceImpl(paymentEventMapper).list(query);
+
+        assertEquals(1, page.getItems().size());
+        assertEquals("EVT-002", page.getItems().get(0).getEventNo());
     }
 
     @Test
