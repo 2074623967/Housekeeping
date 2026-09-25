@@ -140,7 +140,7 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
         existing.setRosterCode("DUTY_EXISTING_P1");
         when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
         when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
-                .thenReturn(Collections.singletonList(existing));
+                .thenReturn(java.util.Arrays.asList(null, existing));
 
         IllegalArgumentException conflict = assertThrows(IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
@@ -234,7 +234,7 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
         existing.setHolidayStrategy("NON_WORKDAY_ONLY");
         when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
         when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
-                .thenReturn(Collections.singletonList(existing));
+                .thenReturn(null);
         when(paymentConfigMapper.insertIssueDutyRoster(any())).thenReturn(1);
         when(paymentConfigMapper.completeIssueDutyRosterReview(any(), any(), any(), any(), any()))
                 .thenReturn(1);

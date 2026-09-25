@@ -3492,7 +3492,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         List<PaymentIssueDutyRosterEntity> existingRosters =
                 paymentConfigMapper.findIssueDutyRostersByScopeForUpdate(
                         candidate.getIssueType(), candidate.getSeverity());
-        for (PaymentIssueDutyRosterEntity existing : existingRosters) {
+        for (PaymentIssueDutyRosterEntity existing : safeList(existingRosters)) {
             if (candidate.getRosterCode().equals(existing.getRosterCode())
                     || !STATUS_ENABLED.equals(existing.getStatus())) {
                 continue;
