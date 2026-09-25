@@ -1680,10 +1680,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw invalidPaymentRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
         }
+        String normalized = value.trim();
         return normalized;
     }
 
@@ -1764,6 +1764,7 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getPayerPhone(), "付款手机号", SUBMIT_PAYER_PHONE_MAX_LENGTH));
         validateSubmitIdempotencyKeyControlCharacters(request.getIdempotencyKey());
         if (StringUtils.hasText(request.getIdempotencyKey())) {
+            validateSubmitIdempotencyKey(request.getIdempotencyKey());
             String idempotencyKey = request.getIdempotencyKey().trim();
             validateSubmitIdempotencyKey(idempotencyKey);
             request.setIdempotencyKey(idempotencyKey);
@@ -1818,6 +1819,9 @@ public class PaymentServiceImpl implements PaymentService {
         validateSubmitControlCharacters(value, fieldName);
         if (!StringUtils.hasText(value)) {
             return null;
+        }
+        if (value.length() > maxLength) {
+            throw invalidSubmitRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
         }
         String normalized = value.trim();
         validateRequiredSubmitField(normalized, fieldName, maxLength);

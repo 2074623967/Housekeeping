@@ -213,6 +213,8 @@ class PaymentServiceImplTest {
         cashierTitleRequest.setCashierTitle("CASHIER\n");
         PrepayRequestDTO remarkRequest = validPrepayRequest();
         remarkRequest.setRemark("REMARK\n");
+        PrepayRequestDTO oversizedOrderNoRequest = validPrepayRequest();
+        oversizedOrderNoRequest.setOrderNo(repeat("O", 64) + " ");
 
         assertPaymentRequestInvalid(() -> service.detail("PAY-DETAIL\n"));
         assertPaymentRequestInvalid(() -> service.cashier("PRE-001\n"));
@@ -223,6 +225,7 @@ class PaymentServiceImplTest {
         assertPaymentRequestInvalid(() -> service.prepay(customerNameRequest));
         assertPaymentRequestInvalid(() -> service.prepay(cashierTitleRequest));
         assertPaymentRequestInvalid(() -> service.prepay(remarkRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(oversizedOrderNoRequest));
 
         verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
     }
@@ -306,6 +309,8 @@ class PaymentServiceImplTest {
         payerPhoneRequest.setPayerPhone("13800138000\n");
         PaymentSubmitRequestDTO idempotencyKeyRequest = validSubmitRequest();
         idempotencyKeyRequest.setIdempotencyKey("IDEMP-001\n");
+        PaymentSubmitRequestDTO oversizedPaymentMethodRequest = validSubmitRequest();
+        oversizedPaymentMethodRequest.setPaymentMethod(repeat("M", 32) + " ");
 
         assertSubmitRequestInvalid(service, prepayOrderNoRequest);
         assertSubmitRequestInvalid(service, paymentMethodRequest);
@@ -317,6 +322,7 @@ class PaymentServiceImplTest {
         assertSubmitRequestInvalid(service, clientIpRequest);
         assertSubmitRequestInvalid(service, clientDeviceIdRequest);
         assertSubmitRequestInvalid(service, payerPhoneRequest);
+        assertSubmitRequestInvalid(service, oversizedPaymentMethodRequest);
         BusinessException idempotencyException = assertThrows(
                 BusinessException.class, () -> service.submit(idempotencyKeyRequest));
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -1894,7 +1900,7 @@ class PaymentServiceImplTest {
         request.setPrepayOrderNo("PRE-IDEMP-LONG");
         request.setPaymentMethod("微信支付");
         request.setChannelCode("wx_h5");
-        request.setIdempotencyKey(repeat("A", 129));
+        request.setIdempotencyKey(repeat("A", 128) + " ");
 
         BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 BusinessException.class,
