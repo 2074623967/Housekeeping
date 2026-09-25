@@ -55,13 +55,16 @@ const paymentApi = {
     return request("/api/payments/prepay", { method: "POST", data: payload });
   },
   getCashier(prepayOrderNo) {
-    return request(`/api/payments/cashier/${encodeURIComponent(prepayOrderNo)}`);
+    return request(`/api/payments/cashier/${encodeURIComponent(prepayOrderNo)}`)
+      .then(normalizeCashierPage);
   },
   getDetail(paymentOrderId) {
-    return request(`/api/payments/${encodeURIComponent(paymentOrderId)}`);
+    return request(`/api/payments/${encodeURIComponent(paymentOrderId)}`)
+      .then(normalizePaymentDetail);
   },
   getRefundDetail(refundOrderId) {
-    return request(`/api/refunds/${encodeURIComponent(refundOrderId)}`);
+    return request(`/api/refunds/${encodeURIComponent(refundOrderId)}`)
+      .then(normalizeRefundDetail);
   },
   submit(payload) {
     return request("/api/payments/submit", { method: "POST", data: payload });
@@ -74,4 +77,44 @@ const paymentApi = {
   }
 };
 
-module.exports = { createBusinessError, paymentApi };
+function normalizeList(value) {
+  return Array.isArray(value) ? value.filter((item) => item != null) : [];
+}
+
+function normalizeCashierPage(page) {
+  if (!page || typeof page !== "object" || Array.isArray(page)) {
+    return page;
+  }
+  return { ...page, channels: normalizeList(page.channels) };
+}
+
+function normalizePaymentDetail(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    return detail;
+  }
+  return {
+    ...detail,
+    routeLogs: normalizeList(detail.routeLogs),
+    notifyLogs: normalizeList(detail.notifyLogs),
+    eventLogs: normalizeList(detail.eventLogs)
+  };
+}
+
+function normalizeRefundDetail(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    return detail;
+  }
+  return {
+    ...detail,
+    attempts: normalizeList(detail.attempts),
+    operationLogs: normalizeList(detail.operationLogs)
+  };
+}
+
+module.exports = {
+  createBusinessError,
+  normalizeCashierPage,
+  normalizePaymentDetail,
+  normalizeRefundDetail,
+  paymentApi
+};
