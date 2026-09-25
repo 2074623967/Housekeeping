@@ -20,12 +20,30 @@ async function parseResponsePayload(response) {
 }
 
 export function normalizePagePayload(data) {
-  if (data && typeof data === "object"
-      && Object.prototype.hasOwnProperty.call(data, "items")
-      && !Array.isArray(data.items)) {
-    return { ...data, items: [] };
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length, pageNo: 1, pageSize: 20 };
   }
-  return data;
+  if (!data || typeof data !== "object") {
+    return { items: [], total: 0, pageNo: 1, pageSize: 20 };
+  }
+  if (!Object.prototype.hasOwnProperty.call(data, "items")) {
+    return data;
+  }
+  const items = Array.isArray(data.items) ? data.items : [];
+  const total = Number(data.total);
+  const pageNo = Number(data.pageNo);
+  const pageSize = Number(data.pageSize);
+  return {
+    ...data,
+    items,
+    total: Number.isInteger(total) && total >= 0 ? total : items.length,
+    pageNo: Number.isInteger(pageNo) && pageNo > 0 ? pageNo : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 20
+  };
+}
+
+function requestPage(url, options = {}) {
+  return request(url, options).then(normalizePagePayload);
 }
 
 export function normalizeDashboardPayload(data) {
@@ -77,7 +95,7 @@ async function request(url, options = {}) {
   if (!payload || payload.code !== "0") {
     throw createBusinessError(payload, "Request failed");
   }
-  return normalizePagePayload(payload.data);
+  return payload.data;
 }
 
 function postJson(url, payload) {
@@ -90,7 +108,7 @@ function postJson(url, payload) {
 export const batchApi = {
   getList: ({ batchDate = "", batchStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchDate, batchStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/settlements/batches?${params.toString()}`);
+    return requestPage(`/api/settlements/batches?${params.toString()}`);
   },
   getDetail: (batchNo) => request(`/api/settlements/batches/${batchNo}`),
   create: (payload) => postJson("/api/settlements/batches", payload)
@@ -103,7 +121,7 @@ export const dashboardApi = {
 export const orderApi = {
   getList: ({ batchNo = "", targetType = "", settlementStatus = "", clearingNo = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchNo, targetType, settlementStatus, clearingNo, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/settlements/orders?${params.toString()}`);
+    return requestPage(`/api/settlements/orders?${params.toString()}`);
   },
   create: (payload) => postJson("/api/settlements/orders", payload),
   audit: (settlementNo, payload) => postJson(`/api/settlements/orders/${settlementNo}/audit`, payload),
@@ -114,7 +132,7 @@ export const orderApi = {
 export const payoutApi = {
   getList: ({ batchNo = "", payoutStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchNo, payoutStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/settlements/payouts?${params.toString()}`);
+    return requestPage(`/api/settlements/payouts?${params.toString()}`);
   },
   buildBatchExportUrl: ({ batchNo = "", payoutStatus = "" } = {}) => {
     const params = new URLSearchParams({ batchNo, payoutStatus });
@@ -126,7 +144,7 @@ export const payoutApi = {
   retry: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/retry`, payload),
   records: (payoutBatchNo, { payoutStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ payoutStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/settlements/payouts/${payoutBatchNo}/records?${params.toString()}`);
+    return requestPage(`/api/settlements/payouts/${payoutBatchNo}/records?${params.toString()}`);
   },
   buildRecordExportUrl: (payoutBatchNo, { payoutStatus = "" } = {}) => {
     const params = new URLSearchParams({ payoutStatus });
@@ -137,7 +155,7 @@ export const payoutApi = {
 export const eventApi = {
   getList: ({ eventType = "", bizNo = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ eventType, bizNo, pageNo: String(pageNo), pageSize: String(pageSize) });
-    return request(`/api/settlements/events?${params.toString()}`);
+    return requestPage(`/api/settlements/events?${params.toString()}`);
   },
   consumeClearingGenerated: (payload) => postJson("/api/settlements/events/clearing/generated", payload)
 };

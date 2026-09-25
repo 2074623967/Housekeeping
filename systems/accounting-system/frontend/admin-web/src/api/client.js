@@ -49,21 +49,30 @@ async function request(url, options = {}) {
 }
 
 export function normalizePagePayload(data) {
-  if (data && typeof data === "object"
-      && Object.prototype.hasOwnProperty.call(data, "items")
-      && !Array.isArray(data.items)) {
-    return { ...data, items: [] };
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length, pageNo: 1, pageSize: 20 };
   }
-  return data;
+  if (!data || typeof data !== "object") {
+    return { items: [], total: 0, pageNo: 1, pageSize: 20 };
+  }
+  if (!Object.prototype.hasOwnProperty.call(data, "items")) {
+    return data;
+  }
+  const items = Array.isArray(data.items) ? data.items : [];
+  const total = Number(data.total);
+  const pageNo = Number(data.pageNo);
+  const pageSize = Number(data.pageSize);
+  return {
+    ...data,
+    items,
+    total: Number.isInteger(total) && total >= 0 ? total : items.length,
+    pageNo: Number.isInteger(pageNo) && pageNo > 0 ? pageNo : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 20
+  };
 }
 
 function requestPage(url, options = {}) {
-  return request(url, options).then((data) => normalizePagePayload(data || {
-    items: [],
-    total: 0,
-    pageNo: 1,
-    pageSize: 20
-  }));
+  return request(url, options).then(normalizePagePayload);
 }
 
 function normalizeAccountDetail(data) {

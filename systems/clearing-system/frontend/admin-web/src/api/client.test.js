@@ -30,6 +30,23 @@ test("normalizes a null clearing page response for list consumers", async () => 
   }
 });
 
+test("normalizes malformed clearing pagination metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { items: [{ batchNo: "CLB-002" }], total: "invalid", pageNo: 0, pageSize: -1 } };
+    }
+  });
+  try {
+    assert.deepEqual(await batchApi.getList(), {
+      items: [{ batchNo: "CLB-002" }], total: 1, pageNo: 1, pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("keeps the clearing service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({

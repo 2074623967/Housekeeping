@@ -29,6 +29,23 @@ test("normalizes a null accounting page response for list consumers", async () =
   }
 });
 
+test("normalizes malformed accounting pagination metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { items: [{ ledgerNo: "LDG-002" }], total: "invalid", pageNo: 0, pageSize: -1 } };
+    }
+  });
+  try {
+    assert.deepEqual(await ledgerApi.getList(), {
+      items: [{ ledgerNo: "LDG-002" }], total: 1, pageNo: 1, pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("normalizes null accounting detail ledgers", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
