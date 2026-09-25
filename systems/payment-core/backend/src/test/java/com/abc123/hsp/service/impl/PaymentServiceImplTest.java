@@ -3535,7 +3535,7 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService);
         PaymentListQueryDTO oversizedPaymentOrderId = paymentListQuery(
-                repeat("P", 65), null, null, null, null);
+                repeat("P", 64) + " ", null, null, null, null);
         PaymentListQueryDTO controlPaymentOrderId = paymentListQuery(
                 "PAY-001\n", null, null, null, null);
         PaymentListQueryDTO oversizedOrderNo = paymentListQuery(
