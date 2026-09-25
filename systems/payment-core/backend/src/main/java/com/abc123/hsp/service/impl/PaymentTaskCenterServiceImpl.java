@@ -331,11 +331,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 queryMonitorLookbackHours);
         int recentQueryRateLimitRejectionCount =
                 paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(queryMonitorLookbackHours);
-        List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentChannelQueryTrends(
-                queryMonitorLookbackHours);
-        if (queryTrends == null) {
-            queryTrends = Collections.emptyList();
-        }
+        List<PaymentQueryTrendPointDTO> queryTrends = safeList(
+                paymentTaskCenterMapper.findRecentChannelQueryTrends(queryMonitorLookbackHours));
         for (PaymentQueryTrendPointDTO trend : queryTrends) {
             trend.setFailureRate(formatPercentage(
                     valueOrZero(trend.getFailureCount()),
@@ -1983,7 +1980,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new java.util.ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private String csvCell(String value) {

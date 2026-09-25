@@ -125,6 +125,25 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInTaskOverviewSources() {
+        PaymentQueryTrendPointDTO trend = new PaymentQueryTrendPointDTO();
+        trend.setQueryCount(2);
+        trend.setFailureCount(1);
+        PaymentTaskRunLogItemDTO taskRun = new PaymentTaskRunLogItemDTO();
+        taskRun.setTaskCode("PAYMENT_EVENT_RETRY");
+        taskRun.setProcessedCount(1);
+        when(paymentTaskCenterMapper.findRecentChannelQueryTrends(24))
+                .thenReturn(Arrays.asList(null, trend));
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Arrays.asList(null, taskRun));
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(1, overview.getQueryTrends().size());
+        Assertions.assertEquals("50.00%", overview.getQueryTrends().get(0).getFailureRate());
+        Assertions.assertEquals(1, overview.getRecentTaskRuns().size());
+    }
+
+    @Test
     void shouldExposeRetryableAndBlockedFailedRefundsAsImmediateP1Alert() {
         PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
         summary.setFailedRefundCount(5);
