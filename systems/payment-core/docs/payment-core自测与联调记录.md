@@ -17257,3 +17257,9 @@ App/H5/PC 共享用户端 API 客户端现在过滤收银台渠道、支付详�
 支付核心直接依赖的账务、清分、结算和钱包骨架现在统一过滤列表中的 `null` 行，同时保留有效记录；本轮回归结果为账务 `48/48`、清分 `39/39`、结算 `39/39`、钱包 `25/25`，均为 `0` failures、`0` errors、`0` skipped。
 
 本轮只增强跨支付子系统的本地查询和任务骨架容错，不替代真实数据库、消息总线、渠道、资金到账、审批或正式发布治理证据。
+
+## 763. 2026-09-25 当前 HEAD 全支付后端矩阵复核
+
+执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home node tools/dev/backend-regression.mjs`，`12/12` 模块通过。当前各模块 Surefire 计数为：payment-core `1221`、gateway-access `53`、settlement `39`、accounting `48`、clearing `39`、refund-center `18`、reconciliation `16`、risk-control `12`、ops-config `13`、deposit `11`、wallet-account `23`、wallet-system `25`；全部 `0` failures、`0` errors、`0` skipped。
+
+矩阵只证明当前本地 Maven/H2 或测试数据库链路可回归，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账、审批签字、现场核验或正式发布门禁事实。
