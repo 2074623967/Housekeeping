@@ -477,12 +477,17 @@ class PaymentTaskCenterServiceImplTest {
                 IllegalArgumentException.class,
                 () -> service.runPendingPaymentQueries(
                         String.join("", Collections.nCopies(65, "A"))));
+        IllegalArgumentException oversizedAfterTrimException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.runPendingPaymentQueries(
+                        String.join("", Collections.nCopies(64, "A")) + " "));
         IllegalArgumentException controlException = Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> service.runPendingPaymentQueries("finance-ops\u0085"));
 
         Assertions.assertTrue(blankException.getMessage().contains("人工任务操作人不能为空"));
         Assertions.assertTrue(oversizedException.getMessage().contains("不能超过64个字符"));
+        Assertions.assertTrue(oversizedAfterTrimException.getMessage().contains("不能超过64个字符"));
         Assertions.assertTrue(controlException.getMessage().contains("不能包含控制字符"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .findPendingPaymentOrderIdsForManualQuery(
@@ -706,6 +711,8 @@ class PaymentTaskCenterServiceImplTest {
     void shouldRejectOversizedTaskRunQueryBeforeMapperAccess() {
         PaymentTaskRunLogQueryDTO taskCodeQuery = new PaymentTaskRunLogQueryDTO();
         taskCodeQuery.setTaskCode(repeat("T", 65));
+        PaymentTaskRunLogQueryDTO taskCodeAfterTrimQuery = new PaymentTaskRunLogQueryDTO();
+        taskCodeAfterTrimQuery.setTaskCode(repeat("T", 64) + " ");
         PaymentTaskRunLogQueryDTO runModeQuery = new PaymentTaskRunLogQueryDTO();
         runModeQuery.setRunMode(repeat("M", 33));
         PaymentTaskRunLogQueryDTO taskStatusQuery = new PaymentTaskRunLogQueryDTO();
@@ -722,6 +729,7 @@ class PaymentTaskCenterServiceImplTest {
         );
 
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskCodeQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskCodeAfterTrimQuery));
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(runModeQuery));
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskStatusQuery));
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(severityQuery));

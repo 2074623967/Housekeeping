@@ -2122,6 +2122,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (!"业务日期".equals(fieldName) && value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
@@ -2137,6 +2140,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             if (Character.isISOControl(operator.charAt(index))) {
                 throw new IllegalArgumentException("人工任务操作人不能包含控制字符");
             }
+        }
+        if (operator.length() > 64) {
+            throw new IllegalArgumentException("人工任务操作人不能超过64个字符");
         }
         String normalized = operator.trim();
         if (normalized.length() > 64) {
