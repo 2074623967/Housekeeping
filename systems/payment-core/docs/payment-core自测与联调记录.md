@@ -17349,6 +17349,10 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 在受控权限下重新执行 `bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟与跨系统 happy-path 通过；本地链路实际生成支付、清分、结算、账务、退款和对账事实，对账链为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果仅证明 H2/demo/HTTP 本地骨架可联调，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收或正式发布治理事实。
 
 同一当前 HEAD 执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `10/10` 完整、缺失样本和证据均为 `0`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`；release 正式条件仍缺正式候选发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论。审计只记录当前事实，不执行分支合并或创建 `release/*`。
+
+## 771. 2026-09-25 gateway-access 支付查单代理请求边界补强
+
+支付核心依赖的 gateway-access 查单代理现在在鉴权和真实上游调用前校验支付单号、订单号、渠道编码和渠道交易号的长度及控制字符，原始字段先校验再 trim；新增超长和控制字符回归，gateway-access 后端全量 `55/55` 通过。该项只强化跨系统请求安全边界，不代表真实渠道查单、生产凭证、网络白名单或资金结果已完成。
 ### 9.70 2026-09-25 返回码指纹与工作台空行边界补强
 
 返回码导入预检、提交和批准后的基线指纹计算现在统一过滤 Mapper 返回的 `null` 映射，避免脏行在排序或字段读取时中断配置治理；工作台卡片列表也过滤集合内 `null` 行，保留有效卡片。新增两条服务层回归，payment-core 后端全量回归为 `1234/1234`，失败 `0`、错误 `0`、跳过 `0`。本轮只补强本地配置治理和工作台骨架的异常数据容错，不改变返回码版本、复核状态、支付事实、真实基础设施或发布治理结论。

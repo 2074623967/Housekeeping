@@ -87,17 +87,49 @@ public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
     }
 
     private void validateRequest(PaymentOrderQueryRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())
-                || !StringUtils.hasText(request.getOrderNo()) || !StringUtils.hasText(request.getChannelCode())) {
+        if (request == null) {
             throw new GatewayAccessException("GATEWAY_INVALID_ARGUMENT",
-                    "paymentOrderId, orderNo and channelCode are required");
+                    "payment query request is required");
         }
-        request.setPaymentOrderId(request.getPaymentOrderId().trim());
-        request.setOrderNo(request.getOrderNo().trim());
-        request.setChannelCode(request.getChannelCode().trim().toLowerCase(Locale.ROOT));
-        if (StringUtils.hasText(request.getChannelTransactionNo())) {
-            request.setChannelTransactionNo(request.getChannelTransactionNo().trim());
+        request.setPaymentOrderId(required(request.getPaymentOrderId(), "paymentOrderId", 64));
+        request.setOrderNo(required(request.getOrderNo(), "orderNo", 64));
+        request.setChannelCode(required(request.getChannelCode(), "channelCode", 64)
+                .toLowerCase(Locale.ROOT));
+        request.setChannelTransactionNo(optional(request.getChannelTransactionNo(), "channelTransactionNo", 128));
+    }
+
+    private String required(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            throw invalid(fieldName + " is required");
         }
+        return validateText(value, fieldName, maxLength).trim();
+    }
+
+    private String optional(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return validateText(value, fieldName, maxLength).trim();
+    }
+
+    private String validateText(String value, String fieldName, int maxLength) {
+        if (value.length() > maxLength || containsIsoControl(value)) {
+            throw invalid(fieldName + " is invalid");
+        }
+        return value;
+    }
+
+    private boolean containsIsoControl(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private GatewayAccessException invalid(String message) {
+        return new GatewayAccessException("GATEWAY_INVALID_ARGUMENT", message);
     }
 
     private PaymentOrderQueryResultDTO validateUpstreamResponse(UpstreamPaymentQueryResponseDTO response) {

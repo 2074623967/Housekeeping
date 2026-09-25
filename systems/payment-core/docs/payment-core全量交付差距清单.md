@@ -3740,3 +3740,7 @@ README 与当前交付记录已更新为最新可验证基线：payment-core 后
 受控权限下重新执行 `bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟与跨系统 happy-path 通过；本地支付、清分、结算、账务、退款和对账事实均生成，对账链 `COMPLETED`、`4/4`、`financialCloseable=true`。该证据只证明本地 H2/demo/HTTP 骨架可联调，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收、审批签字、现场核验或稳定观察。
 
 当前门禁脚本复判结果：回归证据包 `10/10` 完整，缺失样本和缺失证据均为 `0`；`canPromoteTestToMaster=false`、`canCreateRelease=false`。当前仍不能据此合并 `test -> master` 或创建 `release/*`，正式 release 条件还缺正式签字审批、发布后现场核验记录和 master 稳定观察结束结论。本条只更新可验证事实，不伪造治理动作。
+
+### 9.79 2026-09-25 gateway-access 支付查单代理请求边界补强
+
+支付核心依赖的 gateway-access 查单代理现在在治理鉴权和真实上游调用前校验支付单号、订单号、渠道编码和渠道交易号的长度及控制字符，原始字段先校验再 trim，避免清洗绕过输入边界；新增超长和控制字符回归，gateway-access 后端全量 `55/55` 通过。本轮只强化真实网关代理的请求安全契约，不改变渠道状态机、真实渠道受理、资金事实或正式发布治理结论。

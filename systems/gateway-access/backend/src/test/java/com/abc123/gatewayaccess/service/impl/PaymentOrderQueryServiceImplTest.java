@@ -106,6 +106,30 @@ class PaymentOrderQueryServiceImplTest {
         assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
     }
 
+    @Test
+    void shouldRejectOversizedQueryFieldsBeforeAuthorization() {
+        PaymentOrderQueryRequestDTO oversized = request();
+        oversized.setPaymentOrderId(repeat("P", 65));
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", oversized));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper, org.mockito.Mockito.never()).findApplicationByCode(any(String.class));
+    }
+
+    @Test
+    void shouldRejectControlCharactersBeforeAuthorization() {
+        PaymentOrderQueryRequestDTO invalid = request();
+        invalid.setChannelTransactionNo("WX-1001\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", invalid));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper, org.mockito.Mockito.never()).findApplicationByCode(any(String.class));
+    }
+
     private PaymentOrderQueryServiceImpl service() {
         return new PaymentOrderQueryServiceImpl(mapper, properties, restTemplate);
     }
@@ -116,6 +140,14 @@ class PaymentOrderQueryServiceImplTest {
         request.setOrderNo("ORD-1001");
         request.setChannelCode("WX_H5");
         return request;
+    }
+
+    private String repeat(String value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 
     private void configureEnabledGovernance(boolean withRoute) {
