@@ -103,6 +103,8 @@ class PaymentDeadLetterTaskServiceImplTest {
         invalidMessageIdProperties.setMessageId("MSG-001\n");
         MessageProperties oversizedCorrelationProperties = new MessageProperties();
         oversizedCorrelationProperties.setCorrelationId(repeat("C", 129));
+        MessageProperties oversizedAfterTrimCorrelationProperties = new MessageProperties();
+        oversizedAfterTrimCorrelationProperties.setCorrelationId(repeat("C", 128) + " ");
 
         PaymentDeadLetterTaskService.InvalidDeadLetterMessageException messageIdException = assertThrows(
                 PaymentDeadLetterTaskService.InvalidDeadLetterMessageException.class,
@@ -110,6 +112,9 @@ class PaymentDeadLetterTaskServiceImplTest {
                         "payment.success.clearing.dlq.v1"));
         assertThrows(PaymentDeadLetterTaskService.InvalidDeadLetterMessageException.class,
                 () -> service().intake(new Message(new byte[0], oversizedCorrelationProperties),
+                        "payment.success.clearing.dlq.v1"));
+        assertThrows(PaymentDeadLetterTaskService.InvalidDeadLetterMessageException.class,
+                () -> service().intake(new Message(new byte[0], oversizedAfterTrimCorrelationProperties),
                         "payment.success.clearing.dlq.v1"));
         assertThrows(PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException.class,
                 () -> service().intake(new Message(new byte[0], new MessageProperties()),
@@ -181,6 +186,8 @@ class PaymentDeadLetterTaskServiceImplTest {
                 null, "clearing-system\n", null);
         PaymentDeadLetterTaskQueryDTO oversizedMessageId = query(
                 null, null, repeat("M", 129));
+        PaymentDeadLetterTaskQueryDTO oversizedAfterTrimMessageId = query(
+                null, null, repeat("M", 128) + " ");
         PaymentDeadLetterTaskQueryDTO controlMessageId = query(
                 null, null, "MSG-001\n");
 
@@ -189,6 +196,7 @@ class PaymentDeadLetterTaskServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> service().list(oversizedTargetSystem));
         assertThrows(IllegalArgumentException.class, () -> service().list(controlTargetSystem));
         assertThrows(IllegalArgumentException.class, () -> service().list(oversizedMessageId));
+        assertThrows(IllegalArgumentException.class, () -> service().list(oversizedAfterTrimMessageId));
         assertThrows(IllegalArgumentException.class, () -> service().list(controlMessageId));
         verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
     }
@@ -323,11 +331,17 @@ class PaymentDeadLetterTaskServiceImplTest {
     void shouldRejectInvalidManualActionBeforeMapperOrBrokerAccess() {
         String oversizedOperator = String.join("", Collections.nCopies(65, "A"));
         String oversizedNote = String.join("", Collections.nCopies(513, "N"));
+        String oversizedAfterTrimOperator = String.join("", Collections.nCopies(64, "A")) + " ";
+        String oversizedAfterTrimNote = String.join("", Collections.nCopies(512, "N")) + " ";
 
         assertThrows(IllegalArgumentException.class,
                 () -> service().markReadyToReplay("DLQ-001", action(oversizedOperator, "核对完成")));
         assertThrows(IllegalArgumentException.class,
                 () -> service().markManuallyResolved("DLQ-001", action("finance-ops", oversizedNote)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().markReadyToReplay("DLQ-001", action(oversizedAfterTrimOperator, "核对完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().markManuallyResolved("DLQ-001", action("finance-ops", oversizedAfterTrimNote)));
         assertThrows(IllegalArgumentException.class,
                 () -> service().replay("DLQ-001", action("finance\nops", "核对完成")));
         assertThrows(IllegalArgumentException.class,
@@ -336,6 +350,9 @@ class PaymentDeadLetterTaskServiceImplTest {
                 () -> service().replay("DLQ-001\nforged", action("finance-ops", "核对完成")));
         assertThrows(IllegalArgumentException.class,
                 () -> service().replay(String.join("", Collections.nCopies(65, "D")),
+                        action("finance-ops", "核对完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().replay(String.join("", Collections.nCopies(64, "D")) + " ",
                         action("finance-ops", "核对完成")));
 
         verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);

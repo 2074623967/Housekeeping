@@ -232,6 +232,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (containsIsoControl(value)) {
             throw new IllegalArgumentException(fieldName + "不能包含控制字符");
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
@@ -271,6 +274,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (containsIsoControl(value)) {
             throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
         }
+        if (value.length() > maxLength) {
+            throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
+        }
         String normalized = value.trim();
         if (!StringUtils.hasText(normalized)) {
             return null;
@@ -294,6 +300,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
             return null;
         }
         if (containsIsoControl(value)) {
+            throw new IllegalArgumentException("死信重放元数据非法");
+        }
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException("死信重放元数据非法");
         }
         String normalized = value.trim();
@@ -321,6 +330,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (!StringUtils.hasText(taskNo)) {
             throw new IllegalArgumentException("死信任务号不能为空");
         }
+        if (taskNo.length() > TASK_NO_MAX_LENGTH) {
+            throw new IllegalArgumentException("死信任务号不能超过64个字符");
+        }
         String normalized = taskNo.trim();
         if (normalized.length() > TASK_NO_MAX_LENGTH) {
             throw new IllegalArgumentException("死信任务号不能超过64个字符");
@@ -343,6 +355,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         }
         if (!StringUtils.hasText(value)) {
             return null;
+        }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
