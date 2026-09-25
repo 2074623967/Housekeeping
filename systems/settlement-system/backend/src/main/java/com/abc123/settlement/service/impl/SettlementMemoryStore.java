@@ -297,7 +297,8 @@ public class SettlementMemoryStore {
         String executionResult = normalizeExecutionResult(request);
         String failureReason = request == null ? "" : request.getFailureReason();
         for (PayoutRecordEntity record : payoutRecordsByBatchNo(payoutBatchNo)) {
-            if ("待出款".equals(record.getPayoutStatus()) || "处理中".equals(record.getPayoutStatus())) {
+            if ("待出款".equals(record.getPayoutStatus())
+                    && settlementDataMapper.claimPayoutRecord(record.getPayoutNo()) == 1) {
                 if ("FAILED".equals(executionResult)) {
                     settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已失败", record.getRetryCount());
                     markOrderPayoutFailed(record.getSettlementNo());

@@ -382,6 +382,13 @@
         )
     </insert>
 
+    <update id="claimPayoutRecord">
+        UPDATE t_payout_record
+        SET payout_status = '处理中'
+        WHERE payout_no = #{payoutNo}
+          AND payout_status = '待出款'
+    </update>
+
     <update id="updatePayoutRecord">
         UPDATE t_payout_record
         SET payout_status = #{payoutStatus},

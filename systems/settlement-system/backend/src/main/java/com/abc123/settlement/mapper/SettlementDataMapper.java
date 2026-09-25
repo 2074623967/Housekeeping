@@ -140,6 +140,11 @@ public interface SettlementDataMapper {
     int insertPayoutRecord(PayoutRecordEntity entity);
 
     /**
+     * 原子认领待出款记录，避免并发执行重复发放。
+     */
+    int claimPayoutRecord(@Param("payoutNo") String payoutNo);
+
+    /**
      * 更新出款记录状态。
      */
     int updatePayoutRecord(@Param("payoutNo") String payoutNo,
