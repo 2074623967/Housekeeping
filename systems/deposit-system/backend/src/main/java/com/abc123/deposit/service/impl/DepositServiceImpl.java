@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -324,8 +325,12 @@ public class DepositServiceImpl implements DepositService {
     private DepositAccountDTO record(DepositAccountDTO account, String flowType, BigDecimal amount,
                                      BigDecimal before, BigDecimal after, BigDecimal beforeFrozenAmount,
                                      BigDecimal afterFrozenAmount, String referenceNo, String remark) {
-        dao.insertFlow(account.getAccountNo(), flowType, amount, before, after,
-                beforeFrozenAmount, afterFrozenAmount, referenceNo, remark);
+        try {
+            dao.insertFlow(account.getAccountNo(), flowType, amount, before, after,
+                    beforeFrozenAmount, afterFrozenAmount, referenceNo, remark);
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException("该业务关联号已处理，请勿重复提交");
+        }
         return requiredAccount(account.getAccountNo());
     }
 

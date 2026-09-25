@@ -32,5 +32,6 @@ CREATE TABLE IF NOT EXISTS t_deposit_flow (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_deposit_flow_no (flow_no),
+    UNIQUE KEY uk_deposit_flow_reference (account_no, flow_type, reference_no),
     KEY idx_deposit_flow_account_time (account_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='保证金流水表';

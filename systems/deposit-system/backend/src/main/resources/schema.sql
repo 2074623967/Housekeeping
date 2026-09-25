@@ -27,5 +27,6 @@ CREATE TABLE IF NOT EXISTS t_deposit_flow (
     remark VARCHAR(500) COMMENT '备注',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     UNIQUE (flow_no),
+    UNIQUE (account_no, flow_type, reference_no),
     INDEX idx_deposit_flow_account (account_no)
 );
