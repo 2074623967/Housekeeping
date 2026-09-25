@@ -17085,3 +17085,9 @@ gateway-access、ops-config、risk-control 和 wallet-account 管理端同步收
 在受控权限下执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP smoke 通过，跨系统 happy-path 通过。
 
 本次链路事实包含支付、清分、结算、账务、退款及对账事实；对账链状态为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。该证据仅证明本地 H2/demo/HTTP 骨架在当前托管会话可运行，不代表真实渠道受理、生产 RabbitMQ/MySQL、资金到账、正式财务关账、审批签字或发布后观察完成。
+
+## 733. 2026-09-25 test 到 master 当前 Git 门禁复核
+
+当前仓库事实为：`master` 是 `test` 的祖先，`test` 当前 HEAD `cda07a3308cc5948823dcc16a5fbfd6d9afca3ad` 仍领先 `master` `1254` 个提交；因此当前 HEAD 尚未完成 `test -> master` 实际合入。回归证据包中保留的“历史冻结基线已合入”只描述历史批次，不能替代当前分支关系。
+
+统一门禁仍据此保持 `canPromoteTestToMaster=false`、`canCreateRelease=false`。该结论不代表代码回归失败，也不伪造新的合并、审批或发布事实。

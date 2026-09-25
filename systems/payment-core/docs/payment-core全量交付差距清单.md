@@ -3530,3 +3530,7 @@
 ### 9.27 2026-09-25 当前 HEAD 受控本地栈复核
 
 `tools/dev/local-stack.sh verify all` 在受控权限下完成：12 个后端、15 个前端及代理路径全部 `READY`，HTTP smoke 和跨系统 happy-path 通过；对账链 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该运行态只属于本地 H2/demo/HTTP 骨架证据，不改变真实渠道、生产基础设施、资金事实或正式发布门禁结论。
+
+### 9.28 2026-09-25 test 到 master 当前 Git 关系复核
+
+当前 Git 关系确认 `master` 是 `test` 的祖先，`test` 仍领先 `1254` 个提交；历史回归包中“已完成 test -> master”的记录属于历史冻结批次，不能作为当前 HEAD 已合入的证据。当前门禁继续保持 `test -> master=false`、`master -> release/*=false`，直到实际合入记录和对应复核形成。
