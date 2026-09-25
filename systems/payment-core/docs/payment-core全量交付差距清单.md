@@ -3748,3 +3748,7 @@ README 与当前交付记录已更新为最新可验证基线：payment-core 后
 ### 9.80 2026-09-25 任务中心总览与执行日志独立降级
 
 管理端任务中心将总览和执行日志请求从 `Promise.all` 调整为独立收敛：执行日志接口失败时保留总览可操作状态，并明确提示“任务执行日志刷新失败、展示上次成功快照”；总览接口失败时不再误覆盖日志自身的错误状态。该改动只增强本地运营工作台在部分接口故障时的可用性和事实边界，不改变任务执行、补偿语义、真实渠道或正式发布治理结论。
+
+### 9.81 2026-09-25 当前 HEAD 本地全栈联调复核
+
+执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`：12 个后端、15 个前端及代理路径全部 `READY`，HTTP 冒烟和跨系统 happy-path 通过；本地链路生成支付、清分、结算、账务、退款和对账事实，对账链 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。该结果只证明受控 H2/demo/HTTP 本地骨架可联调，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、真机验收或正式发布治理证据。
