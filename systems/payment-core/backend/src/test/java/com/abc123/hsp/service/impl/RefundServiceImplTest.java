@@ -133,16 +133,16 @@ class RefundServiceImplTest {
     void shouldRejectInvalidRefundQueryFieldsBeforeMapperAccess() {
         RefundServiceImpl service = createService();
         RefundQueryDTO oversizedRefundOrderId = refundQuery(
-                String.join("", Collections.nCopies(65, "R")), null, null, null);
+                String.join("", Collections.nCopies(64, "R")) + " ", null, null, null);
         RefundQueryDTO controlRefundOrderId = refundQuery("REF-001\n", null, null, null);
         RefundQueryDTO oversizedPaymentOrderId = refundQuery(
-                null, String.join("", Collections.nCopies(65, "P")), null, null);
+                null, String.join("", Collections.nCopies(64, "P")) + " ", null, null);
         RefundQueryDTO controlPaymentOrderId = refundQuery(null, "PAY-001\n", null, null);
         RefundQueryDTO oversizedStatus = refundQuery(
-                null, null, String.join("", Collections.nCopies(33, "S")), null);
+                null, null, String.join("", Collections.nCopies(32, "S")) + " ", null);
         RefundQueryDTO controlStatus = refundQuery(null, null, "SUCCESS\n", null);
         RefundQueryDTO oversizedMethod = refundQuery(
-                null, null, null, String.join("", Collections.nCopies(33, "M")));
+                null, null, null, String.join("", Collections.nCopies(32, "M")) + " ");
         RefundQueryDTO controlMethod = refundQuery(null, null, null, "原路退款\n");
 
         assertEquals("退款单号长度不能超过64字符", queryFailure(service, oversizedRefundOrderId).getMessage());
@@ -377,15 +377,15 @@ class RefundServiceImplTest {
     @Test
     void shouldRejectInvalidRefundApplyTextFieldsBeforeMapperAccess() {
         RefundApplyRequestDTO oversizedPaymentOrderId = refundApplyRequest(new BigDecimal("20.00"));
-        oversizedPaymentOrderId.setPaymentOrderId(String.join("", Collections.nCopies(65, "P")));
+        oversizedPaymentOrderId.setPaymentOrderId(String.join("", Collections.nCopies(64, "P")) + " ");
         RefundApplyRequestDTO invalidPaymentOrderId = refundApplyRequest(new BigDecimal("20.00"));
         invalidPaymentOrderId.setPaymentOrderId("PAY-001\n");
         RefundApplyRequestDTO oversizedMethod = refundApplyRequest(new BigDecimal("20.00"));
-        oversizedMethod.setRefundMethod(String.join("", Collections.nCopies(33, "M")));
+        oversizedMethod.setRefundMethod(String.join("", Collections.nCopies(32, "M")) + " ");
         RefundApplyRequestDTO invalidMethod = refundApplyRequest(new BigDecimal("20.00"));
         invalidMethod.setRefundMethod("原路退款\n");
         RefundApplyRequestDTO oversizedReason = refundApplyRequest(new BigDecimal("20.00"));
-        oversizedReason.setRefundReason(String.join("", Collections.nCopies(256, "R")));
+        oversizedReason.setRefundReason(String.join("", Collections.nCopies(255, "R")) + " ");
         RefundApplyRequestDTO invalidReason = refundApplyRequest(new BigDecimal("20.00"));
         invalidReason.setRefundReason("客户取消\n服务");
 
@@ -403,7 +403,7 @@ class RefundServiceImplTest {
         RefundApplyRequestDTO missing = refundApplyRequest(new BigDecimal("20.00"));
         missing.setIdempotencyKey("   ");
         RefundApplyRequestDTO oversized = refundApplyRequest(new BigDecimal("20.00"));
-        oversized.setIdempotencyKey(String.join("", Collections.nCopies(129, "I")));
+        oversized.setIdempotencyKey(String.join("", Collections.nCopies(128, "I")) + " ");
         RefundApplyRequestDTO control = refundApplyRequest(new BigDecimal("20.00"));
         control.setIdempotencyKey("REFUND-APPLY\n001");
 
@@ -830,7 +830,7 @@ class RefundServiceImplTest {
         RefundCallbackRequestDTO missingAttemptNo = buildCallbackRequest("SUCCESS");
         missingAttemptNo.setRefundAttemptNo(" ");
         RefundCallbackRequestDTO oversizedAttemptNo = buildCallbackRequest("SUCCESS");
-        oversizedAttemptNo.setRefundAttemptNo(String.join("", Collections.nCopies(65, "R")));
+        oversizedAttemptNo.setRefundAttemptNo(String.join("", Collections.nCopies(64, "R")) + " ");
 
         assertRefundCallbackRequestInvalid(
                 () -> service.callback("wx_h5", missingAttemptNo));
@@ -1313,7 +1313,7 @@ class RefundServiceImplTest {
     @Test
     void shouldRejectMissingOrOversizedManualRefundOperatorBeforeMapperAccess() {
         RefundServiceImpl service = createService();
-        String oversizedOperator = String.join("", Collections.nCopies(65, "A"));
+        String oversizedOperator = String.join("", Collections.nCopies(64, "A")) + " ";
 
         RefundApplyRequestDTO blankApply = new RefundApplyRequestDTO();
         blankApply.setOperator("   ");

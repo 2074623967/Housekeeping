@@ -575,13 +575,12 @@ public class RefundServiceImpl implements RefundService {
                     ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
                     "退款申请幂等键不能包含控制字符");
         }
-        String normalized = idempotencyKey.trim();
-        if (normalized.length() > APPLICATION_IDEMPOTENCY_KEY_MAX_LENGTH) {
+        if (idempotencyKey.length() > APPLICATION_IDEMPOTENCY_KEY_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
                     "退款申请幂等键长度不能超过 128 个字符");
         }
-        return normalized;
+        return idempotencyKey.trim();
     }
 
     private boolean isSameApplication(
@@ -615,10 +614,10 @@ public class RefundServiceImpl implements RefundService {
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
         }
+        String normalized = value.trim();
         return normalized;
     }
 
@@ -654,12 +653,11 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
                     "refund callback field is invalid");
         }
-        String normalized = value.trim();
-        if (normalized.length() > maxLength) {
+        if (value.length() > maxLength) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
                     "refund callback field is invalid");
         }
-        return normalized;
+        return value.trim();
     }
 
     private boolean containsIsoControl(String value) {
@@ -827,11 +825,10 @@ public class RefundServiceImpl implements RefundService {
                 throw new IllegalArgumentException("操作人不能包含控制字符");
             }
         }
-        String normalized = operator.trim();
-        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+        if (operator.length() > OPERATOR_MAX_LENGTH) {
             throw new IllegalArgumentException("操作人长度不能超过64字符");
         }
-        return normalized;
+        return operator.trim();
     }
 
     private String resolveActionCode(String fromStatus, String toStatus) {
