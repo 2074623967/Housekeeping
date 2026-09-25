@@ -177,7 +177,8 @@ class PaymentLogServiceImplTest {
         PaymentLogListItemDTO item = new PaymentLogListItemDTO();
         item.setLogNo("LOG-001");
         item.setMessage("{\"trace\":\"ok\"}");
-        when(paymentLogMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+        when(paymentLogMapper.findAllForExport(query))
+                .thenReturn(java.util.Arrays.asList((PaymentLogListItemDTO) null, item));
 
         String csv = new PaymentLogServiceImpl(paymentLogMapper).exportCsv(query);
 

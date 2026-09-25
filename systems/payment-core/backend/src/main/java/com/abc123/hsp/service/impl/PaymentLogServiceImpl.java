@@ -97,8 +97,8 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     public String exportCsv(PaymentLogQueryDTO query) {
         normalizeQuery(query);
 
-        java.util.List<PaymentLogListItemDTO> items = CsvExportRowLimiter.requireWithinLimit(
-                paymentLogMapper.findAllForExport(query));
+        java.util.List<PaymentLogListItemDTO> items = safeList(
+                CsvExportRowLimiter.requireWithinLimit(paymentLogMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("日志编号,支付单号,订单号,处理阶段,日志级别,来源,日志消息,创建时间\n");
         for (PaymentLogListItemDTO item : items) {
