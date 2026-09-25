@@ -17367,3 +17367,7 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 路由规则审批的冲突检查现在将范围锁后的 Mapper 候选统一归一化为安全列表，查询返回 `null` 列表或包含 `null` 行时均按无效候选跳过，仍保留阻断级冲突和同优先级冲突确认逻辑。路由规则配置定向测试通过；临时构建副本中的 payment-core 后端全量回归为 `1235/1235`，失败 `0`、错误 `0`、跳过 `0`。
 
 本轮只增强路由配置审批骨架对脏查询结果的容错，不改变路由发布、渠道受理、真实生产配置、审批签字或正式发布治理结论。
+
+### 9.76 2026-09-25 payment-core 统一门禁复判
+
+重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `evidenceReady=true`，场景 `10/10` 完整，缺失样本和缺失证据均为 `0`；release 材料结构完整，但当前 `canPromoteTestToMaster=false`、`canCreateRelease=false`。`test -> master` 继续遵循回归汇总中的未放行结论；release 正式条件仍缺正式签字审批、发布后现场核验记录和 master 稳定观察结束结论。本次复判不替代真实治理动作，也不执行分支合并或创建 `release/*`。
