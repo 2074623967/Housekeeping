@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -426,6 +427,8 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("支付运营"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
                 .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));
         when(paymentService.query(
@@ -464,6 +467,10 @@ class PaymentTaskCenterServiceImplTest {
                         && entity.getSummaryComment().contains("查询失败 1 笔")
                         && entity.getSummaryComment().contains("PAY-QUERY-3")
         ));
+        verify(paymentTaskCenterMapper).acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("支付运营"), eq(120));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("支付运营"));
     }
 
     @Test
@@ -528,6 +535,8 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldClampGlobalAndPerChannelPaymentQueryBatchSizes() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), anyString(), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 1, 1))
                 .thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 1000, 1000))
@@ -544,6 +553,8 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldQueryPendingRefundsAndRecordTaskResult() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
         RefundQueryTaskResultDTO queryResult = new RefundQueryTaskResultDTO();
         queryResult.setProcessedCount(3);
         queryResult.setSuccessCount(1);
@@ -562,6 +573,10 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getWarningCount());
         Assertions.assertEquals(1, result.getFailCount());
         verify(refundQueryTaskService).queryPendingRefunds("payment-core-admin");
+        verify(paymentTaskCenterMapper).acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"), eq(120));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"));
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "REFUND_PENDING_QUERY".equals(entity.getTaskCode())
                         && "P2".equals(entity.getSeverityLevel())
@@ -793,6 +808,8 @@ class PaymentTaskCenterServiceImplTest {
         retryResult.setFailCount(2);
         retryResult.setFailedEventNos(Arrays.asList("EVT-2", "EVT-3"));
         when(paymentEventRetryTaskService.retryFailedEvents(false, "finance-ops")).thenReturn(retryResult);
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EVENT_RETRY"), leaseOwner("finance-ops"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -1653,6 +1670,8 @@ class PaymentTaskCenterServiceImplTest {
         retryResult.setFailCount(2);
         retryResult.setFailedRefundOrderIds(Arrays.asList("REF-1", "REF-2"));
         when(refundRetryTaskService.retryFailedRefunds("payment-core-admin")).thenReturn(retryResult);
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_FAIL_RETRY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 

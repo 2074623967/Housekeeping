@@ -673,7 +673,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     public PaymentTaskActionResultDTO runPendingPaymentQueries(String operator) {
-        return runPendingPaymentQueriesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_PENDING_QUERY,
+                "待回调支付主动查单",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runPendingPaymentQueriesByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
@@ -693,7 +705,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     public PaymentTaskActionResultDTO runPendingRefundQueries(String operator) {
-        return runPendingRefundQueriesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_REFUND_PENDING_QUERY,
+                "处理中退款主动查单",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runPendingRefundQueriesByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
@@ -751,7 +775,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runRepublishFailedEvents(String operator) {
-        return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_EVENT_RETRY,
+                "失败事件重发",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
@@ -773,7 +809,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runRetryFailedRefunds(String operator) {
-        return runRetryFailedRefundsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_REFUND_RETRY,
+                "失败退款重试",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runRetryFailedRefundsByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
