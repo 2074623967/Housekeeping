@@ -443,6 +443,14 @@
         )
     </insert>
 
+    <update id="markEventPublishing">
+        UPDATE t_clearing_event
+        SET publish_status = 'PUBLISHING'
+        WHERE event_no = #{eventNo}
+          AND publish_status IN ('PENDING', 'FAILED')
+          AND (publish_status = 'PENDING' OR next_retry_at IS NULL OR next_retry_at &lt;= NOW())
+    </update>
+
     <update id="markEventPublishSuccess">
         UPDATE t_clearing_event
         SET publish_status = 'SUCCESS',

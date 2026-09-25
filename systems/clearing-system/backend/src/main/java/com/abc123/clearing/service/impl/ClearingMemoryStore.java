@@ -236,6 +236,13 @@ public class ClearingMemoryStore {
         return clearingDataMapper.findEventByTypeAndBizNo("CLEARING_GENERATED", clearingOrder.getClearingNo());
     }
 
+    /**
+     * 以条件更新原子认领 outbox，避免并发消费者重复投递同一清分结果。
+     */
+    public boolean tryClaimOutboxPublish(String eventNo) {
+        return eventNo != null && clearingDataMapper.markEventPublishing(eventNo) == 1;
+    }
+
     public void markOutboxPublishSuccess(String eventNo) {
         clearingDataMapper.markEventPublishSuccess(eventNo);
     }

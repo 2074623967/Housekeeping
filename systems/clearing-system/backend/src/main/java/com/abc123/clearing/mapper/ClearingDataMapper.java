@@ -139,6 +139,11 @@ public interface ClearingDataMapper {
      */
     int insertEvent(ClearingEventEntity entity);
 
+    /**
+     * 原子认领待投递或到期失败的 outbox 事件。
+     */
+    int markEventPublishing(@Param("eventNo") String eventNo);
+
     int markEventPublishSuccess(@Param("eventNo") String eventNo);
 
     int markEventPublishFailed(@Param("eventNo") String eventNo,

@@ -57,6 +57,7 @@ class ClearingEventDispatchServiceImplTest {
         workerShare.setShareAmount(new BigDecimal("120.00"));
         when(clearingMemoryStore.sharesByClearingNo("CLR-001")).thenReturn(Collections.singletonList(workerShare));
         when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(true);
 
         when(restTemplate.postForEntity(eq("http://settlement"), any(), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("ok", HttpStatus.OK));
@@ -88,6 +89,7 @@ class ClearingEventDispatchServiceImplTest {
         when(clearingMemoryStore.sharesByClearingNo("CLR-001"))
                 .thenReturn(Collections.<ShareItemEntity>emptyList());
         when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(true);
         when(restTemplate.postForEntity(eq("http://settlement"), any(), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("ok", HttpStatus.OK));
         when(restTemplate.postForEntity(eq("http://accounting"), any(), eq(String.class)))
@@ -118,6 +120,7 @@ class ClearingEventDispatchServiceImplTest {
         when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
         when(clearingMemoryStore.sharesByClearingNo("CLR-001")).thenReturn(Collections.<ShareItemEntity>emptyList());
         when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(true);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
             return callback.doInRabbit(rabbitTemplate);
@@ -166,6 +169,23 @@ class ClearingEventDispatchServiceImplTest {
         verify(restTemplate, times(0)).postForEntity(eq("http://settlement"), any(), eq(String.class));
         verify(restTemplate, times(0)).postForEntity(eq("http://accounting"), any(), eq(String.class));
         verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishFailed("EVT-001");
+    }
+
+    @Test
+    void shouldSkipDispatchWhenAnotherConsumerClaimsOutboxFirst() {
+        ClearingOrderEntity clearingOrder = new ClearingOrderEntity();
+        clearingOrder.setClearingNo("CLR-001");
+        clearingOrder.setPaymentOrderId("PAY-001");
+        when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
+        when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(false);
+
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+        verify(restTemplate, times(0)).postForEntity(any(), any(), eq(String.class));
         verify(clearingMemoryStore, times(0)).markOutboxPublishFailed("EVT-001");
     }
 
