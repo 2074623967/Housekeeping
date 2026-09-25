@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogDetailDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
@@ -100,6 +101,22 @@ class PaymentLogServiceImplTest {
         assertTrue(new PaymentLogServiceImpl(paymentLogMapper).list(query).getItems().isEmpty());
         verify(paymentLogMapper).findAll(query);
         verify(paymentLogMapper).count(query);
+    }
+
+    @Test
+    void shouldIgnoreNullRowsWhenListingPaymentLogs() {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        PaymentLogListItemDTO item = new PaymentLogListItemDTO();
+        item.setLogNo("LOG-001");
+        when(paymentLogMapper.findAll(query))
+                .thenReturn(java.util.Arrays.asList((PaymentLogListItemDTO) null, item));
+        when(paymentLogMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<PaymentLogListItemDTO> result =
+                new PaymentLogServiceImpl(paymentLogMapper).list(query);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals("LOG-001", result.getItems().get(0).getLogNo());
     }
 
     @Test

@@ -92,6 +92,22 @@ class PaymentExpiryTaskServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullExpiredPaymentCandidates() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-EXPIRED-VALID", "ORD-EXPIRED-VALID");
+        when(paymentMapper.findExpiredPayments(100))
+                .thenReturn(Arrays.asList(null, payment));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED-VALID")).thenReturn(0);
+
+        PaymentExpiryCloseResultDTO result = service(100, 60, 2, 3600).closeExpiredPayments();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getSkippedCount());
+        verify(paymentMapper).markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED-VALID");
+    }
+
+    @Test
     void shouldContinueClosingPaymentsAfterOneTransactionFails() {
         ExpiredPaymentDTO first = buildPayment("PAY-FIRST", "ORD-FIRST");
         ExpiredPaymentDTO failed = buildPayment("PAY-FAIL", "ORD-FAIL");

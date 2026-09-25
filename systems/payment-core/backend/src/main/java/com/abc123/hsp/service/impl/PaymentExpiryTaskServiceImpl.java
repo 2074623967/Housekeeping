@@ -87,7 +87,16 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
     }
 
     private <T> List<T> safeList(List<T> values) {
-        return values == null ? Collections.emptyList() : values;
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<T> result = new java.util.ArrayList<>(values.size());
+        for (T value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
