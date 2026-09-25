@@ -17395,3 +17395,7 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.79 2026-09-25 payment-core 门禁复判
 
 重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：回归证据包 `10/10` 完整、缺失样本和证据均为 `0`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前仍真实阻断于回归汇总未放行 `test -> master`、正式签字审批未形成、发布后现场核验未形成实际记录及 master 稳定观察结束结论未形成；本轮不执行分支合并、创建 release 或补写治理事实。
+
+### 9.80 2026-09-25 payment-core 当前 HEAD 全量回归
+
+在排除仓库现有 `target` 的临时副本中执行 payment-core 后端 Maven 全量测试，Surefire 汇总为 `1235` tests、`0` failures、`0` errors、`0` skipped。测试日志中的异常均来自既有故障注入和脱敏分支断言，未形成测试失败；该结果只证明本地 H2/demo 测试链路，不替代真实 MySQL、RabbitMQ/DLQ、渠道协议、资金到账或正式发布治理证据。
