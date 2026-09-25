@@ -41,6 +41,40 @@ const normalizeTotalAccountDetail = (value) => {
   };
 };
 
+const normalizePositiveInteger = (value, fallback) => {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : fallback;
+};
+
+const normalizeNonNegativeInteger = (value, fallback) => {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : fallback;
+};
+
+const normalizePage = (page, pageNo = 1, pageSize = 20) => {
+  const normalizedPageNo = normalizePositiveInteger(pageNo, 1);
+  const normalizedPageSize = normalizePositiveInteger(pageSize, 20);
+  if (Array.isArray(page)) {
+    return {
+      items: page,
+      total: page.length,
+      pageNo: normalizedPageNo,
+      pageSize: normalizedPageSize
+    };
+  }
+  if (!page || typeof page !== "object") {
+    return { items: [], total: 0, pageNo: normalizedPageNo, pageSize: normalizedPageSize };
+  }
+  const items = normalizeList(page.items);
+  return {
+    ...page,
+    items,
+    total: normalizeNonNegativeInteger(page.total, items.length),
+    pageNo: normalizePositiveInteger(page.pageNo, normalizedPageNo),
+    pageSize: normalizePositiveInteger(page.pageSize, normalizedPageSize)
+  };
+};
+
 export const getAccounts = () => request("/api/deposits/accounts");
 export const getOverview = () => request("/api/deposits/overview");
 export const getV2Overview = () => request("/api/deposits/v2/overview");
@@ -58,7 +92,9 @@ export const getAccountsByQuery = (query = {}) => {
     }
   });
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/api/deposits/accounts${suffix}`).then(normalizePage);
+  return request(`/api/deposits/accounts${suffix}`).then((page) =>
+    normalizePage(page, query.pageNo, query.pageSize)
+  );
 };
 export const buildAccountsExportUrl = (query = {}) => {
   const params = new URLSearchParams();
@@ -78,13 +114,10 @@ export const getFlows = (accountNo, query = {}) => {
     }
   });
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`).then(normalizePage);
+  return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`).then((page) =>
+    normalizePage(page, query.pageNo, query.pageSize)
+  );
 };
-
-const normalizePage = (page) => ({
-  ...page,
-  items: Array.isArray(page?.items) ? page.items : []
-});
 export const buildFlowsExportUrl = (accountNo, query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {

@@ -36,6 +36,54 @@ test("normalizes nullable V2 deposit collections", async () => {
   }
 });
 
+test("normalizes deposit account pages to a stable empty-page shape", async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      call += 1;
+      return { code: "0", data: call === 1 ? null : ["unexpected-item"] };
+    }
+  });
+  try {
+    const { getAccountsByQuery, getFlows } = await import(`./api.js?page-null=${Date.now()}`);
+    assert.deepEqual(await getAccountsByQuery({ pageNo: 2, pageSize: 10 }), {
+      items: [], total: 0, pageNo: 2, pageSize: 10
+    });
+    assert.deepEqual(await getFlows("DEP-001", { pageNo: 3, pageSize: 5 }), {
+      items: ["unexpected-item"], total: 1, pageNo: 3, pageSize: 5
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("does not leak array indexes or malformed page metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      call += 1;
+      return call === 1
+        ? { code: "0", data: ["unexpected-item"] }
+        : { code: "0", data: { items: "invalid", total: "invalid", pageNo: 0, pageSize: -1 } };
+    }
+  });
+  try {
+    const { getAccountsByQuery, getFlows } = await import(`./api.js?page-shape=${Date.now()}`);
+    assert.deepEqual(await getAccountsByQuery(), {
+      items: ["unexpected-item"], total: 1, pageNo: 1, pageSize: 20
+    });
+    assert.deepEqual(await getFlows("DEP-001"), {
+      items: [], total: 0, pageNo: 1, pageSize: 20
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reports non-JSON deposit responses with a stable client error", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("upstream unavailable", { status: 502 });

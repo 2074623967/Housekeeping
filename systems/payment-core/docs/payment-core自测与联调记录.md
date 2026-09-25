@@ -17053,3 +17053,9 @@ node tools/release/run_local_regression_report.mjs \
 在原任务窗口以 `tools/dev/local-stack.sh up all` 持续托管本地 demo 栈：12 个后端和 15 个前端全部 `READY`，全量 HTTP smoke 通过。
 
 随后执行跨系统 happy-path，实际生成支付、清分、结算、退款和账务事实；对账事实包含 `PAYMENT_SUCCESS / CLEARING_GENERATED / SETTLEMENT_CREATED / ACCOUNTING_POSTED / REFUND_SUCCESS`，对账链状态为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。本证据只证明本地 H2/demo/HTTP 骨架可以启动并完成跨系统演示闭环，不代表真实渠道受理、生产 MySQL/RabbitMQ、资金到账、正式财务关账或发布治理条件已完成。
+
+## 727. 2026-09-24 保证金管理端分页边界补强
+
+保证金管理端账户和流水 API 补齐分页响应归一化：`null`、字符串等非对象响应统一为空页，数组响应保留为单页列表，对象响应补齐合法的 `items/total/pageNo/pageSize`。新增 `6/6` API 单元测试，生产构建通过；该修复已纳入后续全量管理端回归，不改变 payment-core 的正式发布门禁结论。
+
+随后重跑全量管理端回归：`12/12` 个工程的测试和生产构建全部通过，当前批次合计 `147/147` 用例通过，失败 `0`。该结果只证明本地管理端骨架在正常、空数据和畸形响应下可继续渲染与操作，不替代真实浏览器、渠道网络、生产数据库、消息总线、资金事实或正式发布治理。
