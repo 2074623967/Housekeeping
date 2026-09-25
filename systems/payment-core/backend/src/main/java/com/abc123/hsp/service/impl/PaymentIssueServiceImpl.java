@@ -16,6 +16,7 @@ import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -106,7 +107,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+        return items.stream().filter(item -> item != null).map(this::maskedCopy).collect(Collectors.toList());
     }
 
     private PaymentIssueRowDTO maskedCopy(PaymentIssueRowDTO item) {
@@ -123,7 +124,16 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     public List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(PaymentIssueQueryDTO query) {
         List<PaymentIssueResponsibilitySummaryDTO> summaries =
                 paymentIssueMapper.responsibilitySummary(normalizeQuery(query));
-        return summaries == null ? Collections.emptyList() : summaries;
+        if (summaries == null || summaries.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<PaymentIssueResponsibilitySummaryDTO> result = new ArrayList<>(summaries.size());
+        for (PaymentIssueResponsibilitySummaryDTO summary : summaries) {
+            if (summary != null) {
+                result.add(summary);
+            }
+        }
+        return result;
     }
 
     @Override
@@ -399,7 +409,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        return items.stream().map(this::maskedAlertLogCopy).collect(Collectors.toList());
+        return items.stream().filter(item -> item != null)
+                .map(this::maskedAlertLogCopy).collect(Collectors.toList());
     }
 
     private PaymentIssueAlertLogRowDTO maskedAlertLogCopy(PaymentIssueAlertLogRowDTO item) {

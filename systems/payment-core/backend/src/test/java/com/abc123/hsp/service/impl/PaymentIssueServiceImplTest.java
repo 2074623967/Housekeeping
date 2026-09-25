@@ -139,6 +139,30 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreNullRowsInIssueQueries() {
+        PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+        issue.setIssueNo("ISSUE-002");
+        PaymentIssueAlertLogRowDTO alert = new PaymentIssueAlertLogRowDTO();
+        alert.setAlertNo("ALERT-002");
+        PaymentIssueResponsibilitySummaryDTO summary = new PaymentIssueResponsibilitySummaryDTO();
+        summary.setGroupName("支付后端值班组");
+        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class)))
+                .thenReturn(Arrays.asList(null, issue));
+        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(2L);
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(Arrays.asList(null, alert));
+        when(paymentIssueMapper.countAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(2L);
+        when(paymentIssueMapper.responsibilitySummary(any(PaymentIssueQueryDTO.class)))
+                .thenReturn(Arrays.asList(null, summary));
+
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertEquals(1, service.list(new PaymentIssueQueryDTO()).getItems().size());
+        assertEquals(1, service.listAlertLogs(new PaymentIssueAlertLogQueryDTO()).getItems().size());
+        assertEquals(1, service.responsibilitySummary(new PaymentIssueQueryDTO()).size());
+    }
+
+    @Test
     void shouldNormalizeAndReturnMaskedPaymentIssueDetail() {
         PaymentIssueRowDTO row = new PaymentIssueRowDTO();
         row.setIssueNo("ISSUE-001");
