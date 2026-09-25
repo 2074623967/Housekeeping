@@ -70,3 +70,27 @@ test("maps aborted user-terminal requests to a stable timeout error", async (con
     (error) => error.code === "PAYMENT-CLIENT-TIMEOUT"
   );
 });
+
+test("filters null rows from cashier, payment, and refund detail responses", async (context) => {
+  let call = 0;
+  context.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    json: async () => ({
+      code: "0",
+      data: call++ === 0
+        ? { prepayOrderNo: "PRE-001", channels: [null, "微信支付"] }
+        : call === 2
+          ? { paymentOrderId: "PAY-001", routeLogs: [null, "路由完成"], notifyLogs: null, eventLogs: ["事件完成"] }
+          : { refundOrderId: "REF-001", attempts: [null, { refundAttemptNo: "ATT-001" }], operationLogs: [null, "申请退款"] }
+    })
+  }));
+
+  const cashier = await paymentApi.getCashier("PRE-001");
+  const payment = await paymentApi.getDetail("PAY-001");
+  const refund = await paymentApi.getRefundDetail("REF-001");
+  assert.deepEqual(cashier.channels, ["微信支付"]);
+  assert.deepEqual(payment.routeLogs, ["路由完成"]);
+  assert.deepEqual(payment.notifyLogs, []);
+  assert.deepEqual(refund.attempts, [{ refundAttemptNo: "ATT-001" }]);
+  assert.deepEqual(refund.operationLogs, ["申请退款"]);
+});

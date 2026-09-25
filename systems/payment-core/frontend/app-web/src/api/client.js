@@ -71,10 +71,47 @@ function postJson(url, payload) {
 
 export const paymentApi = {
   prepay: (payload) => postJson("/api/payments/prepay", payload),
-  getCashier: (prepayOrderNo) => request(`/api/payments/cashier/${encodeURIComponent(prepayOrderNo)}`),
-  getDetail: (paymentOrderId) => request(`/api/payments/${encodeURIComponent(paymentOrderId)}`),
-  getRefundDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`),
+  getCashier: (prepayOrderNo) => request(`/api/payments/cashier/${encodeURIComponent(prepayOrderNo)}`)
+    .then(normalizeCashierPage),
+  getDetail: (paymentOrderId) => request(`/api/payments/${encodeURIComponent(paymentOrderId)}`)
+    .then(normalizePaymentDetail),
+  getRefundDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`)
+    .then(normalizeRefundDetail),
   submit: (payload) => postJson("/api/payments/submit", payload),
   query: (payload) => postJson("/api/payments/query", payload),
   close: (payload) => postJson("/api/payments/close", payload)
 };
+
+function normalizeList(value) {
+  return Array.isArray(value) ? value.filter((item) => item != null) : [];
+}
+
+function normalizeCashierPage(page) {
+  if (!page || typeof page !== "object" || Array.isArray(page)) {
+    return page;
+  }
+  return { ...page, channels: normalizeList(page.channels) };
+}
+
+function normalizePaymentDetail(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    return detail;
+  }
+  return {
+    ...detail,
+    routeLogs: normalizeList(detail.routeLogs),
+    notifyLogs: normalizeList(detail.notifyLogs),
+    eventLogs: normalizeList(detail.eventLogs)
+  };
+}
+
+function normalizeRefundDetail(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    return detail;
+  }
+  return {
+    ...detail,
+    attempts: normalizeList(detail.attempts),
+    operationLogs: normalizeList(detail.operationLogs)
+  };
+}
