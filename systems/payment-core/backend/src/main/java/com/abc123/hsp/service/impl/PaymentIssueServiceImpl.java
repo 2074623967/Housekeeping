@@ -281,6 +281,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             }
             throw new IllegalArgumentException(fieldName + "不能为空");
         }
+        if (text.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
+        }
         String normalized = text.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
@@ -361,6 +364,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 throw new IllegalArgumentException(fieldName + "不能包含控制字符");
             }
         }
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
@@ -382,6 +388,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                     throw new IllegalArgumentException("操作人不能包含控制字符");
                 }
             }
+        }
+        if (operator != null && operator.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("操作人长度不能超过64字符");
         }
         String normalized = requireText(operator, requiredMessage);
         if (normalized.length() > OPERATOR_MAX_LENGTH) {

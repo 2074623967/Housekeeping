@@ -658,6 +658,20 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldRejectBatchActionFieldsWhenRawValuesExceedCapacityBeforeTrim() {
+        PaymentIssueActionRequestDTO operatorRequest = validBatchActionRequest();
+        operatorRequest.setOperator(String.join("", Collections.nCopies(64, "a")) + " ");
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(operatorRequest));
+
+        PaymentIssueActionRequestDTO remarkRequest = validBatchActionRequest();
+        remarkRequest.setRemark(String.join("", Collections.nCopies(255, "a")) + " ");
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(remarkRequest));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
     void shouldRejectOversizedBatchBeforeReadingIssues() {
         PaymentIssueActionRequestDTO request = validBatchActionRequest();
         request.setIssueNos(IntStream.rangeClosed(1, 101)
@@ -695,6 +709,11 @@ class PaymentIssueServiceImplTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongRemark));
+
+        PaymentIssueActionRequestDTO overlongIssueNoAfterTrim = validBatchActionRequest();
+        overlongIssueNoAfterTrim.setIssueNos(Arrays.asList("ISSUE-001", String.join("", Collections.nCopies(128, "a")) + " "));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongIssueNoAfterTrim));
         verifyNoInteractions(paymentIssueMapper);
     }
 
