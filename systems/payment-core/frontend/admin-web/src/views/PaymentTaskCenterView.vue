@@ -6,6 +6,7 @@ import {
   paymentTaskCenterApi
 } from "../api/client";
 import { paymentIssuesRoute, refundsRoute } from "../router/listRoutes";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const router = useRouter();
 const overview = ref({
@@ -69,6 +70,14 @@ const isTaskRunsLoading = ref(false);
 const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const taskRunsErrorMessage = ref("");
+const blockedPayments = ref([]);
+const blockedTotal = ref(0);
+const blockedPageNo = ref(1);
+const blockedPageSize = 10;
+const blockedLoaded = ref(false);
+const blockedLoading = ref(false);
+const blockedErrorMessage = ref("");
+const blockedSnapshotCount = ref(0);
 const actionErrorMessage = ref("");
 const actionResultMessage = ref("");
 const activeTaskCode = ref("");
@@ -82,6 +91,7 @@ const filters = ref({
 });
 let latestOverviewRequestId = 0;
 let latestTaskRunsRequestId = 0;
+let latestBlockedRequestId = 0;
 
 const isInteractionLocked = computed(() => Boolean(
   isLoading.value || isTaskRunsLoading.value || activeTaskCode.value
@@ -93,6 +103,57 @@ const canUseTaskRuns = computed(() => canUseOverview.value
   && Boolean(loadedTaskRunsQuery.value)
   && !taskRunsErrorMessage.value);
 const canExportTaskRuns = computed(() => canUseTaskRuns.value && total.value > 0);
+const canUseBlockedPayments = computed(() => canUseOverview.value && blockedLoaded.value
+  && !blockedLoading.value && !blockedErrorMessage.value
+  && blockedSnapshotCount.value === overview.value.blockedExpiredPaymentCount);
+
+function invalidateBlockedPayments() {
+  latestBlockedRequestId += 1;
+  blockedLoaded.value = false;
+  blockedPayments.value = [];
+  blockedLoading.value = false;
+  blockedErrorMessage.value = "";
+}
+
+async function loadBlockedPayments(nextPageNo = 1) {
+  if (!canUseOverview.value || blockedLoading.value || nextPageNo < 1 || nextPageNo > 1000) {
+    return;
+  }
+  const requestId = ++latestBlockedRequestId;
+  const snapshotCount = overview.value.blockedExpiredPaymentCount;
+  blockedLoading.value = true;
+  blockedLoaded.value = false;
+  blockedErrorMessage.value = "";
+  try {
+    const result = await paymentTaskCenterApi.getBlockedExpiredPayments({
+      pageNo: nextPageNo, pageSize: blockedPageSize
+    });
+    if (requestId !== latestBlockedRequestId || !canUseOverview.value
+        || snapshotCount !== overview.value.blockedExpiredPaymentCount) {
+      return;
+    }
+    blockedPayments.value = result.items;
+    blockedTotal.value = result.total;
+    blockedPageNo.value = result.pageNo;
+    blockedSnapshotCount.value = snapshotCount;
+    blockedLoaded.value = true;
+  } catch (error) {
+    if (requestId === latestBlockedRequestId) {
+      blockedErrorMessage.value = error.message || "阻断明细加载失败";
+    }
+  } finally {
+    if (requestId === latestBlockedRequestId) {
+      blockedLoading.value = false;
+    }
+  }
+}
+
+function openBlockedPayment(paymentOrderId) {
+  if (canUseBlockedPayments.value
+      && blockedPayments.value.some((item) => item.paymentOrderId === paymentOrderId)) {
+    router.push(paymentDetailRoute(paymentOrderId));
+  }
+}
 
 function buildTaskRunsQuery() {
   return {
@@ -114,6 +175,7 @@ async function loadOverview() {
 }
 
 async function refreshSnapshots(query, afterAction = false) {
+  invalidateBlockedPayments();
   const overviewRequestId = ++latestOverviewRequestId;
   const taskRunsRequestId = ++latestTaskRunsRequestId;
   isLoading.value = true;
@@ -266,6 +328,7 @@ async function runTask(taskCode, taskName, candidateCount, actionRunner) {
     return;
   }
   activeTaskCode.value = taskCode;
+  invalidateBlockedPayments();
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   const query = { ...loadedTaskRunsQuery.value };
@@ -734,7 +797,7 @@ onMounted(loadOverview);
                 <tr>
                   <td>超时支付令牌阻断待核对</td>
                   <td>{{ overview.blockedExpiredPaymentCount }}</td>
-                  <td>提交令牌仍活跃，不进入自动关单；需人工核对原支付及渠道事实</td>
+                  <td>提交令牌仍活跃，不进入自动关单；需人工核对原支付及渠道事实。<button class="link-button" :disabled="!canUseOverview || overview.blockedExpiredPaymentCount === 0" @click="loadBlockedPayments()">查看阻断明细</button></td>
                 </tr>
                 <tr>
                   <td>支付中待收口</td>
@@ -830,6 +893,42 @@ onMounted(loadOverview);
               </table>
             </div>
           </section>
+        </div>
+
+        <div v-if="blockedLoading || blockedErrorMessage || blockedLoaded" class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>超时支付令牌阻断明细</h3>
+              <p class="meta">只读核对入口，不展示提交令牌；刷新总览后须重新读取明细</p>
+            </div>
+          </div>
+          <div v-if="blockedLoading" class="state-box">阻断明细加载中...</div>
+          <div v-if="blockedErrorMessage" class="error-banner">{{ blockedErrorMessage }}，请重新加载明细。</div>
+          <template v-if="canUseBlockedPayments">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>支付单号</th><th>预付单号</th><th>订单号</th><th>过期时间</th><th>核对</th></tr></thead>
+                <tbody>
+                  <tr v-for="item in blockedPayments" :key="item.paymentOrderId">
+                    <td>{{ item.paymentOrderId }}</td>
+                    <td>{{ item.prepayOrderNo }}</td>
+                    <td>{{ item.orderNo }}</td>
+                    <td>{{ item.expiresAt }}</td>
+                    <td><button class="link-button" :disabled="!canUseBlockedPayments" @click="openBlockedPayment(item.paymentOrderId)">查看支付单</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-if="blockedTotal === 0" class="meta">当前无阻断记录。</p>
+            <div class="pager">
+              <span>共 {{ blockedTotal }} 笔待核对</span>
+              <template v-if="blockedTotal > blockedPageSize">
+                <button class="button secondary" :disabled="blockedPageNo === 1" @click="loadBlockedPayments(blockedPageNo - 1)">上一页</button>
+                <span>第 {{ blockedPageNo }} / {{ Math.ceil(blockedTotal / blockedPageSize) }} 页</span>
+                <button class="button secondary" :disabled="blockedPageNo >= Math.min(1000, Math.ceil(blockedTotal / blockedPageSize))" @click="loadBlockedPayments(blockedPageNo + 1)">下一页</button>
+              </template>
+            </div>
+          </template>
         </div>
 
         <div class="detail-panel">

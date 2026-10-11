@@ -11,6 +11,7 @@ import {
   normalizeReturnCodeImportPreviewResult,
   normalizePaymentMonitorOverviewResult,
   normalizePaymentTaskCenterOverviewResult,
+  normalizeBlockedExpiredPaymentsPage,
   normalizePaymentDayEndOverviewResult,
   normalizePaymentDayEndRecentBatchResult,
   normalizePaymentMetricsResult,
@@ -128,6 +129,25 @@ import {
   refundApi,
   settlementApi
 } from "./client.js";
+
+test("rejects unverified blocked expired payment pages and accepts bounded facts", () => {
+  const item = {
+    paymentOrderId: "PAY-001", prepayOrderNo: "PRE-001", orderNo: "ORD-001",
+    expiresAt: "2026-09-26 10:00:00"
+  };
+  const page = { items: [item], total: 1, pageNo: 1, pageSize: 10 };
+  assert.deepEqual(normalizeBlockedExpiredPaymentsPage(page, 1, 10), page);
+  for (const invalid of [
+    { ...page, total: 0 },
+    { ...page, pageNo: 2 },
+    { ...page, items: [{ ...item, paymentOrderId: "" }] },
+    { ...page, items: [{ ...item, expiresAt: "invalid" }] },
+    { ...page, items: null }
+  ]) {
+    assert.throws(() => normalizeBlockedExpiredPaymentsPage(invalid, 1, 10),
+      /PAYMENT-CLIENT-INVALID-BLOCKED-EXPIRED-PAYMENTS/);
+  }
+});
 
 test("normalizes a null paged items field to an empty array", () => {
   const payload = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });

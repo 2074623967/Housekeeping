@@ -1,6 +1,7 @@
 package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
@@ -39,6 +40,13 @@ public class PaymentTaskCenterController {
     @GetMapping("/overview")
     public ApiResponse<PaymentTaskCenterOverviewDTO> overview() {
         return ApiResponse.success(paymentTaskCenterService.overview());
+    }
+
+    @GetMapping("/blocked-expired-payments")
+    public ApiResponse<PageResultDTO<BlockedExpiredPaymentDTO>> listBlockedExpiredPayments(
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ApiResponse.success(paymentTaskCenterService.listBlockedExpiredPayments(pageNo, pageSize));
     }
 
     /**

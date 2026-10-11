@@ -2897,6 +2897,25 @@ export function normalizePaymentTaskRunsPage(data) {
   };
 }
 
+export function normalizeBlockedExpiredPaymentsPage(data, expectedPageNo, expectedPageSize) {
+  if (!data || typeof data !== "object" || Array.isArray(data)
+      || !Array.isArray(data.items)
+      || !Number.isInteger(data.total) || data.total < 0
+      || data.pageNo !== expectedPageNo || data.pageSize !== expectedPageSize
+      || data.items.length > expectedPageSize
+      || data.items.length > data.total
+      || data.items.some((item) => !item || typeof item !== "object" || Array.isArray(item)
+        || ![item.paymentOrderId, item.prepayOrderNo, item.orderNo].every(
+          (value) => typeof value === "string" && Boolean(value.trim()))
+        || !isValidDateTime(item.expiresAt))) {
+    throw createBusinessError(
+      { code: "PAYMENT-CLIENT-INVALID-BLOCKED-EXPIRED-PAYMENTS" },
+      "超时支付令牌阻断明细返回了无法确认的事实"
+    );
+  }
+  return data;
+}
+
 export function matchesPaymentTaskRunDetailSnapshot(snapshot, result) {
   return Boolean(snapshot
     && result
@@ -4625,6 +4644,17 @@ export const paymentDayEndApi = {
 export const paymentTaskCenterApi = {
   getOverview: () => request("/api/payment-task-center/overview")
     .then(normalizePaymentTaskCenterOverviewResult),
+  getBlockedExpiredPayments: ({ pageNo = 1, pageSize = 10 } = {}) => {
+    if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 1000
+        || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw createBusinessError(
+        { code: "PAYMENT-CLIENT-INVALID-BLOCKED-EXPIRED-QUERY" }, "阻断明细分页参数非法"
+      );
+    }
+    const params = new URLSearchParams({ pageNo: String(pageNo), pageSize: String(pageSize) });
+    return request(`/api/payment-task-center/blocked-expired-payments?${params.toString()}`)
+      .then((data) => normalizeBlockedExpiredPaymentsPage(data, pageNo, pageSize));
+  },
   getTaskRunDetail: (taskLogNo) => {
     const normalizedTaskLogNo = normalizeBusinessIdentifier(taskLogNo);
     return request(`/api/payment-task-center/task-runs/${encodeURIComponent(normalizedTaskLogNo)}`)

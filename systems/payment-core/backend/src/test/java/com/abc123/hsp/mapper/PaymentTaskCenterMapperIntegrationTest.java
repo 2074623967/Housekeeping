@@ -1,8 +1,10 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
@@ -752,6 +754,42 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, mapper.countBackingOffExpiredPayments());
             assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
             assertEquals(0, mapper.countBlockedExpiredPayments());
+        }
+    }
+
+    @Test
+    void shouldPageBlockedExpiredPaymentsWithoutExposingSubmitTokenSecrets() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_prepay_order SET prepay_order_no = 'PRE-EXPIRY-DUE' "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-DUE'");
+            statement.executeUpdate("UPDATE t_prepay_order SET prepay_order_no = 'PRE-EXPIRY-BACKOFF' "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-BACKOFF'");
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, token_status, expire_at) VALUES "
+                    + "('PRE-EXPIRY-DUE', 'PAY-EXPIRY-DUE', 'ACTIVE', TIMESTAMPADD(MINUTE, -1, NOW())), "
+                    + "('PRE-EXPIRY-BACKOFF', 'PAY-EXPIRY-BACKOFF', 'ACTIVE', "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW())), "
+                    + "('PRE-ALIAS', 'pay-expiry-due', 'ACTIVE', TIMESTAMPADD(MINUTE, -1, NOW()))");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(2, mapper.countBlockedExpiredPayments());
+            List<BlockedExpiredPaymentDTO> firstPage = mapper.findBlockedExpiredPayments(1, 0);
+            assertEquals(1, firstPage.size());
+            assertEquals("PAY-EXPIRY-DUE", firstPage.get(0).getPaymentOrderId());
+            assertEquals("PRE-EXPIRY-DUE", firstPage.get(0).getPrepayOrderNo());
+            assertEquals("ORD-TEST", firstPage.get(0).getOrderNo());
+            assertNotNull(firstPage.get(0).getExpiresAt());
+            assertEquals("PAY-EXPIRY-BACKOFF",
+                    mapper.findBlockedExpiredPayments(1, 1).get(0).getPaymentOrderId());
+            assertEquals(0, mapper.findBlockedExpiredPayments(1, 2).size());
+
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token "
+                    + "SET token_status = 'RELEASED' WHERE prepay_order_no = 'PRE-EXPIRY-DUE'");
+            session.clearCache();
+            assertEquals(1, mapper.countBlockedExpiredPayments());
+            assertEquals("PAY-EXPIRY-BACKOFF",
+                    mapper.findBlockedExpiredPayments(1, 0).get(0).getPaymentOrderId());
         }
     }
 
@@ -2405,6 +2443,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "amount DECIMAL(18, 2) DEFAULT 100.00, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
+                    + "prepay_order_no VARCHAR(64), "
                     + "order_no VARCHAR(64) DEFAULT 'ORD-TEST', amount DECIMAL(18, 2) DEFAULT 100.00, "
                     + "expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_payment_attempt ("

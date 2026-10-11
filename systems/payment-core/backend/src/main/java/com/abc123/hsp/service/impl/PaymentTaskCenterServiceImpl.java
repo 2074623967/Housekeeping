@@ -3,6 +3,8 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
+import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.PageQueryBounds;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
@@ -391,6 +393,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(safeList(paymentTaskCenterMapper.findRecentTaskRuns())));
         return overview;
+    }
+
+    @Override
+    public PageResultDTO<BlockedExpiredPaymentDTO> listBlockedExpiredPayments(int pageNo, int pageSize) {
+        int normalizedPageNo = PageQueryBounds.normalizePageNo(pageNo);
+        int normalizedPageSize = PageQueryBounds.normalizePageSize(pageSize);
+        long total = paymentTaskCenterMapper.countBlockedExpiredPayments();
+        List<BlockedExpiredPaymentDTO> items = total == 0 ? Collections.emptyList() :
+                safeList(paymentTaskCenterMapper.findBlockedExpiredPayments(
+                        normalizedPageSize, PageQueryBounds.offset(normalizedPageNo, normalizedPageSize)));
+        return new PageResultDTO<>(items, total, normalizedPageNo, normalizedPageSize);
     }
 
     @Override

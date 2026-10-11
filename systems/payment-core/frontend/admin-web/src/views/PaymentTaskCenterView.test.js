@@ -29,3 +29,12 @@ test("shows blocked expired payments separately from runnable close candidates",
   assert.match(source, /活跃提交令牌阻断的记录/);
   assert.match(source, /overview\.dueExpiredPaymentCount === 0/);
 });
+
+test("opens only a freshly loaded blocked payment fact through the read-only detail route", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /async function loadBlockedPayments\(nextPageNo = 1\)/);
+  assert.match(source, /invalidateBlockedPayments\(\);[\s\S]*?Promise\.allSettled/);
+  assert.match(source, /blockedSnapshotCount\.value === overview\.value\.blockedExpiredPaymentCount/);
+  assert.match(source, /blockedPayments\.value\.some\(\(item\) => item\.paymentOrderId === paymentOrderId\)/);
+  assert.match(source, /router\.push\(paymentDetailRoute\(paymentOrderId\)\)/);
+});

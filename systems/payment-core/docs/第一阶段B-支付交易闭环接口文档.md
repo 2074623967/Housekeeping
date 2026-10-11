@@ -5767,6 +5767,10 @@ App/H5/PC 支付提交响应与当前支付单核对成功后，先保留当前�
 
 任务中心 `expiredPaymentCount` 保留全部满足过期、唯一预付绑定、无渠道流水/支付尝试等事实条件的待关单支付；`dueExpiredPaymentCount` 与 `backingOffExpiredPaymentCount` 只统计未被同一精确支付单号 `ACTIVE` 提交令牌阻断的可处理记录，新增 `blockedExpiredPaymentCount` 单列活跃令牌阻断数。阻断项即使令牌 TTL 已过也不能自动释放或关单，`PAYMENT_EXPIRY` 重点告警提升为 `P1` 并提示人工核对原支付和渠道事实；管理端展示总量、可执行、退避与阻断，执行按钮仍只使用可执行数。大小写不同的历史令牌别名不能阻断原支付单。计数属于读取时点的运营快照，不替代关单原子更新或目标 MySQL 8 多实例验收。
 
+### 14.551 超时支付令牌阻断只读明细
+
+`GET /api/payment-task-center/blocked-expired-payments?pageNo=1&pageSize=10` 返回 `{ items, total, pageNo, pageSize }`，每条仅包含 `paymentOrderId / prepayOrderNo / orderNo / expiresAt`；页码规范化至 `1..1000`、每页 `1..100`。列表与 `blockedExpiredPaymentCount` 使用同一过期、唯一预付绑定、无尝试、精确支付单号活跃令牌资格，按过期时间、支付单号和主键稳定排序；不暴露令牌原文、幂等键或 IP，也不提供释放或关单动作。计数和分页分两次读取，若期间令牌状态变化，页内总数可能与当次列表不一致；运营页刷新总览后必须重新加载明细，单行仅跳转支付详情核对，不以列表结果推断原渠道支付事实。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

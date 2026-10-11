@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
@@ -36,6 +37,9 @@ public interface PaymentTaskCenterMapper {
      * 统计已过期但仍被活跃提交令牌阻断、须核对原渠道事实的支付单。
      */
     int countBlockedExpiredPayments();
+
+    List<BlockedExpiredPaymentDTO> findBlockedExpiredPayments(@Param("limit") int limit,
+                                                               @Param("offset") int offset);
 
     /**
      * 统计必须查单或人工核查的退款提交未知事件。
