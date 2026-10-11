@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
-import { sumPaymentAmounts } from "../utils/paymentAmount";
+import { paymentLogsRoute } from "../router/listRoutes";
+import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
 import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
@@ -42,11 +43,16 @@ function filtersFromRoute() {
 
 const filters = ref(filtersFromRoute());
 
+const hasUnverifiablePaymentAmount = computed(() => items.value.some((item) => item.successFactIssue
+  && !normalizePaymentAmountInput(String(item.amount ?? "").replace(/^¥\s*/, "").replace(/,/g, ""))));
+
 const metrics = computed(() => ({
   total: total.value,
-  successTotal: items.value.filter((item) => item.status === "SUCCESS").length,
+  successTotal: items.value.filter((item) => item.status === "SUCCESS"
+    && !item.successFactIssue && !item.prepayBindingIssue).length,
   callbackPendingTotal: items.value.filter((item) => item.status === "WAIT_CALLBACK").length,
-  amountTotal: sumPaymentAmounts(items.value.map((item) => item.amount))
+  amountTotal: hasUnverifiablePaymentAmount.value
+    ? "—" : sumPaymentAmounts(items.value.map((item) => item.amount))
 }));
 
 const isSnapshotStale = computed(() => Boolean(
@@ -57,7 +63,6 @@ const canUseSnapshot = computed(() => (
   hasLoadedData.value && !isLoading.value && !isSnapshotStale.value && !isActionRunningOnPage.value
 ));
 const canExport = computed(() => canUseSnapshot.value && total.value > 0);
-
 function buildQuery() {
   return {
     paymentOrderId: filters.value.paymentOrderId,
@@ -164,10 +169,18 @@ function goToPage(nextPage) {
 }
 
 function openDetail(paymentOrderId) {
-  if (!canUseSnapshot.value) {
+  const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
+  if (!canUseSnapshot.value || !paymentItem || paymentItem.successFactIssue || paymentItem.prepayBindingIssue) {
     return;
   }
   router.push(paymentDetailRoute(paymentOrderId));
+}
+
+function openLogs(paymentOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(paymentLogsRoute({ paymentOrderId }));
 }
 
 function pickItem(item) {
@@ -182,25 +195,36 @@ function isActionRunning(paymentOrderId, actionName) {
 }
 
 function canRunClose(item) {
-  return canClosePaymentLocally(item.status, item.channelTransactionNo, item.latestAttemptStatus);
+  return !item.prepayBindingIssue
+    && canClosePaymentLocally(item.status, item.channelTransactionNo, item.latestAttemptStatus);
 }
 
 function canRunQuery(item) {
-  return canQueryPaymentChannel(item.status, item.latestAttemptStatus);
+  return !item.successFactIssue && !item.prepayBindingIssue && canQueryPaymentChannel(
+    item.status, item.latestAttemptStatus, item.latestAttemptCompletedAt, item.channelTransactionNo,
+    item.channel
+  );
 }
 
 function updatePaymentSnapshot(paymentDetail) {
   const updatedItem = {
     paymentOrderId: paymentDetail.paymentOrderId,
+    businessChainId: paymentDetail.businessChainId,
     orderNo: paymentDetail.orderNo,
+    prepayOrderNo: paymentDetail.prepayOrderNo,
+    payScene: paymentDetail.payScene,
     customerName: paymentDetail.customerName,
     amount: paymentDetail.amount,
     paymentMethod: paymentDetail.paymentMethod,
     channel: paymentDetail.channel,
     channelTransactionNo: paymentDetail.channelTransactionNo,
     latestAttemptStatus: paymentDetail.latestAttemptStatus,
+    latestAttemptStatusType: paymentDetail.latestAttemptStatusType,
+    latestAttemptCompletedAt: paymentDetail.latestAttemptCompletedAt,
     status: paymentDetail.status,
     statusType: paymentDetail.statusType,
+    successFactIssue: null,
+    prepayBindingIssue: null,
     createdAt: paymentDetail.createdAt
   };
   items.value = items.value.map((item) => item.paymentOrderId === paymentDetail.paymentOrderId
@@ -228,13 +252,19 @@ async function handleQuery(paymentOrderId) {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator, {
+      ...paymentItem,
+      orderNo: paymentItem.orderNo,
+      amount: paymentItem.amount,
+      prepayOrderNo: paymentItem.prepayOrderNo
+    });
     updatePaymentSnapshot(paymentDetail);
     actionResultMessage.value = `支付单 ${paymentOrderId} 已完成主动查单，当前状态为 ${paymentDetail.status}。`;
     actionRefreshErrorMessage.value = "";
     await refreshList(paymentOrderId, true, query);
   } catch (error) {
-    actionErrorMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}`;
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}；请以刷新后的支付事实为准。`;
+    await refreshList(paymentOrderId, true, query);
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -260,7 +290,12 @@ async function handleClose(paymentOrderId) {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.close(paymentOrderId, operator);
+    const paymentDetail = await paymentApi.close(paymentOrderId, operator, {
+      ...paymentItem,
+      orderNo: paymentItem.orderNo,
+      amount: paymentItem.amount,
+      prepayOrderNo: paymentItem.prepayOrderNo
+    });
     updatePaymentSnapshot(paymentDetail);
     actionResultMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${paymentOrderId} 已关闭。`
@@ -268,7 +303,8 @@ async function handleClose(paymentOrderId) {
     actionRefreshErrorMessage.value = "";
     await refreshList(paymentOrderId, true, query);
   } catch (error) {
-    actionErrorMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}`;
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}；请以刷新后的支付事实为准。`;
+    await refreshList(paymentOrderId, true, query);
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -317,7 +353,7 @@ watch(
         <p class="card-value">{{ metrics.total }}</p>
       </article>
       <article class="card">
-        <p class="card-title">本页支付成功</p>
+        <p class="card-title">本页成功事实无异常</p>
         <p class="card-value">{{ metrics.successTotal }}</p>
       </article>
       <article class="card">
@@ -325,7 +361,7 @@ watch(
         <p class="card-value">{{ metrics.callbackPendingTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">本页实付金额</p>
+        <p class="card-title">{{ hasUnverifiablePaymentAmount ? "本页实付金额（异常值不汇总）" : "本页实付金额" }}</p>
         <p class="card-value">{{ metrics.amountTotal }}</p>
       </article>
     </section>
@@ -335,7 +371,7 @@ watch(
         {{ hasLoadedData ? "支付单数据刷新失败，当前展示上次成功快照：" : "支付单数据加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        人工动作结果已更新当前支付单，但列表刷新失败，其他支付单仍为上次成功快照：{{ actionRefreshErrorMessage }}
+        支付动作后列表刷新失败，当前状态未经确认，页面仍展示上次成功快照：{{ actionRefreshErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">
         {{ actionErrorMessage }}
@@ -408,6 +444,8 @@ watch(
             <thead>
               <tr>
                 <th>支付单号</th>
+                <th>业务链路</th>
+                <th>支付场景</th>
                 <th>订单号</th>
                 <th>用户</th>
                 <th>实付金额</th>
@@ -415,6 +453,8 @@ watch(
                 <th>支付渠道</th>
                 <th>渠道交易号</th>
                 <th>支付状态</th>
+                <th>最近尝试</th>
+                <th>最近尝试完成时间</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -422,18 +462,23 @@ watch(
             <tbody>
               <tr v-for="item in items" :key="item.paymentOrderId">
                 <td>{{ item.paymentOrderId }}</td>
+                <td>{{ item.businessChainId }}</td>
+                <td>{{ item.payScene || "—" }} <span v-if="item.prepayBindingIssue" class="badge warn">{{ item.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付缺失待核查" : "多预付待核查" }}</span></td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.customerName }}</td>
                 <td>{{ item.amount }}</td>
                 <td>{{ item.paymentMethod }}</td>
                 <td>{{ item.channel }}</td>
                 <td>{{ item.channelTransactionNo }}</td>
-                <td><span :class="['badge', item.statusType]">{{ item.status }}</span></td>
+                <td><span :class="['badge', item.successFactIssue ? 'danger' : item.statusType]">{{ item.status }}</span> <span v-if="item.successFactIssue" class="badge danger">{{ item.successFactIssue === "SUCCESS_TIME_MISSING" ? "成功时间缺失" : "成功事实异常" }}</span></td>
+                <td><span :class="['badge', item.latestAttemptStatusType || 'info']">{{ item.latestAttemptStatus || "—" }}</span></td>
+                <td>{{ item.latestAttemptCompletedAt || "—" }}</td>
                 <td>{{ item.createdAt }}</td>
                 <td>
                   <div class="list-actions">
                     <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">快照</button>
-                    <button class="link-button" :disabled="!canUseSnapshot" @click="openDetail(item.paymentOrderId)">详情</button>
+                    <button v-if="item.successFactIssue || item.prepayBindingIssue" class="link-button" :disabled="!canUseSnapshot" @click="openLogs(item.paymentOrderId)">处理日志</button>
+                    <button v-else class="link-button" :disabled="!canUseSnapshot" @click="openDetail(item.paymentOrderId)">详情</button>
                     <button class="link-button" :disabled="!canUseSnapshot || !canRunQuery(item)" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
                     </button>
@@ -454,21 +499,31 @@ watch(
               <span class="meta">{{ selectedItem.paymentOrderId }}</span>
             </div>
             <div class="detail-grid">
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
+              <div class="detail-card"><span>支付场景</span><strong>{{ selectedItem.payScene || "—" }}</strong></div>
+              <div v-if="selectedItem.prepayBindingIssue" class="detail-card"><span>预付归属</span><strong>{{ selectedItem.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付归属缺失，待人工核查" : "多预付冲突，待人工核查" }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>客户名称</span><strong>{{ selectedItem.customerName }}</strong></div>
               <div class="detail-card"><span>实付金额</span><strong>{{ selectedItem.amount }}</strong></div>
               <div class="detail-card"><span>支付方式</span><strong>{{ selectedItem.paymentMethod }}</strong></div>
               <div class="detail-card"><span>支付渠道</span><strong>{{ selectedItem.channel }}</strong></div>
               <div class="detail-card"><span>渠道交易号</span><strong>{{ selectedItem.channelTransactionNo || "—" }}</strong></div>
-              <div class="detail-card"><span>支付状态</span><strong>{{ selectedItem.status }}</strong></div>
+              <div class="detail-card"><span>支付状态</span><strong>{{ selectedItem.status }}{{ selectedItem.successFactIssue ? " · " + (selectedItem.successFactIssue === "SUCCESS_TIME_MISSING" ? "成功时间缺失" : "成功事实异常") : "" }}</strong></div>
               <div class="detail-card"><span>最近尝试</span><strong>{{ selectedItem.latestAttemptStatus || "—" }}</strong></div>
+              <div class="detail-card"><span>最近尝试完成时间</span><strong>{{ selectedItem.latestAttemptCompletedAt || "—" }}</strong></div>
               <div class="detail-card"><span>创建时间</span><strong>{{ selectedItem.createdAt }}</strong></div>
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先动作</span><span>已提交先查单，未提交可关闭</span></div>
-              <div class="ops-row"><span>重点核对</span><span>支付状态、渠道流水号、回调是否收口</span></div>
-              <div class="ops-row"><span>典型场景</span><span>待回调长时间未收口、重复支付保护、关闭单保护</span></div>
+              <template v-if="selectedItem.successFactIssue || selectedItem.prepayBindingIssue">
+                <div class="ops-row"><span>优先动作</span><span>保留当前异常快照，联查处理日志与最新支付尝试</span></div>
+                <div class="ops-row"><span>详情门禁</span><span>成功事实异常或预付归属未确认时，不从列表推断可执行的支付动作</span></div>
+              </template>
+              <template v-else>
+                <div class="ops-row"><span>优先动作</span><span>已提交先查单，未提交可关闭</span></div>
+                <div class="ops-row"><span>重点核对</span><span>支付状态、渠道流水号、回调是否收口</span></div>
+                <div class="ops-row"><span>典型场景</span><span>待回调长时间未收口、重复支付保护、关闭单保护</span></div>
+              </template>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付单后，可在这里查看支付单快照与排障建议。</div>

@@ -21,6 +21,7 @@ const overview = ref({
   successSessionCount: 0,
   payingSessionCount: 0,
   pendingSessionCount: 0,
+  otherSessionCount: 0,
   distinctTerminalCount: 0,
   expiringSoonCount: 0,
   totalAmount: "¥0.00"
@@ -56,6 +57,7 @@ const metrics = computed(() => ({
   successTotal: overview.value.successSessionCount,
   payingTotal: overview.value.payingSessionCount,
   pendingTotal: overview.value.pendingSessionCount,
+  otherTotal: overview.value.otherSessionCount,
   terminalCount: overview.value.distinctTerminalCount,
   expiringSoonCount: overview.value.expiringSoonCount,
   totalAmount: overview.value.totalAmount
@@ -135,7 +137,11 @@ function openSelectedCashier() {
     return;
   }
   window.open(
-    buildAppWebCashierUrl(selectedItem.value.prepayOrderNo),
+    buildAppWebCashierUrl(
+      selectedItem.value.prepayOrderNo,
+      undefined,
+      selectedItem.value.payScene
+    ),
     "_blank",
     "noopener,noreferrer"
   );
@@ -253,6 +259,10 @@ watch(
         <p class="card-value">{{ metrics.pendingTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">其他状态</p>
+        <p class="card-value">{{ metrics.otherTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">涉及终端数</p>
         <p class="card-value">{{ metrics.terminalCount }}</p>
       </article>
@@ -320,9 +330,16 @@ watch(
           <select v-model="filters.sessionStatus" :disabled="isLoading">
             <option>全部</option>
             <option>待支付</option>
+            <option>待风控复核</option>
+            <option>风控拦截</option>
+            <option>风控拒绝</option>
             <option>支付中</option>
+            <option>待回调</option>
+            <option>结果待确认</option>
+            <option>成功事实异常</option>
             <option>支付成功</option>
             <option>已完成</option>
+            <option>已关闭</option>
             <option>已失效</option>
           </select>
         </div>
@@ -367,6 +384,7 @@ watch(
                 <th>会话号</th>
                 <th>预付单号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>订单号</th>
                 <th>客户</th>
                 <th>业务场景</th>
@@ -383,6 +401,7 @@ watch(
                 <td>{{ item.sessionNo }}</td>
                 <td>{{ item.prepayOrderNo }}</td>
                 <td>{{ item.paymentOrderId }}</td>
+                <td class="mono-text">{{ item.businessChainId }}</td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.customerName }}</td>
                 <td>{{ item.payScene }}</td>
@@ -411,6 +430,7 @@ watch(
             <div class="detail-grid">
               <div class="detail-card"><span>预付单号</span><strong>{{ selectedItem.prepayOrderNo }}</strong></div>
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>客户名称</span><strong>{{ selectedItem.customerName }}</strong></div>
               <div class="detail-card"><span>业务场景</span><strong>{{ selectedItem.payScene }}</strong></div>

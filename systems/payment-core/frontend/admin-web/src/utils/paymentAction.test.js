@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { canClosePaymentLocally, canQueryPaymentChannel } from "./paymentAction.js";
 
-test("only queries the channel for terminal payments or submitted pending payments", () => {
+test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("SUCCESS", null), true);
+  assert.equal(canQueryPaymentChannel("支付成功", "成功", "2026-10-07 09:00:00", "WX-1"), true);
   assert.equal(canQueryPaymentChannel("CLOSED", null), true);
-  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中"), true);
+  assert.equal(canQueryPaymentChannel("已关闭", null), true);
+  assert.equal(canQueryPaymentChannel("已关闭", null, null, "WX-1"), false);
+  assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, null, "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("CLOSED", "FAILED"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", null), false);
+  assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, "WX-1", " "), false);
+  assert.equal(canQueryPaymentChannel("支付中", "处理中", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("PAYING", "处理中"), false);
+  for (const attemptStatus of ["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED", " FAILED "]) {
+    assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", attemptStatus, null, "WX-1", "wx_h5"), false);
+  }
+  assert.equal(canQueryPaymentChannel("支付中", "处理中", "2026-10-07 09:00:00", "WX-1", "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("PAYING", null), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", null), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "-"), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", " - "), false);

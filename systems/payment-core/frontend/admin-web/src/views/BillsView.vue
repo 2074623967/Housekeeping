@@ -336,6 +336,7 @@ watch(
                 <th>已支付</th>
                 <th>待支付</th>
                 <th>账单状态</th>
+                <th>支付场景</th>
                 <th>到期时间</th>
                 <th>创建时间</th>
                 <th>操作</th>
@@ -350,6 +351,7 @@ watch(
                 <td>{{ item.paidAmount }}</td>
                 <td>{{ item.unpaidAmount }}</td>
                 <td><span :class="['badge', item.billStatusType]">{{ item.billStatus }}</span></td>
+                <td>{{ item.latestPayScene || "-" }}</td>
                 <td>{{ item.dueAt }}</td>
                 <td>{{ item.createdAt }}</td>
                 <td>
@@ -374,6 +376,7 @@ watch(
               <div class="detail-card"><span>已支付</span><strong>{{ selectedItem.paidAmount }}</strong></div>
               <div class="detail-card"><span>待支付</span><strong>{{ selectedItem.unpaidAmount }}</strong></div>
               <div class="detail-card"><span>账单状态</span><strong>{{ selectedItem.billStatus }}</strong></div>
+              <div class="detail-card"><span>支付场景</span><strong>{{ selectedItem.latestPayScene || "-" }}</strong></div>
               <div class="detail-card"><span>到期时间</span><strong>{{ selectedItem.dueAt }}</strong></div>
               <div class="detail-card"><span>创建时间</span><strong>{{ selectedItem.createdAt }}</strong></div>
             </div>

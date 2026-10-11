@@ -27,6 +27,12 @@ test("hydrates refund alert filters from structured route query", () => {
     refundStatus: "TERMINAL_FACT_MISMATCH",
     refundMethod: "全部"
   });
+  assert.deepEqual(refundListFiltersFromQuery({ refundStatus: "UNVERIFIED_SUCCESS" }), {
+    refundOrderId: "",
+    paymentOrderId: "",
+    refundStatus: "UNVERIFIED_SUCCESS",
+    refundMethod: "全部"
+  });
 });
 
 test("ignores non-scalar refund route query values", () => {

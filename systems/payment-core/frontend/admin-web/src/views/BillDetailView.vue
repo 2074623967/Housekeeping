@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { billApi } from "../api/client";
+import { billApi, matchesBillDetailSnapshot } from "../api/client";
 import { orderDetailRoute, paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute } from "../router/listRoutes";
@@ -34,7 +34,7 @@ const paymentRecordRoute = computed(() => detail.value?.latestPaymentOrderId
   ? paymentRecordDetailRoute(detail.value.latestPaymentOrderId)
   : null);
 const cashierUrl = computed(() => detail.value?.latestPrepayOrderNo
-  ? buildAppWebCashierUrl(detail.value.latestPrepayOrderNo)
+  ? buildAppWebCashierUrl(detail.value.latestPrepayOrderNo, undefined, detail.value.latestPayScene)
   : "");
 const metricCards = computed(() => detail.value ? [
   { title: "账单应收", value: detail.value.billAmount || "-", hint: "交易账单应收金额" },
@@ -45,6 +45,17 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(billNo = currentBillNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = billNo === currentBillNo.value && detail.value
+    ? {
+      billNo: detail.value.billNo,
+      orderNo: detail.value.orderNo,
+      standardOrderNo: detail.value.standardOrderNo,
+      billAmount: detail.value.billAmount,
+      paidAmount: detail.value.paidAmount,
+      unpaidAmount: detail.value.unpaidAmount,
+      latestPayScene: detail.value.latestPayScene
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -54,6 +65,9 @@ async function loadDetail(billNo = currentBillNo.value) {
     }
     if (!billDetail || billDetail.billNo !== billNo) {
       throw new Error("账单详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesBillDetailSnapshot(expectedSnapshot, billDetail)) {
+      throw new Error("账单详情响应为空或与当前订单/金额快照不一致");
     }
     detail.value = billDetail;
     hasLoadedData.value = true;
@@ -136,6 +150,8 @@ watch(currentBillNo, (billNo) => {
           <div class="detail-grid detail-grid-wide">
             <div><strong>账单号：</strong>{{ formatValue(detail.billNo) }}</div>
             <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
+            <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
+            <div><strong>标准订单联查：</strong>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</div>
             <div><strong>客户：</strong>{{ formatValue(detail.customerName) }}</div>
             <div><strong>账单状态：</strong><span :class="['badge', detail.billStatusType]">{{ formatValue(detail.billStatus) }}</span></div>
             <div><strong>到期时间：</strong>{{ formatValue(detail.dueAt) }}</div>

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { cashierSessionApi } from "../api/client";
+import { cashierSessionApi, matchesCashierSessionDetailSnapshot } from "../api/client";
 import {
   billDetailRoute,
   orderDetailRoute,
@@ -45,7 +45,7 @@ const paymentFlowRoute = computed(() => detail.value?.paymentOrderId
   ? paymentFlowsRoute({ paymentOrderId: detail.value.paymentOrderId })
   : null);
 const cashierUrl = computed(() => detail.value?.prepayOrderNo
-  ? buildAppWebCashierUrl(detail.value.prepayOrderNo)
+  ? buildAppWebCashierUrl(detail.value.prepayOrderNo, undefined, detail.value.payScene)
   : "");
 const metricCards = computed(() => detail.value ? [
   { title: "会话金额", value: detail.value.amount || "-", hint: detail.value.prepayOrderNo || "预付单未关联" },
@@ -56,6 +56,18 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(sessionNo = currentSessionNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = sessionNo === currentSessionNo.value && detail.value
+    ? {
+      sessionNo: detail.value.sessionNo,
+      prepayOrderNo: detail.value.prepayOrderNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      orderNo: detail.value.orderNo,
+      billNo: detail.value.billNo,
+      customerName: detail.value.customerName,
+      amount: detail.value.amount
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -65,6 +77,9 @@ async function loadDetail(sessionNo = currentSessionNo.value) {
     }
     if (!cashierDetail || cashierDetail.sessionNo !== sessionNo) {
       throw new Error("收银台会话详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesCashierSessionDetailSnapshot(expectedSnapshot, cashierDetail)) {
+      throw new Error("收银台会话详情响应为空或与当前支付关联/金额快照不一致");
     }
     detail.value = cashierDetail;
     hasLoadedData.value = true;
@@ -164,16 +179,17 @@ watch(currentSessionNo, (sessionNo) => {
           <section class="panel mini">
             <div class="section-title">
               <h3>关联标识</h3>
-              <span class="meta">只开放真实存在的标准订单详情</span>
+              <span class="meta">只开放归属已确认的标准订单详情</span>
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
               <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
               <div><strong>账单号：</strong>{{ formatValue(detail.billNo) }}</div>
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div><strong>业务链路：</strong><span class="mono-text">{{ formatValue(detail.businessChainId) }}</span></div>
             </div>
             <div class="ops-card detail-panel">
-              <div class="ops-row"><span>标准订单详情</span><span>{{ detail.standardOrderNo ? "可联查" : "当前业务号不是标准订单" }}</span></div>
+              <div class="ops-row"><span>标准订单详情</span><span>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</span></div>
               <div class="ops-row"><span>账单与支付</span><span>{{ detail.billNo && detail.paymentOrderId ? "关联完整" : "存在未关联事实" }}</span></div>
               <div class="ops-row"><span>导航状态</span><span>{{ canUseSnapshot ? "当前快照有效" : "当前快照不可用于联查" }}</span></div>
             </div>

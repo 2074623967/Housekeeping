@@ -1,11 +1,19 @@
-export function canQueryPaymentChannel(status, latestAttemptStatus) {
-  if (["SUCCESS", "CLOSED"].includes(status)) {
+export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
+  if (["SUCCESS", "支付成功"].includes(status)) {
     return true;
   }
   const normalizedAttemptStatus = typeof latestAttemptStatus === "string"
     ? latestAttemptStatus.trim()
     : "";
-  return status === "WAIT_CALLBACK" && Boolean(normalizedAttemptStatus && normalizedAttemptStatus !== "-");
+  if (["CLOSED", "已关闭"].includes(status) && !normalizedAttemptStatus && !channelTransactionNo) {
+    return true;
+  }
+  return ["WAIT_CALLBACK", "支付中", "CLOSED", "已关闭"].includes(status)
+    && Boolean(normalizedAttemptStatus && normalizedAttemptStatus !== "-")
+    && !["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]
+      .includes(normalizedAttemptStatus.toUpperCase())
+    && typeof channel === "string" && Boolean(channel.trim())
+    && latestAttemptCompletedAt == null;
 }
 
 export function canClosePaymentLocally(status, channelTransactionNo, latestAttemptStatus) {

@@ -161,13 +161,15 @@ async function launchPayment(orderNo) {
   try {
     const prepay = await paymentApi.prepay({
       orderNo,
-      payScene: "HOME_CLEAN"
+      payScene: "HOME_CLEAN",
+      amount: orderItem.orderAmount,
+      customerName: orderItem.customerName
     });
     launchPayload.value = {
       orderNo,
       prepayOrderNo: prepay.prepayOrderNo,
       paymentOrderId: prepay.paymentOrderId,
-      cashierUrl: buildAppWebCashierUrl(prepay.prepayOrderNo)
+      cashierUrl: buildAppWebCashierUrl(prepay.prepayOrderNo, undefined, prepay.payScene)
     };
     actionResultMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
     actionRefreshErrorMessage.value = "";
@@ -199,7 +201,11 @@ function openSnapshotCashier(orderItem) {
   if (!isCurrentSnapshotOrder(orderItem) || !canOpenCashier(orderItem)) {
     return;
   }
-  window.open(buildAppWebCashierUrl(orderItem.latestPrepayOrderNo), "_blank", "noopener,noreferrer");
+  window.open(
+    buildAppWebCashierUrl(orderItem.latestPrepayOrderNo, undefined, orderItem.latestPayScene),
+    "_blank",
+    "noopener,noreferrer"
+  );
 }
 
 onMounted(loadOrders);
@@ -302,6 +308,7 @@ onMounted(loadOrders);
               <th>订单状态</th>
               <th>履约状态</th>
               <th>最近支付状态</th>
+              <th>支付场景</th>
               <th>最近收银台状态</th>
               <th>创建时间</th>
               <th>操作</th>
@@ -324,6 +331,7 @@ onMounted(loadOrders);
                 </span>
                 <span v-else>-</span>
               </td>
+              <td>{{ item.latestPayScene || "-" }}</td>
               <td>
                 <span v-if="item.latestCashierStatus" :class="['badge', item.latestCashierStatusType]">
                   {{ item.latestCashierStatus }}

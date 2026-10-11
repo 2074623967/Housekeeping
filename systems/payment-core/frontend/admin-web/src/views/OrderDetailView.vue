@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { orderApi } from "../api/client";
+import { matchesOrderDetailSnapshot, orderApi } from "../api/client";
 import { billDetailRoute, paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { ordersRoute } from "../router/listRoutes";
@@ -34,7 +34,7 @@ const billRoute = computed(() => detail.value?.billNo
   ? billDetailRoute(detail.value.billNo)
   : null);
 const cashierUrl = computed(() => detail.value?.latestPrepayOrderNo
-  ? buildAppWebCashierUrl(detail.value.latestPrepayOrderNo)
+  ? buildAppWebCashierUrl(detail.value.latestPrepayOrderNo, undefined, detail.value.latestPayScene)
   : "");
 const metricCards = computed(() => detail.value ? [
   { title: "订单应收", value: detail.value.orderAmount || "-", hint: "标准订单应收金额" },
@@ -45,6 +45,13 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(orderNo = currentOrderNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = orderNo === currentOrderNo.value && detail.value
+    ? {
+      orderNo: detail.value.orderNo,
+      orderAmount: detail.value.orderAmount,
+      latestPayScene: detail.value.latestPayScene
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -54,6 +61,9 @@ async function loadDetail(orderNo = currentOrderNo.value) {
     }
     if (!orderDetail || orderDetail.orderNo !== orderNo) {
       throw new Error("订单详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesOrderDetailSnapshot(expectedSnapshot, orderDetail)) {
+      throw new Error("订单详情响应为空或与当前订单金额快照不一致");
     }
     detail.value = orderDetail;
     hasLoadedData.value = true;

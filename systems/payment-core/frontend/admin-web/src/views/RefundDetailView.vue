@@ -1,14 +1,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { refundApi } from "../api/client";
+import { matchesRefundActionSnapshot, refundApi } from "../api/client";
 import { buildAppWebRefundProgressUrl } from "../router/externalUrls";
 import {
   paymentDetailRoute as buildPaymentDetailRoute,
   paymentRecordDetailRoute as buildPaymentRecordDetailRoute
 } from "../router/detailRoutes";
 import { paymentLogsRoute as buildPaymentLogsRoute } from "../router/listRoutes";
-import { canRunRefundAction } from "../utils/refundAction";
+import { canRunRefundAction, refundOperationSuggestions } from "../utils/refundAction";
 import { refundAttemptStatusType } from "../utils/refundAttempt";
 
 const route = useRoute();
@@ -64,7 +64,11 @@ const userRefundProgressUrl = computed(() => {
   if (!detail.value?.refundOrderId) {
     return "";
   }
-  return buildAppWebRefundProgressUrl(detail.value.refundOrderId);
+  return buildAppWebRefundProgressUrl(
+    detail.value.refundOrderId,
+    undefined,
+    detail.value.payScene
+  );
 });
 
 const metricCards = computed(() => {
@@ -95,35 +99,27 @@ const metricCards = computed(() => {
   ];
 });
 
-const operationSuggestions = computed(() => {
-  if (!detail.value) {
-    return [];
-  }
-  const suggestions = [];
-  if (detail.value.status === "REVIEWING") {
-    suggestions.push("当前退款单仍在审核阶段，建议先核对退款原因、原支付事实和审批备注后再放行。");
-  }
-  if (detail.value.status === "PROCESSING") {
-    suggestions.push("当前退款单已进入处理中，建议优先关注渠道回调和任务中心自动重试结果。");
-  }
-  if (detail.value.status === "FAIL") {
-    suggestions.push("当前退款单已失败，建议结合操作日志查看失败原因，并决定是否执行失败重试。");
-  }
-  if (["SUCCESS", "FAIL"].includes(detail.value.status)
-    && (!detail.value.terminalAt || detail.value.terminalAt === "-")) {
-    suggestions.push("当前退款单缺少本地终态时间，请核对可信回调、主动查单和最新退款尝试，勿用申请时间代填。");
-  }
-  if (!(detail.value.operationLogs || []).length) {
-    suggestions.push("当前暂无退款操作日志，建议补充申请、审核或回调动作后再做复盘。");
-  }
-  if (!suggestions.length) {
-    suggestions.push("当前退款状态稳定，可结合支付单详情和支付记录详情继续做资金复盘。");
-  }
-  return suggestions;
-});
+const operationSuggestions = computed(() => refundOperationSuggestions(detail.value));
 
 async function loadDetail(afterAction = false, refundOrderId = currentRefundOrderId.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = refundOrderId === currentRefundOrderId.value && detail.value
+    ? {
+      refundOrderId: detail.value.refundOrderId,
+      paymentOrderId: detail.value.paymentOrderId,
+      payScene: detail.value.payScene,
+      businessChainId: detail.value.businessChainId,
+      orderNo: detail.value.orderNo,
+      customerName: detail.value.customerName,
+      paymentMethod: detail.value.paymentMethod,
+      refundAmount: detail.value.refundAmount,
+      paidAmount: detail.value.paidAmount,
+      refundMethod: detail.value.refundMethod,
+      refundReason: detail.value.refundReason,
+      channelCode: detail.value.channelCode,
+      channelRefundNo: detail.value.channelRefundNo
+    }
+    : null;
   isLoading.value = true;
   if (afterAction) {
     actionRefreshErrorMessage.value = "";
@@ -137,6 +133,9 @@ async function loadDetail(afterAction = false, refundOrderId = currentRefundOrde
     }
     if (!refundDetail || refundDetail.refundOrderId !== refundOrderId) {
       throw new Error("退款详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesRefundActionSnapshot(expectedSnapshot, refundDetail)) {
+      throw new Error("退款详情响应为空或与当前支付单/金额快照不一致");
     }
     detail.value = refundDetail;
     hasLoadedData.value = true;
@@ -194,14 +193,15 @@ async function runAction(actionName, actionLabel, actionRunner) {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const refundDetail = await actionRunner(refundOrderId, operator, actionRemark.value);
+    const refundDetail = await actionRunner(
+      refundOrderId, operator, actionRemark.value, detail.value
+    );
     if (refundOrderId !== currentRefundOrderId.value) {
       return;
     }
-    detail.value = refundDetail;
-    hasLoadedData.value = true;
-    loadErrorMessage.value = "";
-    actionRefreshErrorMessage.value = "";
+    if (!matchesRefundActionSnapshot(detail.value, refundDetail)) {
+      throw new Error("退款动作响应为空或与当前支付单/金额快照不一致");
+    }
     actionResultMessage.value = `退款单 ${refundOrderId} 已${actionLabel}，当前状态为 ${refundDetail.status}。`;
     actionRemark.value = "";
     await loadDetail(true, refundOrderId);
@@ -209,7 +209,8 @@ async function runAction(actionName, actionLabel, actionRunner) {
     if (refundOrderId !== currentRefundOrderId.value) {
       return;
     }
-    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
+    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}请求失败：${error.message}；请以刷新后的退款事实为准。`;
+    await loadDetail(true, refundOrderId);
   } finally {
     activeAction.value = "";
   }
@@ -251,7 +252,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
         {{ hasLoadedData ? "退款详情刷新失败，当前展示上次成功快照：" : "退款详情加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        退款动作结果已更新当前详情，但详情刷新失败，当前展示动作响应快照：{{ actionRefreshErrorMessage }}
+        退款动作后详情刷新失败，当前状态未经确认，展示的是上次成功详情快照：{{ actionRefreshErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">
         {{ actionErrorMessage }}
@@ -302,6 +303,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
             </div>
             <div class="detail-grid">
               <div><strong>原支付单号：</strong>{{ detail.paymentOrderId }}</div>
+              <div><strong>支付场景：</strong>{{ detail.payScene || "-" }}</div>
               <div><strong>原订单号：</strong>{{ detail.orderNo }}</div>
               <div><strong>客户名称：</strong>{{ detail.customerName }}</div>
               <div><strong>申请时间：</strong>{{ detail.appliedAt }}</div>
@@ -372,7 +374,7 @@ watch(currentRefundOrderId, (refundOrderId) => {
             </div>
             <div class="toolbar-actions">
               <button class="button primary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'approve')" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
-              <button class="button primary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'query')" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
+              <button class="button primary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'query')" @click="runAction('query', '完成主动查单', (refundOrderId, operator, _remark, expectedSnapshot) => refundApi.query(refundOrderId, operator, expectedSnapshot))">主动查单</button>
               <button class="button secondary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'retry')" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>

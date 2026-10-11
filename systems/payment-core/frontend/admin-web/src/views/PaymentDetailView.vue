@@ -1,10 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentApi } from "../api/client";
+import { matchesPaymentDetailSnapshot, paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "../router/externalUrls";
-import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute } from "../router/listRoutes";
 import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
@@ -61,7 +61,7 @@ const cashierUrl = computed(() => {
   if (!detail.value?.prepayOrderNo) {
     return "";
   }
-  return buildAppWebCashierUrl(detail.value.prepayOrderNo);
+  return buildAppWebCashierUrl(detail.value.prepayOrderNo, undefined, detail.value.payScene);
 });
 
 const reconciliationChainUrl = computed(() => {
@@ -127,6 +127,21 @@ const operationSuggestions = computed(() => {
 
 async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOrderId.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = paymentOrderId === currentPaymentOrderId.value && detail.value
+    ? {
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      prepayOrderNo: detail.value.prepayOrderNo,
+      orderNo: detail.value.orderNo,
+      billNo: detail.value.billNo,
+      customerName: detail.value.customerName,
+      payScene: detail.value.payScene,
+      amount: detail.value.amount,
+      paymentMethod: detail.value.paymentMethod,
+      channel: detail.value.channel,
+      channelTransactionNo: detail.value.channelTransactionNo
+    }
+    : null;
   isLoading.value = true;
   if (afterAction) {
     actionRefreshErrorMessage.value = "";
@@ -140,6 +155,9 @@ async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOr
     }
     if (!paymentDetail || paymentDetail.paymentOrderId !== paymentOrderId) {
       throw new Error("支付单详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentDetailSnapshot(expectedSnapshot, paymentDetail)) {
+      throw new Error("支付单详情响应为空或与当前订单/金额快照不一致");
     }
     detail.value = paymentDetail;
     hasLoadedData.value = true;
@@ -179,7 +197,11 @@ function canRunClose() {
 }
 
 function canRunQuery() {
-  return canQueryPaymentChannel(detail.value?.status, detail.value?.latestAttemptStatus);
+  return canQueryPaymentChannel(
+    detail.value?.status, detail.value?.latestAttemptStatus,
+    detail.value?.latestAttemptCompletedAt, detail.value?.channelTransactionNo,
+    detail.value?.channel
+  );
 }
 
 function openRelatedRoute(targetRoute) {
@@ -220,21 +242,23 @@ async function handleQuery() {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator, {
+      ...detail.value,
+      orderNo: detail.value?.orderNo,
+      amount: detail.value?.amount,
+      prepayOrderNo: detail.value?.prepayOrderNo
+    });
     if (paymentOrderId !== currentPaymentOrderId.value) {
       return;
     }
-    detail.value = paymentDetail;
-    hasLoadedData.value = true;
-    loadErrorMessage.value = "";
-    actionRefreshErrorMessage.value = "";
     actionResultMessage.value = `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
     await loadDetail(true, paymentOrderId);
   } catch (error) {
     if (paymentOrderId !== currentPaymentOrderId.value) {
       return;
     }
-    actionErrorMessage.value = `主动查单失败：${error.message}`;
+    actionErrorMessage.value = `主动查单失败：${error.message}；请以刷新后的支付事实为准。`;
+    await loadDetail(true, paymentOrderId);
   } finally {
     activeAction.value = "";
   }
@@ -257,14 +281,15 @@ async function handleClose() {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.close(paymentOrderId, operator);
+    const paymentDetail = await paymentApi.close(paymentOrderId, operator, {
+      ...detail.value,
+      orderNo: detail.value?.orderNo,
+      amount: detail.value?.amount,
+      prepayOrderNo: detail.value?.prepayOrderNo
+    });
     if (paymentOrderId !== currentPaymentOrderId.value) {
       return;
     }
-    detail.value = paymentDetail;
-    hasLoadedData.value = true;
-    loadErrorMessage.value = "";
-    actionRefreshErrorMessage.value = "";
     actionResultMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${paymentOrderId} 已关闭。`
       : `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
@@ -273,7 +298,8 @@ async function handleClose() {
     if (paymentOrderId !== currentPaymentOrderId.value) {
       return;
     }
-    actionErrorMessage.value = `关闭支付单失败：${error.message}`;
+    actionErrorMessage.value = `关闭支付单失败：${error.message}；请以刷新后的支付事实为准。`;
+    await loadDetail(true, paymentOrderId);
   } finally {
     activeAction.value = "";
   }
@@ -300,7 +326,10 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
         <p>查看支付主链路、路由轨迹、回调轨迹和事件轨迹</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" @click="router.push('/payments')">返回列表</button>
+        <button class="button secondary" @click="router.push(paymentsRoute({ paymentOrderId: currentPaymentOrderId }))">返回列表</button>
+        <button v-if="loadErrorMessage && !hasLoadedData && currentPaymentOrderId" class="button secondary" @click="router.push(paymentLogsRoute({ paymentOrderId: currentPaymentOrderId }))">
+          按支付单号查看处理日志
+        </button>
         <button class="button secondary" :disabled="!canUseSnapshot" @click="openRelatedRoute(paymentRequestsRoute({ paymentOrderId: detail?.paymentOrderId }))">
           查看支付请求
         </button>
@@ -338,7 +367,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
         {{ hasLoadedData ? "支付单详情刷新失败，当前展示上次成功快照：" : "支付单详情加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        人工动作结果已更新当前支付单，但详情刷新失败，当前展示动作响应快照：{{ actionRefreshErrorMessage }}
+        支付动作后详情刷新失败，当前状态未经确认，展示的是上次成功详情快照：{{ actionRefreshErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">
         {{ actionErrorMessage }}
@@ -359,6 +388,11 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
             <div class="detail-value">{{ detail.businessChainId || "-" }}</div>
             <div class="meta">用于对账台查询支付、清分、结算和账务事实</div>
             <button class="link-button" :disabled="!canUseSnapshot || !reconciliationChainUrl" @click="openReconciliationChain">打开链路诊断</button>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">支付场景</div>
+            <div class="detail-value">{{ detail.payScene || "-" }}</div>
+            <div class="meta">用于核验用户入口与跨系统业务链路连续性</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">预付单号</div>
@@ -408,6 +442,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
 
         <div class="detail-grid detail-grid-wide">
           <div><strong>订单号：</strong>{{ detail.orderNo }}</div>
+          <div><strong>支付场景：</strong>{{ detail.payScene || "-" }}</div>
           <div><strong>客户：</strong>{{ detail.customerName }}</div>
           <div><strong>账单号：</strong>{{ detail.billNo || "-" }}</div>
           <div><strong>金额：</strong>{{ detail.amount }}</div>
@@ -423,6 +458,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           <div><strong>是否可重试：</strong>{{ detail.retryable || "-" }}</div>
           <div><strong>需要人工介入：</strong>{{ detail.manualInterventionRequired || "-" }}</div>
           <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
+          <div><strong>支付成功时间：</strong>{{ detail.successAt || "-" }}</div>
         </div>
 
         <section v-if="detail.standardizedMessage || detail.handlingSuggestion" class="panel mini">
@@ -440,6 +476,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
               <strong>尝试状态：</strong>
               <span :class="['badge', detail.latestAttemptStatusType || 'info']">{{ detail.latestAttemptStatus || "-" }}</span>
             </div>
+            <div><strong>尝试完成时间：</strong>{{ detail.latestAttemptCompletedAt || "-" }}</div>
             <div><strong>发起终端：</strong>{{ detail.latestTerminal || "-" }}</div>
             <div><strong>客户端 IP：</strong>{{ detail.latestClientIp || "-" }}</div>
             <div><strong>配置快照版本：</strong>{{ detail.opsConfigSnapshotVersion || "—" }}</div>

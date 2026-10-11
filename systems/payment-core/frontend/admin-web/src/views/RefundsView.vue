@@ -1,11 +1,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { refundApi } from "../api/client";
+import { matchesRefundActionSnapshot, refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
 import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
 import { canRunRefundAction } from "../utils/refundAction";
-import { resolveRefundApplicationAttempt } from "../utils/refundApplication";
+import { clearRefundApplicationAttempt, resolveRefundApplicationAttempt } from "../utils/refundApplication";
 import { refundListFiltersFromQuery } from "../utils/refundListFilters";
 
 const route = useRoute();
@@ -21,8 +21,6 @@ const actionResultMessage = ref("");
 const activeRefundOrderId = ref("");
 const activeAction = ref("");
 const refundOperator = ref("");
-const applyIdempotencyKey = ref("");
-const applyRequestFingerprint = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
@@ -51,6 +49,9 @@ const isSnapshotStale = computed(() => Boolean(
 const isWriteDisabled = computed(() => (
   !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunningOnPage.value
 ));
+const isDiagnosticView = computed(() => ["SUCCESS_TIME_MISSING", "TERMINAL_FACT_MISMATCH", "UNVERIFIED_SUCCESS"]
+  .includes(loadedQuery.value?.refundStatus));
+const isActionDisabled = computed(() => isWriteDisabled.value || isDiagnosticView.value);
 const canUseSnapshot = computed(() => !isWriteDisabled.value);
 const canExport = computed(() => canUseSnapshot.value && total.value > 0);
 
@@ -168,7 +169,7 @@ function exportRefunds() {
 }
 
 function openRefundDetail(refundOrderId) {
-  if (!canUseSnapshot.value) {
+  if (!canUseSnapshot.value || isDiagnosticView.value) {
     return;
   }
   router.push(refundDetailRoute(refundOrderId));
@@ -178,6 +179,8 @@ function toRefundListItem(refund) {
   return {
     refundOrderId: refund.refundOrderId,
     paymentOrderId: refund.paymentOrderId,
+    payScene: refund.payScene,
+    businessChainId: refund.businessChainId,
     orderNo: refund.orderNo,
     customerName: refund.customerName,
     refundAmount: refund.refundAmount,
@@ -185,7 +188,11 @@ function toRefundListItem(refund) {
     status: refund.status,
     statusType: refund.statusType,
     appliedAt: refund.appliedAt,
-    successAt: refund.successAt
+    successAt: refund.successAt,
+    terminalAt: refund.terminalAt,
+    channelCode: refund.channelCode,
+    channelRefundNo: refund.channelRefundNo,
+    channelSubmittedAt: refund.channelSubmittedAt
   };
 }
 
@@ -198,7 +205,7 @@ function updateRefundSnapshot(refund) {
 }
 
 async function handleApply() {
-  if (isWriteDisabled.value || !loadedQuery.value) {
+  if (isActionDisabled.value || !loadedQuery.value) {
     actionErrorMessage.value = "当前退款列表快照不可操作，请先完成查询或刷新。";
     actionResultMessage.value = "";
     return;
@@ -222,35 +229,41 @@ async function handleApply() {
     refundReason: applyForm.value.refundReason.trim(),
     operator
   };
-  const attempt = resolveRefundApplicationAttempt(requestPayload, {
-    idempotencyKey: applyIdempotencyKey.value,
-    requestFingerprint: applyRequestFingerprint.value
-  });
-  applyIdempotencyKey.value = attempt.idempotencyKey;
-  applyRequestFingerprint.value = attempt.requestFingerprint;
-  const query = { ...loadedQuery.value, pageNo: 1 };
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
+  let attempt;
+  try {
+    attempt = await resolveRefundApplicationAttempt(requestPayload);
+  } catch (error) {
+    actionErrorMessage.value = error.message;
+    activeAction.value = "";
+    return;
+  }
+  const query = { ...loadedQuery.value, pageNo: 1 };
   try {
     const refund = await refundApi.apply({
       ...requestPayload,
-      idempotencyKey: applyIdempotencyKey.value
+      idempotencyKey: attempt.idempotencyKey
     });
     actionResultMessage.value = `退款单 ${refund.refundOrderId} 申请已受理，当前状态为 ${refund.status}。`;
+    try {
+      clearRefundApplicationAttempt(attempt);
+    } catch {
+      actionErrorMessage.value = "退款已受理，但本地申请键未能清理；同内容再次申请前请核对退款单，勿重复提交。";
+    }
     applyForm.value = {
       paymentOrderId: "",
       refundAmount: "",
       refundMethod: "原路退款",
       refundReason: ""
     };
-    applyIdempotencyKey.value = "";
-    applyRequestFingerprint.value = "";
     pageNo.value = 1;
     actionRefreshErrorMessage.value = "";
     await loadRefunds(refund.refundOrderId, true, query);
   } catch (error) {
-    actionErrorMessage.value = `发起退款失败：${error.message}`;
+    actionErrorMessage.value = `发起退款请求失败：${error.message}；请以刷新后的退款事实为准。`;
+    await loadRefunds(selectedItem.value?.refundOrderId, true, query);
   } finally {
     activeAction.value = "";
   }
@@ -258,7 +271,7 @@ async function handleApply() {
 
 async function runRefundAction(refundOrderId, actionName, actionLabel, actionRunner) {
   const refundItem = items.value.find((item) => item.refundOrderId === refundOrderId);
-  if (!canUseSnapshot.value || !loadedQuery.value || !refundItem
+  if (isActionDisabled.value || !loadedQuery.value || !refundItem
       || !canRunRefundAction(refundItem.status, actionName)) {
     actionErrorMessage.value = `退款单 ${refundOrderId} 当前不满足${actionLabel}条件。`;
     actionResultMessage.value = "";
@@ -276,13 +289,19 @@ async function runRefundAction(refundOrderId, actionName, actionLabel, actionRun
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const refund = await actionRunner(refundOrderId, operator);
+    const refund = actionName === "query"
+      ? await actionRunner(refundOrderId, operator, refundItem)
+      : await actionRunner(refundOrderId, operator, "", refundItem);
+    if (!matchesRefundActionSnapshot(refundItem, refund)) {
+      throw new Error("退款动作响应为空或与当前支付单/金额快照不一致");
+    }
     updateRefundSnapshot(refund);
     actionResultMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
     actionRefreshErrorMessage.value = "";
     await loadRefunds(refundOrderId, true, query);
   } catch (error) {
-    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
+    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}请求失败：${error.message}；请以刷新后的退款事实为准。`;
+    await loadRefunds(refundOrderId, true, query);
   } finally {
     activeRefundOrderId.value = "";
     activeAction.value = "";
@@ -345,8 +364,8 @@ watch(
         <p class="card-value">{{ metrics.failTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">本页退款金额</p>
-        <p class="card-value">{{ metrics.refundAmountTotal }}</p>
+        <p class="card-title">{{ isDiagnosticView ? "本页退款金额（异常值不汇总）" : "本页退款金额" }}</p>
+        <p class="card-value">{{ isDiagnosticView ? "—" : metrics.refundAmountTotal }}</p>
       </article>
     </section>
 
@@ -355,7 +374,7 @@ watch(
         {{ hasLoadedData ? "退款单数据刷新失败，当前展示上次成功快照：" : "退款单数据加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        退款人工动作结果已保留，但列表刷新失败，当前页面仍包含上次成功快照：{{ actionRefreshErrorMessage }}
+        退款动作后列表刷新失败，当前状态未经确认，页面仍展示上次成功快照：{{ actionRefreshErrorMessage }}
       </div>
       <div v-if="actionErrorMessage" class="error-banner">
         {{ actionErrorMessage }}
@@ -372,15 +391,15 @@ watch(
         <div class="toolbar compact-toolbar">
           <div class="field">
             <label>原支付单号</label>
-            <input v-model="applyForm.paymentOrderId" :disabled="isWriteDisabled" placeholder="PAY202607190001" />
+            <input v-model="applyForm.paymentOrderId" :disabled="isActionDisabled" placeholder="PAY202607190001" />
           </div>
           <div class="field">
             <label>退款金额</label>
-            <input v-model="applyForm.refundAmount" :disabled="isWriteDisabled" type="number" min="0.01" step="0.01" placeholder="请输入金额" />
+            <input v-model="applyForm.refundAmount" :disabled="isActionDisabled" type="number" min="0.01" step="0.01" placeholder="请输入金额" />
           </div>
           <div class="field">
             <label>退款方式</label>
-            <select v-model="applyForm.refundMethod" :disabled="isWriteDisabled">
+            <select v-model="applyForm.refundMethod" :disabled="isActionDisabled">
               <option>原路退款</option>
               <option>线下打款</option>
               <option>退转付</option>
@@ -388,14 +407,14 @@ watch(
           </div>
           <div class="field wide-field">
             <label>退款原因</label>
-            <input v-model="applyForm.refundReason" :disabled="isWriteDisabled" placeholder="客户取消服务、服务未履约等" />
+            <input v-model="applyForm.refundReason" :disabled="isActionDisabled" placeholder="客户取消服务、服务未履约等" />
           </div>
           <div class="field">
             <label>操作人</label>
-            <input v-model="refundOperator" :disabled="isWriteDisabled" maxlength="64" placeholder="请输入操作人" />
+            <input v-model="refundOperator" :disabled="isActionDisabled" maxlength="64" placeholder="请输入操作人" />
           </div>
           <div class="toolbar-actions">
-            <button class="button primary" :disabled="isWriteDisabled" @click="handleApply">
+            <button class="button primary" :disabled="isActionDisabled" @click="handleApply">
               {{ activeAction === "apply" ? "提交中..." : "提交退款申请" }}
             </button>
           </div>
@@ -420,6 +439,7 @@ watch(
             <option>PROCESSING</option>
             <option>SUCCESS</option>
             <option value="SUCCESS_TIME_MISSING">成功时间缺失</option>
+            <option value="UNVERIFIED_SUCCESS">成功退款待核查</option>
             <option value="TERMINAL_FACT_MISMATCH">终态事实不一致</option>
             <option>FAIL</option>
           </select>
@@ -441,6 +461,8 @@ watch(
         </div>
       </div>
 
+      <div v-if="!isLoading && isDiagnosticView" class="state-box">诊断筛选仅供核查和导出，退款操作请在事实复核后使用普通列表。</div>
+
       <div v-if="isLoading" class="state-box">退款单数据加载中...</div>
 
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的退款单快照</div>
@@ -454,6 +476,8 @@ watch(
               <tr>
                 <th>退款单号</th>
                 <th>原支付单号</th>
+                <th>支付场景</th>
+                <th>业务链路</th>
                 <th>原订单号</th>
                 <th>用户</th>
                 <th>退款金额</th>
@@ -461,6 +485,7 @@ watch(
                 <th>退款状态</th>
                 <th>申请时间</th>
                 <th>成功时间</th>
+                <th>终态时间</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -468,34 +493,37 @@ watch(
               <tr v-for="item in items" :key="item.refundOrderId">
                 <td>{{ item.refundOrderId }}</td>
                 <td>{{ item.paymentOrderId }}</td>
+                <td>{{ item.payScene || "-" }}</td>
+                <td>{{ item.businessChainId }}</td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.customerName }}</td>
-                <td>{{ item.refundAmount }}</td>
+                <td>{{ item.refundAmount ?? "—" }}</td>
                 <td>{{ item.refundMethod }}</td>
                 <td><span :class="['badge', item.statusType]">{{ item.status }}</span></td>
                 <td>{{ item.appliedAt }}</td>
-                <td>{{ item.successAt }}</td>
+                <td>{{ item.successAt || "—" }}</td>
+                <td>{{ item.terminalAt || "—" }}</td>
                 <td>
                   <div class="list-actions">
                     <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">快照</button>
-                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRefundDetail(item.refundOrderId)">详情</button>
+                    <button class="link-button" :disabled="!canUseSnapshot || isDiagnosticView" @click="openRefundDetail(item.refundOrderId)">详情</button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'query')"
+                      :disabled="isActionDisabled || !canRunRefundAction(item.status, 'query')"
                       @click="runRefundAction(item.refundOrderId, 'query', '完成主动查单', refundApi.query)"
                     >
                       {{ isActionRunning(item.refundOrderId, "query") ? "查询中..." : "主动查单" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'approve')"
+                      :disabled="isActionDisabled || !canRunRefundAction(item.status, 'approve')"
                       @click="runRefundAction(item.refundOrderId, 'approve', '审核通过', refundApi.approve)"
                     >
                       {{ isActionRunning(item.refundOrderId, "approve") ? "审核中..." : "审核通过" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'retry')"
+                      :disabled="isActionDisabled || !canRunRefundAction(item.status, 'retry')"
                       @click="runRefundAction(item.refundOrderId, 'retry', '重新提交', refundApi.retry)"
                     >
                       {{ isActionRunning(item.refundOrderId, "retry") ? "重试中..." : "重试" }}
@@ -517,16 +545,20 @@ watch(
               <div class="detail-card"><span>原支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
               <div class="detail-card"><span>原订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>用户</span><strong>{{ selectedItem.customerName }}</strong></div>
-              <div class="detail-card"><span>退款金额</span><strong>{{ selectedItem.refundAmount }}</strong></div>
+              <div class="detail-card"><span>退款金额</span><strong>{{ selectedItem.refundAmount ?? "—" }}</strong></div>
               <div class="detail-card"><span>退款方式</span><strong>{{ selectedItem.refundMethod }}</strong></div>
               <div class="detail-card"><span>退款状态</span><strong>{{ selectedItem.status }}</strong></div>
               <div class="detail-card"><span>申请时间</span><strong>{{ selectedItem.appliedAt }}</strong></div>
               <div class="detail-card"><span>成功时间</span><strong>{{ selectedItem.successAt || "—" }}</strong></div>
+              <div class="detail-card"><span>终态时间</span><strong>{{ selectedItem.terminalAt || "—" }}</strong></div>
+              <div class="detail-card"><span>渠道编码</span><strong>{{ selectedItem.channelCode || "—" }}</strong></div>
+              <div class="detail-card"><span>渠道退款号</span><strong>{{ selectedItem.channelRefundNo || "—" }}</strong></div>
+              <div class="detail-card"><span>渠道受理时间</span><strong>{{ selectedItem.channelSubmittedAt || "—" }}</strong></div>
             </div>
             <div class="ops-card">
               <div class="ops-title">处理建议</div>
               <div class="ops-row"><span>优先动作</span><span>审核、主动查单、失败重试</span></div>
-              <div class="ops-row"><span>重点核对</span><span>退款状态、退款方式、退款金额</span></div>
+              <div class="ops-row"><span>重点核对</span><span>退款状态、终态时间、退款方式、退款金额</span></div>
               <div class="ops-row"><span>典型场景</span><span>部分退款、原路退款失败、自动重试承接</span></div>
             </div>
           </div>
