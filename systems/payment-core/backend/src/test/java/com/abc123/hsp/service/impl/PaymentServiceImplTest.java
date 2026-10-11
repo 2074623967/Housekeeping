@@ -5705,14 +5705,6 @@ class PaymentServiceImplTest {
         token.setTokenStatus("ACTIVE");
         token.setHolderIdempotencyKey("IDEMP-OLD-330");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-330", "housekeeping-app-web")).thenReturn(token);
-        when(paymentMapper.occupySubmitConcurrencyToken(
-                "PRE-330",
-                "PAY-330",
-                "housekeeping-app-web",
-                "IDEMP-330",
-                "H5",
-                "10.0.0.10",
-                120)).thenReturn(0);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-330");
@@ -5737,6 +5729,8 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, exception.getCode());
         verify(paymentMapper, never()).updatePrepayToPaying("PRE-330");
+        verify(paymentMapper, never()).occupySubmitConcurrencyToken(
+                "PRE-330", "PAY-330", "housekeeping-app-web", "IDEMP-330", "H5", "10.0.0.10", 120);
     }
 
     @Test

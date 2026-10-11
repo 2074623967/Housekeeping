@@ -218,7 +218,7 @@ class PaymentSubmitReplayIntegrationTest {
                             + "source_app_id, token_status, holder_idempotency_key, holder_terminal, holder_client_ip, "
                             + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
                             + "(?, ?, 'housekeeping-h5-web', ' active ', 'IDEMP-OLD-HOLDER', 'H5', "
-                            + "'127.0.0.1', NOW(), TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())",
+                            + "'127.0.0.1', NOW(), TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())",
                     prepayOrderNo, paymentOrderId));
 
             PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
@@ -230,6 +230,19 @@ class PaymentSubmitReplayIntegrationTest {
             request.setAccessToken("token-housekeeping-h5-web");
             request.setTerminal("H5");
             request.setClientIp("127.0.0.1");
+            request.setIdempotencyKey("IDEMP-OLD-HOLDER");
+            BusinessException sameKeyBlocked = assertThrows(BusinessException.class,
+                    () -> paymentService.submit(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, sameKeyBlocked.getCode());
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                    Integer.class, paymentOrderId));
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_submit_concurrency_token "
+                    + "SET expire_at = TIMESTAMPADD(MINUTE, -1, NOW()) WHERE prepay_order_no = ?",
+                    prepayOrderNo));
+            BusinessException expiredSameKeyBlocked = assertThrows(BusinessException.class,
+                    () -> paymentService.submit(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, expiredSameKeyBlocked.getCode());
             request.setIdempotencyKey("IDEMP-NEW-HOLDER");
 
             BusinessException blocked = assertThrows(BusinessException.class, () -> paymentService.submit(request));

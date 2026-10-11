@@ -1072,6 +1072,20 @@ public class PaymentServiceImpl implements PaymentService {
                 }
             }
             throw exception;
+        } catch (BusinessException exception) {
+            if (ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED.equals(exception.getCode())) {
+                try {
+                    if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+                        validateSubmitIdempotencyOwnership(
+                                idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+                    }
+                } catch (BusinessException conflict) {
+                    throw conflict;
+                } catch (RuntimeException lookupFailure) {
+                    throw exception;
+                }
+            }
+            throw exception;
         }
         if (concurrentResult != null) {
             return concurrentResult;
@@ -2846,9 +2860,9 @@ public class PaymentServiceImpl implements PaymentService {
                     "当前预付单提交令牌归属异常，请核对原支付事实");
         }
         if ("ACTIVE".equalsIgnoreCase(currentToken.getTokenStatus() == null
-                ? "" : currentToken.getTokenStatus().trim())
-                && idempotencyKey.equals(currentToken.getHolderIdempotencyKey())) {
-            return;
+                ? "" : currentToken.getTokenStatus().trim())) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                    "当前预付单仍有活跃提交令牌，请刷新并核对原支付及渠道事实");
         }
         int affectedRows = paymentMapper.occupySubmitConcurrencyToken(
                 prepayOrderNo,
@@ -2865,7 +2879,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (affectedRows > 1) {
             throw new IllegalStateException("payment submit concurrency token update affected multiple rows");
         }
-        throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, "当前预付单已存在并发支付提交，请稍后刷新收银台状态");
+        throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                "当前预付单提交令牌不可占用，请刷新并核对原支付及渠道事实");
     }
 
     /**
