@@ -728,6 +728,17 @@
         LIMIT 1
     </select>
 
+    <select id="hasActiveSubmitConcurrencyToken" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM t_payment_submit_concurrency_token token
+            WHERE token.payment_order_id = #{paymentOrderId}
+              AND CHAR_LENGTH(token.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+              AND CAST(token.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+              AND UPPER(TRIM(token.token_status)) = 'ACTIVE'
+        )
+    </select>
+
     <select id="findNotifyLogs" resultType="string">
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
         FROM t_payment_notify_log

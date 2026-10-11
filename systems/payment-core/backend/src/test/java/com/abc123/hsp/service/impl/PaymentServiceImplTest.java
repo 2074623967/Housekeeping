@@ -6076,6 +6076,34 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldDescribeActiveSubmitTokenAsProcessingInsteadOfRecommendingUnavailableQuery() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPrepayAmountBindingValid(true);
+        detail.setPaymentOrderId("PAY-CLOSE-TOKEN-ONLY");
+        detail.setOrderNo("ORD-CLOSE-TOKEN-ONLY");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-CLOSE-TOKEN-ONLY")).thenReturn(detail);
+        when(paymentMapper.hasActiveSubmitConcurrencyToken("PAY-CLOSE-TOKEN-ONLY")).thenReturn(true);
+
+        com.abc123.hsp.dto.PaymentCloseRequestDTO request = new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        request.setPaymentOrderId("PAY-CLOSE-TOKEN-ONLY");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService).close(request));
+
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, exception.getCode());
+        assertTrue(exception.getMessage().contains("刷新"));
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(
+                "PAY-CLOSE-TOKEN-ONLY", "MANUAL_CLOSE");
+    }
+
+    @Test
     void shouldReleaseSubmitTokenWhenConcurrentCloseWinsBeforeThisRequest() {
         PaymentDetailDTO initialDetail = new PaymentDetailDTO();
         initialDetail.setPrepayAmountBindingValid(true);

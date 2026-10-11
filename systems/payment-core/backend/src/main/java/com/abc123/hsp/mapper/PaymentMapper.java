@@ -396,6 +396,8 @@ public interface PaymentMapper {
     PaymentSubmitConcurrencyTokenDTO findSubmitConcurrencyToken(@Param("prepayOrderNo") String prepayOrderNo,
                                                                 @Param("sourceAppId") String sourceAppId);
 
+    boolean hasActiveSubmitConcurrencyToken(@Param("paymentOrderId") String paymentOrderId);
+
     /**
      * 新增支付提交并发令牌。
      */

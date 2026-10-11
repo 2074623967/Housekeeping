@@ -2188,6 +2188,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "'pending-key', 'APP', '127.0.0.1', NOW(), "
                     + "TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())");
 
+            assertTrue(mapper.hasActiveSubmitConcurrencyToken("PAY-UNSUBMITTED"));
             assertEquals(0, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
             assertEquals(0, mapper.markExpiredUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
             try (java.sql.ResultSet resultSet = statement.executeQuery(
@@ -2197,6 +2198,7 @@ class PaymentMapperStateTransitionIntegrationTest {
             }
             statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status='RELEASED' "
                     + "WHERE payment_order_id='PAY-UNSUBMITTED'");
+            assertFalse(mapper.hasActiveSubmitConcurrencyToken("PAY-UNSUBMITTED"));
             assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
         }
     }
@@ -2260,6 +2262,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "'alias-key', 'APP', '127.0.0.1', NOW(), "
                     + "TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())");
 
+            assertFalse(mapper.hasActiveSubmitConcurrencyToken("PAY-UNSUBMITTED"));
             assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
         }
     }

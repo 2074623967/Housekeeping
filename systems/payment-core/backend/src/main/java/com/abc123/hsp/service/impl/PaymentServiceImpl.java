@@ -2275,6 +2275,10 @@ public class PaymentServiceImpl implements PaymentService {
                 }
                 return outwardDetail(latestDetail);
             }
+            if (paymentMapper.hasActiveSubmitConcurrencyToken(request.getPaymentOrderId())) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交令牌仍占用，请刷新结果并核对原支付事实");
+            }
             throw new BusinessException(
                     ErrorCode.PAYMENT_CLOSE_CHANNEL_CONFIRMATION_REQUIRED,
                     "支付已提交渠道或结果尚未确认，请先主动查单");
