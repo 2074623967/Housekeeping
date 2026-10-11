@@ -562,3 +562,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 65. 2026-10-11 九服务支付请求真实状态投影与回调/查单收口
 
 `cross-system-happy-path` 现沿真实本机支付提交和同键重放读取支付请求列表、总览、详情，核对同支付单恰好一条“处理中 / info”请求；回调或受控网关查单收口后，同一请求号成为“成功 / success”，处理中列表为空。断言单测 `64/64`；`local-stack.sh verify payment-chain` 与 `verify payment-query-chain` 均通过写前隔离门禁、九服务 HTTP 冒烟与 happy-path `[PASS]`，分别以 `CALLBACK` 和 `GATEWAY_QUERY` 收口，对账 `COMPLETED/4/4`、`financialCloseable=true`。退出码均为 `0`，九服务及本机查单上游停止、状态 `DOWN`。仅为 H2/demo、模拟渠道与上游，不证明目标 MySQL 8、多实例、正式资金、可信身份或发布。
+
+## 66. 2026-10-11 当前基线九服务支付链复验
+
+在 `eeb7ca5d` 基线上复核写前环境、PID 与端口门禁后，`node --test tools/dev/cross-system-happy-path.test.mjs` 为 `64/64`。分别执行 `bash tools/dev/local-stack.sh verify payment-chain` 和 `verify payment-query-chain`，两轮退出码均为 `0`，九服务 HTTP 冒烟与 happy-path 均 `[PASS]`。支付单 `PAY17917153983175e936489` 经 `CALLBACK` 收口，`PAY179171557591650eef12d` 经 `GATEWAY_QUERY` 收口；两轮对账均为 `COMPLETED/4/4` 且 `reconciliationFinancialCloseable=true`。脚本停服后九服务均 `DOWN`，查询链本机上游桩也已停止。该结果仅覆盖本机 H2/demo、模拟渠道与查单上游，不代表目标 MySQL 8、多实例、可信身份、真实资金或生产验收。
