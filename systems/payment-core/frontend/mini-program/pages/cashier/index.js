@@ -37,6 +37,9 @@ Page({
   onLoad(options) {
     this.pageActive = true;
     this.cashierRequestVersion = 0;
+    this.visibilityVersion = 0;
+    this.submitInFlight = false;
+    this.resultNavigationStarted = false;
     const prepayOrderNo = options && options.prepayOrderNo
       ? decodeURIComponent(options.prepayOrderNo).trim()
       : "";
@@ -54,20 +57,40 @@ Page({
     this.loadCashier();
   },
 
+  onShow() {
+    const shouldReload = this.pageActive === false && Boolean(this.data.prepayOrderNo);
+    this.pageActive = true;
+    if (shouldReload) {
+      this.loadCashier();
+    }
+  },
+
+  onHide() {
+    this.pageActive = false;
+    this.visibilityVersion = (this.visibilityVersion || 0) + 1;
+    this.cashierRequestVersion += 1;
+    this.stopCountdown();
+    this.setData({ loading: false, actionName: "", staleCashier: true, canSubmit: false });
+  },
+
   onUnload() {
     this.pageActive = false;
+    this.visibilityVersion = (this.visibilityVersion || 0) + 1;
     this.cashierRequestVersion += 1;
     this.stopCountdown();
   },
 
   updateActionState(cashier) {
     this.setData({
-      canSubmit: canSubmitPayment(cashier),
+      canSubmit: !this.data.staleCashier && !this.submitInFlight
+        && !this.resultNavigationStarted && canSubmitPayment(cashier),
       statusClass: resolveCashierStatusClass(cashier && cashier.statusType)
     });
   },
 
   redirectToPaymentResult(paymentOrderId, prepayOrderNo, paymentMethod = PAYMENT_METHOD) {
+    this.resultNavigationStarted = true;
+    this.setData({ canSubmit: false });
     wx.redirectTo({
       url: `/pages/result/index?paymentOrderId=${encodeURIComponent(paymentOrderId)}`
         + `&prepayOrderNo=${encodeURIComponent(prepayOrderNo)}`
@@ -86,7 +109,9 @@ Page({
       this.setData({
         countdownSeconds,
         countdownLabel: `${hours}:${minutes}:${seconds}`,
-        canSubmit: canSubmitPayment(this.data.cashier)
+        canSubmit: !this.data.staleCashier && !this.submitInFlight
+          && !this.resultNavigationStarted
+          && canSubmitPayment(this.data.cashier)
       });
       if (countdownSeconds <= 0) {
         this.stopCountdown();
@@ -172,7 +197,9 @@ Page({
       this.setData({ errorMessage: "小程序支付访问令牌未配置，请联系运营完成安全注入" });
       return;
     }
-    this.setData({ actionName: "submit", errorMessage: "" });
+    const actionVersion = this.visibilityVersion;
+    this.submitInFlight = true;
+    this.setData({ actionName: "submit", errorMessage: "", canSubmit: false });
     try {
       const result = await paymentApi.submit({
         prepayOrderNo,
@@ -185,7 +212,7 @@ Page({
         clientDeviceId: "wechat-mini-program",
         idempotencyKey: this.data.idempotencyKey
       }, this.data.scene.payScene);
-      if (!this.pageActive) {
+      if (!this.pageActive || actionVersion !== this.visibilityVersion) {
         return;
       }
       if (!matchesPaymentSubmission(
@@ -215,7 +242,7 @@ Page({
         throw new Error("支付提交状态不允许拉起微信支付，请刷新收银台核对结果");
       }
       const nativePaymentResult = await requestNativePayment(result);
-      if (!this.pageActive) {
+      if (!this.pageActive || actionVersion !== this.visibilityVersion) {
         return;
       }
       if (!canRedirectAfterNativePayment(nativePaymentResult)) {
@@ -223,14 +250,18 @@ Page({
       }
       this.redirectToPaymentResult(result.paymentOrderId, prepayOrderNo);
     } catch (error) {
-      if (!this.pageActive) {
+      if (!this.pageActive || actionVersion !== this.visibilityVersion) {
         return;
       }
       this.setData({ errorMessage: error.message || "支付提交失败" });
       await this.loadCashierAfterAction(error);
     } finally {
-      if (this.pageActive) {
+      this.submitInFlight = false;
+      if (this.pageActive && actionVersion === this.visibilityVersion) {
         this.setData({ actionName: "" });
+        this.updateActionState(this.data.cashier);
+      } else if (this.pageActive) {
+        this.loadCashier();
       }
     }
   },

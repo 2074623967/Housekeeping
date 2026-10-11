@@ -143,6 +143,143 @@ test("does not write an in-flight cashier response after page unload", async () 
   assert.equal(page.data.loading, true);
 });
 
+test("reloads the cashier after a hidden request without applying its old response", async () => {
+  const firstRequest = deferred();
+  let requestCount = 0;
+  paymentApi.getCashier = () => {
+    requestCount += 1;
+    return requestCount === 1 ? firstRequest.promise : Promise.resolve(cashier());
+  };
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  page.onShow();
+  page.onHide();
+  firstRequest.resolve(pendingCashier());
+  await flushPromises();
+
+  assert.equal(page.data.cashier, null);
+  assert.equal(page.data.canSubmit, false);
+  page.onShow();
+  await flushPromises();
+  assert.equal(requestCount, 2);
+  assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+  assert.equal(page.data.canSubmit, true);
+  assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+  page.onUnload();
+});
+
+test("ignores a hidden cashier response that arrives after the resumed readback", async () => {
+  const firstRequest = deferred();
+  let requestCount = 0;
+  paymentApi.getCashier = () => {
+    requestCount += 1;
+    return requestCount === 1 ? firstRequest.promise : Promise.resolve(cashier());
+  };
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  page.onHide();
+  page.onShow();
+  await flushPromises();
+  firstRequest.resolve(pendingCashier());
+  await flushPromises();
+
+  assert.equal(requestCount, 2);
+  assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+  assert.equal(page.data.canSubmit, true);
+  assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+  page.onUnload();
+});
+
+test("ignores an old submit response after hide and show while retaining the original key", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  const submitRequest = deferred();
+  let nativeCalls = 0;
+  let redirects = 0;
+  let submits = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.submit = () => {
+    submits += 1;
+    return submitRequest.promise;
+  };
+  paymentApi.getCashier = () => Promise.resolve(cashier());
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    idempotencyKey: "MINI-PRE-001", loading: false, canSubmit: true });
+  try {
+    const action = page.submitPayment();
+    page.onHide();
+    page.onShow();
+    await flushPromises();
+    assert.equal(page.data.canSubmit, false);
+    submitRequest.resolve(terminalSubmitResult("SUCCESS"));
+    await action;
+    await flushPromises();
+
+    assert.equal(submits, 1);
+    assert.equal(nativeCalls, 0);
+    assert.equal(redirects, 0);
+    assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+    assert.equal(page.data.canSubmit, true);
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("uses the refreshed cashier instead of a late native payment callback after returning", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeSuccess;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeSuccess = success; },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.submit = () => Promise.resolve({
+    ...pendingCashier(),
+    nativePaymentParams: {
+      timeStamp: "123", nonceStr: "nonce", package: "prepay_id=local",
+      signType: "RSA", paySign: "signature"
+    }
+  });
+  paymentApi.getCashier = () => Promise.resolve(pendingCashier());
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    idempotencyKey: "MINI-PRE-001", loading: false, canSubmit: true });
+  try {
+    const action = page.submitPayment();
+    await flushPromises();
+    assert.equal(typeof nativeSuccess, "function");
+    page.onHide();
+    page.onShow();
+    await flushPromises();
+    assert.equal(redirects, 1);
+    nativeSuccess();
+    await action;
+    assert.equal(redirects, 1);
+    assert.equal(page.data.cashier.paymentStatus, "WAIT_CALLBACK");
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
 test("keeps the cashier latest attempt completion time in the loaded snapshot", async () => {
   paymentApi.getCashier = () => Promise.resolve(cashier());
   const page = createPage();
@@ -332,6 +469,8 @@ test("routes completed submit responses without invoking native payment again", 
       try {
         await page.submitPayment();
         assert.equal(page.data.errorMessage, "");
+        page.startCountdown(cashier().expiresAt);
+        assert.equal(page.data.canSubmit, false);
       } finally {
         page.onUnload();
       }
@@ -405,6 +544,8 @@ test("still invokes native payment once for an accepted pending submit", async (
     assert.equal(nativeCalls, 1);
     assert.equal(redirects, 1);
     assert.equal(page.data.errorMessage, "");
+    page.startCountdown(cashier().expiresAt);
+    assert.equal(page.data.canSubmit, false);
   } finally {
     page.onUnload();
     global.getApp = previousGetApp;
