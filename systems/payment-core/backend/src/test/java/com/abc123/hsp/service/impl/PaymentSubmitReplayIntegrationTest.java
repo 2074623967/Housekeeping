@@ -393,6 +393,10 @@ class PaymentSubmitReplayIntegrationTest {
                 request.setPayerPhone("13800000001");
                 assertEquals(ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_CONFLICT,
                         post(objectMapper, port, objectMapper.writeValueAsString(request)).path("code").asText());
+                request.setPayerPhone("13800000000");
+                request.setIdempotencyKey("DEMO-PENDING-REPLAY-ALT-001");
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_CONFLICT,
+                        post(objectMapper, port, objectMapper.writeValueAsString(request)).path("code").asText());
                 assertEquals(1, calls.get());
                 assertEquals(1, jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
@@ -414,7 +418,12 @@ class PaymentSubmitReplayIntegrationTest {
                         .path("data").path("paymentStatus").asText());
                 assertEquals("WAIT_CALLBACK", post(objectMapper, port, requestBody)
                         .path("data").path("paymentStatus").asText());
+                assertEquals("WAIT_CALLBACK", post(objectMapper, port,
+                        objectMapper.writeValueAsString(request)).path("data").path("paymentStatus").asText());
                 assertEquals(1, calls.get());
+                assertEquals(1, jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                        Integer.class, prepay.getPaymentOrderId()));
             } finally {
                 release.countDown();
                 executor.shutdownNow();
