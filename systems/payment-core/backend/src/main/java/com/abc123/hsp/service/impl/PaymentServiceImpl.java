@@ -418,8 +418,11 @@ public class PaymentServiceImpl implements PaymentService {
                 validateActivePrepayOrderFacts(activePrepay, customerName, remainAmount);
             }
             if ("WAIT_CALLBACK".equalsIgnoreCase(activePrepay.getPaymentStatus())) {
-                requireWaitingChannelSubmissionFact(activePrepay.getPaymentOrderId(),
-                        paymentMapper.findSubmissionFact(activePrepay.getPaymentOrderId()));
+                PaymentDetailDTO submissionFact = paymentMapper.findSubmissionFact(activePrepay.getPaymentOrderId());
+                requireWaitingChannelSubmissionFact(activePrepay.getPaymentOrderId(), submissionFact);
+                if (isUnacceptedChannelSubmit(activePrepay, submissionFact)) {
+                    activePrepay.setPaymentStatus("PAYING");
+                }
             }
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
             PrepayOrderDTO reusablePrepay = withDefaultPrepayPaymentStatus(activePrepay);
@@ -683,8 +686,11 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private boolean isUnacceptedChannelSubmit(PrepayOrderDTO prepay, PaymentDetailDTO detail) {
+        return "支付中".equals(prepay.getCashierStatus()) && isUnacceptedChannelSubmit(detail);
+    }
+
+    private boolean isUnacceptedChannelSubmit(PaymentDetailDTO detail) {
         return detail != null && "WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
-                && "支付中".equals(prepay.getCashierStatus())
                 && "渠道提交中".equals(detail.getLatestAttemptStatus())
                 && !StringUtils.hasText(detail.getChannelTransactionNo())
                 && detail.getLatestAttemptCompletedAt() == null;
@@ -1778,6 +1784,9 @@ public class PaymentServiceImpl implements PaymentService {
                 && !StringUtils.hasText(detail.getChannelTransactionNo())
                 && !StringUtils.hasText(detail.getLatestAttemptStatus())) {
             return outwardDetail(detail);
+        }
+        if (isUnacceptedChannelSubmit(detail)) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
         }
         requireChannelSubmissionFact(detail);
         try {

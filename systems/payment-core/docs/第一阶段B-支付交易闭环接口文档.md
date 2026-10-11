@@ -5628,6 +5628,10 @@ App/H5/PC 的 GET 收银台若读回 `PAYING`，渠道受理事实尚未就绪�
 
 在 14.515 的隔离事务场景中，真实 `POST /api/payments/submit` 首次请求停在渠道适配器，同一请求的第二次 HTTP POST 返回 `PAYMENT-1016`，相同键但内容变化返回 `PAYMENT-1069`；`GET /api/payments/cashier/{prepayOrderNo}` 返回 `PAYING / 支付中`。首单渠道受理完成后，GET 和原请求重放才返回 `WAIT_CALLBACK`。此回归从 HTTP JSON 入口到正式控制器、服务及 H2 Mapper；不证明客户端断网时能收到响应，也不等于 MySQL 8 多实例、真实渠道资金或正式发布验收。
 
+### 14.517 待受理窗口的预付复用与主动查单
+
+支付准备事务预写 `WAIT_CALLBACK` 但渠道交易号仍为空、尝试尚为“渠道提交中”时，同订单重复 `POST /api/payments/prepay` 复用原预付单但对外返回 `PAYING / 支付中`，不可提前呈现待回调完成事实；`POST /api/payments/query` 在调用渠道及写查单快照前返回 `PAYMENT-1016`。渠道受理并回写交易号后，重复预付才恢复 `WAIT_CALLBACK`。独立 H2/demo 阻塞渠道 HTTP 回归覆盖这些动作及无查单快照写入；不允许据此推断真实渠道受理、资金成功或目标 MySQL 8 多实例事务可靠性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

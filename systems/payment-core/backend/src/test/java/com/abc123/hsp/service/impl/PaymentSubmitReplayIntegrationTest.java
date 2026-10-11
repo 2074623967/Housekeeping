@@ -368,6 +368,18 @@ class PaymentSubmitReplayIntegrationTest {
                 assertEquals("支付中", cashier.path("status").asText());
                 assertTrue(cashier.path("channelTransactionNo").isNull()
                         || cashier.path("channelTransactionNo").isMissingNode());
+                JsonNode reusedPrepay = post(objectMapper, port, "/api/payments/prepay",
+                        objectMapper.writeValueAsString(prepayRequest));
+                assertEquals("0", reusedPrepay.path("code").asText());
+                assertEquals(prepay.getPrepayOrderNo(), reusedPrepay.path("data").path("prepayOrderNo").asText());
+                assertEquals("PAYING", reusedPrepay.path("data").path("paymentStatus").asText());
+                assertEquals("支付中", reusedPrepay.path("data").path("cashierStatus").asText());
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, post(objectMapper, port,
+                        "/api/payments/query", "{\"paymentOrderId\":\"" + prepay.getPaymentOrderId()
+                                + "\"}").path("code").asText());
+                assertNull(jdbcTemplate.queryForObject(
+                        "SELECT last_channel_return_code FROM t_payment_order WHERE payment_order_id = ?",
+                        String.class, prepay.getPaymentOrderId()));
                 assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS,
                         post(objectMapper, port, requestBody).path("code").asText());
                 request.setPayerPhone("13800000001");
@@ -384,6 +396,9 @@ class PaymentSubmitReplayIntegrationTest {
                 assertEquals("WAIT_CALLBACK", first.get(15, TimeUnit.SECONDS)
                         .path("data").path("paymentStatus").asText());
                 assertEquals("WAIT_CALLBACK", get(objectMapper, port, prepay.getPrepayOrderNo())
+                        .path("data").path("paymentStatus").asText());
+                assertEquals("WAIT_CALLBACK", post(objectMapper, port, "/api/payments/prepay",
+                        objectMapper.writeValueAsString(prepayRequest))
                         .path("data").path("paymentStatus").asText());
                 assertEquals("WAIT_CALLBACK", post(objectMapper, port, requestBody)
                         .path("data").path("paymentStatus").asText());
@@ -802,8 +817,12 @@ class PaymentSubmitReplayIntegrationTest {
     }
 
     private JsonNode post(ObjectMapper objectMapper, int port, String body) throws Exception {
+        return post(objectMapper, port, "/api/payments/submit", body);
+    }
+
+    private JsonNode post(ObjectMapper objectMapper, int port, String path, String body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(
-                "http://127.0.0.1:" + port + "/api/payments/submit").openConnection();
+                "http://127.0.0.1:" + port + path).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(3000);
         connection.setReadTimeout(20000);
