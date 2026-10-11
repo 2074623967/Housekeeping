@@ -358,6 +358,10 @@ public class PaymentServiceImpl implements PaymentService {
         requireNonSuccessfulPaymentPrepayBinding(detail);
         if ("WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())) {
             requireWaitingChannelSubmissionFact(normalizedPaymentOrderId, detail);
+            if (isUnacceptedChannelSubmit(detail)) {
+                detail.setStatus("PAYING");
+                detail.setStatusType("info");
+            }
         } else if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             validatePaymentSuccessFacts(detail);
         }

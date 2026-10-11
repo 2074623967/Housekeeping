@@ -363,7 +363,12 @@ class PaymentSubmitReplayIntegrationTest {
                 assertEquals("支付中", jdbcTemplate.queryForObject(
                         "SELECT cashier_status FROM t_prepay_order WHERE prepay_order_no = ?",
                         String.class, prepay.getPrepayOrderNo()));
-                JsonNode cashier = get(objectMapper, port, prepay.getPrepayOrderNo()).path("data");
+                JsonNode detail = get(objectMapper, port,
+                        "/api/payments/" + prepay.getPaymentOrderId()).path("data");
+                assertEquals("PAYING", detail.path("status").asText());
+                assertEquals("info", detail.path("statusType").asText());
+                JsonNode cashier = get(objectMapper, port,
+                        "/api/payments/cashier/" + prepay.getPrepayOrderNo()).path("data");
                 assertEquals("PAYING", cashier.path("paymentStatus").asText());
                 assertEquals("支付中", cashier.path("status").asText());
                 assertTrue(cashier.path("channelTransactionNo").isNull()
@@ -395,7 +400,11 @@ class PaymentSubmitReplayIntegrationTest {
                 release.countDown();
                 assertEquals("WAIT_CALLBACK", first.get(15, TimeUnit.SECONDS)
                         .path("data").path("paymentStatus").asText());
-                assertEquals("WAIT_CALLBACK", get(objectMapper, port, prepay.getPrepayOrderNo())
+                assertEquals("WAIT_CALLBACK", get(objectMapper, port,
+                        "/api/payments/" + prepay.getPaymentOrderId())
+                        .path("data").path("status").asText());
+                assertEquals("WAIT_CALLBACK", get(objectMapper, port,
+                        "/api/payments/cashier/" + prepay.getPrepayOrderNo())
                         .path("data").path("paymentStatus").asText());
                 assertEquals("WAIT_CALLBACK", post(objectMapper, port, "/api/payments/prepay",
                         objectMapper.writeValueAsString(prepayRequest))
@@ -841,9 +850,9 @@ class PaymentSubmitReplayIntegrationTest {
         }
     }
 
-    private JsonNode get(ObjectMapper objectMapper, int port, String prepayOrderNo) throws Exception {
+    private JsonNode get(ObjectMapper objectMapper, int port, String path) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(
-                "http://127.0.0.1:" + port + "/api/payments/cashier/" + prepayOrderNo).openConnection();
+                "http://127.0.0.1:" + port + path).openConnection();
         connection.setConnectTimeout(3000);
         connection.setReadTimeout(5000);
         try {
