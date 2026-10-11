@@ -5,18 +5,25 @@ const createRequestError = (code, message, cause) => {
   return error;
 };
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 const request = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "DEPOSIT-CLIENT-TIMEOUT"
       : "DEPOSIT-CLIENT-NETWORK";
     throw createRequestError(code, error?.name === "AbortError" ? "保证金服务请求超时" : "无法连接保证金服务", error);
+  } finally {
+    clearTimeout(timeoutId);
   }
   let body;
   try {
