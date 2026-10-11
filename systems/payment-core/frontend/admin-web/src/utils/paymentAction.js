@@ -76,3 +76,27 @@ export function paymentDetailOperationSuggestions(detail) {
   }
   return suggestions;
 }
+
+export function paymentRecordQuerySuggestion(detail) {
+  if (!detail) {
+    return null;
+  }
+  if (isChannelSubmissionUnaccepted(
+    detail.paymentStatus, detail.latestAttemptStatus, detail.externalTransactionNo
+  )) {
+    return "渠道受理未确认，先核对最近支付尝试与提交日志，等待状态推进；勿主动查单或重复提交。";
+  }
+  if (detail.successFactIssue || detail.prepayBindingIssue) {
+    return null;
+  }
+  if (canQueryPaymentChannel(
+    detail.paymentStatus, detail.latestAttemptStatus, detail.latestAttemptCompletedAt,
+    detail.externalTransactionNo, detail.paymentChannel
+  ) && detail.latestAttemptStatus && detail.latestAttemptStatus !== "成功") {
+    return `最近一次支付尝试状态为 ${detail.latestAttemptStatus}，建议先主动查单再决定是否人工干预。`;
+  }
+  if (["WAIT_CALLBACK", "支付中"].includes(detail.paymentStatus)) {
+    return "当前支付记录缺少可查单的渠道提交事实，先刷新详情并核对支付尝试与渠道受理情况，勿重复提交。";
+  }
+  return null;
+}

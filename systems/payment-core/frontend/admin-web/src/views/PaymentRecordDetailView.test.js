@@ -6,7 +6,10 @@ const source = fs.readFileSync(new URL("./PaymentRecordDetailView.vue", import.m
 
 test("uses record-specific payment and transaction facts for query eligibility", () => {
   assert.match(source, /canQueryPaymentChannel\(\s*detail\.value\?\.paymentStatus,\s*detail\.value\?\.latestAttemptStatus,\s*detail\.value\?\.latestAttemptCompletedAt,\s*detail\.value\?\.externalTransactionNo/);
-  assert.match(source, /if \(canRunQuery\.value && detail\.value\.latestAttemptStatus/);
+  assert.match(source, /paymentRecordQuerySuggestion\(detail\.value\)/);
+  assert.match(source, /isChannelSubmissionUnaccepted\(detail\.paymentStatus, detail\.latestAttemptStatus, detail\.externalTransactionNo\)/);
+  assert.match(source, /渠道受理未确认/);
+  assert.match(source, /:disabled="!canUseSnapshot \|\| !canRunQuery" @click="handleQueryPayment"/);
 });
 
 test("surfaces the payment scene in payment record details", () => {

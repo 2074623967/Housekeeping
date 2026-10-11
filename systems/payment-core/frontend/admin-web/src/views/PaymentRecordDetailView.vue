@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { matchesPaymentRecordDetailSnapshot, paymentApi, paymentRecordApi } from "../api/client";
 import { normalizePaymentRecordType, paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute, refundsRoute } from "../router/listRoutes";
-import { canQueryPaymentChannel } from "../utils/paymentAction";
+import { canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentRecordQuerySuggestion } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -198,14 +198,16 @@ const operationSuggestions = computed(() => {
   if (detail.value.unverifiedRefundCount > 0) {
     suggestions.push(`${detail.value.unverifiedRefundCount} 笔成功退款事实待核查，尚未计入已退金额；请下钻退款异常记录。`);
   }
-  if ((detail.value.notifyLogs || []).length === 0) {
+  const querySuggestion = paymentRecordQuerySuggestion(detail.value);
+  if ((detail.value.notifyLogs || []).length === 0
+    && !isChannelSubmissionUnaccepted(detail.value.paymentStatus, detail.value.latestAttemptStatus, detail.value.externalTransactionNo)) {
     suggestions.push("当前无回调轨迹，优先核对渠道回调是否到达与通知地址是否配置正确。");
   }
   if ((detail.value.eventLogs || []).length === 0) {
     suggestions.push("当前无事件轨迹，建议联查支付处理日志和事件出站记录。");
   }
-  if (canRunQuery.value && detail.value.latestAttemptStatus && detail.value.latestAttemptStatus !== "成功") {
-    suggestions.push(`最近一次支付尝试状态为 ${detail.value.latestAttemptStatus}，建议先主动查单再决定是否人工干预。`);
+  if (querySuggestion) {
+    suggestions.push(querySuggestion);
   }
   if (!suggestions.length) {
     suggestions.push("当前记录链路完整，可结合支付单详情继续做业务复盘。");
@@ -321,7 +323,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           <div class="detail-card">
             <div class="detail-label">支付状态</div>
             <div class="detail-value">
-              <span :class="['badge', detail.statusType]">{{ formatValue(detail.paymentStatus) }}</span>
+              <span :class="['badge', detail.statusType]">{{ formatValue(detail.paymentStatus) }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.paymentStatus, detail.latestAttemptStatus, detail.externalTransactionNo)" class="badge warn">渠道受理未确认</span>
             </div>
           </div>
           <div class="detail-card">

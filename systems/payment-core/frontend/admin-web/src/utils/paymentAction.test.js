@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentDetailOperationSuggestions } from "./paymentAction.js";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentDetailOperationSuggestions, paymentRecordQuerySuggestion } from "./paymentAction.js";
 
 test("distinguishes persisted callback waiting from unaccepted channel submission", () => {
   assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", "渠道提交中", null), true);
@@ -60,4 +60,17 @@ test("payment detail guidance follows channel acceptance and actual query eligib
   assert.match(paymentDetailOperationSuggestions({ ...waiting, channelTransactionNo: "WX-ACCEPTED" })[0], /可主动查单/);
   assert.match(paymentDetailOperationSuggestions({ ...waiting, latestAttemptStatus: "处理中", channel: null })[0], /缺少可查单的渠道提交事实/);
   assert.deepEqual(paymentDetailOperationSuggestions(null), []);
+});
+
+test("payment record guidance follows channel acceptance and query eligibility", () => {
+  const waiting = {
+    paymentStatus: "支付中", latestAttemptStatus: "渠道提交中",
+    latestAttemptCompletedAt: null, externalTransactionNo: null, paymentChannel: "wx_h5"
+  };
+  assert.match(paymentRecordQuerySuggestion(waiting), /渠道受理未确认.*勿主动查单或重复提交/);
+  assert.match(paymentRecordQuerySuggestion({ ...waiting, externalTransactionNo: "WX-ACCEPTED" }), /建议先主动查单/);
+  assert.match(paymentRecordQuerySuggestion({ ...waiting, latestAttemptStatus: "处理中", paymentChannel: null }), /缺少可查单的渠道提交事实/);
+  assert.equal(paymentRecordQuerySuggestion({ ...waiting, prepayBindingIssue: "PREPAY_BINDING_MISSING", externalTransactionNo: "WX-ACCEPTED" }), null);
+  assert.equal(paymentRecordQuerySuggestion({ ...waiting, paymentStatus: "已关闭", latestAttemptStatus: null }), null);
+  assert.equal(paymentRecordQuerySuggestion(null), null);
 });
