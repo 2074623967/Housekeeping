@@ -107,10 +107,11 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
                 && !expectedChannelRefundNo.equals(result.getChannelRefundNo())) {
             throw invalidResponse("refund query upstream returned a mismatched channelRefundNo");
         }
-        if (!StringUtils.hasText(result.getQuerySource())) {
+        if (result.getQuerySource() == null) {
             result.setQuerySource("GATEWAY_ACCESS_PROXY");
         } else {
-            result.setQuerySource(validateText(result.getQuerySource(), "querySource", 64, false));
+            String querySource = validateText(result.getQuerySource(), "querySource", 64, false);
+            result.setQuerySource(StringUtils.hasText(querySource) ? querySource : "GATEWAY_ACCESS_PROXY");
         }
         return result;
     }

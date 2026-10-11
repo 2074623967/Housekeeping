@@ -93,6 +93,28 @@ class RefundOrderSubmitServiceImplTest {
     }
 
     @Test
+    void shouldAcceptMatchingSuccessStatusAndStyle() {
+        configureEnabledGovernance();
+        RefundOrderSubmitResultDTO data = new RefundOrderSubmitResultDTO();
+        data.setChannelRefundNo("WX-R-1001");
+        data.setStatus(" success ");
+        data.setStatusType(" SUCCESS ");
+        UpstreamRefundSubmitResponseDTO response = new UpstreamRefundSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        RefundOrderSubmitResultDTO result = service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request());
+
+        assertEquals("SUCCESS", result.getStatus());
+        assertEquals("success", result.getStatusType());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("SUCCESS", captor.getValue().getResultStatus());
+    }
+
+    @Test
     void shouldRejectAcceptanceWithoutChannelRefundNumber() {
         configureEnabledGovernance();
         RefundOrderSubmitResultDTO data = new RefundOrderSubmitResultDTO();
@@ -112,6 +134,16 @@ class RefundOrderSubmitServiceImplTest {
         verify(mapper).insertAuditLog(captor.capture());
         assertEquals("UNKNOWN", captor.getValue().getResultStatus());
         assertEquals("warn", captor.getValue().getResultStatusType());
+    }
+
+    @Test
+    void shouldRejectProcessingWithSuccessStyleAsUnknown() {
+        assertInvalidAcceptanceStatus("PROCESSING", "success");
+    }
+
+    @Test
+    void shouldRejectSuccessWithWarningStyleAsUnknown() {
+        assertInvalidAcceptanceStatus("SUCCESS", "warn");
     }
 
     @Test
@@ -152,8 +184,63 @@ class RefundOrderSubmitServiceImplTest {
         assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
     }
 
+    @Test
+    void shouldRejectExplicitControlCharactersInOptionalCustomerName() {
+        RefundOrderSubmitRequestDTO request = request();
+        request.setCustomerName("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectExplicitControlCharactersInOptionalRefundReason() {
+        RefundOrderSubmitRequestDTO request = request();
+        request.setRefundReason("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectRawOversizedOptionalCustomerNameBeforeAuthorization() {
+        RefundOrderSubmitRequestDTO request = request();
+        request.setCustomerName(String.join("", Collections.nCopies(128, " ")) + " ");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
     private RefundOrderSubmitServiceImpl service() {
         return new RefundOrderSubmitServiceImpl(accessService, restTemplate);
+    }
+
+    private void assertInvalidAcceptanceStatus(String status, String statusType) {
+        configureEnabledGovernance();
+        RefundOrderSubmitResultDTO data = new RefundOrderSubmitResultDTO();
+        data.setChannelRefundNo("WX-R-1001");
+        data.setStatus(status);
+        data.setStatusType(statusType);
+        UpstreamRefundSubmitResponseDTO response = new UpstreamRefundSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getResultStatus());
+        assertEquals("warn", captor.getValue().getResultStatusType());
     }
 
     private RefundOrderSubmitRequestDTO request() {

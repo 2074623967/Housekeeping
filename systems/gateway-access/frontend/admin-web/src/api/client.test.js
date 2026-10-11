@@ -130,3 +130,67 @@ test("reports gateway access network failures with a stable client error", async
     globalThis.fetch = originalFetch;
   }
 });
+
+test("aborts slow gateway access requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "gateway-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "gateway-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      gatewayAccessApi.getSummary(),
+      (error) => error.code === "GATEWAY-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("aborts slow gateway audit exports and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "gateway-export-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "gateway-export-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      gatewayAccessApi.downloadAuditLogs(),
+      (error) => error.code === "GATEWAY-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});

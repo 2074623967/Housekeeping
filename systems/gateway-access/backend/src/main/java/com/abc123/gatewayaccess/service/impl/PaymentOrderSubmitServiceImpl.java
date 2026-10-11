@@ -71,6 +71,7 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
             UpstreamPaymentSubmitResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamPaymentSubmitResponseDTO.class);
             PaymentOrderSubmitResultDTO result = validateUpstreamResponse(response, request);
+            result.setGatewayCode(context.getGatewayCode());
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.PAYMENT_SUBMIT,
                     "SUCCESS", "success", "支付请求已由配置的真实上游明确受理");
@@ -168,10 +169,11 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
     }
 
     private String optional(String value, String fieldName, int maxLength) {
-        if (!StringUtils.hasText(value)) {
+        if (value == null) {
             return null;
         }
-        return validateText(value, fieldName, maxLength, true);
+        String normalized = validateText(value, fieldName, maxLength, true);
+        return StringUtils.hasText(normalized) ? normalized : null;
     }
 
     private String requiredResponse(String value, String fieldName, int maxLength) {

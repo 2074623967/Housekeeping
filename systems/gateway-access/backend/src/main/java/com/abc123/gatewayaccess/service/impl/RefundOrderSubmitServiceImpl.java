@@ -28,8 +28,6 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RefundOrderSubmitServiceImpl.class);
     private static final Set<String> STATUSES = new HashSet<>(Arrays.asList("PROCESSING", "SUCCESS"));
-    private static final Set<String> STATUS_TYPES = new HashSet<>(
-            Arrays.asList("info", "warn", "danger", "success"));
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final GatewayTransactionAccessService accessService;
@@ -119,10 +117,15 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
         result.setStatus(requiredResponse(result.getStatus(), "status", 32).toUpperCase(Locale.ROOT));
         result.setStatusType(requiredResponse(result.getStatusType(), "statusType", 32)
                 .toLowerCase(Locale.ROOT));
-        if (!STATUSES.contains(result.getStatus()) || !STATUS_TYPES.contains(result.getStatusType())) {
+        if (!STATUSES.contains(result.getStatus())
+                || !isConsistentStatusType(result.getStatus(), result.getStatusType())) {
             throw invalidResponse("refund submit upstream returned an unsupported acceptance status");
         }
         return result;
+    }
+
+    private boolean isConsistentStatusType(String status, String statusType) {
+        return "SUCCESS".equals(status) ? "success".equals(statusType) : "warn".equals(statusType);
     }
 
     private String required(String value, String fieldName, int maxLength) {
@@ -133,7 +136,11 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
     }
 
     private String optional(String value, String fieldName, int maxLength) {
-        return StringUtils.hasText(value) ? validateText(value, fieldName, maxLength, true) : null;
+        if (value == null) {
+            return null;
+        }
+        String normalized = validateText(value, fieldName, maxLength, true);
+        return StringUtils.hasText(normalized) ? normalized : null;
     }
 
     private String requiredResponse(String value, String fieldName, int maxLength) {

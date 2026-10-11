@@ -8,7 +8,10 @@ import com.abc123.gatewayaccess.dto.UpstreamPaymentQueryResponseDTO;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import com.abc123.gatewayaccess.service.PaymentOrderQueryService;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,9 @@ import org.springframework.web.client.RestTemplate;
 public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PaymentOrderQueryServiceImpl.class);
+    private static final Set<String> TRADE_STATUSES = new HashSet<>(Arrays.asList(
+            "PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED",
+            "WAIT_CALLBACK", "SUCCESS", "CLOSED", "FAIL"));
     private final GatewayTransactionAccessService accessService;
     private final RestTemplate restTemplate;
 
@@ -106,10 +112,11 @@ public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
     }
 
     private String optional(String value, String fieldName, int maxLength) {
-        if (!StringUtils.hasText(value)) {
+        if (value == null) {
             return null;
         }
-        return validateText(value, fieldName, maxLength).trim();
+        String normalized = validateText(value, fieldName, maxLength).trim();
+        return StringUtils.hasText(normalized) ? normalized : null;
     }
 
     private String validateText(String value, String fieldName, int maxLength) {
@@ -133,15 +140,41 @@ public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
     }
 
     private PaymentOrderQueryResultDTO validateUpstreamResponse(UpstreamPaymentQueryResponseDTO response) {
-        if (response == null || !"0".equals(response.getCode()) || response.getData() == null
-                || !StringUtils.hasText(response.getData().getTradeStatus())) {
+        if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment query upstream returned no definitive trade status");
         }
-        response.getData().setTradeStatus(response.getData().getTradeStatus().trim());
-        if (StringUtils.hasText(response.getData().getChannelTransactionNo())) {
-            response.getData().setChannelTransactionNo(response.getData().getChannelTransactionNo().trim());
+        PaymentOrderQueryResultDTO result = response.getData();
+        String tradeStatus = responseText(result.getTradeStatus(), 32);
+        if (tradeStatus == null || !TRADE_STATUSES.contains(tradeStatus.toUpperCase(Locale.ROOT))) {
+            throw invalidResponse();
         }
-        return response.getData();
+        result.setTradeStatus(tradeStatus.toUpperCase(Locale.ROOT));
+        result.setChannelTransactionNo(responseText(result.getChannelTransactionNo(), 128));
+        String querySource = responseText(result.getQuerySource(), 64);
+        result.setQuerySource(querySource == null ? "GATEWAY_ACCESS_PROXY" : querySource);
+        result.setChannelReturnCode(responseText(result.getChannelReturnCode(), 64));
+        result.setStandardizedCode(responseText(result.getStandardizedCode(), 64));
+        result.setStandardizedMessage(responseText(result.getStandardizedMessage(), 256));
+        result.setHandlingSuggestion(responseText(result.getHandlingSuggestion(), 256));
+        result.setRetryable(responseText(result.getRetryable(), 16));
+        result.setManualInterventionRequired(responseText(result.getManualInterventionRequired(), 16));
+        result.setMappingVersion(responseText(result.getMappingVersion(), 32));
+        return result;
+    }
+
+    private String responseText(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (value.length() > maxLength || containsIsoControl(value)) {
+            throw invalidResponse();
+        }
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private GatewayAccessException invalidResponse() {
+        return new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
+                "payment query upstream returned an invalid trade fact");
     }
 }

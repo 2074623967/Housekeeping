@@ -15,6 +15,7 @@ public class PaymentOrderSubmitResultDTO {
     private Map<String, String> nativePaymentParams;
 
     private String channelTransactionNo;
+    private String gatewayCode;
     private String attemptStatus;
     private String attemptStatusType;
     private String channelReturnCode;

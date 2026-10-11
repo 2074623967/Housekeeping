@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-const gatewayAccessApiTarget = process.env.HSP_GATEWAY_ACCESS_API_TARGET || "http://127.0.0.1:8090";
+const gatewayAccessApiTarget = process.env.HSP_GATEWAY_ACCESS_API_TARGET || "http://localhost:8090";
 
 export default defineConfig({
   plugins: [vue()],

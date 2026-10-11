@@ -69,7 +69,7 @@ class PaymentOrderQueryServiceImplTest {
     void shouldReturnOnlyDefinitiveUpstreamTradeFactAndAudit() {
         configureEnabledGovernance(true);
         PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
-        data.setTradeStatus(" SUCCESS ");
+        data.setTradeStatus(" success ");
         data.setChannelTransactionNo(" WX-1001 ");
         UpstreamPaymentQueryResponseDTO response = new UpstreamPaymentQueryResponseDTO();
         response.setCode("0");
@@ -107,6 +107,52 @@ class PaymentOrderQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectUnknownStatusWithoutSuccessfulAudit() {
+        configureEnabledGovernance(true);
+        PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setTradeStatus("PAID");
+        stubUpstream(data);
+
+        assertInvalidUpstreamResponse();
+    }
+
+    @Test
+    void shouldRejectOversizedOrControlledUpstreamFieldsBeforeSuccessfulAudit() {
+        configureEnabledGovernance(true);
+        PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo(repeat("W", 129));
+        stubUpstream(data);
+        assertInvalidUpstreamResponse();
+
+        data.setChannelTransactionNo("WX-1001\n");
+        assertInvalidUpstreamResponse();
+
+        data.setChannelTransactionNo("WX-1001");
+        data.setStandardizedMessage(repeat("M", 256) + " ");
+        assertInvalidUpstreamResponse();
+    }
+
+    private void stubUpstream(PaymentOrderQueryResultDTO data) {
+        UpstreamPaymentQueryResponseDTO response = new UpstreamPaymentQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentQueryResponseDTO.class)))
+                .thenReturn(response);
+    }
+
+    private void assertInvalidUpstreamResponse() {
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper, org.mockito.Mockito.atLeastOnce()).insertAuditLog(captor.capture());
+        for (GatewayAuditLogEntity audit : captor.getAllValues()) {
+            assertEquals("FAILED", audit.getResultStatus());
+        }
+    }
+
+    @Test
     void shouldRejectOversizedQueryFieldsBeforeAuthorization() {
         PaymentOrderQueryRequestDTO oversized = request();
         oversized.setPaymentOrderId(repeat("P", 65));
@@ -122,6 +168,30 @@ class PaymentOrderQueryServiceImplTest {
     void shouldRejectControlCharactersBeforeAuthorization() {
         PaymentOrderQueryRequestDTO invalid = request();
         invalid.setChannelTransactionNo("WX-1001\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", invalid));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper, org.mockito.Mockito.never()).findApplicationByCode(any(String.class));
+    }
+
+    @Test
+    void shouldRejectWhitespaceOnlyControlCharactersBeforeAuthorization() {
+        PaymentOrderQueryRequestDTO invalid = request();
+        invalid.setChannelTransactionNo("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", invalid));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper, org.mockito.Mockito.never()).findApplicationByCode(any(String.class));
+    }
+
+    @Test
+    void shouldRejectOversizedWhitespaceOnlyChannelTransactionNo() {
+        PaymentOrderQueryRequestDTO invalid = request();
+        invalid.setChannelTransactionNo(repeat(" ", 129));
 
         GatewayAccessException exception = assertThrows(GatewayAccessException.class,
                 () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", invalid));

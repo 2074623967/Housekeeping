@@ -85,7 +85,7 @@
 }
 ```
 
-成功响应必须同时包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode`。当终端为 `MINI_PROGRAM` 且上游已经完成微信签名时，可额外返回完整的 `nativePaymentParams`：`timeStamp / nonceStr / package / signType / paySign`；网关只透传这五个白名单字段，不落库，缺字段、额外字段或控制字符均拒绝。金额必须为正数，最多 `16` 位整数和 `2` 位小数；文本字段执行必填、长度和 ISO 控制字符校验。空响应、业务失败或必要字段缺失均不视为已明确受理。
+成功响应必须同时包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode`。当终端为 `MINI_PROGRAM` 且上游已经完成微信签名时，可额外返回完整的 `nativePaymentParams`：`timeStamp / nonceStr / package / signType / paySign`；网关只透传这五个白名单字段，不落库，缺字段、额外字段或控制字符均拒绝。金额必须为正数，最多 `16` 位整数和 `2` 位小数；文本字段执行必填、长度和 ISO 控制字符校验，显式传入的可选 `customerName / requestedChannelCode` 也先校验原文再将纯空白规范为空值。空响应、业务失败或必要字段缺失均不视为已明确受理。
 
 提交与查单复用相同的应用、凭证、权限、网关、有效证书和当前环境发布路由门禁。上游异常只记录请求号和异常类型，并返回 `GATEWAY_UPSTREAM_UNAVAILABLE`；调用方必须先查单再决定后续动作，禁止因超时或未知结果自动重提。
 
@@ -122,6 +122,7 @@
 ```
 
 成功响应中的 `data` 只透传配置上游返回的确定性渠道事实，包含 `tradeStatus`、`channelTransactionNo`、`querySource` 以及可选返回码标准化字段。接口不会从 gateway-access 本地台账推导支付状态，也不会生成模拟成功结果。
+代理仅接受 payment-core 支持的交易状态（`PREPAY_CREATED`、`RISK_REVIEW`、`RISK_BLOCKED`、`RISK_REJECTED`、`WAIT_CALLBACK`、`SUCCESS`、`CLOSED`、`FAIL`），并在成功审计前校验响应字段原文长度与控制字符；未知状态或越界字段返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE` 并记失败审计。请求中可选的 `channelTransactionNo` 即使只有空白，也先执行原文长度及 ISO 控制字符校验，再将合法纯空白规范为空值以按支付单号查单。
 
 代理前依次校验：
 
@@ -168,7 +169,7 @@
 
 `refundOrderId / refundAttemptNo / channelCode` 必填。`refundAttemptNo` 是该轮退款渠道请求的商户侧身份，必须与提交时使用的值一致。已有渠道受理事实时必须传 `channelRefundNo`；退款提交结果未知且尚未取得渠道退款号时允许省略该字段，由上游按退款尝试号和平台退款单号核查。显式传入的可选字段仍执行长度和 ISO 控制字符校验。
 
-成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo / querySource`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`；请求已携带 `channelRefundNo` 时，响应必须与其完全一致；请求未携带时，响应仍必须返回非空渠道退款号，供支付核心首次绑定可信受理事实。缺失、超长、含 ISO 控制字符、状态非法或已有关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
+成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo`，`querySource` 可由代理在上游省略或纯空白时补为 `GATEWAY_ACCESS_PROXY`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`；请求已携带 `channelRefundNo` 时，响应必须与其完全一致；请求未携带时，响应仍必须返回非空渠道退款号，供支付核心首次绑定可信受理事实。上游显式提供的 `querySource` 即使只有空白也先执行原文长度和 ISO 控制字符校验；缺失必填事实、超长、含 ISO 控制字符、状态非法或已有关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
 
 退款查单复用支付交易代理的应用、访问凭证、权限、网关、有效证书和当前环境发布路由门禁，并写入 `REFUND_QUERY` 最小审计。访问密钥、请求报文、上游原始响应和异常原文不进入审计日志。
 
@@ -204,9 +205,9 @@
 }
 ```
 
-退款金额必须为正数且最多两位小数；`refundOrderId / refundAttemptNo / paymentOrderId / orderNo / refundMethod / channelCode` 必填，文本执行长度和 ISO 控制字符校验。`refundAttemptNo` 作为每轮渠道侧商户退款请求号原样转发，同一轮调用前失败重试必须复用，新的退款业务重试必须使用新值。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
+退款金额必须为正数且最多两位小数；`refundOrderId / refundAttemptNo / paymentOrderId / orderNo / refundMethod / channelCode` 必填，文本执行长度和 ISO 控制字符校验。显式传入的可选 `customerName / refundReason` 也先按原文校验，再将纯空白规范为空值。`refundAttemptNo` 作为每轮渠道侧商户退款请求号原样转发，同一轮调用前失败重试必须复用，新的退款业务重试必须使用新值。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
 
-成功响应必须同时包含 `channelRefundNo / status / statusType`，其中 `status` 只允许 `PROCESSING / SUCCESS`。空响应、上游业务码非 `0`、字段缺失或非法均不视为明确受理；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。
+成功响应必须同时包含 `channelRefundNo / status / statusType`，且仅接受 `PROCESSING / warn` 或 `SUCCESS / success` 配对。空响应、上游业务码非 `0`、字段缺失、状态与样式矛盾或其他非法响应均不视为明确受理，返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`、审计 `UNKNOWN / warn`；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。
 
 退款提交上游由以下环境变量显式配置，默认均为空：
 

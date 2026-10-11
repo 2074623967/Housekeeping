@@ -22,6 +22,7 @@ import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,24 +72,32 @@ class PaymentOrderSubmitServiceImplTest {
         data.setAttemptStatus(" 处理中 ");
         data.setAttemptStatusType(" INFO ");
         data.setChannelReturnCode(" USERPAYING ");
+        data.setGatewayCode("FORGED_UPSTREAM_CODE");
         data.setNativePaymentParams(nativePaymentParams());
         UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
         response.setCode("0");
         response.setData(data);
+        ArgumentCaptor<PaymentOrderSubmitRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(PaymentOrderSubmitRequestDTO.class);
         when(restTemplate.postForObject(
                 eq("https://channel.example/payments/submit"),
-                any(PaymentOrderSubmitRequestDTO.class),
+                requestCaptor.capture(),
                 eq(UpstreamPaymentSubmitResponseDTO.class))).thenReturn(response);
 
         PaymentOrderSubmitRequestDTO miniProgramRequest = request();
         miniProgramRequest.setTerminal("MINI_PROGRAM");
+        miniProgramRequest.setCustomerName(" Customer ");
+        miniProgramRequest.setRequestedChannelCode(" WX_H5 ");
         PaymentOrderSubmitResultDTO result = service().submit(
                 "APP_PAY_CORE", "secret", "127.0.0.1", miniProgramRequest);
 
+        assertEquals("Customer", requestCaptor.getValue().getCustomerName());
+        assertEquals("WX_H5", requestCaptor.getValue().getRequestedChannelCode());
         assertEquals("WX-1001", result.getChannelTransactionNo());
         assertEquals("处理中", result.getAttemptStatus());
         assertEquals("info", result.getAttemptStatusType());
         assertEquals("USERPAYING", result.getChannelReturnCode());
+        assertEquals("GW_WX", result.getGatewayCode());
         assertEquals("prepay_id=wx-prepay", result.getNativePaymentParams().get("package"));
         ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
         verify(mapper).insertAuditLog(captor.capture());
@@ -183,6 +192,39 @@ class PaymentOrderSubmitServiceImplTest {
     void shouldRejectControlCharacterBeforeTrimmingRequestFields() {
         PaymentOrderSubmitRequestDTO request = request();
         request.setOrderNo("ORD-1001\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectControlCharacterInOptionalCustomerNameBeforeAuthorization() {
+        PaymentOrderSubmitRequestDTO request = request();
+        request.setCustomerName("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectControlCharacterInOptionalRequestedChannelBeforeAuthorization() {
+        PaymentOrderSubmitRequestDTO request = request();
+        request.setRequestedChannelCode("\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectOversizedWhitespaceOnlyOptionalRequestedChannel() {
+        PaymentOrderSubmitRequestDTO request = request();
+        request.setRequestedChannelCode(String.join("", Collections.nCopies(65, " ")));
 
         GatewayAccessException exception = assertThrows(GatewayAccessException.class,
                 () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));

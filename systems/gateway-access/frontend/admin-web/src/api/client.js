@@ -5,6 +5,8 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 function normalizeListPayload(data) {
   const records = Array.isArray(data)
     ? data
@@ -34,17 +36,22 @@ function normalizeSummaryPayload(data) {
 }
 
 async function request(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "GATEWAY-CLIENT-TIMEOUT"
       : "GATEWAY-CLIENT-NETWORK";
     throw createRequestError(code, error?.name === "AbortError" ? "网关接入服务请求超时" : "无法连接网关接入服务", error);
+  } finally {
+    clearTimeout(timeoutId);
   }
   let payload;
   try {
@@ -78,11 +85,23 @@ export const gatewayAccessApi = {
   },
   downloadAuditLogs: ({ keyword = "", appCode = "全部", resultStatus = "全部" } = {}) => {
     const params = new URLSearchParams({ keyword, appCode, resultStatus });
-    return fetch(`/api/gateway-access/audit-logs/export?${params.toString()}`).then(async (response) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+    return fetch(`/api/gateway-access/audit-logs/export?${params.toString()}`, {
+      signal: controller.signal
+    }).then(async (response) => {
       if (!response.ok) {
-        throw new Error("审计快照导出失败");
+        throw createRequestError(`GATEWAY-CLIENT-HTTP-${response.status}`, "审计快照导出失败");
       }
       return response.blob();
+    }).catch((error) => {
+      if (error?.code) throw error;
+      const code = error?.name === "AbortError"
+        ? "GATEWAY-CLIENT-TIMEOUT"
+        : "GATEWAY-CLIENT-NETWORK";
+      throw createRequestError(code, error?.name === "AbortError" ? "网关接入服务导出请求超时" : "无法连接网关接入服务", error);
+    }).finally(() => {
+      clearTimeout(timeoutId);
     });
   },
   getReleaseRoutes: ({ environment = "全部", status = "全部" } = {}) => {

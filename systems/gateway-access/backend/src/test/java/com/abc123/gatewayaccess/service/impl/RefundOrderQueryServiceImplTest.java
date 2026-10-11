@@ -130,6 +130,47 @@ class RefundOrderQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectExplicitControlCharactersInUpstreamQuerySource() {
+        configureEnabledGovernance();
+        RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundStatus("PROCESSING");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        data.setQuerySource("\n");
+        UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundQueryResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("FAILED", captor.getValue().getResultStatus());
+        assertEquals("danger", captor.getValue().getResultStatusType());
+    }
+
+    @Test
+    void shouldDefaultWhitespaceOnlyUpstreamQuerySource() {
+        configureEnabledGovernance();
+        RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundStatus("PROCESSING");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        data.setQuerySource("   ");
+        UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundQueryResponseDTO.class)))
+                .thenReturn(response);
+
+        RefundOrderQueryResultDTO result = service().query("APP_PAY_CORE", "secret", "127.0.0.1", request());
+
+        assertEquals("GATEWAY_ACCESS_PROXY", result.getQuerySource());
+    }
+
+    @Test
     void shouldRejectRequestControlCharactersBeforeAuthorization() {
         RefundOrderQueryRequestDTO request = request();
         request.setRefundOrderId("REF-001\n");
