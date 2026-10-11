@@ -40,18 +40,47 @@ function normalizeDashboard(value) {
   };
 }
 
+export function normalizeWalletActionResult(data, key, expectedValue = "", message) {
+  if (!data || typeof data !== "object" || typeof data[key] !== "string"
+      || !data[key].trim() || (expectedValue && data[key] !== expectedValue)) {
+    throw createRequestError(
+      "WALLET-CLIENT-INVALID-BUSINESS-RESULT",
+      message
+    );
+  }
+  return data;
+}
+
+function normalizeWalletDetailResult(data, expectedAccountNo) {
+  const account = data?.account && typeof data.account === "object" ? data.account : data;
+  if (!account || typeof account !== "object" || account.accountNo !== expectedAccountNo) {
+    throw createRequestError(
+      "WALLET-CLIENT-INVALID-BUSINESS-RESULT",
+      "钱包账户详情响应未确认当前账户"
+    );
+  }
+  return normalizeDetail(data);
+}
+
+const CLIENT_TIMEOUT_MS = 10000;
+
 async function request(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "WALLET-CLIENT-TIMEOUT"
       : "WALLET-CLIENT-NETWORK";
     throw createRequestError(code, error?.name === "AbortError" ? "钱包服务请求超时" : "无法连接钱包服务", error);
+  } finally {
+    clearTimeout(timeoutId);
   }
   let payload;
   try {
@@ -88,32 +117,35 @@ export const walletApi = {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return `/api/wallet/accounts/ledgers/export${suffix}`;
   },
-  getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`).then(normalizeDetail),
+  getDetail: (accountNo) => request(`/api/wallet/accounts/${encodeURIComponent(accountNo)}`)
+    .then((data) => normalizeWalletDetailResult(data, accountNo)),
   balancePayment: (payload) => request("/api/wallet/accounts/balance-payments", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(
+    data, "balancePaymentNo", "", "余额支付响应未确认业务单号"
+  )),
   recharge: (payload) => request("/api/wallet/accounts/recharges", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(data, "rechargeNo", "", "充值响应未确认业务单号")),
   withdraw: (payload) => request("/api/wallet/accounts/withdrawals", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(data, "withdrawNo", "", "提现响应未确认业务单号")),
   transfer: (payload) => request("/api/wallet/accounts/transfers", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(data, "transferNo", "", "转账响应未确认业务单号")),
   getRedPackets: async () => normalizeList(await request("/api/wallet/red-packets")),
   issueRedPacket: (payload) => request("/api/wallet/red-packets", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(data, "redPacketNo", "", "红包响应未确认业务单号")),
   getRiskEvents: async () => normalizeList(await request("/api/wallet/risk-events")),
   approveRiskEvent: (payload) => request("/api/wallet/risk-events/approve", {
     method: "POST",
     body: JSON.stringify(payload)
-  }),
+  }).then((data) => normalizeWalletActionResult(data, "eventNo", payload?.eventNo, "风控事件响应未确认当前事件")),
   getMarketingFundDashboard: () => request("/api/wallet/marketing-funds/dashboard").then(normalizeDashboard)
 };
