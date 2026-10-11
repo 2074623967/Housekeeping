@@ -24,3 +24,10 @@ test("refreshes the current payment detail after failed query and close requests
   }
   assert.match(source, /支付动作后详情刷新失败，当前状态未经确认/);
 });
+
+test("distinguishes unaccepted submission from eligible callback on payment detail", () => {
+  assert.match(source, /paymentDetailOperationSuggestions\(detail\.value\)/);
+  assert.match(source, /v-if="isChannelSubmissionUnaccepted\(detail\.status, detail\.latestAttemptStatus, detail\.channelTransactionNo\)"[^>]*>渠道受理未确认/);
+  assert.match(source, /function queryActionAvailabilityHint\(\) \{[\s\S]*?canRunQuery\(\)[\s\S]*?isChannelSubmissionUnaccepted\([\s\S]*?渠道受理未确认，当前不可查单/);
+  assert.match(source, /\{\{ queryActionAvailabilityHint\(\) \}\}/);
+});

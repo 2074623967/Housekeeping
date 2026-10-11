@@ -5,7 +5,7 @@ import { matchesPaymentDetailSnapshot, paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute } from "../router/listRoutes";
-import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentDetailOperationSuggestions } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -99,31 +99,7 @@ const metricCards = computed(() => {
   ];
 });
 
-const operationSuggestions = computed(() => {
-  if (!detail.value) {
-    return [];
-  }
-  const suggestions = [];
-  if (detail.value.status === "WAIT_CALLBACK") {
-    suggestions.push("当前支付单等待回调，建议先主动查单；确认渠道已成功但未回调时，再进入异常中心排查。");
-  }
-  if (detail.value.status === "PAYING") {
-    suggestions.push("当前支付单处理中，建议优先查看最近一次支付尝试和渠道响应报文，避免重复提交。");
-  }
-  if (detail.value.status === "CLOSED") {
-    suggestions.push("当前支付单已关闭，如业务仍需付款，应从订单侧重新发起预付单，禁止直接恢复旧单。");
-  }
-  if (detail.value.status === "SUCCESS") {
-    suggestions.push("当前支付单已成功，建议联查订单、账单、支付记录和下游事件是否全部收口。");
-  }
-  if (!(detail.value.notifyLogs || []).length) {
-    suggestions.push("当前没有回调轨迹，需关注渠道回调地址、验签和消息落库情况。");
-  }
-  if (!suggestions.length) {
-    suggestions.push("当前状态可结合路由、回调和事件轨迹继续完成支付链路复盘。");
-  }
-  return suggestions;
-});
+const operationSuggestions = computed(() => paymentDetailOperationSuggestions(detail.value));
 
 async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOrderId.value) {
   const requestId = ++latestLoadRequestId;
@@ -202,6 +178,18 @@ function canRunQuery() {
     detail.value?.latestAttemptCompletedAt, detail.value?.channelTransactionNo,
     detail.value?.channel
   );
+}
+
+function queryActionAvailabilityHint() {
+  if (canRunQuery()) {
+    return "当前可执行";
+  }
+  if (isChannelSubmissionUnaccepted(
+    detail.value?.status, detail.value?.latestAttemptStatus, detail.value?.channelTransactionNo
+  )) {
+    return "渠道受理未确认，当前不可查单";
+  }
+  return "当前缺少可查单事实";
 }
 
 function openRelatedRoute(targetRoute) {
@@ -404,7 +392,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           </div>
           <div class="detail-card">
             <div class="detail-label">当前状态</div>
-            <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span></div>
+            <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.status, detail.latestAttemptStatus, detail.channelTransactionNo)" class="badge warn">渠道受理未确认</span></div>
           </div>
         </div>
 
@@ -423,7 +411,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
               <span class="meta">根据支付单当前状态控制动作</span>
             </div>
             <div class="ops-card">
-              <div class="ops-row"><span>主动查单</span><span>{{ canRunQuery() ? "当前可执行" : "仅已提交渠道或终态支付单可执行" }}</span></div>
+              <div class="ops-row"><span>主动查单</span><span>{{ queryActionAvailabilityHint() }}</span></div>
               <div class="ops-row"><span>渠道回调</span><span>仅接收真实渠道签名通知，页面不提供人工收口动作</span></div>
               <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "已提交渠道或已终态支付单不可本地关闭" }}</span></div>
             </div>
