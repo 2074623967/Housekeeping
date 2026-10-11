@@ -28251,3 +28251,7 @@ App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 
 ### 10.979 2026-10-11 同步成功退款的网关双服务 HTTP 回归
 
 扩展隔离 H2/demo 的 `payment-core-gateway-refund-smoke.mjs`，让第三次假上游退款提交同步返回 `SUCCESS/success` 与渠道退款号。真实 payment-core→gateway-access HTTP 派发后退款仍为 `PROCESSING`、单一尝试及出站事件均为 `UNKNOWN`、订单渠道退款号尚未绑定；人工重发被拒且假上游未收到第二次提交。随后从同一退款单发起 HTTP 主动查单，网关向本地假上游按原尝试号且不带未验证渠道号查询；可信查单回执使原尝试、原事件及退款单同时收口为 `SUCCESS`，重复终态查单不再访问上游。原错号拒绝与结果未知恢复场景仍通过，脚本 `[PASS]`、退出码 `0`，回环服务和临时 H2 被清理，语法及补丁检查通过。仅关闭该本机双服务协议路径，不证明真实渠道支持按尝试号查询、目标 MySQL 8、多实例、资金到账、可信身份或发布。
+
+### 10.980 2026-10-11 回调、批量异常动作和退款出站 HTTP 同进程回归
+
+获准回环监听后，离线 Maven 在同一测试进程联合执行 `PaymentCallbackTransportHttpIntegrationTest`、`PaymentIssueBatchActionHttpIntegrationTest` 与 `RefundOutboxHttpIntegrationTest`，Surefire 分别 `1/1`、`1/1`、`8/8`，合计 `10/10`，零失败、错误、跳过。回调测试覆盖拒绝请求返回 HTTP 503 而一般查询错误仍维持原 HTTP 契约；批量异常动作覆盖同键重放、内容冲突、显式空键及大小写独立键的日志留痕；退款出站覆盖演示回调、受理未知和重发门禁。同一进程各随机 H2/demo 上下文退出后关闭，未连接正式渠道。该组合只确认这三组本地入口及上下文隔离，不代表全部后端用例、目标 MySQL 8、多实例、资金事实、可信身份或发布。
