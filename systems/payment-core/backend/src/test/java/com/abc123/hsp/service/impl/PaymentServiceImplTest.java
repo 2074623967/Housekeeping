@@ -3999,7 +3999,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void shouldRejectSameKeyReplayWhileChannelSubmitIsStillPaying() {
+    void shouldRejectSameKeyReplayWhileChannelSubmitIsStillPayingWithoutReevaluatingRisk() {
         PrepayOrderDTO prepay = boundPrepay();
         prepay.setPrepayOrderNo("PRE-PAYING-REPLAY");
         prepay.setPaymentOrderId("PAY-PAYING-REPLAY");
@@ -4030,9 +4030,15 @@ class PaymentServiceImplTest {
         request.setPaymentMethod("微信支付");
         request.setChannelCode("WX_H5");
         request.setIdempotencyKey("IDEMP-PAYING-REPLAY");
+        PaymentRiskDecisionResultDTO changedRiskDecision = new PaymentRiskDecisionResultDTO();
+        changedRiskDecision.setDecision("REVIEW");
+        org.mockito.Mockito.lenient().when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(changedRiskDecision);
         PaymentServiceImpl service = new PaymentServiceImpl(
                 paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
-                paymentChannelQueryService, paymentChannelSubmitService);
+                paymentChannelQueryService, paymentChannelSubmitService, paymentEventDispatchService,
+                paymentRiskControlService, paymentOpsConfigService);
         PaymentAttemptIdempotencyDTO existingAttempt = new PaymentAttemptIdempotencyDTO();
         existingAttempt.setPrepayOrderNo(prepay.getPrepayOrderNo());
         existingAttempt.setPaymentOrderId(prepay.getPaymentOrderId());
@@ -4044,6 +4050,65 @@ class PaymentServiceImplTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
 
         assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, exception.getCode());
+        verifyNoInteractions(paymentRiskControlService);
+        verify(paymentMapper, never()).updatePaymentRiskStatus(anyString(), anyString(), anyString());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldNotApplyRiskDecisionWhenSameKeyAttemptAppearsDuringEvaluation() {
+        PrepayOrderDTO prepay = boundPrepay();
+        prepay.setPrepayOrderNo("PRE-RISK-RACE");
+        prepay.setPaymentOrderId("PAY-RISK-RACE");
+        prepay.setAmount("¥88.00");
+        PrepayOrderDTO latestPrepay = boundPrepay();
+        latestPrepay.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        latestPrepay.setPaymentOrderId(prepay.getPaymentOrderId());
+        latestPrepay.setAmount(prepay.getAmount());
+        latestPrepay.setPaymentStatus("PAYING");
+        latestPrepay.setCashierStatus("支付中");
+        when(paymentMapper.findPrepay(prepay.getPrepayOrderNo())).thenReturn(prepay, latestPrepay);
+
+        PaymentDetailDTO initialDetail = new PaymentDetailDTO();
+        initialDetail.setPaymentOrderId(prepay.getPaymentOrderId());
+        initialDetail.setAmount(prepay.getAmount());
+        initialDetail.setStatus("PREPAY_CREATED");
+        PaymentDetailDTO payingDetail = new PaymentDetailDTO();
+        payingDetail.setPaymentOrderId(prepay.getPaymentOrderId());
+        payingDetail.setStatus("PAYING");
+        when(paymentMapper.findDetail(prepay.getPaymentOrderId())).thenReturn(initialDetail, payingDetail);
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-RISK-RACE"))
+                .thenReturn(false, true);
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("REVIEW");
+        when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setIdempotencyKey("IDEMP-RISK-RACE");
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService, paymentEventDispatchService,
+                paymentRiskControlService, paymentOpsConfigService);
+        PaymentAttemptIdempotencyDTO existingAttempt = new PaymentAttemptIdempotencyDTO();
+        existingAttempt.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        existingAttempt.setPaymentOrderId(prepay.getPaymentOrderId());
+        existingAttempt.setRequestFingerprint(service.submitRequestFingerprint(
+                request, prepay, prepay.getPaymentOrderId(), "default-app", "wx_h5", "UNKNOWN"));
+        when(paymentMapper.findPaymentAttemptIdempotency(request.getIdempotencyKey()))
+                .thenReturn(existingAttempt);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
+
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, exception.getCode());
+        verify(paymentMapper, never()).updatePaymentRiskStatus(anyString(), anyString(), anyString());
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
     }
 

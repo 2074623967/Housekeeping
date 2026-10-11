@@ -1010,6 +1010,13 @@ public class PaymentServiceImpl implements PaymentService {
             attachPaymentChannelFacts(response, currentDetail);
             return response;
         }
+        if (existingAttempt) {
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            return validateConcurrentSubmitResult(
+                    requireCurrentSubmitPrepay(currentPrepay), paymentMapper.findDetail(paymentOrderId),
+                    paymentOrderId, request.getPaymentMethod(), resolvedChannelCode);
+        }
         PaymentRiskDecisionResultDTO riskDecision = paymentRiskControlService.evaluateSubmitRisk(
                 buildRiskDecisionRequest(
                         request,
@@ -1019,6 +1026,13 @@ public class PaymentServiceImpl implements PaymentService {
                         resolvedChannelCode,
                         terminal,
                         clientIp));
+        if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            return validateConcurrentSubmitResult(
+                    requireCurrentSubmitPrepay(currentPrepay), paymentMapper.findDetail(paymentOrderId),
+                    paymentOrderId, request.getPaymentMethod(), resolvedChannelCode);
+        }
         if (!"PASS".equalsIgnoreCase(riskDecision.getDecision())) {
             return executeSubmitTransaction(() -> handleRiskDecision(
                         request,
@@ -1026,14 +1040,6 @@ public class PaymentServiceImpl implements PaymentService {
                         currentDetail,
                         resolvedChannelCode,
                         riskDecision));
-        }
-        if (existingAttempt || paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
-            // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
-            validateSubmitIdempotencyOwnership(
-                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
-            return validateConcurrentSubmitResult(
-                    requireCurrentSubmitPrepay(currentPrepay), paymentMapper.findDetail(paymentOrderId),
-                    paymentOrderId, request.getPaymentMethod(), resolvedChannelCode);
         }
         paymentChannelSubmitService.ensureAdapterAvailable(resolvedChannelCode);
         String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
