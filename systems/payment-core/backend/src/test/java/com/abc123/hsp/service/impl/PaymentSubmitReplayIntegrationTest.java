@@ -11,6 +11,7 @@ import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
@@ -29,6 +30,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,6 +48,48 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PaymentSubmitReplayIntegrationTest {
 
     private static final String LONG_CHANNEL_CODE = "LONG-" + String.join("", java.util.Collections.nCopies(59, "C"));
+
+    @Order(5)
+    private static class BlockingChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+        private final String channelCode;
+        private final CountDownLatch entered;
+        private final CountDownLatch release;
+        private final AtomicInteger calls;
+
+        BlockingChannelSubmitAdapter(String channelCode, CountDownLatch entered,
+                CountDownLatch release, AtomicInteger calls) {
+            this.channelCode = channelCode;
+            this.entered = entered;
+            this.release = release;
+            this.calls = calls;
+        }
+
+        @Override
+        public boolean supports(String candidate) {
+            return channelCode.equals(candidate);
+        }
+
+        @Override
+        public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
+            calls.incrementAndGet();
+            entered.countDown();
+            try {
+                if (!release.await(15, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("channel submit timed out");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("channel submit interrupted", exception);
+            }
+            PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
+            result.setChannelTransactionNo("BLOCK-WX-001");
+            result.setChannelReturnCode("USERPAYING");
+            result.setAttemptStatus("处理中");
+            result.setAttemptStatusType("info");
+            result.setResponsePayload("{\"accepted\":true}");
+            return result;
+        }
+    }
 
     private static PaymentChannelSubmitAdapter longChannelSubmitAdapter() {
         return new PaymentChannelSubmitAdapter() {
@@ -247,6 +292,88 @@ class PaymentSubmitReplayIntegrationTest {
                         String.class, prepay.getPrepayOrderNo()));
             } finally {
                 start.countDown();
+                executor.shutdownNow();
+            }
+        }
+    }
+
+    @Test
+    void shouldNotReplayUnacceptedChannelSubmitAsSuccess() throws Exception {
+        String channelCode = "blocking_wx_h5";
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        PaymentChannelSubmitAdapter adapter = new BlockingChannelSubmitAdapter(channelCode, entered, release, calls);
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        application.addInitializers(context -> context.getBeanFactory().registerSingleton("blockingAdapter", adapter));
+        String databaseUrl = "jdbc:h2:mem:payment_pending_replay_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE;LOCK_TIMEOUT=10000";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo", "--spring.datasource.url=" + databaseUrl,
+                "--payment.ops-config.enabled=false", "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            PaymentService paymentService = context.getBean(PaymentService.class);
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            assertEquals(1, jdbcTemplate.update(
+                    "UPDATE t_payment_channel_config SET channel_code = ? WHERE channel_code = 'wx_h5'",
+                    channelCode));
+            assertEquals(1, jdbcTemplate.update(
+                    "UPDATE t_payment_control_policy SET allowed_channel_codes = ? WHERE source_app_id = ?",
+                    "wx_h5,alipay_h5," + channelCode, "housekeeping-h5-web"));
+            PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+            prepayRequest.setOrderNo("DEMO-PENDING-REPLAY-001");
+            prepayRequest.setPayScene("HOME_CLEAN");
+            prepayRequest.setCustomerName("demo pending replay");
+            prepayRequest.setAmount(new BigDecimal("88.00"));
+            PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+            PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+            request.setPrepayOrderNo(prepay.getPrepayOrderNo());
+            request.setPaymentMethod("微信支付");
+            request.setChannelCode(channelCode);
+            request.setSourceAppId("housekeeping-h5-web");
+            request.setMerchantNo("MCH_WX_10001");
+            request.setAccessToken("token-housekeeping-h5-web");
+            request.setTerminal("H5");
+            request.setClientIp("127.0.0.1");
+            request.setIdempotencyKey("DEMO-PENDING-REPLAY-001");
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<PrepayOrderDTO> first = executor.submit(() -> paymentService.submit(request));
+                if (!entered.await(10, TimeUnit.SECONDS)) {
+                    first.get(1, TimeUnit.SECONDS);
+                    throw new AssertionError("channel submit was not entered");
+                }
+                assertEquals("WAIT_CALLBACK", jdbcTemplate.queryForObject(
+                        "SELECT status FROM t_payment_order WHERE payment_order_id = ?",
+                        String.class, prepay.getPaymentOrderId()));
+                assertNull(jdbcTemplate.queryForObject(
+                        "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = ?",
+                        String.class, prepay.getPaymentOrderId()));
+                assertEquals("支付中", jdbcTemplate.queryForObject(
+                        "SELECT cashier_status FROM t_prepay_order WHERE prepay_order_no = ?",
+                        String.class, prepay.getPrepayOrderNo()));
+                CashierPageDTO cashier = paymentService.cashier(prepay.getPrepayOrderNo());
+                assertEquals("PAYING", cashier.getPaymentStatus());
+                assertEquals("支付中", cashier.getStatus());
+                assertNull(cashier.getChannelTransactionNo());
+                BusinessException pending = assertThrows(BusinessException.class, () -> paymentService.submit(request));
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, pending.getCode());
+                assertEquals(1, calls.get());
+                assertEquals(1, jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                        Integer.class, prepay.getPaymentOrderId()));
+                assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+                        "SELECT token_status FROM t_payment_submit_concurrency_token WHERE prepay_order_no = ?",
+                        String.class, prepay.getPrepayOrderNo()));
+                release.countDown();
+                assertEquals("WAIT_CALLBACK", first.get(15, TimeUnit.SECONDS).getPaymentStatus());
+                assertEquals("WAIT_CALLBACK", paymentService.cashier(prepay.getPrepayOrderNo()).getPaymentStatus());
+                assertEquals("WAIT_CALLBACK", paymentService.submit(request).getPaymentStatus());
+                assertEquals(1, calls.get());
+            } finally {
+                release.countDown();
                 executor.shutdownNow();
             }
         }

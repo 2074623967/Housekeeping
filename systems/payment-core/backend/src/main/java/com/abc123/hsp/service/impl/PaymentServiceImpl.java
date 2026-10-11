@@ -627,6 +627,9 @@ public class PaymentServiceImpl implements PaymentService {
     private PrepayOrderDTO validateConcurrentSubmitResult(
             PrepayOrderDTO latestPrepay, PaymentDetailDTO latestDetail, String paymentOrderId,
             String paymentMethod, String resolvedChannelCode) {
+        if (isUnacceptedChannelSubmit(latestPrepay, latestDetail)) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
+        }
         if ("SUCCESS".equalsIgnoreCase(latestPrepay.getPaymentStatus())
                 && (latestDetail == null || !"SUCCESS".equalsIgnoreCase(latestDetail.getStatus()))) {
             throw new IllegalStateException("payment success facts are inconsistent");
@@ -677,6 +680,14 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
         return latestPrepay;
+    }
+
+    private boolean isUnacceptedChannelSubmit(PrepayOrderDTO prepay, PaymentDetailDTO detail) {
+        return detail != null && "WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
+                && "支付中".equals(prepay.getCashierStatus())
+                && "渠道提交中".equals(detail.getLatestAttemptStatus())
+                && !StringUtils.hasText(detail.getChannelTransactionNo())
+                && detail.getLatestAttemptCompletedAt() == null;
     }
 
     private void recordPrepayRemark(
@@ -735,6 +746,9 @@ public class PaymentServiceImpl implements PaymentService {
                 cashierPage.setReviewPaymentMethod(submissionFact.getPaymentMethod());
                 cashierPage.setReviewChannelCode(submissionFact.getChannel());
                 cashierPage.setChannelTransactionNo(submissionFact.getChannelTransactionNo());
+            }
+            if (isUnacceptedChannelSubmit(prepayOrder, submissionFact)) {
+                cashierPage.setPaymentStatus("PAYING");
             }
             applyCashierPaymentStatus(cashierPage);
         }
@@ -950,6 +964,11 @@ public class PaymentServiceImpl implements PaymentService {
                 terminal,
                 clientIp,
                 existingAttempt);
+        if (isUnacceptedChannelSubmit(currentPrepay, currentDetail)) {
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
+        }
         if (("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
                 || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus()))
                 && StringUtils.hasText(currentDetail.getChannel())
@@ -1152,6 +1171,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (occupiedRows != 1) {
             PrepayOrderDTO latestPrepay = requireCurrentSubmitPrepay(currentPrepay);
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
+            if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+                validateSubmitIdempotencyOwnership(
+                        idempotencyKey, currentPrepay.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            }
             validateConcurrentSubmitResult(latestPrepay, latestDetail, paymentOrderId,
                     request.getPaymentMethod(), routeDecision.getChannelCode());
             validateSubmitIdempotencyOwnership(
