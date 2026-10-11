@@ -15,6 +15,7 @@ const chromeBinary = process.env.HSP_CHROME_BIN
 const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
   submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
+  submitCleanup: "PAY-RESULT-SUBMIT-CLEANUP-001",
   submitStale: "PAY-RESULT-SUBMIT-STALE-001",
   submitProcessing: "PAY-RESULT-SUBMIT-PROCESSING-001"
 };
@@ -94,15 +95,23 @@ async function main() {
           }
           response.end(JSON.stringify({ code: "0", data }));
         }
-      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
+      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitCleanup", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
         let input = "";
         for await (const chunk of request) input += chunk;
         const body = JSON.parse(input);
-        if (["submit", "submitOther", "submitStale", "submitProcessing"].includes(kind)) {
+        if (["submit", "submitOther", "submitCleanup", "submitStale", "submitProcessing"].includes(kind)) {
           assert.equal(body.prepayOrderNo, `PRE-${paymentIds[kind]}`);
           assert.equal(body.paymentMethod, "支付宝");
           assert.equal(body.accessToken, "local-test-token");
           assert.ok(typeof body.idempotencyKey === "string" && body.idempotencyKey.length > 0);
+          if (kind === "submitCleanup") {
+            status = "WAIT_CALLBACK";
+            response.end(JSON.stringify({ code: "0", data: {
+              ...cashierPage(kind, status), channel: body.channelCode,
+              cashierStatus: "支付中", cashierStatusType: "info"
+            } }));
+            return;
+          }
           if (retrySubmit) {
             const attempts = retrySubmitBodies.get(body.prepayOrderNo) || [];
             if (attempts.length) {
@@ -336,6 +345,35 @@ async function main() {
     assert.equal(await evaluate("Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.')).length"),
       pendingKeysBeforeSubmit);
     await send("Page.removeScriptToEvaluateOnNewDocument", { identifier: ignoredWrite.identifier });
+    kind = "submitCleanup";
+    status = "PREPAY_CREATED";
+    const ignoredRemoval = await send("Page.addScriptToEvaluateOnNewDocument", {
+      source: `(() => {
+        const original = Storage.prototype.removeItem;
+        Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value(key) {
+          if (key.startsWith('hsp.paymentSubmitAttempt.v1.')) return;
+          return original.call(this, key);
+        } });
+      })();`
+    });
+    const ignoredRemovalStart = requests.length;
+    const cleanupUrl = `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token`;
+    await send("Page.navigate", { url: cleanupUrl });
+    await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
+      "cashier with ignored pending-key removal");
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付响应已返回，但本机未决记录未能清理')
+      && ${actionButton('确认支付')}.disabled && ${actionButton('重置幂等键')}.disabled`),
+    "ignored pending-key removal blocks a repeated submit");
+    assert.equal(requests.slice(ignoredRemovalStart).filter((item) => item.method === "POST").length, 1);
+    assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('PRE-${paymentIds[kind]}'))`), false);
+    assert.equal(await evaluate("Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.')).length"),
+      pendingKeysBeforeSubmit + 1);
+    await send("Page.removeScriptToEvaluateOnNewDocument", { identifier: ignoredRemoval.identifier });
+    await send("Page.navigate", { url: cleanupUrl });
+    await waitFor(() => evaluate(`document.body.innerText.includes('待回调') && ${actionButton('确认支付')}.disabled`),
+      "cashier reload after confirmed submit cleanup failure");
+    assert.equal(requests.slice(ignoredRemovalStart).filter((item) => item.method === "POST").length, 1);
     kind = "submitStale";
     status = "PREPAY_CREATED";
     retrySubmit = true;
