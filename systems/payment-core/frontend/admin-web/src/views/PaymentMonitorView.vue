@@ -46,9 +46,9 @@ const monitorCards = computed(() => {
       hint: `成功金额 ${summary.successAmount || "¥0.00"}`
     },
     {
-      title: "待收口支付",
+      title: "待处理支付",
       value: summary.pendingPaymentCount ?? 0,
-      hint: "建议优先查单与核对回调"
+      hint: "先区分渠道受理未确认与已受理待回调，按告警处理"
     },
     {
       title: "已关闭支付",
@@ -87,7 +87,8 @@ const riskSummary = computed(() => {
   const alerts = overview.value.alerts || [];
   return {
     highRiskChannelCount: channelMetrics.filter(isHighRiskChannel).length,
-    pendingChannelCount: channelMetrics.filter((item) => (item.pendingCount || 0) > 0).length,
+    pendingChannelCount: channelMetrics.filter((item) =>
+      (item.pendingCount || 0) > 0 || (item.unacceptedCount || 0) > 0).length,
     alertP1Count: alerts.filter((item) => item.alertLevel === "P1").length
   };
 });
@@ -103,6 +104,9 @@ const alertSuggestions = computed(() => {
   }
   const alert = selectedAlert.value;
   const suggestions = [];
+  if (alert.alertType === "CHANNEL_SUBMIT_UNCONFIRMED") {
+    suggestions.push("先核对渠道受理与支付尝试日志，等待状态推进；勿主动查单或重复提交。");
+  }
   if (alert.alertTitle?.includes("待回调") || alert.alertMessage?.includes("待回调")) {
     suggestions.push("优先联查支付单管理页，确认是否存在 WAIT_CALLBACK 积压和渠道回调延迟。");
   }
@@ -134,12 +138,15 @@ const channelSuggestions = computed(() => {
   const channel = selectedChannel.value;
   const suggestions = [];
   if ((channel.pendingCount || 0) > 0) {
-    suggestions.push("当前渠道存在待处理支付，建议优先进入支付单管理页查看回调未收口链路。");
+    suggestions.push("当前渠道存在已受理待回调支付，进入支付单管理页核对查单与回调收口链路。");
+  }
+  if ((channel.unacceptedCount || 0) > 0) {
+    suggestions.push("当前渠道存在提交受理未确认支付，先核对渠道受理结果，勿主动查单或重复提交。");
   }
   if (isHighRiskChannel(channel)) {
     suggestions.push("当前渠道为高风险，建议检查渠道可用性、商户配置和返回码分布。");
   }
-  if ((channel.pendingCount || 0) === 0) {
+  if ((channel.pendingCount || 0) === 0 && (channel.unacceptedCount || 0) === 0) {
     suggestions.push("当前渠道无待处理积压，可回看支付流水确认路由和回调轨迹是否稳定。");
   }
   return suggestions;
@@ -199,7 +206,7 @@ function openChannelDrillDown(item) {
   if (!canDrillDown.value) {
     return;
   }
-  if ((item.pendingCount || 0) > 0) {
+  if ((item.pendingCount || 0) > 0 || (item.unacceptedCount || 0) > 0) {
     router.push(paymentsRoute({
       channelCode: item.channelCode,
       paymentMethod: item.paymentMethod,
@@ -336,7 +343,7 @@ onMounted(loadOverview);
             <article class="overview-card warn">
               <p class="overview-title">存在待处理渠道</p>
               <strong>{{ riskSummary.pendingChannelCount }}</strong>
-              <span>表示当前仍有渠道存在待收口支付，建议结合支付单与回调链路继续追踪。</span>
+              <span>包含已受理待回调与渠道受理未确认，先核对事实再决定是否查单。</span>
             </article>
             <article class="overview-card info">
               <p class="overview-title">高风险渠道数</p>
@@ -503,7 +510,8 @@ onMounted(loadOverview);
                   <th>成功单量</th>
                   <th>成功率</th>
                   <th>成功金额</th>
-                  <th>待处理</th>
+                  <th>已受理待回调</th>
+                  <th>受理未确认</th>
                   <th>风险等级</th>
                   <th>风险说明</th>
                   <th>操作</th>
@@ -511,7 +519,7 @@ onMounted(loadOverview);
               </thead>
               <tbody>
                 <tr v-if="!overview.channelMetrics?.length">
-                  <td colspan="10" class="state-box">当前暂无渠道监控数据</td>
+                  <td colspan="11" class="state-box">当前暂无渠道监控数据</td>
                 </tr>
                 <tr v-for="item in overview.channelMetrics" :key="item.channelCode + item.paymentMethod">
                   <td>
@@ -523,6 +531,7 @@ onMounted(loadOverview);
                   <td>{{ item.successRate }}</td>
                   <td>{{ item.successAmount }}</td>
                   <td>{{ item.pendingCount }}</td>
+                  <td>{{ item.unacceptedCount }}</td>
                   <td><span :class="['badge', item.riskLevelType]">{{ item.riskLevel }}</span></td>
                   <td class="flow-summary-cell">{{ item.riskHint }}</td>
                   <td>
@@ -545,7 +554,8 @@ onMounted(loadOverview);
                 <div class="detail-card"><span>成功单量</span><strong>{{ selectedChannel.successCount }}</strong></div>
                 <div class="detail-card"><span>成功率</span><strong>{{ selectedChannel.successRate }}</strong></div>
                 <div class="detail-card"><span>成功金额</span><strong>{{ selectedChannel.successAmount }}</strong></div>
-                <div class="detail-card"><span>待处理</span><strong>{{ selectedChannel.pendingCount }}</strong></div>
+                <div class="detail-card"><span>已受理待回调</span><strong>{{ selectedChannel.pendingCount }}</strong></div>
+                <div class="detail-card"><span>受理未确认</span><strong>{{ selectedChannel.unacceptedCount }}</strong></div>
               </div>
               <div class="ops-card">
                 <div class="ops-title">风险说明</div>

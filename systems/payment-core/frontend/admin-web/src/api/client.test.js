@@ -8519,6 +8519,7 @@ test("requires a structured payment monitor overview", () => {
         totalCount: 10,
         successCount: 8,
         pendingCount: 1,
+        unacceptedCount: 0,
         successRate: "79.99%",
         successAmount: "¥80.00",
         riskLevel: "正常",
@@ -8534,6 +8535,7 @@ test("requires a structured payment monitor overview", () => {
     totalCount: 10,
     successCount: 8,
     pendingCount: 1,
+    unacceptedCount: 0,
     successRate: "80.00%",
     successAmount: "¥80.00",
     riskLevel: "P1",
@@ -8544,6 +8546,22 @@ test("requires a structured payment monitor overview", () => {
     normalizePaymentMonitorOverviewResult({ ...overview, channelMetrics: [channelMetric] }).channelMetrics,
     [channelMetric]
   );
+  assert.deepEqual(
+    normalizePaymentMonitorOverviewResult({
+      ...overview,
+      channelMetrics: [{ ...channelMetric, pendingCount: 0, unacceptedCount: 1, riskLevel: "P2", riskLevelType: "warn" }]
+    }).channelMetrics[0].unacceptedCount,
+    1
+  );
+  for (const unacceptedCount of [undefined, -1, 10]) {
+    assert.throws(
+      () => normalizePaymentMonitorOverviewResult({
+        ...overview,
+        channelMetrics: [{ ...channelMetric, unacceptedCount }]
+      }),
+      (error) => error.code === "PAYMENT-CLIENT-INVALID-MONITOR-OVERVIEW"
+    );
+  }
   assert.deepEqual(
     normalizePaymentMonitorOverviewResult({
       ...overview,
@@ -8588,6 +8606,7 @@ test("requires a structured payment monitor overview", () => {
         totalCount: 1,
         successCount: 2,
         pendingCount: 0,
+        unacceptedCount: 0,
         successRate: "200.00%",
         successAmount: "¥80.00",
         riskLevel: "正常",

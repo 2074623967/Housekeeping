@@ -16,7 +16,7 @@ public class PaymentMonitorSummaryDTO {
     private String successRate;
     /** 成功金额。 */
     private String successAmount;
-    /** 待回调支付单量。 */
+    /** 待处理支付单量，包含预付已创建及底层待回调。 */
     private Integer pendingPaymentCount;
     /** 已关闭支付单量。 */
     private Integer closedPaymentCount;

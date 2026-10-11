@@ -20,8 +20,10 @@ public class PaymentChannelMetricDTO {
     private String successRate;
     /** 成功金额。 */
     private String successAmount;
-    /** 待处理笔数。 */
+    /** 已受理待回调笔数。 */
     private Integer pendingCount;
+    /** 渠道提交受理未确认笔数。 */
+    private Integer unacceptedCount;
     /** 风险等级。 */
     private String riskLevel;
     /** 风险等级样式。 */

@@ -3852,6 +3852,8 @@ export function normalizePaymentMonitorOverviewResult(data) {
       || item.successCount > item.totalCount
       || !Number.isInteger(item.pendingCount) || item.pendingCount < 0
       || item.pendingCount > item.totalCount
+      || !Number.isInteger(item.unacceptedCount) || item.unacceptedCount < 0
+      || item.unacceptedCount > item.totalCount - item.pendingCount
       || !isConsistentSuccessRate(item.successCount, item.totalCount, item.successRate)
       || !Number.isFinite(normalizeNonNegativeAmount(item.successAmount))
       || !isConsistentChannelRiskLevel(item.riskLevel, item.riskLevelType)

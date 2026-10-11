@@ -8,6 +8,23 @@
         <include refid="com.abc123.hsp.mapper.PaymentMapper.trustedPaymentSuccessCondition"/>
     </sql>
 
+    <sql id="unacceptedChannelSubmission">
+        p.status = 'WAIT_CALLBACK'
+        AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
+        AND EXISTS (SELECT 1
+                    FROM t_payment_attempt latest_attempt
+                    WHERE latest_attempt.id = (
+                        SELECT attempt.id
+                        FROM t_payment_attempt attempt
+                        WHERE attempt.payment_order_id = p.payment_order_id
+                          AND CHAR_LENGTH(attempt.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                          AND CAST(attempt.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                        ORDER BY attempt.created_at DESC, attempt.id DESC
+                        LIMIT 1
+                    )
+                      AND latest_attempt.attempt_status = '渠道提交中')
+    </sql>
+
     <select id="findSummary" resultType="com.abc123.hsp.dto.PaymentMonitorSummaryDTO">
         SELECT payment_summary.total_count AS totalCount,
                payment_summary.success_count AS successCount,
@@ -20,6 +37,7 @@
                COALESCE(channel_summary.disabled_channel_count, 0) AS disabledChannelCount,
                (
                    CASE WHEN payment_summary.wait_callback_count &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN payment_summary.unaccepted_submit_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_summary.missing_success_time_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_success_fact_summary.mismatch_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(refund_summary.missing_success_time_count, 0) &gt; 0 THEN 1 ELSE 0 END +
@@ -36,8 +54,11 @@
                    COALESCE(SUM(CASE WHEN <include refid="trustedSuccess"/> THEN amount ELSE 0 END), 0) AS success_amount,
                    COALESCE(SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END), 0)
                        AS pending_payment_count,
-                   COALESCE(SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END), 0)
+                   COALESCE(SUM(CASE WHEN p.status = 'WAIT_CALLBACK'
+                        AND NOT (<include refid="unacceptedChannelSubmission"/>) THEN 1 ELSE 0 END), 0)
                        AS wait_callback_count,
+                   COALESCE(SUM(CASE WHEN <include refid="unacceptedChannelSubmission"/>
+                        THEN 1 ELSE 0 END), 0) AS unaccepted_submit_count,
                    COALESCE(SUM(CASE WHEN status = 'SUCCESS' AND success_at IS NULL THEN 1 ELSE 0 END), 0)
                        AS missing_success_time_count,
                    COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0) AS closed_payment_count
@@ -114,9 +135,11 @@
                    '%'
                ) AS successRate,
                CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN trusted_success = 1 THEN amount ELSE 0 END), 0), 2)) AS successAmount,
-               SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) AS pendingCount,
+               SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) AS pendingCount,
+               SUM(unaccepted_submit) AS unacceptedCount,
                CASE
-                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
+                   WHEN SUM(unaccepted_submit) &gt; 0 THEN 'P2'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN trusted_success = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(1)
@@ -125,7 +148,8 @@
                    ELSE '正常'
                END AS riskLevel,
                CASE
-                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
+                   WHEN SUM(unaccepted_submit) &gt; 0 THEN 'warn'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN trusted_success = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(1)
@@ -134,7 +158,8 @@
                    ELSE 'success'
                END AS riskLevelType,
                CASE
-                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
+                   WHEN SUM(unaccepted_submit) &gt; 0 THEN '渠道受理未确认，先核对渠道受理结果，勿主动查单或重复提交。'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN trusted_success = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(1)
@@ -142,7 +167,8 @@
                    ) &lt; 80 THEN '成功率偏低，建议检查路由命中、渠道稳定性和异常日志。'
                    ELSE '当前渠道表现稳定，可持续观察。'
                END AS riskHint
-        FROM (SELECT p.*, CASE WHEN <include refid="trustedSuccess"/> THEN 1 ELSE 0 END AS trusted_success
+        FROM (SELECT p.*, CASE WHEN <include refid="trustedSuccess"/> THEN 1 ELSE 0 END AS trusted_success,
+                     CASE WHEN <include refid="unacceptedChannelSubmission"/> THEN 1 ELSE 0 END AS unaccepted_submit
               FROM t_payment_order p) payment_facts
         WHERE EXISTS (
             SELECT 1
@@ -172,13 +198,29 @@
                COUNT(1) AS affectedCount,
                '进入支付交易异常中心，优先核对待回调支付单、回调日志和查单结果。' AS suggestedAction,
                '/payment-issues?issueType=待回调未收口' AS actionRoute
-        FROM t_payment_order
-        WHERE status = 'WAIT_CALLBACK'
+        FROM t_payment_order p
+        WHERE p.status = 'WAIT_CALLBACK'
+          AND NOT (<include refid="unacceptedChannelSubmission"/>)
         HAVING COUNT(1) &gt; 0
 
         UNION ALL
 
         SELECT 2 AS alertSortNo,
+               'CHANNEL_SUBMIT_UNCONFIRMED' AS alertType,
+               '渠道提交受理未确认' AS alertTitle,
+               '支付单处于渠道提交窗口，尚无渠道受理流水，需要核对提交结果。' AS alertMessage,
+               'P2' AS alertLevel,
+               'warn' AS alertLevelType,
+               COUNT(1) AS affectedCount,
+               '核对渠道受理结果与提交日志，等待状态推进，勿主动查单或重复提交。' AS suggestedAction,
+               '/payments?status=WAIT_CALLBACK' AS actionRoute
+        FROM t_payment_order p
+        WHERE <include refid="unacceptedChannelSubmission"/>
+        HAVING COUNT(1) &gt; 0
+
+        UNION ALL
+
+        SELECT 3 AS alertSortNo,
                'PAYMENT_SUCCESS_TIME_MISSING' AS alertType,
                '支付成功时间缺失' AS alertTitle,
                '存在已成功但缺少成功时间的支付单，无法可信归属支付账期。' AS alertMessage,
@@ -194,7 +236,7 @@
 
         UNION ALL
 
-        SELECT 3 AS alertSortNo,
+        SELECT 4 AS alertSortNo,
                'PAYMENT_SUCCESS_FACT_MISMATCH' AS alertType,
                '支付成功事实不一致' AS alertTitle,
                '支付终态与渠道尝试、预付绑定或订单来源不一致，需核查原始事实。' AS alertMessage,
@@ -209,7 +251,7 @@
 
         UNION ALL
 
-        SELECT 4 AS alertSortNo,
+        SELECT 5 AS alertSortNo,
                'REFUND_SUCCESS_TIME_MISSING' AS alertType,
                '退款成功时间缺失' AS alertTitle,
                '存在已成功但缺少成功时间的退款单，无法可信归属逆向资金账期。' AS alertMessage,
@@ -225,7 +267,7 @@
 
         UNION ALL
 
-        SELECT 5 AS alertSortNo,
+        SELECT 6 AS alertSortNo,
                'REFUND_TERMINAL_FACT_MISMATCH' AS alertType,
                '退款终态事实不一致' AS alertTitle,
                '存在退款单终态与最新退款尝试状态不一致或完成事实缺失的记录。' AS alertMessage,
@@ -240,7 +282,7 @@
 
         UNION ALL
 
-        SELECT 6 AS alertSortNo,
+        SELECT 7 AS alertSortNo,
                'REFUND_FAIL' AS alertType,
                '退款失败待重试' AS alertTitle,
                '退款单存在失败记录，需要运营复核后重试或切线下处理。' AS alertMessage,
@@ -255,7 +297,7 @@
 
         UNION ALL
 
-        SELECT 7 AS alertSortNo,
+        SELECT 8 AS alertSortNo,
                'CHANNEL_DISABLED' AS alertType,
                '渠道已停用' AS alertTitle,
                '存在已停用渠道，请确认是否需要同步调整路由规则。' AS alertMessage,

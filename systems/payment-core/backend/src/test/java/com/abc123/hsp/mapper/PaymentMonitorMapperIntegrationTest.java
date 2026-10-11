@@ -126,6 +126,73 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
+    void shouldDistinguishUnacceptedChannelSubmissionFromAcceptedCallbackWithoutHidingIt() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道提交中' "
+                    + "WHERE payment_order_id = 'PAY-002'");
+            session.clearCache();
+
+            List<PaymentAlertItemDTO> beforeAcceptance = mapper.findAlerts();
+            org.junit.jupiter.api.Assertions.assertFalse(beforeAcceptance.stream()
+                    .anyMatch(alert -> "WAIT_CALLBACK_TIMEOUT".equals(alert.getAlertType())));
+            PaymentAlertItemDTO submission = beforeAcceptance.stream()
+                    .filter(alert -> "CHANNEL_SUBMIT_UNCONFIRMED".equals(alert.getAlertType()))
+                    .findFirst().get();
+            assertEquals(Integer.valueOf(1), submission.getAffectedCount());
+            org.junit.jupiter.api.Assertions.assertTrue(submission.getSuggestedAction().contains("勿主动查单"));
+            assertEquals(Integer.valueOf(3), mapper.findSummary().getAlertCount());
+            PaymentChannelMetricDTO pendingChannel = mapper.findChannelMetrics().stream()
+                    .filter(metric -> "channel-b".equals(metric.getChannelCode())).findFirst().get();
+            assertEquals(Integer.valueOf(0), pendingChannel.getPendingCount());
+            assertEquals(Integer.valueOf(1), pendingChannel.getUnacceptedCount());
+            org.junit.jupiter.api.Assertions.assertTrue(pendingChannel.getRiskHint().contains("核对渠道受理"));
+
+            statement.executeUpdate("UPDATE t_payment_order SET channel_transaction_no = 'TX-ACCEPTED' "
+                    + "WHERE payment_order_id = 'PAY-002'");
+            session.clearCache();
+
+            List<PaymentAlertItemDTO> afterAcceptance = mapper.findAlerts();
+            org.junit.jupiter.api.Assertions.assertFalse(afterAcceptance.stream()
+                    .anyMatch(alert -> "CHANNEL_SUBMIT_UNCONFIRMED".equals(alert.getAlertType())));
+            assertEquals(Integer.valueOf(1), afterAcceptance.stream()
+                    .filter(alert -> "WAIT_CALLBACK_TIMEOUT".equals(alert.getAlertType()))
+                    .findFirst().get().getAffectedCount());
+            assertEquals(Integer.valueOf(1), mapper.findChannelMetrics().stream()
+                    .filter(metric -> "channel-b".equals(metric.getChannelCode()))
+                    .findFirst().get().getPendingCount());
+            assertEquals(Integer.valueOf(0), mapper.findChannelMetrics().stream()
+                    .filter(metric -> "channel-b".equals(metric.getChannelCode()))
+                    .findFirst().get().getUnacceptedCount());
+
+            statement.executeUpdate("UPDATE t_payment_order SET channel_transaction_no = NULL "
+                    + "WHERE payment_order_id = 'PAY-002'");
+            statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, channel_code, "
+                    + "channel_transaction_no, payment_method, status, amount) VALUES "
+                    + "('PAY-ACCEPTED-CALLBACK', 'channel-b', 'TX-OTHER', 'method-a', 'WAIT_CALLBACK', 10.00)");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-ACCEPTED-CALLBACK', '处理中', CURRENT_TIMESTAMP)");
+            session.clearCache();
+
+            List<PaymentAlertItemDTO> mixedAlerts = mapper.findAlerts();
+            assertEquals(Integer.valueOf(1), mixedAlerts.stream()
+                    .filter(alert -> "WAIT_CALLBACK_TIMEOUT".equals(alert.getAlertType()))
+                    .findFirst().get().getAffectedCount());
+            assertEquals(Integer.valueOf(1), mixedAlerts.stream()
+                    .filter(alert -> "CHANNEL_SUBMIT_UNCONFIRMED".equals(alert.getAlertType()))
+                    .findFirst().get().getAffectedCount());
+            assertEquals(Integer.valueOf(4), mapper.findSummary().getAlertCount());
+            assertEquals(Integer.valueOf(1), mapper.findChannelMetrics().stream()
+                    .filter(metric -> "channel-b".equals(metric.getChannelCode()))
+                    .findFirst().get().getPendingCount());
+            assertEquals(Integer.valueOf(1), mapper.findChannelMetrics().stream()
+                    .filter(metric -> "channel-b".equals(metric.getChannelCode()))
+                    .findFirst().get().getUnacceptedCount());
+        }
+    }
+
+    @Test
     void shouldExposeMissingSuccessTimeAsGlobalP1Alert() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
