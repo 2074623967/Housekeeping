@@ -340,6 +340,37 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldAlertOnOverdueUnacceptedSubmissionWithoutRecommendingQuery() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            int originalCandidates = mapper.countPendingIssueAlertGenerationCandidates();
+            statement.executeUpdate("UPDATE t_payment_order SET created_at = TIMESTAMPADD(MINUTE, -61, NOW()) "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道提交中' "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            session.clearCache();
+
+            assertEquals(originalCandidates + 1, mapper.countPendingIssueAlertGenerationCandidates());
+            PaymentIssueAlertCandidateDTO unaccepted = mapper.findOverdueIssueAlertCandidates(100).stream()
+                    .filter(candidate -> "ISSUE-WAIT-PAY-NO-HISTORY".equals(candidate.getIssueNo()))
+                    .findFirst().get();
+            org.junit.jupiter.api.Assertions.assertTrue(unaccepted.getAlertContent().contains("渠道受理未确认"));
+            org.junit.jupiter.api.Assertions.assertTrue(unaccepted.getAlertContent().contains("勿主动查单"));
+
+            statement.executeUpdate("UPDATE t_payment_order SET channel_transaction_no = 'WX-ACCEPTED' "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            session.clearCache();
+
+            PaymentIssueAlertCandidateDTO accepted = mapper.findOverdueIssueAlertCandidates(100).stream()
+                    .filter(candidate -> "ISSUE-WAIT-PAY-NO-HISTORY".equals(candidate.getIssueNo()))
+                    .findFirst().get();
+            org.junit.jupiter.api.Assertions.assertFalse(accepted.getAlertContent().contains("渠道受理未确认"));
+            assertEquals(originalCandidates + 1, mapper.countPendingIssueAlertGenerationCandidates());
+        }
+    }
+
+    @Test
     void shouldExcludeUnverifiedPrepayBindingsFromPaymentQueryCandidatesAndCounts() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
