@@ -24,4 +24,6 @@ public class SettlementOrderEntity {
     private String auditStatus;
     private String createdAt;
     private String clearingNo;
+    /** 支付业务场景。 */
+    private String payScene;
 }

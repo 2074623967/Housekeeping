@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
@@ -54,8 +55,8 @@ public class SettlementMemoryStore {
             return;
         }
         SettlementBatchEntity batch = createBatch("2026-07-20", "MANUAL", "结算运营", "SETTLE-20260720-INIT");
-        SettlementOrderEntity workerOrder = createOrder(batch.getBatchNo(), "WORKER", "WRK1001", "李阿姨", new BigDecimal("120.00"), new BigDecimal("8.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001");
-        SettlementOrderEntity merchantOrder = createOrder(batch.getBatchNo(), "MERCHANT", "MCH1001", "上海静安门店", new BigDecimal("20.00"), new BigDecimal("0.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001");
+        SettlementOrderEntity workerOrder = createOrder(batch.getBatchNo(), "WORKER", "WRK1001", "李阿姨", new BigDecimal("120.00"), new BigDecimal("8.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001", "HOME_CLEAN");
+        SettlementOrderEntity merchantOrder = createOrder(batch.getBatchNo(), "MERCHANT", "MCH1001", "上海静安门店", new BigDecimal("20.00"), new BigDecimal("0.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001", "HOME_CLEAN");
         createItem(workerOrder.getSettlementNo(), "基础结算", "应结金额", new BigDecimal("120.00"));
         createItem(workerOrder.getSettlementNo(), "结算扣减", "扣减金额", new BigDecimal("8.00"));
         createItem(merchantOrder.getSettlementNo(), "商家结算", "应结金额", new BigDecimal("20.00"));
@@ -115,7 +116,7 @@ public class SettlementMemoryStore {
     @Transactional
     public SettlementOrderEntity createOrder(String batchNo, String targetType, String targetNo, String targetName,
             BigDecimal shouldSettleAmount, BigDecimal deductAmount, String settlementStatus, String clearingNo,
-            String businessChainId) {
+            String businessChainId, String payScene) {
         SettlementOrderEntity entity = new SettlementOrderEntity();
         entity.setBusinessChainId(resolveBusinessChainId(businessChainId, clearingNo));
         entity.setSettlementNo(nextNo("SLT", orderSeq));
@@ -131,6 +132,7 @@ public class SettlementMemoryStore {
         entity.setAuditStatus("待审核");
         entity.setCreatedAt(now());
         entity.setClearingNo(clearingNo);
+        entity.setPayScene(payScene);
         settlementDataMapper.insertOrder(entity);
         updateBatchSummary(batchNo);
         return entity;
@@ -143,7 +145,7 @@ public class SettlementMemoryStore {
     public SettlementOrderEntity createOrder(String batchNo, String targetType, String targetNo, String targetName,
             BigDecimal shouldSettleAmount, BigDecimal deductAmount, String settlementStatus, String clearingNo) {
         return createOrder(batchNo, targetType, targetNo, targetName, shouldSettleAmount, deductAmount,
-                settlementStatus, clearingNo, null);
+                settlementStatus, clearingNo, null, null);
     }
 
     public List<SettlementItemEntity> itemsBySettlementNo(String settlementNo) {
@@ -344,17 +346,19 @@ public class SettlementMemoryStore {
 
     @Transactional
     public SettlementEventEntity consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
-        request.setBusinessChainId(resolveBusinessChainId(request.getBusinessChainId(), request.getClearingNo()));
+        request.setBusinessChainId(normalizeClearingGeneratedBusinessChainId(
+                request.getBusinessChainId(), request.getPaymentOrderId(), request.getClearingNo()));
         SettlementOrderEntity existingOrder = findOrderByClearingTarget(
                 request.getClearingNo(),
                 request.getTargetType(),
                 request.getTargetNo());
         if (existingOrder != null) {
+            validateRepeatedClearingGeneratedRequest(existingOrder, request);
             SettlementEventEntity existingEvent = findEvent("CLEARING_GENERATED", request.getClearingNo());
             if (existingEvent != null) {
                 return existingEvent;
             }
-            return createClearingGeneratedEvent(request.getClearingNo());
+            return createClearingGeneratedEvent(request.getClearingNo(), request.getPayScene());
         }
         SettlementBatchEntity batch = createBatch("2026-07-20", "EVENT", "系统事件", "EVENT-" + request.getClearingNo());
         SettlementOrderEntity order = createOrder(
@@ -366,11 +370,23 @@ public class SettlementMemoryStore {
                 request.getDeductAmount(),
                 "待审核",
                 request.getClearingNo(),
-                request.getBusinessChainId());
+                request.getBusinessChainId(),
+                request.getPayScene());
         createItem(order.getSettlementNo(), "应结金额", "应结", request.getShouldSettleAmount());
         createItem(order.getSettlementNo(), "扣减金额", "扣减", request.getDeductAmount());
         updateBatchSummary(batch.getBatchNo(), "已完成", now());
-        return createClearingGeneratedEvent(request.getClearingNo());
+        return createClearingGeneratedEvent(request.getClearingNo(), request.getPayScene());
+    }
+
+    private void validateRepeatedClearingGeneratedRequest(SettlementOrderEntity existingOrder,
+                                                          ClearingGeneratedEventRequestDTO request) {
+        if (!Objects.equals(existingOrder.getBusinessChainId(), request.getBusinessChainId())
+                || !Objects.equals(existingOrder.getPayScene(), request.getPayScene())
+                || !Objects.equals(existingOrder.getTargetName(), request.getTargetName())
+                || existingOrder.getShouldSettleAmount().compareTo(request.getShouldSettleAmount()) != 0
+                || existingOrder.getDeductAmount().compareTo(request.getDeductAmount()) != 0) {
+            throw new IllegalArgumentException("重复清分事件与已落库结算事实不一致");
+        }
     }
 
     @Transactional
@@ -550,7 +566,7 @@ public class SettlementMemoryStore {
         return request;
     }
 
-    private SettlementEventEntity createClearingGeneratedEvent(String clearingNo) {
+    private SettlementEventEntity createClearingGeneratedEvent(String clearingNo, String payScene) {
         SettlementEventEntity entity = new SettlementEventEntity();
         SettlementOrderEntity order = findOrderByClearingTarget(clearingNo, "WORKER", "WRK1001");
         entity.setBusinessChainId(order == null ? resolveBusinessChainId(null, clearingNo) : order.getBusinessChainId());
@@ -558,7 +574,8 @@ public class SettlementMemoryStore {
         entity.setEventType("CLEARING_GENERATED");
         entity.setBizNo(clearingNo);
         entity.setSummary("清分结果生成后自动生成结算单");
-        entity.setPayload("{\"clearingNo\":\"" + clearingNo + "\"}");
+        entity.setPayload("{\"clearingNo\":\"" + clearingNo
+                + "\",\"payScene\":\"" + (payScene == null ? "" : payScene) + "\"}");
         entity.setEventStatus("已消费");
         entity.setCreatedAt(now());
         settlementDataMapper.insertEvent(entity);
@@ -569,6 +586,22 @@ public class SettlementMemoryStore {
         return businessChainId == null || businessChainId.trim().isEmpty()
                 ? "CHAIN-" + businessNo
                 : businessChainId.trim();
+    }
+
+    private String normalizeClearingGeneratedBusinessChainId(
+            String businessChainId, String paymentOrderId, String clearingNo) {
+        if (paymentOrderId == null || paymentOrderId.trim().isEmpty()) {
+            return resolveBusinessChainId(businessChainId, clearingNo);
+        }
+        String normalizedPaymentOrderId = paymentOrderId.trim();
+        String normalizedChainId = businessChainId == null ? null : businessChainId.trim();
+        if (normalizedChainId == null || normalizedChainId.isEmpty()) {
+            return "CHAIN-" + normalizedPaymentOrderId;
+        }
+        if (!normalizedChainId.equals("CHAIN-" + normalizedPaymentOrderId)) {
+            throw new IllegalArgumentException("业务链路与支付单号不匹配");
+        }
+        return normalizedChainId;
     }
 
     private void syncSequencesFromDatabase() {

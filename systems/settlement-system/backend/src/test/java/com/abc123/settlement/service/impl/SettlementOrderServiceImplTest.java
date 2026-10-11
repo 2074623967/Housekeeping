@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.abc123.settlement.common.BusinessException;
 import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
+import com.abc123.settlement.dto.CreateSettlementOrderRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
+import java.math.BigDecimal;
 
 /**
  * 结算单服务测试。
@@ -62,5 +64,37 @@ class SettlementOrderServiceImplTest {
 
         assertEquals(ErrorCode.SETTLEMENT_ORDER_NOT_FOUND, exception.getCode());
         assertEquals("结算单不存在", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectSettlementOrderWhenDeductionExceedsSettlementAmount() {
+        CreateSettlementOrderRequestDTO request = new CreateSettlementOrderRequestDTO();
+        request.setBatchNo("SET10001");
+        request.setTargetType("WORKER");
+        request.setTargetNo("WRK-INVALID");
+        request.setTargetName("服务者");
+        request.setShouldSettleAmount(new BigDecimal("100.00"));
+        request.setDeductAmount(new BigDecimal("100.01"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> settlementOrderService.create(request));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectSettlementOrderAmountWithMoreThanTwoDecimalPlaces() {
+        CreateSettlementOrderRequestDTO request = new CreateSettlementOrderRequestDTO();
+        request.setBatchNo("SET10001");
+        request.setTargetType("WORKER");
+        request.setTargetNo("WRK-SCALE");
+        request.setTargetName("服务者");
+        request.setShouldSettleAmount(new BigDecimal("100.001"));
+        request.setDeductAmount(BigDecimal.ZERO);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> settlementOrderService.create(request));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getCode());
     }
 }

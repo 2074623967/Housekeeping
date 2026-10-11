@@ -43,12 +43,13 @@ public class PayoutServiceImpl implements PayoutService {
         List<PayoutBatchDTO> items = list(batchNo, payoutStatus, 1, Integer.MAX_VALUE).getItems();
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("出款批次号,结算批次号,出款渠道,出款状态,出款笔数,成功笔数,失败笔数,总金额,创建人,创建时间,完成时间\n");
+        builder.append("出款批次号,结算批次号,出款渠道,出款状态,状态样式,出款笔数,成功笔数,失败笔数,总金额,创建人,创建时间,完成时间\n");
         for (PayoutBatchDTO item : items) {
             builder.append(csv(item.getPayoutBatchNo())).append(',')
                     .append(csv(item.getBatchNo())).append(',')
                     .append(csv(item.getPayoutChannel())).append(',')
                     .append(csv(item.getPayoutStatus())).append(',')
+                    .append(csv(item.getPayoutStatusType())).append(',')
                     .append(item.getPayoutCount()).append(',')
                     .append(item.getSuccessCount()).append(',')
                     .append(item.getFailedCount()).append(',')
@@ -103,7 +104,7 @@ public class PayoutServiceImpl implements PayoutService {
         List<PayoutRecordDTO> items = records(payoutBatchNo, payoutStatus, 1, Integer.MAX_VALUE).getItems();
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("出款单号,出款批次号,结算单号,对象编号,对象名称,出款金额,出款状态,重试次数,创建时间\n");
+        builder.append("出款单号,出款批次号,结算单号,对象编号,对象名称,出款金额,出款状态,状态样式,重试次数,创建时间\n");
         for (PayoutRecordDTO item : items) {
             builder.append(csv(item.getPayoutNo())).append(',')
                     .append(csv(item.getPayoutBatchNo())).append(',')
@@ -112,6 +113,7 @@ public class PayoutServiceImpl implements PayoutService {
                     .append(csv(item.getTargetName())).append(',')
                     .append(csv(item.getPayoutAmount())).append(',')
                     .append(csv(item.getPayoutStatus())).append(',')
+                    .append(csv(item.getPayoutStatusType())).append(',')
                     .append(csv(item.getRetryCount())).append(',')
                     .append(csv(item.getCreatedAt())).append('\n');
         }

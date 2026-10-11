@@ -120,6 +120,7 @@
                payout_status,
                audit_status,
                clearing_no,
+               pay_scene,
                created_at
         FROM t_settlement_order
         ORDER BY id DESC
@@ -139,6 +140,7 @@
                payout_status,
                audit_status,
                clearing_no,
+               pay_scene,
                created_at
         FROM t_settlement_order
         WHERE settlement_no = #{settlementNo}
@@ -158,6 +160,7 @@
                payout_status,
                audit_status,
                clearing_no,
+               pay_scene,
                created_at
         FROM t_settlement_order
         WHERE clearing_no = #{clearingNo}
@@ -182,6 +185,7 @@
             payout_status,
             audit_status,
             clearing_no,
+            pay_scene,
             created_at
         ) VALUES (
             #{businessChainId},
@@ -197,6 +201,7 @@
             #{payoutStatus},
             #{auditStatus},
             #{clearingNo},
+            #{payScene},
             #{createdAt}
         )
     </insert>

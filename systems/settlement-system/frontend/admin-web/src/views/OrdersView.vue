@@ -166,6 +166,7 @@ onMounted(loadRows);
             <tr>
               <th>结算单号</th>
               <th>批次号</th>
+              <th>支付场景</th>
               <th>对象类型</th>
               <th>对象编号</th>
               <th>对象名称</th>
@@ -182,6 +183,7 @@ onMounted(loadRows);
             <tr v-for="row in rows" :key="row.settlementNo">
               <td>{{ row.settlementNo }}</td>
               <td>{{ row.batchNo }}</td>
+              <td>{{ row.payScene || "-" }}</td>
               <td>{{ row.targetType }}</td>
               <td>{{ row.targetNo }}</td>
               <td>{{ row.targetName }}</td>
@@ -222,7 +224,7 @@ onMounted(loadRows);
       <div v-if="selectedOrder" class="detail-summary-grid">
         <div class="summary-card">
           <strong>对象信息</strong>
-          <span>{{ selectedOrder.targetName }} / {{ selectedOrder.targetNo }}</span>
+          <span>{{ selectedOrder.targetName }} / {{ selectedOrder.targetNo }} / {{ selectedOrder.payScene || "-" }}</span>
         </div>
         <div class="summary-card">
           <strong>批次与状态</strong>

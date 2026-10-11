@@ -132,8 +132,11 @@ class PayoutServiceImplTest {
         String recordCsv = new String(payoutService.exportRecords(payoutBatchNo, ""), StandardCharsets.UTF_8);
 
         assertTrue(batchCsv.contains("出款批次号,结算批次号,出款渠道"));
+        assertTrue(batchCsv.contains("出款状态,状态样式,出款笔数"));
         assertTrue(batchCsv.contains("SET10001"));
+        assertTrue(batchCsv.contains("待出款,warn"));
         assertTrue(recordCsv.contains("出款单号,出款批次号,结算单号"));
+        assertTrue(recordCsv.contains("出款状态,状态样式,重试次数"));
         assertTrue(recordCsv.contains(payoutBatchNo));
         assertTrue(recordCsv.contains("SLT20001"));
     }

@@ -5,10 +5,12 @@ import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.SettlementEventDTO;
 import com.abc123.settlement.entity.SettlementOrderEntity;
 import com.abc123.settlement.service.SettlementEventService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,9 @@ import org.springframework.web.client.RestTemplate;
  */
 @Service
 public class SettlementEventServiceImpl implements SettlementEventService {
+
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final SettlementMemoryStore settlementMemoryStore;
     private final SettlementMapper settlementMapper;
@@ -54,10 +59,41 @@ public class SettlementEventServiceImpl implements SettlementEventService {
 
     @Override
     public SettlementEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
+        validateClearingGeneratedAmounts(request);
         SettlementEventDTO event = settlementMapper.toEventDTO(
                 settlementMemoryStore.consumeClearingGenerated(request));
         reportReconciliationFact(request);
         return event;
+    }
+
+    private void validateClearingGeneratedAmounts(ClearingGeneratedEventRequestDTO request) {
+        if (request == null || request.getShouldSettleAmount() == null
+                || request.getDeductAmount() == null) {
+            throw new IllegalArgumentException("清分事件金额字段不能为空");
+        }
+        validatePositiveAmount(request.getShouldSettleAmount(), "应结金额必须大于0且最多保留2位小数");
+        BigDecimal deductAmount = request.getDeductAmount();
+        if (deductAmount.compareTo(BigDecimal.ZERO) < 0
+                || deductAmount.scale() > MONEY_MAX_SCALE
+                || deductAmount.compareTo(MAX_MONEY_AMOUNT) > 0
+                || deductAmount.compareTo(request.getShouldSettleAmount()) > 0) {
+            throw new IllegalArgumentException("扣减金额必须为非负数且不能超过应结金额");
+        }
+        if (request.getNetSettleAmount() != null
+                && (request.getNetSettleAmount().scale() > MONEY_MAX_SCALE
+                || request.getNetSettleAmount().compareTo(MAX_MONEY_AMOUNT) > 0
+                || request.getNetSettleAmount().compareTo(
+                request.getShouldSettleAmount().subtract(deductAmount)) != 0)) {
+            throw new IllegalArgumentException("净结金额与清分金额不一致");
+        }
+    }
+
+    private void validatePositiveAmount(BigDecimal amount, String message) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE
+                || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException(message);
+        }
     }
 
     private void reportReconciliationFact(ClearingGeneratedEventRequestDTO request) {
@@ -67,7 +103,7 @@ public class SettlementEventServiceImpl implements SettlementEventService {
         SettlementOrderEntity order = settlementMemoryStore.findOrderByClearingTarget(
                 request.getClearingNo(), request.getTargetType(), request.getTargetNo());
         if (order == null) {
-            return;
+            throw new IllegalStateException("结算对账事实缺少对应结算单");
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("businessChainId", order.getBusinessChainId());
@@ -75,14 +111,42 @@ public class SettlementEventServiceImpl implements SettlementEventService {
         payload.put("factType", "SETTLEMENT_CREATED");
         payload.put("factNo", order.getSettlementNo());
         payload.put("businessNo", request.getPaymentOrderId());
+        payload.put("payScene", request.getPayScene());
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", order.getNetSettleAmount());
-        payload.put("payload", "{\"settlementNo\":\"" + order.getSettlementNo() + "\"}");
+        payload.put("payload", "{\"settlementNo\":\"" + order.getSettlementNo()
+                + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene()) + "\"}");
         ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(), payload, Map.class);
-        Object code = response.getBody() == null ? null : response.getBody().get("code");
-        if (!response.getStatusCode().is2xxSuccessful() || !"0".equals(String.valueOf(code))) {
+        Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
+        if (response == null || !response.getStatusCode().is2xxSuccessful()
+                || !"0".equals(String.valueOf(code))
+                || !(response.getBody().get("data") instanceof Map)) {
             throw new IllegalStateException("结算事实上报失败");
         }
+        Map<?, ?> snapshot = (Map<?, ?>) response.getBody().get("data");
+        if (!Objects.equals(payload.get("businessChainId"), snapshot.get("businessChainId"))
+                || !(snapshot.get("facts") instanceof List)) {
+            throw new IllegalStateException("结算对账回执业务链不匹配");
+        }
+        for (Object item : (List<?>) snapshot.get("facts")) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> fact = (Map<?, ?>) item;
+            if (Objects.equals(payload.get("businessChainId"), fact.get("businessChainId"))
+                    && Objects.equals(payload.get("systemCode"), fact.get("systemCode"))
+                    && Objects.equals(payload.get("factType"), fact.get("factType"))
+                    && Objects.equals(payload.get("factNo"), fact.get("factNo"))
+                    && Objects.equals(payload.get("businessNo"), fact.get("businessNo"))
+                    && Objects.equals(payload.get("payScene"), fact.get("payScene"))
+                    && Objects.equals(payload.get("factStatus"), fact.get("factStatus"))
+                    && fact.get("amount") instanceof Number
+                    && new BigDecimal(fact.get("amount").toString())
+                            .compareTo((BigDecimal) payload.get("amount")) == 0) {
+                return;
+            }
+        }
+        throw new IllegalStateException("结算对账回执缺少本次结算事实");
     }
 
     private PageResultDTO<SettlementEventDTO> page(List<SettlementEventDTO> items, int pageNo, int pageSize) {

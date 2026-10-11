@@ -11,6 +11,7 @@ import com.abc123.settlement.dto.SettlementOrderDTO;
 import com.abc123.settlement.dto.SettlementOrderDetailDTO;
 import com.abc123.settlement.entity.SettlementOrderEntity;
 import com.abc123.settlement.service.SettlementOrderService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SettlementOrderServiceImpl implements SettlementOrderService {
+
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final SettlementMemoryStore settlementMemoryStore;
     private final SettlementMapper settlementMapper;
@@ -43,6 +47,7 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
 
     @Override
     public SettlementOrderDTO create(CreateSettlementOrderRequestDTO request) {
+        validateCreateRequest(request);
         SettlementOrderEntity entity = settlementMemoryStore.createOrder(
                 request.getBatchNo(),
                 request.getTargetType(),
@@ -56,6 +61,28 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
         settlementMemoryStore.createItem(entity.getSettlementNo(), "扣减金额", "扣减", request.getDeductAmount());
         settlementMemoryStore.createAuditLog(entity.getSettlementNo(), "创建结算单", "待审核", "系统");
         return settlementMapper.toOrderDTO(entity);
+    }
+
+    private void validateCreateRequest(CreateSettlementOrderRequestDTO request) {
+        if (request == null || request.getShouldSettleAmount() == null
+                || request.getDeductAmount() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "结算金额字段不能为空");
+        }
+        validateMoney(request.getShouldSettleAmount(), "应结金额必须大于0且最多保留2位小数");
+        if (request.getDeductAmount().compareTo(BigDecimal.ZERO) < 0
+                || request.getDeductAmount().scale() > MONEY_MAX_SCALE
+                || request.getDeductAmount().compareTo(MAX_MONEY_AMOUNT) > 0
+                || request.getDeductAmount().compareTo(request.getShouldSettleAmount()) > 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "扣减金额必须为非负数且不能超过应结金额");
+        }
+    }
+
+    private void validateMoney(BigDecimal amount, String message) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE
+                || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, message);
+        }
     }
 
     @Override

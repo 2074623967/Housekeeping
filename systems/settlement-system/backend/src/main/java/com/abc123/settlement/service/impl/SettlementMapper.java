@@ -66,6 +66,7 @@ public class SettlementMapper {
         dto.setAuditStatusType(statusType(entity.getAuditStatus()));
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setClearingNo(entity.getClearingNo());
+        dto.setPayScene(entity.getPayScene());
         return dto;
     }
 
@@ -154,7 +155,7 @@ public class SettlementMapper {
         if (status == null) {
             return "info";
         }
-        if (status.contains("成功") || status.contains("已完成") || status.contains("通过")
+        if (status.contains("成功") || status.contains("已完成") || status.contains("已消费") || status.contains("通过")
                 || status.contains("已发放") || status.contains("已出款")) {
             return "success";
         }

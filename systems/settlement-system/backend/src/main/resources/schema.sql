@@ -35,6 +35,7 @@ CREATE TABLE `t_settlement_order` (
   `payout_status` VARCHAR(32) NOT NULL COMMENT '出款状态',
   `audit_status` VARCHAR(32) NOT NULL COMMENT '审核状态',
   `clearing_no` VARCHAR(32) DEFAULT NULL COMMENT '来源清分单号',
+  `pay_scene` VARCHAR(64) DEFAULT NULL COMMENT '支付业务场景，历史数据可为空',
   `created_at` DATETIME NOT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_settlement_no` (`settlement_no`),

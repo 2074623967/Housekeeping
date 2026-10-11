@@ -42,6 +42,7 @@ INSERT INTO t_settlement_order (
     payout_status,
     audit_status,
     clearing_no,
+    pay_scene,
     created_at
 ) VALUES
 (
@@ -58,6 +59,7 @@ INSERT INTO t_settlement_order (
     '待出款',
     '待审核',
     'CLO20001',
+    'HOME_CLEAN',
     '2026-07-20 09:05:00'
 ),
 (
@@ -74,6 +76,7 @@ INSERT INTO t_settlement_order (
     '待出款',
     '待审核',
     'CLO20001',
+    'HOME_CLEAN',
     '2026-07-20 09:06:00'
 );
 

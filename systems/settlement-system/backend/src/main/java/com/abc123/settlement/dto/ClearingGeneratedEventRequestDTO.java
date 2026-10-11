@@ -19,6 +19,8 @@ public class ClearingGeneratedEventRequestDTO {
     private String businessChainId;
     private String clearingNo;
     private String paymentOrderId;
+    /** 支付业务场景。 */
+    private String payScene;
     private String targetType;
     private String targetNo;
     private String targetName;

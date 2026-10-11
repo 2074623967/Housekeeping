@@ -1,6 +1,124 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { batchApi, dashboardApi, eventApi, normalizeDashboardPayload, normalizePagePayload, orderApi, payoutApi } from "./client.js";
+import {
+  batchApi,
+  dashboardApi,
+  eventApi,
+  normalizeDashboardPayload,
+  normalizePagePayload,
+  normalizePayoutBatchPage,
+  normalizePayoutBatchResult,
+  normalizePayoutRecordPage,
+  normalizeSettlementBatchResult,
+  normalizeSettlementOrderDetailResult,
+  normalizeSettlementOrderResult,
+  orderApi,
+  payoutApi
+} from "./client.js";
+
+const validSettlementOrder = {
+  settlementNo: "SET-001",
+  businessChainId: "CHAIN-PAY-001",
+  clearingNo: "CLR-001",
+  payScene: "HOME_CLEAN",
+  targetType: "WORKER",
+  targetNo: "WORKER-001",
+  shouldSettleAmount: "88.00",
+  deductAmount: "8.00",
+  netSettleAmount: "80.00",
+  settlementStatus: "待审核",
+  settlementStatusType: "warn",
+  auditStatus: "待审核",
+  auditStatusType: "warn",
+  payoutStatus: "待出款",
+  payoutStatusType: "warn"
+};
+
+const validPayoutBatch = {
+  payoutBatchNo: "PBT-001",
+  batchNo: "SET-BATCH-001",
+  payoutChannel: "银行代付",
+  payoutStatus: "待出款",
+  payoutStatusType: "warn",
+  payoutCount: 2,
+  successCount: 0,
+  failedCount: 0,
+  totalAmount: "80.00",
+  createdBy: "operator-001",
+  createdAt: "2026-09-30 10:00:00",
+  finishedAt: ""
+};
+
+const validPayoutRecord = {
+  payoutNo: "PO-001",
+  payoutBatchNo: "PBT-001",
+  settlementNo: "SET-001",
+  targetNo: "WORKER-001",
+  targetName: "服务者甲",
+  payoutAmount: "80.00",
+  payoutStatus: "待出款",
+  payoutStatusType: "warn",
+  retryCount: "0",
+  createdAt: "2026-09-30 10:01:00"
+};
+
+test("validates payout batch and record list business facts", () => {
+  assert.equal(normalizePayoutBatchPage({ items: [validPayoutBatch] }).items[0].payoutBatchNo, "PBT-001");
+  assert.equal(normalizePayoutRecordPage({ items: [validPayoutRecord] }, "PBT-001").items[0].payoutNo, "PO-001");
+  assert.throws(
+    () => normalizePayoutBatchPage({ items: [{ ...validPayoutBatch, successCount: 2, failedCount: 1 }] }),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizePayoutBatchPage({ items: [{ ...validPayoutBatch, totalAmount: "80.001" }] }),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizePayoutRecordPage({ items: [{ ...validPayoutRecord, retryCount: "-1" }] }, "PBT-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizePayoutRecordPage({ items: [{ ...validPayoutRecord, payoutBatchNo: "PBT-002" }] }, "PBT-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.deepEqual(normalizePayoutBatchPage({ items: null, total: 0 }).items, []);
+  assert.deepEqual(normalizePayoutRecordPage({ items: null, total: 0 }, "PBT-001").items, []);
+});
+
+test("requires settlement business keys on detail and mutation responses", () => {
+  assert.equal(normalizeSettlementBatchResult({ batchNo: "SET-BATCH-001" }, "SET-BATCH-001").batchNo, "SET-BATCH-001");
+  assert.equal(normalizeSettlementOrderResult(validSettlementOrder, "SET-001").settlementNo, "SET-001");
+  assert.equal(normalizePayoutBatchResult({ payoutBatchNo: "PBT-001" }, "PBT-001").payoutBatchNo, "PBT-001");
+  assert.equal(normalizeSettlementOrderDetailResult({ order: validSettlementOrder }, "SET-001").order.settlementNo, "SET-001");
+  assert.throws(
+    () => normalizeSettlementBatchResult({ batchNo: "SET-BATCH-002" }, "SET-BATCH-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizeSettlementOrderResult({ ...validSettlementOrder, settlementNo: "SET-002" }, "SET-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizePayoutBatchResult({ payoutBatchNo: "PBT-002" }, "PBT-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizeSettlementOrderDetailResult({ order: { ...validSettlementOrder, settlementNo: "SET-002" } }, "SET-001"),
+    (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  for (const invalidOrder of [
+    { ...validSettlementOrder, businessChainId: "" },
+    { ...validSettlementOrder, payScene: 123 },
+    { ...validSettlementOrder, deductAmount: "9.00", netSettleAmount: "80.00" },
+    { ...validSettlementOrder, netSettleAmount: "80.001" },
+    { ...validSettlementOrder, payoutStatusType: "" }
+  ]) {
+    assert.throws(
+      () => normalizeSettlementOrderResult(invalidOrder),
+      (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+});
 
 test("normalizes empty settlement page items", () => {
   const result = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -61,13 +179,13 @@ test("normalizes null settlement order detail collections", async () => {
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { code: "0", data: { order: { settlementNo: "SET-001" }, items: null, auditLogs: null } };
+      return { code: "0", data: { order: validSettlementOrder, items: null, auditLogs: null } };
     }
   });
 
   try {
     assert.deepEqual(await orderApi.getDetail("SET-001"), {
-      order: { settlementNo: "SET-001" },
+      order: validSettlementOrder,
       items: [],
       auditLogs: []
     });
@@ -137,6 +255,25 @@ test("keeps payout list pagination in the query contract", async () => {
   }
 });
 
+test("rejects payout records that do not belong to the requested batch", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { items: [{ ...validPayoutRecord, payoutBatchNo: "PBT-002" }] } };
+    }
+  });
+
+  try {
+    await assert.rejects(
+      payoutApi.records("PBT-001"),
+      (error) => error.code === "SETTLEMENT-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("passes pagination to settlement batch, order, and event lists", async () => {
   const originalFetch = globalThis.fetch;
   const requestedUrls = [];
@@ -198,5 +335,37 @@ test("reports settlement network failures with a stable client error", async () 
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("aborts slow settlement requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "settlement-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "settlement-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      payoutApi.inspect(),
+      (error) => error.code === "SETTLEMENT-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });
