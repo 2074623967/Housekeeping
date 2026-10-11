@@ -5777,6 +5777,10 @@ class PaymentServiceImplTest {
     void shouldRejectWhenSubmitConcurrencyTokenUpdateAffectsMultipleRows()
             throws Exception {
         PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();
+        token.setPrepayOrderNo("PRE-TOKEN-MULTI");
+        token.setPaymentOrderId("PAY-TOKEN-MULTI");
+        token.setSourceAppId("default-app");
+        token.setTokenStatus("RELEASED");
         token.setHolderIdempotencyKey("IDEMP-TOKEN-OLD");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-MULTI", "default-app"))
                 .thenReturn(token);
@@ -5807,6 +5811,63 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "payment submit concurrency token update affected multiple rows",
                 exception.getCause().getMessage());
+    }
+
+    @Test
+    void shouldReoccupyReleasedTokenEvenWithSameIdempotencyKey() throws Exception {
+        PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();
+        token.setPrepayOrderNo("PRE-TOKEN-REUSE");
+        token.setPaymentOrderId("PAY-TOKEN-REUSE");
+        token.setSourceAppId("default-app");
+        token.setTokenStatus("RELEASED");
+        token.setHolderIdempotencyKey("IDEMP-TOKEN-REUSE");
+        when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-REUSE", "default-app"))
+                .thenReturn(token);
+        when(paymentMapper.occupySubmitConcurrencyToken(
+                "PRE-TOKEN-REUSE", "PAY-TOKEN-REUSE", "default-app", "IDEMP-TOKEN-REUSE",
+                "H5", "127.0.0.1", 120)).thenReturn(1);
+
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService);
+        java.lang.reflect.Method method = PaymentServiceImpl.class.getDeclaredMethod(
+                "occupySubmitConcurrencyToken", String.class, String.class, String.class,
+                String.class, String.class, String.class);
+        method.setAccessible(true);
+
+        method.invoke(service, "PRE-TOKEN-REUSE", "PAY-TOKEN-REUSE", "default-app",
+                "H5", "127.0.0.1", "IDEMP-TOKEN-REUSE");
+        verify(paymentMapper).occupySubmitConcurrencyToken(
+                "PRE-TOKEN-REUSE", "PAY-TOKEN-REUSE", "default-app", "IDEMP-TOKEN-REUSE",
+                "H5", "127.0.0.1", 120);
+    }
+
+    @Test
+    void shouldRejectTokenForAnotherPaymentEvenWithSameIdempotencyKey() throws Exception {
+        PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();
+        token.setPrepayOrderNo("PRE-TOKEN-MISMATCH");
+        token.setPaymentOrderId("PAY-OLD");
+        token.setSourceAppId("default-app");
+        token.setTokenStatus("ACTIVE");
+        token.setHolderIdempotencyKey("IDEMP-TOKEN-MISMATCH");
+        when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-MISMATCH", "default-app"))
+                .thenReturn(token);
+
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService);
+        java.lang.reflect.Method method = PaymentServiceImpl.class.getDeclaredMethod(
+                "occupySubmitConcurrencyToken", String.class, String.class, String.class,
+                String.class, String.class, String.class);
+        method.setAccessible(true);
+
+        java.lang.reflect.InvocationTargetException exception = assertThrows(
+                java.lang.reflect.InvocationTargetException.class,
+                () -> method.invoke(service, "PRE-TOKEN-MISMATCH", "PAY-NEW", "default-app",
+                        "H5", "127.0.0.1", "IDEMP-TOKEN-MISMATCH"));
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                ((BusinessException) exception.getCause()).getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-TOKEN-MISMATCH");
     }
 
     @Test

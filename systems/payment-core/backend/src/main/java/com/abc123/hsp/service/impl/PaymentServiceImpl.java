@@ -2839,7 +2839,15 @@ public class PaymentServiceImpl implements PaymentService {
             }
             return;
         }
-        if (idempotencyKey.equals(currentToken.getHolderIdempotencyKey())) {
+        if (!prepayOrderNo.equals(currentToken.getPrepayOrderNo())
+                || !paymentOrderId.equals(currentToken.getPaymentOrderId())
+                || !sourceAppId.equals(currentToken.getSourceAppId())) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                    "当前预付单提交令牌归属异常，请核对原支付事实");
+        }
+        if ("ACTIVE".equalsIgnoreCase(currentToken.getTokenStatus() == null
+                ? "" : currentToken.getTokenStatus().trim())
+                && idempotencyKey.equals(currentToken.getHolderIdempotencyKey())) {
             return;
         }
         int affectedRows = paymentMapper.occupySubmitConcurrencyToken(

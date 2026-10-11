@@ -1247,6 +1247,22 @@ class PaymentMapperStateTransitionIntegrationTest {
                     "PRE-TOKEN-001", "PAY-TOKEN-001", "APP", "alias-key", "APP", "127.0.0.1", 60));
             assertEquals(1, mapper.occupySubmitConcurrencyToken(
                     "PRE-TOKEN-001", "PAY-TOKEN-001", "app", "owner-key", "APP", "127.0.0.1", 60));
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET expire_at = "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW()) WHERE prepay_order_no = 'PRE-TOKEN-001'");
+            assertEquals(0, mapper.occupySubmitConcurrencyToken(
+                    "PRE-TOKEN-001", "PAY-TOKEN-001", "app", "stolen-key", "APP", "127.0.0.1", 60));
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status = ' active ' "
+                    + "WHERE prepay_order_no = 'PRE-TOKEN-001'");
+            assertEquals(0, mapper.occupySubmitConcurrencyToken(
+                    "PRE-TOKEN-001", "PAY-TOKEN-001", "app", "alias-stolen-key", "APP", "127.0.0.1", 60));
+            assertEquals("owner-key", mapper.findSubmitConcurrencyToken("PRE-TOKEN-001", "app")
+                    .getHolderIdempotencyKey());
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status = 'RELEASED' "
+                    + "WHERE prepay_order_no = 'PRE-TOKEN-001'");
+            assertEquals(0, mapper.occupySubmitConcurrencyToken(
+                    "PRE-TOKEN-001", "pay-token-001", "app", "wrong-payment", "APP", "127.0.0.1", 60));
+            assertEquals(1, mapper.occupySubmitConcurrencyToken(
+                    "PRE-TOKEN-001", "PAY-TOKEN-001", "app", "confirmed-key", "APP", "127.0.0.1", 60));
             assertEquals(0, mapper.releaseSubmitConcurrencyToken("pay-token-001", "ALIAS_RELEASE"));
             assertEquals(1, mapper.releaseSubmitConcurrencyToken("PAY-TOKEN-001", "OWNER_RELEASE"));
         }

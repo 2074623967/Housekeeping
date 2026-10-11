@@ -191,6 +191,69 @@ class PaymentSubmitReplayIntegrationTest {
     }
 
     @Test
+    void shouldNotTakeOverExpiredActiveSubmitTokenBeforeManualFactReview() {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        String databaseUrl = "jdbc:h2:mem:payment_submit_token_expired_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--payment.ops-config.enabled=false",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            PaymentService paymentService = context.getBean(PaymentService.class);
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+            prepayRequest.setOrderNo("DEMO-EXPIRED-ACTIVE-TOKEN");
+            prepayRequest.setPayScene("HOME_CLEAN");
+            prepayRequest.setCustomerName("demo expired active token");
+            prepayRequest.setAmount(new BigDecimal("88.00"));
+            PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+            String prepayOrderNo = prepay.getPrepayOrderNo();
+            String paymentOrderId = prepay.getPaymentOrderId();
+            assertEquals(1, jdbcTemplate.update(
+                    "INSERT INTO t_payment_submit_concurrency_token (prepay_order_no, payment_order_id, "
+                            + "source_app_id, token_status, holder_idempotency_key, holder_terminal, holder_client_ip, "
+                            + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                            + "(?, ?, 'housekeeping-h5-web', ' active ', 'IDEMP-OLD-HOLDER', 'H5', "
+                            + "'127.0.0.1', NOW(), TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())",
+                    prepayOrderNo, paymentOrderId));
+
+            PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+            request.setPrepayOrderNo(prepayOrderNo);
+            request.setPaymentMethod("微信支付");
+            request.setChannelCode("wx_h5");
+            request.setSourceAppId("housekeeping-h5-web");
+            request.setMerchantNo("MCH_WX_10001");
+            request.setAccessToken("token-housekeeping-h5-web");
+            request.setTerminal("H5");
+            request.setClientIp("127.0.0.1");
+            request.setIdempotencyKey("IDEMP-NEW-HOLDER");
+
+            BusinessException blocked = assertThrows(BusinessException.class, () -> paymentService.submit(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, blocked.getCode());
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                    Integer.class, paymentOrderId));
+            assertEquals("IDEMP-OLD-HOLDER", jdbcTemplate.queryForObject(
+                    "SELECT holder_idempotency_key FROM t_payment_submit_concurrency_token "
+                            + "WHERE prepay_order_no = ?", String.class, prepayOrderNo));
+
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_submit_concurrency_token "
+                    + "SET token_status = 'RELEASED' WHERE prepay_order_no = ?", prepayOrderNo));
+            assertEquals(paymentOrderId, paymentService.submit(request).getPaymentOrderId());
+            assertEquals(1, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                    Integer.class, paymentOrderId));
+            assertEquals("IDEMP-NEW-HOLDER", jdbcTemplate.queryForObject(
+                    "SELECT holder_idempotency_key FROM t_payment_submit_concurrency_token "
+                            + "WHERE prepay_order_no = ?", String.class, prepayOrderNo));
+        }
+    }
+
+    @Test
     void shouldRejectSamePaymentKeyWithChangedSubmitContent() {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
         application.setWebApplicationType(WebApplicationType.NONE);

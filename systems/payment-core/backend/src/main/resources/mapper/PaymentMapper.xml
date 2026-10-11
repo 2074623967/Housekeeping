@@ -1402,7 +1402,12 @@
           AND source_app_id = #{sourceAppId}
           AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
           AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
-           AND (token_status &lt;&gt; 'ACTIVE' OR expire_at &lt; NOW())
+          AND payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND token_status = 'RELEASED'
+          AND CHAR_LENGTH(token_status) = CHAR_LENGTH('RELEASED')
+          AND CAST(token_status AS BINARY(32)) = CAST('RELEASED' AS BINARY(32))
     </update>
 
     <update id="releaseSubmitConcurrencyToken">
