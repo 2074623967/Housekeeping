@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
@@ -19,13 +21,27 @@ import java.util.Base64;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class RefundDemoRetryIntegrationTest {
+
+    private final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    private final Logger transactionLogger = (Logger) LoggerFactory.getLogger(TransactionTemplate.class);
+    private final Level originalRootLevel = rootLogger.getLevel();
+    private final Level originalTransactionLevel = transactionLogger.getLevel();
+
+    @AfterEach
+    void restoreLoggingLevels() {
+        rootLogger.setLevel(originalRootLevel);
+        transactionLogger.setLevel(originalTransactionLevel);
+    }
 
     @Test
     void shouldPreserveAttemptIdentityAcrossFailedRefundRetry() throws Exception {

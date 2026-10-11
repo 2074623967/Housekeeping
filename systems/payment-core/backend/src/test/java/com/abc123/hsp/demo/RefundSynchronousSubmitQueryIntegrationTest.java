@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
@@ -17,7 +19,9 @@ import com.abc123.hsp.service.RefundChannelQueryAdapter;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.abc123.hsp.service.RefundService;
 import java.math.BigDecimal;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -27,8 +31,20 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class RefundSynchronousSubmitQueryIntegrationTest {
+
+    private final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    private final Logger transactionLogger = (Logger) LoggerFactory.getLogger(TransactionTemplate.class);
+    private final Level originalRootLevel = rootLogger.getLevel();
+    private final Level originalTransactionLevel = transactionLogger.getLevel();
+
+    @AfterEach
+    void restoreLoggingLevels() {
+        rootLogger.setLevel(originalRootLevel);
+        transactionLogger.setLevel(originalTransactionLevel);
+    }
 
     @Test
     void shouldReconcileSynchronousSuccessOnlyAfterQueryingSameAttempt() {

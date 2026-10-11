@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
@@ -14,13 +16,27 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class PaymentIssueBatchActionHttpIntegrationTest {
+
+    private final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    private final Logger transactionLogger = (Logger) LoggerFactory.getLogger(TransactionTemplate.class);
+    private final Level originalRootLevel = rootLogger.getLevel();
+    private final Level originalTransactionLevel = transactionLogger.getLevel();
+
+    @AfterEach
+    void restoreLoggingLevels() {
+        rootLogger.setLevel(originalRootLevel);
+        transactionLogger.setLevel(originalTransactionLevel);
+    }
 
     @Test
     void shouldReplayCommittedBatchResponseOverHttpWithoutRepeatingAction() throws Exception {

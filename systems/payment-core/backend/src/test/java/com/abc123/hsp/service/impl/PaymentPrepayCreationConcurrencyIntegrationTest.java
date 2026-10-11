@@ -929,7 +929,7 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
                 "prepareSubmit", PaymentSubmitRequestDTO.class, PrepayOrderDTO.class,
                 String.class, String.class, String.class, String.class, String.class,
                 PaymentRouteDecisionDTO.class, String.class, String.class, String.class,
-                String.class, Long.class);
+                String.class, String.class, Long.class);
         method.setAccessible(true);
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo(prepay.getPrepayOrderNo());
@@ -941,7 +941,7 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
                     createService(mapper), request, prepay, prepay.getPaymentOrderId(),
                     "default-app", "H5", "127.0.0.1", "IDEMP-CONCURRENT-SECOND",
                     routeDecision, ORDER_NO, "RTR-CONCURRENT-SECOND", "ATT-CONCURRENT-SECOND",
-                    "{}", null);
+                    "{}", "FP-CONCURRENT-SECOND", null);
         } catch (InvocationTargetException exception) {
             if (exception.getCause() instanceof RuntimeException) {
                 throw (RuntimeException) exception.getCause();
@@ -1063,7 +1063,7 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
                     + "success_at DATETIME, created_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, idempotency_key VARCHAR(128) NOT NULL, "
-                    + "payment_order_id VARCHAR(64), channel_code VARCHAR(64), "
+                    + "payment_order_id VARCHAR(64), channel_code VARCHAR(64), payment_method VARCHAR(32), "
                     + "terminal VARCHAR(32), client_ip VARCHAR(64), ops_config_snapshot_version BIGINT, "
                     + "request_payload VARCHAR(2048), response_payload VARCHAR(2048), "
                     + "attempt_status VARCHAR(32), attempt_status_type VARCHAR(32), "
@@ -1099,12 +1099,14 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
     }
 
     private void recordAcceptedChannelAttempt(Statement statement, String paymentOrderId) throws Exception {
-        statement.executeUpdate("UPDATE t_payment_order SET channel_code = 'wx_h5' "
+        statement.executeUpdate("UPDATE t_payment_order SET channel_code = 'wx_h5', "
+                + "payment_method = '微信支付' "
                 + "WHERE payment_order_id = '" + paymentOrderId + "'");
         statement.executeUpdate("INSERT INTO t_payment_attempt "
-                + "(idempotency_key, payment_order_id, channel_code, attempt_status, attempt_status_type, created_at) "
+                + "(idempotency_key, payment_order_id, channel_code, payment_method, "
+                + "attempt_status, attempt_status_type, created_at) "
                 + "VALUES ('KEY-" + paymentOrderId + "', '" + paymentOrderId
-                + "', 'wx_h5', '待回调', 'warn', NOW())");
+                + "', 'wx_h5', '微信支付', '待回调', 'warn', NOW())");
     }
 
     public static String formatAmount(BigDecimal amount, int scale) {

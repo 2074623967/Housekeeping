@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
@@ -22,15 +24,29 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class PaymentIssueBatchActionIntegrationTest {
+
+    private final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    private final Logger transactionLogger = (Logger) LoggerFactory.getLogger(TransactionTemplate.class);
+    private final Level originalRootLevel = rootLogger.getLevel();
+    private final Level originalTransactionLevel = transactionLogger.getLevel();
+
+    @AfterEach
+    void restoreLoggingLevels() {
+        rootLogger.setLevel(originalRootLevel);
+        transactionLogger.setLevel(originalTransactionLevel);
+    }
 
     @Test
     void shouldReturnAllSelectedIssuesAfterActualMapperWritesBeyondDefaultPage() throws Exception {
