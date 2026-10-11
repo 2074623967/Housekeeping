@@ -1100,6 +1100,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     private String renderTemplate(String templateBody, PaymentIssueAlertDispatchItemDTO item) {
+        if ("待回调未收口".equals(item.getIssueType())
+                && StringUtils.hasText(item.getIssueNo())
+                && item.getIssueNo().startsWith("ISSUE-WAIT-")
+                && StringUtils.hasText(item.getAlertContent())
+                && item.getAlertContent().contains("渠道受理未确认")
+                && item.getAlertContent().contains("勿主动查单")) {
+            return item.getAlertContent();
+        }
         if (!StringUtils.hasText(templateBody)) {
             return buildAlertContent(item);
         }

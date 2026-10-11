@@ -668,6 +668,33 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldPreserveUnacceptedSubmissionGuidanceWhenProviderTemplateIsMisleading() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setIssueNo("ISSUE-WAIT-PAY-001");
+        item.setNotifyChannels("IM");
+        item.setAlertContent("支付异常 ISSUE-WAIT-PAY-001 渠道受理未确认，请核对提交日志，勿主动查单或重复提交。");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        PaymentAlertProviderConfigDTO provider = buildProvider(
+                "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_UNSAFE", "DEFAULT", 100);
+        provider.setTemplateBody("请立即主动查单：{{issueType}}");
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(provider));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(paymentTaskCenterMapper, Collections.singletonList(imNotifier))
+                .dispatchPendingAlerts("payment-core-admin");
+
+        ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
+        verify(imNotifier).send(dispatchCaptor.capture());
+        Assertions.assertEquals(item.getAlertContent(), dispatchCaptor.getValue().getRenderedAlertContent());
+    }
+
+    @Test
     void shouldMarkUnsupportedChannelAsFailure() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,VOICE");
