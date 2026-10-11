@@ -56,7 +56,8 @@ function readSavedAttempt(storage, key) {
   try {
     const saved = JSON.parse(rawSaved);
     if (saved && typeof saved.digest === "string" && DIGEST_PATTERN.test(saved.digest)
-        && typeof saved.idempotencyKey === "string" && UUID_PATTERN.test(saved.idempotencyKey)) {
+        && typeof saved.idempotencyKey === "string" && UUID_PATTERN.test(saved.idempotencyKey)
+        && (saved.confirmed === undefined || saved.confirmed === true)) {
       return saved;
     }
   } catch {}
@@ -70,7 +71,10 @@ export async function resolvePaymentIssueActionAttempt(
   cryptoProvider = globalThis.crypto
 ) {
   const fingerprint = requestFingerprint(payload);
-  if (currentAttempt?.fingerprint === fingerprint) return currentAttempt;
+  if (currentAttempt?.fingerprint === fingerprint) {
+    if (currentAttempt.confirmed) throw new UnverifiablePaymentIssueActionAttemptError();
+    return currentAttempt;
+  }
   if (!storage) throw new UnverifiablePaymentIssueActionAttemptError();
   const digest = await fingerprintDigest(fingerprint, cryptoProvider);
   if (!digest) throw new UnverifiablePaymentIssueActionAttemptError();
@@ -78,12 +82,15 @@ export async function resolvePaymentIssueActionAttempt(
   const saved = readSavedAttempt(storage, scopedStorageKey(digest));
   if (saved && saved.digest !== digest) throw new UnverifiablePaymentIssueActionAttemptError();
   if (legacy?.digest === digest) {
+    if (legacy.confirmed) throw new UnverifiablePaymentIssueActionAttemptError();
     if (saved && saved.idempotencyKey !== legacy.idempotencyKey) {
       throw new UnverifiablePaymentIssueActionAttemptError();
     }
+    if (saved?.confirmed) throw new UnverifiablePaymentIssueActionAttemptError();
     return { fingerprint, digest, idempotencyKey: legacy.idempotencyKey };
   }
   if (saved) {
+    if (saved.confirmed) throw new UnverifiablePaymentIssueActionAttemptError();
     return { fingerprint, digest, idempotencyKey: saved.idempotencyKey };
   }
   try {
@@ -103,13 +110,36 @@ export async function resolvePaymentIssueActionAttempt(
 }
 
 export function clearPaymentIssueActionAttempt(attempt, storage = availableStorage()) {
-  if (!attempt || !storage) return;
+  if (!attempt || !storage) throw new UnverifiablePaymentIssueActionAttemptError();
+  let retained = false;
   try {
     for (const key of [STORAGE_KEY, scopedStorageKey(attempt.digest)]) {
       const saved = readSavedAttempt(storage, key);
-      if (saved?.digest === attempt.digest && saved.idempotencyKey === attempt.idempotencyKey) {
-        storage.removeItem(key);
+      if (!saved) continue;
+      if (saved.digest !== attempt.digest) {
+        if (key === STORAGE_KEY) continue;
+        throw new Error("scoped batch action changed before cleanup");
       }
+      if (saved.idempotencyKey !== attempt.idempotencyKey || saved.confirmed) {
+        throw new Error("batch action key changed before cleanup");
+      }
+      const rawSaved = storage.getItem(key);
+      try {
+        storage.removeItem(key);
+      } catch {}
+      const remaining = storage.getItem(key);
+      if (remaining === null) continue;
+      if (remaining !== rawSaved) throw new Error("batch action key changed during cleanup");
+      const confirmed = JSON.stringify({ digest: saved.digest, idempotencyKey: saved.idempotencyKey,
+        confirmed: true });
+      storage.setItem(key, confirmed);
+      if (storage.getItem(key) !== confirmed) {
+        throw new Error("confirmed batch action not saved");
+      }
+      retained = true;
     }
-  } catch {}
+  } catch {
+    throw new UnverifiablePaymentIssueActionAttemptError();
+  }
+  if (retained) throw new UnverifiablePaymentIssueActionAttemptError();
 }

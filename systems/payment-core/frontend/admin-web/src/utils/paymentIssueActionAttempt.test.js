@@ -95,6 +95,31 @@ test("blocks conflicting legacy and scoped keys for the same action", async () =
     /未决批量动作无法核实/);
 });
 
+test("marks both legacy and scoped batch keys after a confirmed action cannot remove them", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentIssueActionAttempt(payload, null, storage);
+  const scopedKey = [...storage.values.keys()][0];
+  storage.setItem("payment-issue-action-attempt:v1", storage.getItem(scopedKey));
+  storage.removeItem = () => { throw new Error("blocked"); };
+  assert.throws(() => clearPaymentIssueActionAttempt(attempt, storage),
+    /未决批量动作无法核实/);
+  assert.equal(JSON.parse(storage.getItem(scopedKey)).confirmed, true);
+  assert.equal(JSON.parse(storage.getItem("payment-issue-action-attempt:v1")).confirmed, true);
+  await assert.rejects(resolvePaymentIssueActionAttempt(payload, null, storage),
+    /未决批量动作无法核实/);
+});
+
+test("fails closed when the confirmed marker cannot be persisted", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentIssueActionAttempt(payload, null, storage);
+  storage.removeItem = () => {};
+  storage.setItem = () => {};
+  assert.throws(() => clearPaymentIssueActionAttempt(attempt, storage),
+    /未决批量动作无法核实/);
+  await assert.rejects(resolvePaymentIssueActionAttempt(payload,
+    { ...attempt, confirmed: true }, storage), /未决批量动作无法核实/);
+});
+
 test("blocks a new batch key when browser storage cannot be read", async () => {
   const unavailableStorage = {
     getItem: () => { throw new Error("blocked"); },
@@ -141,6 +166,32 @@ test("does not send a new batch action when storage silently ignores the write",
   await assert.rejects(resolvePaymentIssueActionAttempt(payload, null, storage),
     /未决批量动作无法核实/);
   assert.equal(storage.values.size, 0);
+});
+
+test("marks a confirmed batch action when storage silently retains its key", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentIssueActionAttempt(payload, null, storage);
+  storage.removeItem = () => {};
+  assert.throws(() => clearPaymentIssueActionAttempt(attempt, storage),
+    /未决批量动作无法核实/);
+  const saved = JSON.parse([...storage.values.values()][0]);
+  assert.equal(saved.confirmed, true);
+  await assert.rejects(resolvePaymentIssueActionAttempt(payload, null, storage),
+    /未决批量动作无法核实/);
+  const other = await resolvePaymentIssueActionAttempt({ ...payload, remark: "另一笔动作" }, null, storage);
+  assert.notEqual(other.idempotencyKey, attempt.idempotencyKey);
+});
+
+test("does not clear a replaced batch action key", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentIssueActionAttempt(payload, null, storage);
+  const storageKey = [...storage.values.keys()][0];
+  const replaced = JSON.stringify({ digest: attempt.digest,
+    idempotencyKey: "00000000-0000-4000-8000-000000000001" });
+  storage.setItem(storageKey, replaced);
+  assert.throws(() => clearPaymentIssueActionAttempt(attempt, storage),
+    /未决批量动作无法核实/);
+  assert.equal(storage.getItem(storageKey), replaced);
 });
 
 test("rejects a pending batch UUID that is not a string", async () => {

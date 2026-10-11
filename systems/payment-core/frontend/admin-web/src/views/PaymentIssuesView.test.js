@@ -27,3 +27,9 @@ test("reuses the same idempotency key for a matching ambiguous batch attempt", (
   assert.match(source, /pendingActionAttempt = null;\s*selectedIssueNos\.value = \[\];/);
   assert.match(source, /UnverifiablePaymentIssueActionAttemptError[\s\S]*?批量处理未发送：/);
 });
+
+test("does not call a confirmed batch cleanup failure an unsent action", () => {
+  assert.match(source, /let cleanupFailed = false;[\s\S]*?await paymentIssueApi\.batchAction[\s\S]*?try \{\s*clearPaymentIssueActionAttempt\(pendingActionAttempt\);/);
+  assert.match(source, /cleanupFailed = true;\s*pendingActionAttempt = \{ \.\.\.pendingActionAttempt, confirmed: true \};/);
+  assert.match(source, /const failureLabel = cleanupFailed\s*\? "批量处理响应已成功，但本机未决键清理失败："/);
+});

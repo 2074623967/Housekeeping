@@ -237,10 +237,17 @@ async function submitBatchAction() {
   isActionRunning.value = true;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
+  let cleanupFailed = false;
   try {
     pendingActionAttempt = await resolvePaymentIssueActionAttempt(actionPayload, pendingActionAttempt);
     await paymentIssueApi.batchAction({ ...actionPayload, idempotencyKey: pendingActionAttempt.idempotencyKey });
-    clearPaymentIssueActionAttempt(pendingActionAttempt);
+    try {
+      clearPaymentIssueActionAttempt(pendingActionAttempt);
+    } catch (error) {
+      cleanupFailed = true;
+      pendingActionAttempt = { ...pendingActionAttempt, confirmed: true };
+      throw error;
+    }
     pendingActionAttempt = null;
     selectedIssueNos.value = [];
     actionResultMessage.value = `已记录 ${issueNos.length} 条异常的批量处理动作。`;
@@ -249,8 +256,10 @@ async function submitBatchAction() {
   } catch (error) {
     selectedIssueNos.value = [];
     const refreshed = await loadIssues(true, query);
-    const failureLabel = error instanceof UnverifiablePaymentIssueActionAttemptError
-      ? "批量处理未发送：" : "批量处理请求失败：";
+    const failureLabel = cleanupFailed
+      ? "批量处理响应已成功，但本机未决键清理失败："
+      : error instanceof UnverifiablePaymentIssueActionAttemptError
+        ? "批量处理未发送：" : "批量处理请求失败：";
     actionErrorMessage.value = refreshed
       ? `${failureLabel}${error.message}；已重新读取异常与责任组，请核对处理记录后重新选择。`
       : `${failureLabel}${error.message}；状态未经确认，旧快照不可操作，请刷新成功后核对处理记录。`;

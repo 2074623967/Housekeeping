@@ -947,6 +947,49 @@ async function main() {
         assert.equal(issueActionRequests.length, 2);
       }
     }
+    isolateIssueActions = false;
+    issueHandled = false;
+    issueActionRequests.length = 0;
+    await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
+    await waitFor(async () => (await evaluate(issueState))?.status === "待分派"
+      && !(await evaluate(issueState))?.disabled, "清键失败前的异常列表");
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`${issueActionButton}.click()`);
+    await waitFor(() => issueActionRequests.length === 1, "清键失败前的未决动作");
+    await waitFor(async () => (await evaluate(issueState))?.status === "已分派"
+      && !(await evaluate(issueState))?.selected, "未决动作读回");
+    await evaluate(`(() => {
+      window.__originalIssueRemoveItem = Storage.prototype.removeItem;
+      Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value(key) {
+        if (key.startsWith('payment-issue-action-attempt:v1')) return;
+        return window.__originalIssueRemoveItem.call(this, key);
+      } });
+    })()`);
+    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`${issueActionButton}.click()`);
+    await waitFor(async () => issueActionRequests.length === 2
+      && await evaluate("document.body.innerText.includes('批量处理响应已成功，但本机未决键清理失败：')"),
+    "已受理批量动作的静默清键失败");
+    assert.equal(await evaluate(`Object.entries(sessionStorage).some(([key, value]) => {
+      if (!key.startsWith('payment-issue-action-attempt:v1.')) return false;
+      try { return JSON.parse(value).confirmed === true; } catch { return false; }
+    })`), true);
+    assert.equal((await evaluate(issueState)).selected, false);
+    await evaluate("Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value: window.__originalIssueRemoveItem }); delete window.__originalIssueRemoveItem");
+    await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
+    await waitFor(async () => (await evaluate(issueState))?.status === "已分派"
+      && !(await evaluate(issueState))?.disabled, "清键失败后的新快照");
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`${issueActionButton}.click()`);
+    await waitFor(() => evaluate("document.body.innerText.includes('批量处理未发送：未决批量动作无法核实')"),
+      "已确认动作刷新后拒绝旧键重放");
+    assert.equal(issueActionRequests.length, 2);
+    await evaluate(`Object.keys(sessionStorage).filter((key) => key.startsWith('payment-issue-action-attempt:v1.'))
+      .forEach((key) => sessionStorage.removeItem(key))`);
     isolateIssueActions = true;
     issueHandled = false;
     issueActionRequests.length = 0;
@@ -1019,7 +1062,7 @@ async function main() {
       "畸形未决动作拒绝提交");
     assert.equal(issueActionRequests.length, 0);
     assert.equal(await evaluate("sessionStorage.getItem('payment-issue-action-attempt:v1')"), "{broken-json");
-    console.log("[PASS] 管理端浏览器：错误读回、双动作并存重放及畸形未决动作拒绝提交");
+    console.log("[PASS] 管理端浏览器：错误读回、双动作重放、已受理清键失败门禁及畸形记录拒绝提交");
   } finally {
     socket?.close();
     chrome.kill("SIGTERM");
