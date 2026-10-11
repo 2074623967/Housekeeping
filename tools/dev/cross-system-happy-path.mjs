@@ -542,6 +542,28 @@ export function assertPaymentRecordEventTopic(record, event) {
   return record;
 }
 
+export function assertPaymentRequestDiagnostics(
+  page, overview, detail, paymentOrderId, expectedStatus, expectedStyle, expectedCountField
+) {
+  assert(page?.total === 1 && page.items?.length === 1,
+    "payment request list did not contain exactly one attempt");
+  const request = page.items[0];
+  assert(matchesIdentifier(request.paymentOrderId, paymentOrderId)
+    && typeof request.requestNo === "string" && request.requestNo.trim()
+    && matchesIdentifier(detail?.requestNo, request.requestNo)
+    && matchesIdentifier(detail?.paymentOrderId, paymentOrderId),
+  "payment request detail did not match the submitted attempt");
+  assert(request.requestStatus === expectedStatus && request.requestStatusType === expectedStyle
+    && detail.requestStatus === expectedStatus && detail.requestStatusType === expectedStyle,
+  "payment request list and detail status did not match the persisted attempt");
+  assert(overview?.totalRequestCount === 1
+    && overview[expectedCountField] === 1
+    && ["successRequestCount", "failedRequestCount", "processingRequestCount", "waitingCallbackRequestCount"]
+      .filter((field) => field !== expectedCountField).every((field) => overview[field] === 0),
+  "payment request overview did not match the filtered attempt status");
+  return request;
+}
+
 export function assertIdempotentPaymentSubmission(
   first,
   repeated,
@@ -1947,6 +1969,17 @@ export async function verifyLocalDemoTargets(targets, request = api, environment
   }
 }
 
+async function verifyPaymentRequestStatus(paymentOrderId, status, style, countField) {
+  const filter = `paymentOrderId=${encodeURIComponent(paymentOrderId)}&requestStatus=${encodeURIComponent(status)}`;
+  const page = await api(`${paymentBaseUrl}/api/payment-requests?${filter}`);
+  const overview = await api(`${paymentBaseUrl}/api/payment-requests/overview?${filter}`);
+  const requestNo = page?.items?.[0]?.requestNo;
+  const detail = requestNo
+    ? await api(`${paymentBaseUrl}/api/payment-requests/${encodeURIComponent(requestNo)}`) : null;
+  return assertPaymentRequestDiagnostics(page, overview, detail,
+    paymentOrderId, status, style, countField);
+}
+
 async function main() {
   await verifyLocalDemoTargets({
     paymentBaseUrl, opsConfigBaseUrl, riskBaseUrl, gatewayBaseUrl,
@@ -2050,6 +2083,9 @@ async function main() {
   assert(submitted.status === "WAIT_CALLBACK" && submitted.statusType === "warn",
     `unexpected submitted payment state: ${submitted.status}/${submitted.statusType}`);
   assert(submitted.channelTransactionNo, "channel transaction number was not created");
+  const pendingRequest = await verifyPaymentRequestStatus(
+    prepay.paymentOrderId, "处理中", "info", "processingRequestCount"
+  );
 
   const waitingCashier = assertBoundCashierPage(
     await api(`${paymentBaseUrl}/api/payments/cashier/${encodeURIComponent(normalizeIdentifier(prepay.prepayOrderNo))}?terminal=H5_WEB`),
@@ -2152,6 +2188,14 @@ async function main() {
     "88.00",
     expectedPayScene
   );
+  const successfulRequest = await verifyPaymentRequestStatus(
+    prepay.paymentOrderId, "成功", "success", "successRequestCount"
+  );
+  assert(successfulRequest.requestNo === pendingRequest.requestNo,
+    "payment completion changed the original submitted request number");
+  const oldProcessingPage = await api(`${paymentBaseUrl}/api/payment-requests?paymentOrderId=${encodeURIComponent(prepay.paymentOrderId)}&requestStatus=${encodeURIComponent("处理中")}`);
+  assert(oldProcessingPage.total === 0 && oldProcessingPage.items?.length === 0,
+    "completed payment request remained in the processing filter");
   assertBillPaymentFacts(
     await api(`${paymentBaseUrl}/api/bills/${encodeURIComponent(normalizeIdentifier(billNo))}`),
     billNo, orderNo, prepay.prepayOrderNo, prepay.paymentOrderId, expectedPayScene,

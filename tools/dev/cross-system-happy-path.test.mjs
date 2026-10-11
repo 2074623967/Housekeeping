@@ -21,6 +21,7 @@ import {
   assertPaymentSuccessDetail,
   assertPaymentRecordProjection,
   assertPaymentRecordEventTopic,
+  assertPaymentRequestDiagnostics,
   assertIdempotentRefundApplication,
   assertIdempotentRefundCallback,
   assertRefundSuccessDetail,
@@ -164,6 +165,32 @@ test("normalizes identifiers before constructing resource paths", () => {
   assert.equal(`CHAIN-${normalizeIdentifier("  PAY-001  ")}`, "CHAIN-PAY-001");
   assert.equal(normalizeIdentifier("SET-001"), "SET-001");
   assert.equal(normalizeIdentifier(undefined), undefined);
+});
+
+test("ties the payment request diagnostics to one real submitted attempt and its status bucket", () => {
+  const request = {
+    requestNo: "ATT-001", paymentOrderId: "PAY-001", requestStatus: "处理中", requestStatusType: "info"
+  };
+  const page = { total: 1, items: [request] };
+  const overview = {
+    totalRequestCount: 1, successRequestCount: 0, failedRequestCount: 0,
+    processingRequestCount: 1, waitingCallbackRequestCount: 0
+  };
+  assert.equal(assertPaymentRequestDiagnostics(page, overview, request, "PAY-001",
+    "处理中", "info", "processingRequestCount"), request);
+  const successful = { ...request, requestStatus: "成功", requestStatusType: "success" };
+  assert.equal(assertPaymentRequestDiagnostics({ total: 1, items: [successful] }, {
+    ...overview, successRequestCount: 1, processingRequestCount: 0
+  }, successful, "PAY-001", "成功", "success", "successRequestCount"), successful);
+  assert.throws(() => assertPaymentRequestDiagnostics({ total: 2, items: [request, request] }, overview,
+    request, "PAY-001", "处理中", "info", "processingRequestCount"), /exactly one attempt/);
+  assert.throws(() => assertPaymentRequestDiagnostics(page, overview, { ...request, requestNo: "ATT-OTHER" },
+    "PAY-001", "处理中", "info", "processingRequestCount"), /did not match the submitted attempt/);
+  assert.throws(() => assertPaymentRequestDiagnostics(page, overview, { ...request, requestStatusType: "warn" },
+    "PAY-001", "处理中", "info", "processingRequestCount"), /status did not match/);
+  assert.throws(() => assertPaymentRequestDiagnostics(page, {
+    ...overview, waitingCallbackRequestCount: 1
+  }, request, "PAY-001", "处理中", "info", "processingRequestCount"), /overview did not match/);
 });
 
 test("requires payment record list and detail to retain the paid scene and business type", () => {

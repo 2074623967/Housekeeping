@@ -558,3 +558,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 64. 2026-10-11 PAYING 操作提示与查单门禁一致性
 
 隔离 Chrome/mock 首先复现 App 收银台 GET 读回 `PAYING` 时查单禁用但提示用户先查单。现在首次提交异常读回与重载页面都提示刷新收银台等待推进、勿重复付款；浏览器同时核查原键留存、重置与主动查单禁用、刷新可用、无错误跳转，脚本 `[PASS]`。App `125/125`、H5/PC 各 `4/4`、三端构建通过。此证据仅覆盖本地 mock 与共享页面代码，不证明 H5/PC 真浏览器、渠道实际受理、目标 MySQL 8、多实例恢复、真实资金或发布。
+
+## 65. 2026-10-11 九服务支付请求真实状态投影与回调/查单收口
+
+`cross-system-happy-path` 现沿真实本机支付提交和同键重放读取支付请求列表、总览、详情，核对同支付单恰好一条“处理中 / info”请求；回调或受控网关查单收口后，同一请求号成为“成功 / success”，处理中列表为空。断言单测 `64/64`；`local-stack.sh verify payment-chain` 与 `verify payment-query-chain` 均通过写前隔离门禁、九服务 HTTP 冒烟与 happy-path `[PASS]`，分别以 `CALLBACK` 和 `GATEWAY_QUERY` 收口，对账 `COMPLETED/4/4`、`financialCloseable=true`。退出码均为 `0`，九服务及本机查单上游停止、状态 `DOWN`。仅为 H2/demo、模拟渠道与上游，不证明目标 MySQL 8、多实例、正式资金、可信身份或发布。
