@@ -243,7 +243,7 @@ watch(
         <div class="detail-card">
           <div class="detail-label">处理中请求</div>
           <div class="detail-value">{{ overview.processingRequestCount }}</div>
-          <div class="detail-hint">已发起但尚未拿到最终结果的请求</div>
+          <div class="detail-hint">含渠道提交中（受理未确认）；不可将其当作已受理待回调</div>
           <button class="link-button" :disabled="!canUseSnapshot || !(overview.processingRequestCount > 0)" @click="openRequestStatus('处理中', overview.processingRequestCount)">
             查看处理中请求
           </button>
@@ -330,6 +330,7 @@ watch(
           <select v-model="filters.requestStatus" :disabled="isLoading">
             <option>全部</option>
             <option>处理中</option>
+            <option>渠道提交中</option>
             <option>待人工确认</option>
             <option>等待回调</option>
             <option>请求已发起</option>
@@ -413,7 +414,7 @@ watch(
                   <td>{{ item.terminal || "-" }}</td>
                   <td>{{ item.clientIp || "-" }}</td>
                   <td>{{ item.idempotencyKey || "-" }}</td>
-                  <td><span :class="['badge', item.requestStatusType]">{{ item.requestStatus }}</span></td>
+                  <td><span :class="['badge', item.requestStatusType]">{{ item.requestStatus }}</span> <span v-if="item.requestStatus === '渠道提交中'" class="badge warn">渠道受理未确认</span></td>
                   <td>{{ item.createdAt }}</td>
                   <td>
                     <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRequestDetailRoute(item.requestNo))">唯一详情</button>
@@ -458,7 +459,7 @@ watch(
               <div class="detail-card"><span>渠道编码</span><strong>{{ selectedItem.channelCode }}</strong></div>
               <div class="detail-card"><span>终端</span><strong>{{ selectedItem.terminal || "-" }}</strong></div>
               <div class="detail-card"><span>客户端 IP</span><strong>{{ selectedItem.clientIp || "-" }}</strong></div>
-              <div class="detail-card"><span>请求状态</span><strong>{{ selectedItem.requestStatus }}</strong></div>
+              <div class="detail-card"><span>请求状态</span><strong>{{ selectedItem.requestStatus }} <span v-if="selectedItem.requestStatus === '渠道提交中'" class="badge warn">渠道受理未确认</span></strong></div>
               <div class="detail-card detail-card-wide"><span>幂等键</span><strong class="mono-text">{{ selectedItem.idempotencyKey || "-" }}</strong></div>
               <div class="detail-card detail-card-wide"><span>路由结果</span><strong>{{ selectedItem.routeResult || "-" }}</strong></div>
             </div>
@@ -466,7 +467,8 @@ watch(
             <div class="ops-title">联查建议</div>
               <div class="ops-row"><span>排查入口</span><span>{{ selectedItem.successFactIssue ? "保留请求快照，联查路由结果与处理日志；成功支付详情不可用" : "支付单详情 / 路由结果 / 处理日志" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>幂等键、终端、渠道编码、请求状态</span></div>
-              <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
+              <div v-if="selectedItem.requestStatus === '渠道提交中'" class="ops-row"><span>当前阶段</span><span>渠道受理未确认，先核对提交日志并等待状态推进；勿主动查单或重复提交。</span></div>
+              <div v-else class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRequestDetailRoute(selectedItem.requestNo))">查看唯一详情</button>

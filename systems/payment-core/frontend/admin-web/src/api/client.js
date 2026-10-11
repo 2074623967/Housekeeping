@@ -1546,7 +1546,10 @@ function isConsistentPaymentRequestStatus(status, statusType) {
     "成功": "success",
     "失败": "danger",
     "处理中": "warn",
-    "等待回调": "warn"
+    "等待回调": "warn",
+    "渠道提交中": "warn",
+    "待人工确认": "warn",
+    "已关闭": "danger"
   }[status.trim()];
   return Boolean(expectedType) && statusType.trim().toLowerCase() === expectedType;
 }

@@ -253,8 +253,9 @@ class PaymentRequestListMapperIntegrationTest {
     }
 
     @Test
-    void shouldCountManualConfirmationAsProcessingAndIncludeItInProcessingFilter() {
-        try (SqlSession session = sqlSessionFactory.openSession()) {
+    void shouldCountUnacceptedSubmissionAndManualConfirmationAsProcessing() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
             PaymentRequestMapper mapper = session.getMapper(PaymentRequestMapper.class);
             PaymentRequestQueryDTO overviewQuery = new PaymentRequestQueryDTO();
             assertEquals(7L, mapper.findOverviewSummary(overviewQuery).getTotalRequestCount());
@@ -266,6 +267,23 @@ class PaymentRequestListMapperIntegrationTest {
             assertEquals(1L, mapper.findAllForExport(processingQuery).stream()
                     .filter(item -> "待人工确认".equals(item.getRequestStatus()))
                     .count());
+            assertEquals(1L, mapper.findAllForExport(processingQuery).stream()
+                    .filter(item -> "渠道提交中".equals(item.getRequestStatus()))
+                    .count());
+
+            PaymentRequestQueryDTO submittingQuery = new PaymentRequestQueryDTO();
+            submittingQuery.setRequestStatus("渠道提交中");
+            assertEquals(1L, mapper.count(submittingQuery));
+            assertEquals("ATTEMPT-VIRTUAL-001", mapper.findAll(submittingQuery).get(0).getRequestNo());
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '等待回调' "
+                    + "WHERE attempt_no = 'ATTEMPT-VIRTUAL-001'");
+            session.clearCache();
+            assertEquals(7L, mapper.findOverviewSummary(overviewQuery).getTotalRequestCount());
+            assertEquals(4L, mapper.findOverviewSummary(overviewQuery).getProcessingRequestCount());
+            assertEquals(1L, mapper.findOverviewSummary(overviewQuery).getWaitingCallbackRequestCount());
+            assertEquals(4L, mapper.count(processingQuery));
+            assertEquals(0L, mapper.count(submittingQuery));
         }
     }
 
@@ -406,7 +424,7 @@ class PaymentRequestListMapperIntegrationTest {
                     + "'10.20.30.41', 'APP-HOME', 'KEY-SHARED-002', '{}', '失败', 'danger', 6, NULL, "
                     + "'2026-09-12 12:00:02'), "
                     + "('ATTEMPT-VIRTUAL-001', 'PRE-VIRTUAL-001', 'PAY-VIRTUAL', 'wx_h5', '微信支付', 'H5', "
-                    + "'10.20.30.42', 'APP-HOME', 'KEY-VIRTUAL-001', '{}', '处理中', 'warning', 8, NULL, "
+                    + "'10.20.30.42', 'APP-HOME', 'KEY-VIRTUAL-001', '{}', '渠道提交中', 'warning', 8, NULL, "
                     + "'2026-09-12 12:00:04'), "
                     + "('ATTEMPT-MANUAL-001', 'PRE-MANUAL-001', 'PAY-MANUAL', 'offline_bank', '银行转账', 'H5', "
                     + "'10.20.30.43', 'APP-HOME', 'KEY-MANUAL-001', '{}', '待人工确认', 'warn', NULL, NULL, "

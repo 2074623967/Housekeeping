@@ -4,6 +4,11 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("./PaymentRequestDetailView.vue", import.meta.url), "utf8");
 
+test("identifies unaccepted request submissions before operators query the payment", () => {
+  assert.match(source, /detail\.requestStatus === '渠道提交中'[^>]*>渠道受理未确认/);
+  assert.match(source, /detail\.requestStatus === '渠道提交中'[\s\S]*勿主动查单或重复提交/);
+});
+
 test("preserves payment scene in payment request details and cashier entry", () => {
   assert.match(source, /prepayOrderNo: detail\.value\.prepayOrderNo,[\s\S]*payScene: detail\.value\.payScene/);
   assert.match(source, /buildAppWebCashierUrl\(detail\.value\.prepayOrderNo, undefined, detail\.value\.payScene\)/);
