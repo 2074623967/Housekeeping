@@ -16,6 +16,7 @@ const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
   submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
   submitCleanup: "PAY-RESULT-SUBMIT-CLEANUP-001",
+  submitCleanupWrite: "PAY-RESULT-SUBMIT-CLEANUP-WRITE-001",
   submitStale: "PAY-RESULT-SUBMIT-STALE-001",
   submitProcessing: "PAY-RESULT-SUBMIT-PROCESSING-001"
 };
@@ -95,16 +96,16 @@ async function main() {
           }
           response.end(JSON.stringify({ code: "0", data }));
         }
-      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitCleanup", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
+      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
         let input = "";
         for await (const chunk of request) input += chunk;
         const body = JSON.parse(input);
-        if (["submit", "submitOther", "submitCleanup", "submitStale", "submitProcessing"].includes(kind)) {
+        if (["submit", "submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing"].includes(kind)) {
           assert.equal(body.prepayOrderNo, `PRE-${paymentIds[kind]}`);
           assert.equal(body.paymentMethod, "支付宝");
           assert.equal(body.accessToken, "local-test-token");
           assert.ok(typeof body.idempotencyKey === "string" && body.idempotencyKey.length > 0);
-          if (kind === "submitCleanup") {
+          if (kind === "submitCleanup" || kind === "submitCleanupWrite") {
             status = "WAIT_CALLBACK";
             response.end(JSON.stringify({ code: "0", data: {
               ...cashierPage(kind, status), channel: body.channelCode,
@@ -244,7 +245,7 @@ async function main() {
       .some((element) => element.textContent.includes('主动查单'))`), false);
     status = "WAIT_CALLBACK";
     await evaluate(`${actionButton('刷新收银台')}.click()`);
-    await waitFor(() => evaluate(`${actionButton('主动查单')}.disabled === false`),
+    await waitFor(() => evaluate(`${actionButton('主动查单')}?.disabled === false`),
       "accepted cashier guidance");
     assert.equal(await evaluate("document.querySelector('.channel-tips')?.textContent.includes('继续查单')"), true);
     assert.equal(requests.slice(cashierPayingStart).filter((item) => item.method === "POST").length, 0);
@@ -369,11 +370,54 @@ async function main() {
     assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('PRE-${paymentIds[kind]}'))`), false);
     assert.equal(await evaluate("Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.')).length"),
       pendingKeysBeforeSubmit + 1);
+    assert.equal(await evaluate(`Object.entries(sessionStorage).some(([key, value]) =>
+      key.startsWith('hsp.paymentSubmitAttempt.v1.') && JSON.parse(value).confirmed === true)`), true);
     await send("Page.removeScriptToEvaluateOnNewDocument", { identifier: ignoredRemoval.identifier });
+    status = "PREPAY_CREATED";
     await send("Page.navigate", { url: cleanupUrl });
-    await waitFor(() => evaluate(`document.body.innerText.includes('待回调') && ${actionButton('确认支付')}.disabled`),
-      "cashier reload after confirmed submit cleanup failure");
+    await waitFor(() => evaluate(`document.body.innerText.includes('本机未决记录未能清理')
+      && ${actionButton('确认支付')}.disabled && ${actionButton('重置幂等键')}.disabled`),
+      "stale cashier reload after confirmed submit cleanup failure");
     assert.equal(requests.slice(ignoredRemovalStart).filter((item) => item.method === "POST").length, 1);
+    status = "WAIT_CALLBACK";
+    await evaluate(`${actionButton('刷新收银台')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('待回调')
+      && !${actionButton('主动查单')}.disabled && ${actionButton('确认支付')}.disabled`),
+      "confirmed submit remains read-only after fresh cashier readback");
+    assert.equal(requests.slice(ignoredRemovalStart).filter((item) => item.method === "POST").length, 1);
+    kind = "submitCleanupWrite";
+    status = "PREPAY_CREATED";
+    const blockedWriteStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token` });
+    await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
+      "cashier before unavailable cleanup marker write");
+    await evaluate(`(() => {
+      window.__originalSubmitRemoveItem = Storage.prototype.removeItem;
+      window.__originalSubmitSetItem = Storage.prototype.setItem;
+      Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value(key) {
+        if (key.startsWith('hsp.paymentSubmitAttempt.v1.')) return;
+        return window.__originalSubmitRemoveItem.call(this, key);
+      } });
+      Object.defineProperty(Storage.prototype, 'setItem', { configurable: true, value(key, value) {
+        if (key.startsWith('hsp.paymentSubmitAttempt.v1.') && this.getItem(key) !== null) return;
+        return window.__originalSubmitSetItem.call(this, key, value);
+      } });
+    })()`);
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付响应已返回，但本机未决记录未能清理')
+      && ${actionButton('确认支付')}.disabled`), "cleanup removal and marker write both fail");
+    assert.equal(requests.slice(blockedWriteStart).filter((item) => item.method === "POST").length, 1);
+    assert.equal(await evaluate(`Object.entries(sessionStorage).some(([key, value]) =>
+      key.startsWith('hsp.paymentSubmitAttempt.v1.') && JSON.parse(value).confirmed === undefined)`), true);
+    status = "PREPAY_CREATED";
+    await evaluate(`${actionButton('刷新收银台')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('待支付')
+      && ${actionButton('确认支付')}?.disabled && ${actionButton('重置幂等键')}?.disabled`),
+      "in-memory confirmed submit remains locked after cashier refresh");
+    assert.equal(requests.slice(blockedWriteStart).filter((item) => item.method === "POST").length, 1);
+    await evaluate(`Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value: window.__originalSubmitRemoveItem });
+      Object.defineProperty(Storage.prototype, 'setItem', { configurable: true, value: window.__originalSubmitSetItem });
+      delete window.__originalSubmitRemoveItem; delete window.__originalSubmitSetItem`);
     kind = "submitStale";
     status = "PREPAY_CREATED";
     retrySubmit = true;

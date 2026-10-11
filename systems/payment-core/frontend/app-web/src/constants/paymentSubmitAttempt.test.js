@@ -163,8 +163,13 @@ test("does not report a confirmed submit key as cleared when storage retains it"
   assert.throws(() => clearPaymentSubmitAttempt(attempt, storage),
     (error) => error instanceof UnverifiablePaymentSubmitAttemptError
       && error.message.includes("支付响应已返回"));
-  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).idempotencyKey,
-    attempt.idempotencyKey);
+  assert.equal(JSON.parse([...storage.values.values()][0]).confirmed, true);
+  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).confirmed, true);
+  await assert.rejects(resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage),
+    UnverifiablePaymentSubmitAttemptError);
+  await assert.rejects(discardPaymentSubmitAttempt("PRE-001", storage),
+    UnverifiablePaymentSubmitAttemptError);
+  await resolvePaymentSubmitAttempt({ ...payload, prepayOrderNo: "PRE-002" }, generatePaymentSubmitKey(), storage);
 });
 
 test("does not clear a different pending key after a confirmed submit", async () => {
@@ -185,8 +190,18 @@ test("fails closed when confirmed submit cleanup storage throws", async () => {
   storage.removeItem = () => { throw new Error("blocked"); };
   assert.throws(() => clearPaymentSubmitAttempt(attempt, storage),
     UnverifiablePaymentSubmitAttemptError);
-  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).idempotencyKey,
-    attempt.idempotencyKey);
+  assert.equal(JSON.parse([...storage.values.values()][0]).confirmed, true);
+  await assert.rejects(resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage),
+    UnverifiablePaymentSubmitAttemptError);
+});
+
+test("does not claim a confirmed marker when storage silently ignores its write", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage);
+  storage.removeItem = () => {};
+  storage.setItem = () => {};
+  assert.throws(() => clearPaymentSubmitAttempt(attempt, storage), UnverifiablePaymentSubmitAttemptError);
+  assert.equal(JSON.parse([...storage.values.values()][0]).confirmed, undefined);
 });
 
 test("rejects a saved UUID with a non-string representation", async () => {

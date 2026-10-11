@@ -233,8 +233,10 @@ async function loadCashier(prepayOrderNo = currentPrepayOrderNo.value) {
     }
     let pendingAttempt;
     try {
-      pendingAttempt = await readPaymentSubmitAttemptForPrepay(prepayOrderNo)
-        || (prepayOrderNo === loadedPrepayOrderNo.value ? pendingSubmitAttempt.value : null);
+      const savedAttempt = await readPaymentSubmitAttemptForPrepay(prepayOrderNo);
+      pendingAttempt = prepayOrderNo === loadedPrepayOrderNo.value && pendingSubmitAttempt.value?.confirmed
+        ? pendingSubmitAttempt.value
+        : savedAttempt || (prepayOrderNo === loadedPrepayOrderNo.value ? pendingSubmitAttempt.value : null);
     } catch (error) {
       if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
         return;
@@ -363,6 +365,7 @@ const canSubmit = computed(() => {
     && hasChannels.value
     && accessTokenAvailable.value
     && !submissionPending.value
+    && !pendingSubmitAttempt.value?.confirmed
     && (!pendingSubmitAttempt.value
       || pendingSubmitAttempt.value.paymentMethod === selectedPaymentMethod.value)
     && (!queriedStatus || queriedStatus === "PREPAY_CREATED"
@@ -379,6 +382,9 @@ const submitBlockedHint = computed(() => {
   const status = cashier.value?.status;
   if (cashierSnapshotStale.value) {
     return "收银台状态未能重新核实，请先刷新收银台，避免重复提交。";
+  }
+  if (pendingSubmitAttempt.value?.confirmed) {
+    return "支付响应已返回，但本机未决记录未能清理；请查单核对原支付结果，勿重复付款。";
   }
   if (!accessTokenAvailable.value) {
     return "当前支付访问令牌未注入，请联系运营完成安全配置后再提交。";
@@ -649,6 +655,7 @@ async function pay() {
     if (!matchesPaymentSnapshot(snapshot, submitResult)) {
       throw new Error("支付提交响应为空或与当前支付单不一致");
     }
+    pendingSubmitAttempt.value = { ...attempt, confirmed: true };
     clearPaymentSubmitAttempt(attempt);
     pendingSubmitAttempt.value = null;
     router.push(buildPaymentResultRoute(

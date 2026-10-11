@@ -63,6 +63,14 @@ test("blocks mutations when cashier status cannot be reverified", () => {
   assert.match(source, /:disabled="actionRunning \|\| submissionPending \|\| pendingSubmitAttempt \|\| cashierSnapshotStale" @click="regenerateIdempotencyKey"/);
 });
 
+test("keeps confirmed cleanup failures read-only after a cashier reload", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /const canSubmit = computed\([\s\S]*!pendingSubmitAttempt\.value\?\.confirmed/);
+  assert.match(source, /if \(pendingSubmitAttempt\.value\?\.confirmed\) \{\s*return "支付响应已返回，但本机未决记录未能清理/);
+  assert.match(source, /pendingSubmitAttempt\.value = \{ \.\.\.attempt, confirmed: true \};\s*clearPaymentSubmitAttempt\(attempt\);/);
+  assert.match(source, /pendingSubmitAttempt\.value\?\.confirmed[\s\S]*\? pendingSubmitAttempt\.value\s*: savedAttempt/);
+});
+
 test("rechecks the cashier after a failed query or close and blocks unverified actions", () => {
   const source = readFileSync(viewPath, "utf8");
   for (const action of ["queryCurrentPayment", "closeCurrentPayment"]) {

@@ -51,7 +51,8 @@ function readSavedAttempt(storage, scopeHash) {
     if (saved && typeof saved.digest === "string" && DIGEST_PATTERN.test(saved.digest)
         && saved.scopeHash === scopeHash
         && typeof saved.idempotencyKey === "string" && UUID_PATTERN.test(saved.idempotencyKey)
-        && typeof saved.paymentMethod === "string" && saved.paymentMethod.trim()) {
+        && typeof saved.paymentMethod === "string" && saved.paymentMethod.trim()
+        && (saved.confirmed === undefined || saved.confirmed === true)) {
       return saved;
     }
   } catch {}
@@ -84,6 +85,7 @@ export async function resolvePaymentSubmitAttempt(
   if (!digest || !scopeHash) throw new UnverifiablePaymentSubmitAttemptError();
   const saved = readSavedAttempt(storage, scopeHash);
   if (saved) {
+    if (saved.confirmed) throw new UnverifiablePaymentSubmitAttemptError();
     if (saved.digest !== digest) {
       throw new Error("本次预付单存在待核实的支付提交，请沿用原方式查单，不要更换渠道或请求键。");
     }
@@ -116,13 +118,27 @@ export function clearPaymentSubmitAttempt(attempt, storage = availableStorage())
     if (!attempt?.scopeHash || !storage) throw new Error("pending payment submit unavailable");
     const saved = readSavedAttempt(storage, attempt.scopeHash);
     if (!saved) return;
-    if (saved.idempotencyKey !== attempt.idempotencyKey || saved.digest !== attempt.digest) {
+    if (saved.idempotencyKey !== attempt.idempotencyKey || saved.digest !== attempt.digest
+        || saved.confirmed) {
       throw new Error("pending payment submit changed");
     }
-    storage.removeItem(storageKey(attempt.scopeHash));
-    if (storage.getItem(storageKey(attempt.scopeHash)) !== null) {
-      throw new Error("pending payment submit was not removed");
+    const key = storageKey(attempt.scopeHash);
+    const rawSaved = storage.getItem(key);
+    try {
+      storage.removeItem(key);
+    } catch {}
+    const remaining = storage.getItem(key);
+    if (remaining === null) return;
+    const retained = JSON.parse(remaining);
+    if (remaining !== rawSaved || retained.digest !== saved.digest
+        || retained.scopeHash !== saved.scopeHash || retained.paymentMethod !== saved.paymentMethod
+        || retained.idempotencyKey !== saved.idempotencyKey || retained.confirmed !== undefined) {
+      throw new Error("pending payment submit changed during cleanup");
     }
+    const confirmed = JSON.stringify({ ...saved, confirmed: true });
+    storage.setItem(key, confirmed);
+    if (storage.getItem(key) !== confirmed) throw new Error("confirmed payment submit not saved");
+    throw new Error("confirmed payment submit retained for review");
   } catch {
     throw new UnverifiablePaymentSubmitAttemptError(
       "支付响应已返回，但本机未决记录未能清理；请刷新核对支付结果，勿重复付款。"
@@ -140,6 +156,9 @@ export async function discardPaymentSubmitAttempt(
   const scopeHash = await digestText(prepayOrderNo, cryptoProvider);
   if (!scopeHash) throw new UnverifiablePaymentSubmitAttemptError();
   try {
+    if (readSavedAttempt(storage, scopeHash)?.confirmed) {
+      throw new Error("confirmed payment submit cannot be reset");
+    }
     storage.removeItem(storageKey(scopeHash));
     if (storage.getItem(storageKey(scopeHash)) !== null) {
       throw new Error("pending payment submit was not removed");
