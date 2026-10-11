@@ -143,6 +143,7 @@ async function main() {
   let failRefundListOnce = false;
   let paymentStatus = "PREPAY_CREATED";
   let paymentScenario = "close";
+  let querySubmissionUnaccepted = false;
   let failPaymentReadbackOnce = false;
   let taskExecuted = false;
   let failTaskRunReadbackOnce = false;
@@ -276,7 +277,9 @@ async function main() {
           const item = paymentScenario === "query" ? {
             ...initialQueryPayment, status: paymentStatus,
             statusType: paymentStatus === "FAIL" ? "danger" : "warn",
-            latestAttemptStatus: paymentStatus === "FAIL" ? "失败" : "处理中",
+            channelTransactionNo: querySubmissionUnaccepted ? null : initialQueryPayment.channelTransactionNo,
+            latestAttemptStatus: paymentStatus === "FAIL" ? "失败"
+              : querySubmissionUnaccepted ? "渠道提交中" : "处理中",
             latestAttemptStatusType: paymentStatus === "FAIL" ? "danger" : "info"
           } : { ...initialPayment, status: paymentStatus,
             statusType: paymentStatus === "CLOSED" ? "danger" : "info" };
@@ -689,6 +692,25 @@ async function main() {
     const queryDetailButton = `Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent.trim() === '主动查单')`;
     const queryDetailState = paymentDetailState.replaceAll(paymentDetailButton, queryDetailButton);
+    paymentScenario = "query";
+    paymentStatus = "WAIT_CALLBACK";
+    querySubmissionUnaccepted = true;
+    const unacceptedStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/payments/${queryPaymentOrderId}` });
+    await waitFor(async () => (await evaluate(queryDetailState))?.status === "WAIT_CALLBACK"
+      && await evaluate("document.body.innerText.includes('渠道受理未确认')"), "渠道待受理详情");
+    assert.deepEqual(await evaluate(queryDetailState), { status: "WAIT_CALLBACK", disabled: true });
+    assert.equal(await evaluate("document.body.innerText.includes('勿主动查单或重复提交')"), true);
+    assert.equal(await evaluate("document.body.innerText.includes('建议先主动查单')"), false);
+    await evaluate(`${queryDetailButton}.click()`);
+    assert.equal(requests.slice(unacceptedStart).filter((item) => item.method === "POST").length, 0);
+    querySubmissionUnaccepted = false;
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '刷新').click()`);
+    await waitFor(async () => (await evaluate(queryDetailState))?.disabled === false
+      && await evaluate("document.body.innerText.includes('可主动查单')"), "渠道受理后详情");
+    assert.equal(await evaluate("document.body.innerText.includes('渠道受理未确认')"), false);
+    assert.equal(requests.slice(unacceptedStart).filter((item) => item.method === "POST").length, 0);
     for (const detail of [false, true]) {
       for (const failReadback of [false, true]) {
         paymentScenario = "query";
