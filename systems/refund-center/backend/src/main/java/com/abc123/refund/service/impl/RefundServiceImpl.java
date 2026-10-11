@@ -222,8 +222,7 @@ public class RefundServiceImpl implements RefundService {
                 ? request.getRefundMethod().trim() : "ORIGINAL";
         String refundReason = StringUtils.hasText(request.getRefundReason())
                 ? request.getRefundReason().trim() : "客户申请退款";
-        String idempotencyKey = StringUtils.hasText(request.getIdempotencyKey())
-                ? request.getIdempotencyKey().trim() : UUID.randomUUID().toString();
+        String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
         PaymentSuccessProjectionEntity source = refundDao.findPaymentSourceForUpdate(paymentOrderId);
         if (source == null) {
             throw new BusinessException("未找到支付成功事实，禁止发起退款");
@@ -268,6 +267,22 @@ public class RefundServiceImpl implements RefundService {
 
     static String newRefundOrderId(LocalDateTime timestamp) {
         return "REF" + timestamp.format(ID_FORMATTER) + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private String normalizeIdempotencyKey(String value) {
+        if (value == null) {
+            return UUID.randomUUID().toString();
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new BusinessException("退款幂等键包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (!StringUtils.hasText(normalized) || normalized.length() > 128) {
+            throw new BusinessException("退款幂等键不能为空且不能超过128字符");
+        }
+        return normalized;
     }
 
     private void assertSameRefundRequest(RefundListItemDTO existing, String paymentOrderId,

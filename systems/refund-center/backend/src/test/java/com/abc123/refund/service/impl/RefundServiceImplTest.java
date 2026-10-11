@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.refund.common.BusinessException;
@@ -143,6 +144,21 @@ class RefundServiceImplTest {
         verify(refundDao, never()).findByIdempotencyKey(any());
         verify(refundDao, never()).findPaymentSourceForUpdate(any());
         verify(refundDao, never()).insertRefund(any());
+    }
+
+    @Test
+    void shouldRejectInvalidExplicitIdempotencyKeysBeforeReadingSource() {
+        for (String idempotencyKey : Arrays.asList(
+                " ", "\t", String.join("", Collections.nCopies(129, "x")), "abc\nkey")) {
+            RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+            request.setPaymentOrderId("PAY-1");
+            request.setRefundAmount(new BigDecimal("10.00"));
+            request.setIdempotencyKey(idempotencyKey);
+
+            BusinessException exception = assertThrows(BusinessException.class, () -> service.apply(request));
+            assertTrue(exception.getMessage().contains("幂等键"));
+        }
+        verifyNoInteractions(refundDao);
     }
 
     @Test

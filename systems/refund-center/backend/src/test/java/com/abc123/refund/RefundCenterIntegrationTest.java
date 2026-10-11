@@ -250,6 +250,29 @@ class RefundCenterIntegrationTest {
     }
 
     @Test
+    void shouldAcceptMaxLengthIdempotencyKeyAndReplaySameRefund() {
+        String paymentOrderId = "PAY-IT-KEY-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-KEY");
+        source.setPaidAmount(new BigDecimal("100.00"));
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId(paymentOrderId);
+        request.setRefundAmount(new BigDecimal("10.00"));
+        request.setIdempotencyKey(String.join("", java.util.Collections.nCopies(128, "x")));
+        RefundListItemDTO created = refundService.apply(request);
+        assertEquals(created.getRefundOrderId(), refundService.apply(request).getRefundOrderId());
+
+        request.setIdempotencyKey(request.getIdempotencyKey() + "x");
+        assertThrows(BusinessException.class, () -> refundService.apply(request));
+        RefundQueryDTO query = new RefundQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        assertEquals(1L, refundService.list(query).getTotal());
+    }
+
+    @Test
     void shouldRejectConflictingPaymentSuccessProjection() {
         String paymentOrderId = "PAY-IT-REPLAY-" + UUID.randomUUID();
         PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
