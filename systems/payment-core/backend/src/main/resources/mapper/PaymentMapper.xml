@@ -1419,7 +1419,7 @@
         WHERE payment_order_id = #{paymentOrderId}
           AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
           AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
-          AND token_status = 'ACTIVE'
+          AND UPPER(TRIM(token_status)) = 'ACTIVE'
     </update>
 
     <update id="updateOrderAfterPayment">

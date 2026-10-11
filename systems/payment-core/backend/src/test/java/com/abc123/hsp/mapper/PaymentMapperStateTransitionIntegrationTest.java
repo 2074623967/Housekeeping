@@ -1269,6 +1269,30 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldReleaseActiveStatusVariantOnlyForExactPaymentOwner() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, "
+                    + "holder_idempotency_key, holder_terminal, holder_client_ip, "
+                    + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                    + "('PRE-TOKEN-STATUS', 'PAY-TOKEN-STATUS', 'app', ' active ', "
+                    + "'original-key', 'APP', '127.0.0.1', NOW(), "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertTrue(mapper.hasActiveSubmitConcurrencyToken("PAY-TOKEN-STATUS"));
+            assertEquals(0, mapper.releaseSubmitConcurrencyToken("pay-token-status", "ALIAS_RELEASE"));
+            assertTrue(mapper.hasActiveSubmitConcurrencyToken("PAY-TOKEN-STATUS"));
+            assertEquals(1, mapper.releaseSubmitConcurrencyToken("PAY-TOKEN-STATUS", "VERIFIED_TERMINAL"));
+            session.clearCache();
+            assertFalse(mapper.hasActiveSubmitConcurrencyToken("PAY-TOKEN-STATUS"));
+            assertEquals("RELEASED", mapper.findSubmitConcurrencyToken("PRE-TOKEN-STATUS", "app")
+                    .getTokenStatus());
+        }
+    }
+
+    @Test
     void shouldRejectChannelBindingWhenOriginalPrepayIsReplaced() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
