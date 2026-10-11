@@ -5,7 +5,7 @@ import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute } from "../router/listRoutes";
 import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
-import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -50,7 +50,8 @@ const metrics = computed(() => ({
   total: total.value,
   successTotal: items.value.filter((item) => item.status === "SUCCESS"
     && !item.successFactIssue && !item.prepayBindingIssue).length,
-  callbackPendingTotal: items.value.filter((item) => item.status === "WAIT_CALLBACK").length,
+  callbackPendingTotal: items.value.filter((item) => item.status === "WAIT_CALLBACK"
+    && !isChannelSubmissionUnaccepted(item.status, item.latestAttemptStatus, item.channelTransactionNo)).length,
   amountTotal: hasUnverifiablePaymentAmount.value
     ? "—" : sumPaymentAmounts(items.value.map((item) => item.amount))
 }));
@@ -470,7 +471,7 @@ watch(
                 <td>{{ item.paymentMethod }}</td>
                 <td>{{ item.channel }}</td>
                 <td>{{ item.channelTransactionNo }}</td>
-                <td><span :class="['badge', item.successFactIssue ? 'danger' : item.statusType]">{{ item.status }}</span> <span v-if="item.successFactIssue" class="badge danger">{{ item.successFactIssue === "SUCCESS_TIME_MISSING" ? "成功时间缺失" : "成功事实异常" }}</span></td>
+                <td><span :class="['badge', item.successFactIssue ? 'danger' : item.statusType]">{{ item.status }}</span> <span v-if="isChannelSubmissionUnaccepted(item.status, item.latestAttemptStatus, item.channelTransactionNo)" class="badge warn">渠道受理未确认</span> <span v-if="item.successFactIssue" class="badge danger">{{ item.successFactIssue === "SUCCESS_TIME_MISSING" ? "成功时间缺失" : "成功事实异常" }}</span></td>
                 <td><span :class="['badge', item.latestAttemptStatusType || 'info']">{{ item.latestAttemptStatus || "—" }}</span></td>
                 <td>{{ item.latestAttemptCompletedAt || "—" }}</td>
                 <td>{{ item.createdAt }}</td>
@@ -518,6 +519,10 @@ watch(
               <template v-if="selectedItem.successFactIssue || selectedItem.prepayBindingIssue">
                 <div class="ops-row"><span>优先动作</span><span>保留当前异常快照，联查处理日志与最新支付尝试</span></div>
                 <div class="ops-row"><span>详情门禁</span><span>成功事实异常或预付归属未确认时，不从列表推断可执行的支付动作</span></div>
+              </template>
+              <template v-else-if="isChannelSubmissionUnaccepted(selectedItem.status, selectedItem.latestAttemptStatus, selectedItem.channelTransactionNo)">
+                <div class="ops-row"><span>优先动作</span><span>渠道受理尚未确认，请等待状态推进，刷新详情核对，不可主动查单或关单</span></div>
+                <div class="ops-row"><span>状态说明</span><span>列表显示持久化状态，最近尝试仍在渠道提交中，不能按已受理待回调处理</span></div>
               </template>
               <template v-else>
                 <div class="ops-row"><span>优先动作</span><span>已提交先查单，未提交可关闭</span></div>

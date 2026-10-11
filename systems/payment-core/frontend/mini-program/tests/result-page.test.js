@@ -154,6 +154,26 @@ test("keeps PAYING result read-only until channel acceptance is confirmed", asyn
   }
 });
 
+test("keeps a prewritten WAIT_CALLBACK result read-only before channel acceptance", async () => {
+  let queryCalls = 0;
+  paymentApi.getDetail = () => Promise.resolve({
+    ...paymentDetail(),
+    latestAttemptStatus: "渠道提交中",
+    channelTransactionNo: null
+  });
+  paymentApi.query = () => { queryCalls += 1; return Promise.resolve(paymentDetail()); };
+  const page = createPage();
+  page.onLoad({ paymentOrderId: "PAY-1", prepayOrderNo: "PRE-TRUSTED", scene: "balance-pay" });
+  try {
+    await flushPromises();
+    assert.equal(page.data.canQuery, false);
+    await page.queryPayment();
+    assert.equal(queryCalls, 0);
+  } finally {
+    page.onUnload();
+  }
+});
+
 test("shows FAIL as an unverified result without offering channel actions", async () => {
   let queryCalls = 0;
   paymentApi.getDetail = () => Promise.resolve({

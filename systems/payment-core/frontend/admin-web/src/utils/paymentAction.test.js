@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canClosePaymentLocally, canQueryPaymentChannel } from "./paymentAction.js";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted } from "./paymentAction.js";
+
+test("distinguishes persisted callback waiting from unaccepted channel submission", () => {
+  assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", "渠道提交中", null), true);
+  assert.equal(isChannelSubmissionUnaccepted("支付中", " 渠道提交中 ", " "), true);
+  assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", "渠道提交中", "WX-1"), false);
+  assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", "等待回调", null), false);
+  assert.equal(isChannelSubmissionUnaccepted("CLOSED", "渠道提交中", null), false);
+});
 
 test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("SUCCESS", null), true);
@@ -11,6 +19,9 @@ test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, null, "wx_h5"), true);
   assert.equal(canQueryPaymentChannel("CLOSED", "FAILED"), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "渠道提交中", null, null, "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("支付中", "渠道提交中", null, "", "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "渠道提交中", null, "WX-1", "wx_h5"), true);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", null), false);
   assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, "WX-1", " "), false);
   assert.equal(canQueryPaymentChannel("支付中", "处理中", null, "WX-1", "wx_h5"), true);

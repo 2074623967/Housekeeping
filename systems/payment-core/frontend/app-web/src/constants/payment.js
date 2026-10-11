@@ -142,6 +142,11 @@ export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemp
   const normalizedAttemptStatus = typeof latestAttemptStatus === "string"
     ? latestAttemptStatus.trim()
     : "";
+  if (status === "WAIT_CALLBACK" && normalizedAttemptStatus === "渠道提交中"
+      && !(typeof channelTransactionNo === "string"
+        ? channelTransactionNo.trim() : channelTransactionNo)) {
+    return false;
+  }
   if (status === "CLOSED" && !normalizedAttemptStatus && !channelTransactionNo) {
     return true;
   }

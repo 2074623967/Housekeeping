@@ -1,3 +1,11 @@
+export function isChannelSubmissionUnaccepted(status, latestAttemptStatus, channelTransactionNo) {
+  return ["WAIT_CALLBACK", "支付中"].includes(status)
+    && typeof latestAttemptStatus === "string"
+    && latestAttemptStatus.trim() === "渠道提交中"
+    && !(typeof channelTransactionNo === "string"
+      ? channelTransactionNo.trim() : channelTransactionNo);
+}
+
 export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
   if (["SUCCESS", "支付成功"].includes(status)) {
     return true;
@@ -5,6 +13,9 @@ export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemp
   const normalizedAttemptStatus = typeof latestAttemptStatus === "string"
     ? latestAttemptStatus.trim()
     : "";
+  if (isChannelSubmissionUnaccepted(status, latestAttemptStatus, channelTransactionNo)) {
+    return false;
+  }
   if (["CLOSED", "已关闭"].includes(status) && !normalizedAttemptStatus && !channelTransactionNo) {
     return true;
   }

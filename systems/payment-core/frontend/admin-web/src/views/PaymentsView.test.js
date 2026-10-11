@@ -14,6 +14,12 @@ test("shows pay scene in the payment list and selected snapshot", () => {
   assert.match(source, /<span>支付场景<\/span><strong>\{\{ selectedItem\.payScene \|\| "—" \}\}<\/strong>/);
 });
 
+test("keeps unaccepted channel submissions out of callback metrics and query guidance", () => {
+  assert.match(source, /callbackPendingTotal: items\.value\.filter\(\(item\) => item\.status === "WAIT_CALLBACK"[\s\S]*!isChannelSubmissionUnaccepted/);
+  assert.match(source, /item\.status \}\}<\/span> <span v-if="isChannelSubmissionUnaccepted\(item\.status/);
+  assert.match(source, /v-else-if="isChannelSubmissionUnaccepted\(selectedItem\.status[\s\S]*渠道受理尚未确认，请等待状态推进/);
+});
+
 test("keeps anomalous success rows on the snapshot and links to logs in every list mode", () => {
   assert.doesNotMatch(source, /isSuccessFactDiagnosticView/);
   assert.match(source, /function openLogs\(paymentOrderId\) \{[\s\S]*?if \(!canUseSnapshot\.value\)[\s\S]*?router\.push\(paymentLogsRoute\(\{ paymentOrderId \}\)\)/);

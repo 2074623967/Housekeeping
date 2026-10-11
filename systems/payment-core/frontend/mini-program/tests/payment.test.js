@@ -75,6 +75,8 @@ test("fails closed when the mini program payment token is absent", () => {
 
 test("keeps query and close operations on proven channel facts", () => {
   assert.equal(canQueryPayment("WAIT_CALLBACK", "等待回调", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPayment("WAIT_CALLBACK", "渠道提交中", null, null, "wx_h5"), false);
+  assert.equal(canQueryPayment("WAIT_CALLBACK", "渠道提交中", null, "WX-1", "wx_h5"), true);
   assert.equal(canQueryPayment("WAIT_CALLBACK", "等待回调", null, "WX-1", null), false);
   assert.equal(canQueryPayment("CLOSED", "处理中", null, "WX-1", " "), false);
   assert.equal(canQueryPayment("CLOSED", null), true);

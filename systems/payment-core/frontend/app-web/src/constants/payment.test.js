@@ -39,6 +39,8 @@ test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, null, "wx_h5"), true);
   assert.equal(canQueryPaymentChannel("CLOSED", "失败"), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "渠道提交中", null, null, "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "渠道提交中", null, "WX-1", "wx_h5"), true);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", null), false);
   assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, "WX-1", " "), false);
   assert.equal(canQueryPaymentChannel("PAYING", "处理中"), false);

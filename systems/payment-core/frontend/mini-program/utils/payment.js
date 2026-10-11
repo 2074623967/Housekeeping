@@ -104,6 +104,11 @@ function canQueryPayment(status, latestAttemptStatus, latestAttemptCompletedAt, 
     return true;
   }
   const attemptStatus = typeof latestAttemptStatus === "string" ? latestAttemptStatus.trim() : "";
+  if (status === "WAIT_CALLBACK" && attemptStatus === "渠道提交中"
+      && !(typeof channelTransactionNo === "string"
+        ? channelTransactionNo.trim() : channelTransactionNo)) {
+    return false;
+  }
   if (status === "CLOSED" && !attemptStatus && !channelTransactionNo) {
     return true;
   }
