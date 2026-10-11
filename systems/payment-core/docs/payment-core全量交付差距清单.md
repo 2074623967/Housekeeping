@@ -9099,3 +9099,7 @@ H2/MyBatis 将同退款单两条尝试的 demo 渠道号分别落库并按号查
 ### 10.902 2026-10-11 当前代码九服务网关主动查单路径
 
 隔离 `verify payment-query-chain` 启动九后端与本机查询上游，HTTP 冒烟和跨系统 happy-path 均通过；支付由 `GATEWAY_QUERY` 收口，对账 `COMPLETED`、`4/4`、`financialCloseable=true`，随后服务与端口/PID 清理。仅关闭当前基线的本机假上游查单回归，正式渠道资金、目标 MySQL 8、多实例、可信身份与发布仍未验。详见自测记录 10.982、跨系统记录第 58 节。
+
+### 10.903 2026-10-11 当前代码风险复核状态门禁
+
+隔离 `verify risk-review` 的支付与风控后端 HTTP 周期通过：上下文漂移返回 `PAYMENT-1024`、原请求批准后 `WAIT_CALLBACK`、硬拒绝订单 `RISK_BLOCKED`，退出清理。仅关闭本地状态门禁复验，可信审核主体、目标 MySQL 8、正式渠道资金与发布仍待验。详见自测记录 10.983、跨系统记录第 59 节。

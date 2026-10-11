@@ -534,3 +534,7 @@ payment-core H2/HTTP 定向测试先由主动查单确认成功，再重放查�
 ## 58. 2026-10-11 当前基线九服务主动网关查单链路复验
 
 在固定端口、环境覆盖与现存 PID 的写前隔离检查通过后，执行 `local-stack.sh verify payment-query-chain`。本机受控查询上游及九个后端均 `READY`，HTTP 冒烟与跨系统主动查单 happy-path 均 `[PASS]`；虚构支付由 `GATEWAY_QUERY` 收口，后续支付成功、清分、结算、账务与退款事实进入对账，链路 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。退出码 `0`，九个后端与查询上游均停服，相关端口和 PID 文件复核无遗留。此路径仅使用 H2/demo 与本机假上游，不证明真实渠道查单、资金到账、目标 MySQL 8、多实例、可信身份或发布。
+
+## 59. 2026-10-11 当前基线风控双服务复核周期
+
+在目标端口与现存 PID 隔离后运行 `local-stack.sh verify risk-review`，支付核心和风控后端均 `READY`，HTTP 冒烟与本地人工复核周期均 `[PASS]`。演示订单待审及批准后变更绑定上下文返回 `PAYMENT-1024`，原请求批准后进入 `WAIT_CALLBACK`；另一个硬拒绝订单维持 `RISK_BLOCKED`。退出码 `0`，两服务停服、端口/PID 无遗留。仅为 H2/demo 的本机 HTTP 状态门禁，不证明可信审核人身份、目标 MySQL 8、正式渠道资金或发布。
