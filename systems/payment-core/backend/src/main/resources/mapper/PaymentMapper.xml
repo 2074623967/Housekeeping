@@ -1064,6 +1064,14 @@
               AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
               AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_submit_concurrency_token token
+            WHERE token.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(token.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(token.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND UPPER(TRIM(token.token_status)) = 'ACTIVE'
+          )
     </update>
 
     <update id="markUnsubmittedPaymentClosed">
@@ -1110,6 +1118,14 @@
             WHERE pa.payment_order_id = t_payment_order.payment_order_id
               AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
               AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_submit_concurrency_token token
+            WHERE token.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(token.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(token.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND UPPER(TRIM(token.token_status)) = 'ACTIVE'
           )
     </update>
 

@@ -2176,6 +2176,49 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldNotClosePaymentWithActiveSubmitTokenEvenWhenAttemptIsMissing() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, "
+                    + "holder_idempotency_key, holder_terminal, holder_client_ip, "
+                    + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                    + "('PRE-UNSUBMITTED-LOCK', 'PAY-UNSUBMITTED', 'app', 'ACTIVE', "
+                    + "'pending-key', 'APP', '127.0.0.1', NOW(), "
+                    + "TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())");
+
+            assertEquals(0, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
+            assertEquals(0, mapper.markExpiredUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
+            try (java.sql.ResultSet resultSet = statement.executeQuery(
+                    "SELECT status FROM t_payment_order WHERE payment_order_id='PAY-UNSUBMITTED'")) {
+                assertTrue(resultSet.next());
+                assertEquals("PREPAY_CREATED", resultSet.getString(1));
+            }
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status='RELEASED' "
+                    + "WHERE payment_order_id='PAY-UNSUBMITTED'");
+            assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
+        }
+    }
+
+    @Test
+    void shouldNotTreatCaseVariantSubmitTokenAsExactPaymentOwner() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, "
+                    + "holder_idempotency_key, holder_terminal, holder_client_ip, "
+                    + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                    + "('PRE-ALIAS-LOCK', 'pay-unsubmitted', 'app', 'ACTIVE', "
+                    + "'alias-key', 'APP', '127.0.0.1', NOW(), "
+                    + "TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())");
+
+            assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
+        }
+    }
+
+    @Test
     void shouldNotManuallyClosePaymentAfterPrepayBindingDrifts() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
