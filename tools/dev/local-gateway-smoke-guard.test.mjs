@@ -4,12 +4,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertLocalGatewaySmokeEnvironment } from "./local-gateway-smoke-guard.mjs";
 
-test("allows only local toolchain and query race controls", () => {
+test("allows local toolchain controls", () => {
   assert.doesNotThrow(() => assertLocalGatewaySmokeEnvironment({
     HSP_MAVEN_BIN: "/opt/maven/bin/mvn",
     HSP_MAVEN_REPO: "/tmp/maven-repo",
-    HSP_JAVA_HOME: "/opt/jdk",
-    HSP_QUERY_RACE_MODE: "conflicting"
+    HSP_JAVA_HOME: "/opt/jdk"
   }));
 });
 
@@ -24,6 +23,19 @@ test("rejects inherited service, datasource, JVM and proxy overrides without exp
   }
 });
 
+test("allows only the explicit query race variant on the query smoke", () => {
+  assert.doesNotThrow(() => assertLocalGatewaySmokeEnvironment(
+    { HSP_QUERY_RACE_MODE: "conflicting" }, { allowQueryRaceMode: true }
+  ));
+  for (const [value, options] of [["conflict", { allowQueryRaceMode: true }],
+    ["conflicting", undefined]]) {
+    assert.throws(
+      () => assertLocalGatewaySmokeEnvironment({ HSP_QUERY_RACE_MODE: value }, options),
+      /HSP_QUERY_RACE_MODE/
+    );
+  }
+});
+
 test("both gateway smoke entry points refuse overrides before starting services", () => {
   for (const script of ["payment-core-gateway-query-smoke.mjs", "payment-core-gateway-refund-smoke.mjs"]) {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url))], {
@@ -34,5 +46,18 @@ test("both gateway smoke entry points refuse overrides before starting services"
     assert.equal(result.status, 1, `${script}: ${result.stderr}`);
     assert.match(result.stderr, /refuses environment override: SPRING_DATASOURCE_URL/);
     assert.doesNotMatch(result.stderr, /jdbc:mysql:/);
+  }
+});
+
+test("a misspelled query mode and a refund-only race mode fail before startup", () => {
+  for (const [script, mode] of [["payment-core-gateway-query-smoke.mjs", "conflict"],
+    ["payment-core-gateway-refund-smoke.mjs", "conflicting"]]) {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url))], {
+      env: { PATH: process.env.PATH, HSP_QUERY_RACE_MODE: mode },
+      encoding: "utf8",
+      timeout: 5000
+    });
+    assert.equal(result.status, 1, `${script}: ${result.stderr}`);
+    assert.match(result.stderr, /refuses environment override: HSP_QUERY_RACE_MODE/);
   }
 });

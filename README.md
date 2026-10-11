@@ -149,7 +149,7 @@ bash tools/dev/local-stack.sh up all
 
 支付核心主动查单穿过真实 gateway-access 的本地双服务回归可执行 `node tools/dev/payment-core-gateway-query-smoke.mjs`（按需指定 `HSP_MAVEN_BIN`、`HSP_JAVA_HOME`）。脚本仅启动回环 HTTP 与精确 H2/demo 服务，网关证书调整只写当次 H2 fixture；清分/账务仍是本机受控 mock，不代表真实渠道或九服务验收。
 
-网关查单与退款双服务 smoke 均在启动前拒绝继承的 Spring、服务连接、数据库、JVM 和代理环境覆盖；仅接收本地 Maven/Java 路径、Maven 仓库及查单脚本的竞态测试开关。运行前清理这些环境变量，不要将脚本指向共享或真实渠道。
+网关查单与退款双服务 smoke 均在启动前拒绝继承的 Spring、服务连接、数据库、JVM 和代理环境覆盖；仅接收本地 Maven/Java 路径与 Maven 仓库。只有查单脚本接受 `HSP_QUERY_RACE_MODE=conflicting`，拼写错误或退款脚本携带此变量都会在启动前失败。运行前清理其他环境变量，不要将脚本指向共享或真实渠道。
 
 也可以只运行某一类或某个系统：
 

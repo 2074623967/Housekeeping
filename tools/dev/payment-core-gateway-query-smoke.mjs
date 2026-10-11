@@ -98,7 +98,7 @@ async function stopBackends() {
 }
 
 async function main() {
-  assertLocalGatewaySmokeEnvironment(process.env);
+  assertLocalGatewaySmokeEnvironment(process.env, { allowQueryRaceMode: true });
   const directory = await mkdtemp(path.join(os.tmpdir(), "payment-gateway-query-"));
   const upstreamQueries = [];
   const downstreamEvents = [];
