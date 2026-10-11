@@ -2323,16 +2323,16 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.29 过期支付关闭与成功恢复规则
 
-1. `POST /api/payment-task-center/actions/close-expired-payments` 仅关闭仍为 `PREPAY_CREATED`、渠道交易号为空、不存在支付尝试且预付单已过期的支付单；更新时再次校验条件，并发提交已开始时不写关闭事件。
+1. `POST /api/payment-task-center/actions/close-expired-payments` 仅关闭仍为 `PREPAY_CREATED`、渠道交易号为空、不存在支付尝试、无关联 `ACTIVE` 提交令牌且预付单已过期的支付单；候选筛选与更新时均校验令牌和原有条件，并发提交已开始时不写关闭事件。
 2. 存在支付尝试的 `WAIT_CALLBACK` 即使预付单已过期，仍计入达到等待阈值的人工和自动查单候选；自动模式继续使用查询历史指数退避、最大间隔、渠道批次配额和限流。
 3. 可信成功回调或主动查单通过同一条件更新抢占成功收口权。普通 `PAYMENT_CLOSED` 不可重开；历史上带 `PAYMENT_EXPIRED_CLOSED` 事件的关闭单允许恢复为 `SUCCESS`，且只有抢占成功者记账和发布成功事件。
 4. 当前接口没有实现真实渠道关闭或撤销调用，非成功渠道结果不会被本地过期任务推断为渠道已关闭；生产接入需补渠道终态码表、关闭请求幂等、关闭与成功竞态及对账规则。
 
 ### 14.30 人工关闭支付单规则
 
-1. `POST /api/payments/close` 仅接受尚未提交渠道的支付单：状态属于 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED`，渠道交易号为空且不存在任何支付尝试。
-2. 服务端使用条件更新原子抢占关闭权。条件更新失败后若最新状态为 `SUCCESS / CLOSED` 则幂等返回最新详情；其他状态返回 `PAYMENT-1029`，要求调用方先执行主动查单。
-3. `PAYMENT-1029` 路径不更新预付单、不追加关闭事件且不释放提交令牌；已提交后历史误关的 `CLOSED` 单据重复关闭时同样保留令牌和可信成功恢复入口。
+1. `POST /api/payments/close` 仅接受尚未提交渠道的支付单：状态属于 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED`，渠道交易号为空、不存在任何支付尝试且同一精确支付单号未关联 `ACTIVE` 提交令牌。
+2. 服务端使用条件更新原子抢占关闭权。条件更新失败后若最新状态为 `SUCCESS / CLOSED` 则幂等返回最新详情；非终态且关联 `ACTIVE` 提交令牌时返回 `PAYMENT-1016`，提示刷新并核对原支付事实；其他不满足关单条件的非终态返回 `PAYMENT-1029`，在具备渠道受理事实时先主动查单。
+3. 以上失败路径均不更新预付单、不追加关闭事件且不释放提交令牌；已提交后历史误关的 `CLOSED` 单据重复关闭时同样保留令牌和可信成功恢复入口。
 4. `GET /api/cashier/{prepayOrderNo}` 新增 `paymentOrderId`，供收银台直接查询与关闭对应支付单。该接口仍只是本地关单，不调用真实渠道关闭或撤销。
 
 ### 14.31 支付回调渠道绑定规则
@@ -2687,10 +2687,11 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1009` | 验签入口回调渠道缺失或超过安全长度 |
 | `PAYMENT-1010` | 当前没有启用的支付渠道 |
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
+| `PAYMENT-1016` | 支付提交仍在处理中，或关单遇到同支付单活跃提交令牌；应刷新核对原支付事实，不能凭此断言渠道已受理并直接查单 |
 | `PAYMENT-1026` | 外部渠道查单失败，结果为空、字段非法/不完整或无法安全收口 |
 | `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
 | `PAYMENT-1028` | 支付提交最终幂等键为空、超过 128 字符、包含控制字符或无法编码为有效 UTF-8 |
-| `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭，需先主动查单 |
+| `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭；具备渠道受理事实时需先主动查单 |
 | `PAYMENT-1030` | 回调 URL 渠道与支付单实际路由渠道不一致或支付单尚未绑定渠道 |
 | `PAYMENT-1031` | 回调渠道交易号与支付单已绑定的渠道交易号不一致 |
 | `PAYMENT-1032` | 渠道回调签名算法缺失或不在运行时白名单 |
