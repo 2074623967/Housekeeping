@@ -77,6 +77,44 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
     }
 
     @Test
+    void shouldKeepUnacceptedSubmissionVisibleWithoutSuggestingPrematureQuery() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, order_no, customer_name, "
+                    + "amount, payment_method, channel_code, status, status_type, created_at) VALUES "
+                    + "('PAY-SUBMIT-UNCONFIRMED', 'ORD-UNCONFIRMED', '客户', 10.00, "
+                    + "'微信', 'wx_h5', 'WAIT_CALLBACK', 'warn', NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-SUBMIT-UNCONFIRMED', '渠道提交中', NOW())");
+            PaymentIssueMapper mapper = session.getMapper(PaymentIssueMapper.class);
+
+            PaymentIssueRowDTO unaccepted = mapper.findByIssueNo("ISSUE-WAIT-PAY-SUBMIT-UNCONFIRMED");
+            assertNotNull(unaccepted);
+            assertTrue(unaccepted.getIssueSummary().contains("渠道受理未确认"));
+            assertTrue(unaccepted.getRootCauseHint().contains("勿主动查单"));
+            assertTrue(unaccepted.getRecommendedAction().contains("核对渠道受理"));
+            assertTrue(unaccepted.getResponsibilityHint().contains("勿主动查单"));
+            PaymentIssueQueryDTO query = new PaymentIssueQueryDTO();
+            query.setIssueType("待回调未收口");
+            assertEquals(1L, mapper.count(query));
+            assertTrue(mapper.findAll(query).stream().anyMatch(issue ->
+                    "ISSUE-WAIT-PAY-SUBMIT-UNCONFIRMED".equals(issue.getIssueNo())
+                            && issue.getRootCauseHint().contains("勿主动查单")
+                            && issue.getResponsibilityHint().contains("勿主动查单")));
+            assertTrue(mapper.responsibilitySummary(query).stream().anyMatch(summary ->
+                    summary.getSuggestedAction().contains("勿主动查单")));
+
+            statement.executeUpdate("UPDATE t_payment_order SET channel_transaction_no = 'WX-ACCEPTED' "
+                    + "WHERE payment_order_id = 'PAY-SUBMIT-UNCONFIRMED'");
+            session.clearCache();
+
+            PaymentIssueRowDTO accepted = mapper.findByIssueNo("ISSUE-WAIT-PAY-SUBMIT-UNCONFIRMED");
+            assertTrue(accepted.getRootCauseHint().contains("优先主动查单"));
+            assertTrue(accepted.getRecommendedAction().contains("核对回调"));
+        }
+    }
+
+    @Test
     void shouldRouteOverpaidSuccessToClearingAndBlockDayEndReadiness() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
@@ -495,7 +533,8 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "order_no VARCHAR_IGNORECASE(64), customer_name VARCHAR(128), amount DECIMAL(18,2), "
-                    + "payment_method VARCHAR(32), channel_code VARCHAR(64), status VARCHAR(32), "
+                    + "payment_method VARCHAR(32), channel_code VARCHAR(64), "
+                    + "channel_transaction_no VARCHAR(128), status VARCHAR(32), "
                     + "status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
