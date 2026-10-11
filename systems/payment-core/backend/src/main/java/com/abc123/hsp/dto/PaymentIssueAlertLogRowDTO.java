@@ -16,6 +16,12 @@ public class PaymentIssueAlertLogRowDTO {
     private String issueNo;
     /** 支付单号。 */
     private String paymentOrderId;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 异常类型。 */
     private String issueType;
     /** 严重等级。 */

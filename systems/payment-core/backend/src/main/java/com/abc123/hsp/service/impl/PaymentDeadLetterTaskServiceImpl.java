@@ -129,7 +129,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     public PaymentDeadLetterTaskEntity markReadyToReplay(String taskNo, PaymentDeadLetterTaskActionRequestDTO request) {
         PaymentDeadLetterTaskActionRequestDTO normalizedRequest = requireAction(request);
         if (paymentDeadLetterTaskMapper.markReadyToReplay(normalizeTaskNo(taskNo), normalizedRequest.getOperator(),
-                normalizedRequest.getResolutionNote()) <= 0) {
+                normalizedRequest.getResolutionNote()) != 1) {
             throw new IllegalArgumentException("死信任务不存在或当前状态不允许重放");
         }
         return maskedTaskCopy(findRequiredTask(taskNo));
@@ -139,7 +139,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     public PaymentDeadLetterTaskEntity markManuallyResolved(String taskNo, PaymentDeadLetterTaskActionRequestDTO request) {
         PaymentDeadLetterTaskActionRequestDTO normalizedRequest = requireAction(request);
         if (paymentDeadLetterTaskMapper.markManuallyResolved(normalizeTaskNo(taskNo), normalizedRequest.getOperator(),
-                normalizedRequest.getResolutionNote()) <= 0) {
+                normalizedRequest.getResolutionNote()) != 1) {
             throw new IllegalArgumentException("死信任务不存在或当前状态不允许人工结案");
         }
         return maskedTaskCopy(findRequiredTask(taskNo));
@@ -152,11 +152,11 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (paymentDeadLetterTaskMapper.markReplaying(
                 normalizedTaskNo,
                 normalizedRequest.getOperator(),
-                normalizedRequest.getResolutionNote()) <= 0) {
+                normalizedRequest.getResolutionNote()) != 1) {
             throw new IllegalArgumentException("死信任务尚未完成复核或已被其他操作处理");
         }
-        PaymentDeadLetterTaskEntity task = findRequiredTask(normalizedTaskNo);
         try {
+            PaymentDeadLetterTaskEntity task = findRequiredTask(normalizedTaskNo);
             final String replayExchange = normalizeReplayRequired(
                     task.getReplayExchange(), EXCHANGE_MAX_LENGTH);
             final String replayRoutingKey = normalizeReplayRequired(
@@ -176,9 +176,18 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
                 operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
                 return null;
             });
-            paymentDeadLetterTaskMapper.markReplayed(normalizedTaskNo);
+            if (paymentDeadLetterTaskMapper.markReplayed(normalizedTaskNo) != 1) {
+                throw new IllegalStateException("死信重放状态更新失败");
+            }
         } catch (RuntimeException exception) {
-            paymentDeadLetterTaskMapper.markReplayFailed(normalizedTaskNo, buildFailureNote());
+            int failedStatusUpdated = paymentDeadLetterTaskMapper.markReplayFailed(
+                    normalizedTaskNo, buildFailureNote());
+            if (failedStatusUpdated != 1) {
+                IllegalStateException statusException = new IllegalStateException(
+                        "死信重放失败状态更新未恰好影响一行");
+                statusException.addSuppressed(exception);
+                throw statusException;
+            }
         }
         return maskedTaskCopy(findRequiredTask(normalizedTaskNo));
     }

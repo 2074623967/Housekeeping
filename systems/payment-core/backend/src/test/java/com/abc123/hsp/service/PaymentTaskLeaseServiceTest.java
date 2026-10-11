@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -94,6 +95,21 @@ class PaymentTaskLeaseServiceTest {
     }
 
     @Test
+    void shouldRejectUnexpectedLeaseAcquireRowCount() {
+        executeTransactionCallbacks();
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "owner-b", 120))
+                .thenReturn(2);
+        PaymentTaskLeaseService service = new PaymentTaskLeaseService(
+                paymentTaskCenterMapper, transactionTemplate, renewalExecutor);
+
+        assertNull(service.tryAcquire("PAYMENT_EVENT_RETRY", "owner-b", 120));
+
+        verify(renewalExecutor, never()).scheduleWithFixedDelay(
+                any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
+        verify(paymentTaskCenterMapper, never()).releaseTaskLease(any(String.class), any(String.class));
+    }
+
+    @Test
     void shouldStopRenewalAndRetainLeaseUntilExpiry() {
         executeTransactionCallbacks();
         when(paymentTaskCenterMapper.acquireTaskLease("ALERT_PROVIDER_PROBE", "owner-a", 630))
@@ -134,6 +150,66 @@ class PaymentTaskLeaseServiceTest {
         verify(paymentTaskCenterMapper, times(1)).releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a");
         verify(renewalFuture).cancel(false);
         assertNotNull(lease);
+    }
+
+    @Test
+    void shouldStopRenewalWhenRenewalUpdatesUnexpectedRows() {
+        executeTransactionCallbacks();
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.renewTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120)).thenReturn(2);
+        doReturn(renewalFuture).when(renewalExecutor).scheduleWithFixedDelay(
+                any(Runnable.class), eq(40000L), eq(40000L), eq(TimeUnit.MILLISECONDS));
+        PaymentTaskLeaseService service = new PaymentTaskLeaseService(
+                paymentTaskCenterMapper, transactionTemplate, renewalExecutor);
+
+        PaymentTaskLeaseService.Lease lease = service.tryAcquire("PAYMENT_EVENT_RETRY", "owner-a", 120);
+        ArgumentCaptor<Runnable> renewalCaptor = ArgumentCaptor.forClass(Runnable.class);
+        verify(renewalExecutor).scheduleWithFixedDelay(
+                renewalCaptor.capture(), eq(40000L), eq(40000L), eq(TimeUnit.MILLISECONDS));
+
+        renewalCaptor.getValue().run();
+        renewalCaptor.getValue().run();
+
+        verify(paymentTaskCenterMapper, times(1)).renewTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120);
+        verify(paymentTaskCenterMapper, times(1)).releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a");
+        verify(renewalFuture).cancel(false);
+        assertNotNull(lease);
+    }
+
+    @Test
+    void shouldKeepCloseIdempotentWhenLeaseReleaseAffectsUnexpectedRows() {
+        executeTransactionCallbacks();
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a")).thenReturn(2);
+        doReturn(renewalFuture).when(renewalExecutor).scheduleWithFixedDelay(
+                any(Runnable.class), eq(40000L), eq(40000L), eq(TimeUnit.MILLISECONDS));
+        PaymentTaskLeaseService service = new PaymentTaskLeaseService(
+                paymentTaskCenterMapper, transactionTemplate, renewalExecutor);
+
+        PaymentTaskLeaseService.Lease lease = service.tryAcquire("PAYMENT_EVENT_RETRY", "owner-a", 120);
+        lease.close();
+        lease.close();
+
+        verify(paymentTaskCenterMapper, times(1)).releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a");
+        verify(renewalFuture).cancel(false);
+    }
+
+    @Test
+    void shouldNotMaskTaskFailureWhenLeaseReleaseFails() {
+        executeTransactionCallbacks();
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a"))
+                .thenThrow(new IllegalStateException("database unavailable"));
+        doReturn(renewalFuture).when(renewalExecutor).scheduleWithFixedDelay(
+                any(Runnable.class), eq(40000L), eq(40000L), eq(TimeUnit.MILLISECONDS));
+        PaymentTaskLeaseService service = new PaymentTaskLeaseService(
+                paymentTaskCenterMapper, transactionTemplate, renewalExecutor);
+
+        PaymentTaskLeaseService.Lease lease = service.tryAcquire("PAYMENT_EVENT_RETRY", "owner-a", 120);
+
+        assertDoesNotThrow(lease::close);
+        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_EVENT_RETRY", "owner-a");
+        verify(renewalFuture).cancel(false);
     }
 
     @Test

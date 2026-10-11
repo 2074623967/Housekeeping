@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
@@ -19,6 +20,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -56,6 +58,10 @@ public class PaymentTaskCenterMapperIntegrationTest {
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentTaskCenterMapper.class);
         configuration.addMapper(PaymentIssueMapper.class);
+        try (InputStream mapperXml = Resources.getResourceAsStream("mapper/RefundMapper.xml")) {
+            new XMLMapperBuilder(mapperXml, configuration, "mapper/RefundMapper.xml",
+                    configuration.getSqlFragments()).parse();
+        }
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentTaskCenterMapper.xml")) {
             new XMLMapperBuilder(
                     mapperXml,
@@ -102,26 +108,95 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotCountAliasedFailedEventsAsRiskOrAlertCandidates() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentTaskCenterOverviewDTO baseline = mapper.findOverviewSummary();
+            int overdueCount = mapper.countOverduePaymentIssues();
+            int alertCandidateCount = mapper.countPendingIssueAlertGenerationCandidates();
+            int candidateRows = mapper.findOverdueIssueAlertCandidates(1000).size();
+            statement.executeUpdate("INSERT INTO t_payment_event("
+                    + "event_no, payment_order_id, biz_no, event_type, publish_status, created_at) VALUES "
+                    + "('EVT-ALIAS-FAILED', 'PAY-A1', 'ORD-A1', 'PAYMENT_SUCCESS', 'failed', "
+                    + "TIMESTAMPADD(HOUR, -3, NOW())), "
+                    + "('EVT-ALIAS-DEAD', 'PAY-A2', 'ORD-A2', 'PAYMENT_SUCCESS', 'DEAD_LETTER ', "
+                    + "TIMESTAMPADD(HOUR, -3, NOW()))");
+            session.clearCache();
+
+            PaymentTaskCenterOverviewDTO afterAlias = mapper.findOverviewSummary();
+            assertEquals(baseline.getFailedEventCount(), afterAlias.getFailedEventCount());
+            assertEquals(baseline.getRetryableFailedEventCount(), afterAlias.getRetryableFailedEventCount());
+            assertEquals(baseline.getDeadLetterEventCount(), afterAlias.getDeadLetterEventCount());
+            assertEquals(overdueCount, mapper.countOverduePaymentIssues());
+            assertEquals(alertCandidateCount, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(candidateRows, mapper.findOverdueIssueAlertCandidates(1000).size());
+
+            statement.executeUpdate("INSERT INTO t_payment_event("
+                    + "event_no, payment_order_id, biz_no, event_type, publish_status, created_at) VALUES "
+                    + "('EVT-EXACT-FAILED', 'PAY-E1', 'ORD-E1', 'PAYMENT_SUCCESS', 'FAILED', "
+                    + "TIMESTAMPADD(HOUR, -3, NOW())), "
+                    + "('EVT-EXACT-DEAD', 'PAY-E2', 'ORD-E2', 'PAYMENT_SUCCESS', 'DEAD_LETTER', "
+                    + "TIMESTAMPADD(HOUR, -3, NOW()))");
+            session.clearCache();
+            PaymentTaskCenterOverviewDTO afterExact = mapper.findOverviewSummary();
+            assertEquals(baseline.getFailedEventCount() + 2, afterExact.getFailedEventCount());
+            assertEquals(baseline.getRetryableFailedEventCount() + 1,
+                    afterExact.getRetryableFailedEventCount());
+            assertEquals(baseline.getDeadLetterEventCount() + 1, afterExact.getDeadLetterEventCount());
+            assertEquals(overdueCount + 2, mapper.countOverduePaymentIssues());
+            assertEquals(alertCandidateCount + 2, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(candidateRows + 2, mapper.findOverdueIssueAlertCandidates(1000).size());
+        }
+    }
+
+    @Test
+    void shouldSelectOnlyExactAlertProviderChannel() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_alert_provider_config ("
+                    + "provider_code, provider_name, channel_code, endpoint_alias, template_code, "
+                    + "template_body, route_rule, route_priority, retry_policy, rate_limit_policy, "
+                    + "status, status_type, updated_at) VALUES "
+                    + "('ALERT_IM_CANONICAL', '规范供应商', 'IM', 'canonical', 'TPL-IM', "
+                    + "'正文', 'DEFAULT', 10, '不重试', '不限流', 'ENABLED', 'success', NOW()), "
+                    + "('ALERT_IM_ALIAS', '历史别名供应商', 'im', 'alias', 'TPL-IM', "
+                    + "'正文', 'DEFAULT', 1, '不重试', '不限流', 'ENABLED', 'success', NOW())");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals("ALERT_IM_CANONICAL",
+                    mapper.findEnabledAlertProvidersByChannel("IM").get(0).getProviderCode());
+            assertEquals(1, mapper.findEnabledAlertProvidersByChannel("IM").size());
+            assertEquals("ALERT_IM_ALIAS",
+                    mapper.findEnabledAlertProvidersByChannel("im").get(0).getProviderCode());
+            assertEquals(1, mapper.findEnabledAlertProvidersByChannel("im").size());
+        }
+    }
+
+    @Test
     void shouldPartitionFailedRefundsByBatchRetryEligibility() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("INSERT INTO t_refund_order("
-                    + "refund_order_id, status, applied_at, success_at, terminal_at) VALUES "
-                    + "('REF-RETRYABLE', 'FAIL', NOW(), NULL, NOW()), "
-                    + "('REF-NO-TERMINAL', 'FAIL', NOW(), NULL, NULL), "
-                    + "('REF-NO-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
-                    + "('REF-MISMATCHED-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
-                    + "('REF-INCOMPLETE-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
-                    + "('REF-RESIDUAL-SUCCESS', 'FAIL', NOW(), NOW(), NOW())");
+                    + "refund_order_id, status, status_type, applied_at, success_at, terminal_at) VALUES "
+                    + "('REF-RETRYABLE', 'FAIL', 'danger', DATEADD('SECOND', -2, NOW()), NULL, "
+                    + "DATEADD('SECOND', 2, NOW())), "
+                    + "('REF-NO-TERMINAL', 'FAIL', 'danger', NOW(), NULL, NULL), "
+                    + "('REF-NO-ATTEMPT', 'FAIL', 'danger', NOW(), NULL, NOW()), "
+                    + "('REF-MISMATCHED-ATTEMPT', 'FAIL', 'danger', NOW(), NULL, NOW()), "
+                    + "('REF-INCOMPLETE-ATTEMPT', 'FAIL', 'danger', NOW(), NULL, NOW()), "
+                    + "('REF-RESIDUAL-SUCCESS', 'FAIL', 'danger', NOW(), NOW(), NOW())");
+            statement.executeUpdate("UPDATE t_refund_order SET channel_code = 'wx_h5', "
+                    + "channel_refund_no = 'CHANNEL-RETRYABLE', channel_submitted_at = DATEADD('SECOND', -1, NOW()) "
+                    + "WHERE refund_order_id = 'REF-RETRYABLE'");
             statement.executeUpdate("INSERT INTO t_refund_attempt("
-                    + "refund_attempt_no, refund_order_id, channel_code, attempt_status, "
+                    + "refund_attempt_no, refund_order_id, channel_code, channel_refund_no, attempt_status, "
                     + "attempt_status_type, completed_at, created_at) VALUES "
-                    + "('RFA-RETRYABLE', 'REF-RETRYABLE', 'wx_h5', 'FAIL', 'danger', NOW(), NOW()), "
-                    + "('RFA-MISMATCHED', 'REF-MISMATCHED-ATTEMPT', 'wx_h5', "
+                    + "('RFA-RETRYABLE', 'REF-RETRYABLE', 'wx_h5', 'CHANNEL-RETRYABLE', 'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-MISMATCHED', 'REF-MISMATCHED-ATTEMPT', 'wx_h5', NULL, "
                     + "'ACCEPTED', 'warn', NOW(), NOW()), "
-                    + "('RFA-INCOMPLETE', 'REF-INCOMPLETE-ATTEMPT', 'wx_h5', "
+                    + "('RFA-INCOMPLETE', 'REF-INCOMPLETE-ATTEMPT', 'wx_h5', NULL, "
                     + "'FAIL', 'danger', NULL, NOW()), "
-                    + "('RFA-RESIDUAL-SUCCESS', 'REF-RESIDUAL-SUCCESS', 'wx_h5', "
+                    + "('RFA-RESIDUAL-SUCCESS', 'REF-RESIDUAL-SUCCESS', 'wx_h5', NULL, "
                     + "'FAIL', 'danger', NOW(), NOW())");
 
             PaymentTaskCenterOverviewDTO overview = session
@@ -131,6 +206,34 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(6, overview.getFailedRefundCount());
             assertEquals(1, overview.getRetryableFailedRefundCount());
             assertEquals(5, overview.getBlockedFailedRefundCount());
+            assertEquals(Collections.singletonList("REF-RETRYABLE"),
+                    session.getMapper(RefundMapper.class).findFailedRefundOrderIds(100));
+        }
+    }
+
+    @Test
+    void shouldBlockFailedRefundWithWrongAttemptChannelOrStyle() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, status_type, applied_at, "
+                    + "channel_code, channel_refund_no, channel_submitted_at, terminal_at) VALUES "
+                    + "('REF-WRONG-CHANNEL', 'FAIL', 'danger', '2026-09-12 08:00:00', 'wx_h5', 'CH-1', "
+                    + "'2026-09-12 08:01:00', '2026-09-12 09:00:00'), "
+                    + "('REF-WRONG-STYLE', 'FAIL', 'danger', '2026-09-12 08:00:00', 'wx_h5', 'CH-2', "
+                    + "'2026-09-12 08:01:00', '2026-09-12 09:00:00')");
+            statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, channel_code, channel_refund_no, "
+                    + "attempt_status, attempt_status_type, completed_at, created_at) VALUES "
+                    + "('REF-WRONG-CHANNEL', 'other', 'CH-1', 'FAIL', 'danger', "
+                    + "'2026-09-12 09:00:00', '2026-09-12 08:01:00'), "
+                    + "('REF-WRONG-STYLE', 'wx_h5', 'CH-2', 'FAIL', 'warn', "
+                    + "'2026-09-12 09:00:00', '2026-09-12 08:01:00')");
+            PaymentTaskCenterOverviewDTO overview = session.getMapper(PaymentTaskCenterMapper.class)
+                    .findOverviewSummary();
+            assertEquals(2, overview.getFailedRefundCount());
+            assertEquals(0, overview.getRetryableFailedRefundCount());
+            assertEquals(2, overview.getBlockedFailedRefundCount());
+            assertEquals(Collections.emptyList(),
+                    session.getMapper(RefundMapper.class).findFailedRefundOrderIds(100));
         }
     }
 
@@ -187,6 +290,135 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     "PAY-MAX-DUE"), channelLimitedManualCandidates);
             assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
             assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+        }
+    }
+
+    @Test
+    void shouldExcludeUnverifiedPrepayBindingsFromPaymentQueryCandidatesAndCounts() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) "
+                    + "VALUES ('PAY-NO-HISTORY', TIMESTAMPADD(HOUR, 1, NOW()))");
+            statement.executeUpdate("UPDATE t_prepay_order SET amount = 99.00 "
+                    + "WHERE payment_order_id = 'PAY-BACKOFF-DUE'");
+            statement.executeUpdate("UPDATE t_prepay_order SET payment_order_id = 'pay-max-due' "
+                    + "WHERE payment_order_id = 'PAY-MAX-DUE'");
+            session.clearCache();
+
+            assertEquals(3, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(0, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            assertEquals(Arrays.asList("PAY-BASE-WAIT", "PAY-BACKOFF-WAIT", "PAY-MAX-WAIT"),
+                    mapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100));
+            assertEquals(Collections.emptyList(), mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100));
+
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-OTHER' "
+                    + "WHERE payment_order_id = 'PAY-BASE-WAIT'");
+            session.clearCache();
+            assertEquals(2, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(Arrays.asList("PAY-BACKOFF-WAIT", "PAY-MAX-WAIT"),
+                    mapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100));
+        }
+    }
+
+    @Test
+    void shouldExcludeRepeatedPrepayAssociationsFromPaymentQueryCandidates() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) "
+                    + "VALUES ('PAY-NO-HISTORY', TIMESTAMPADD(MINUTE, -5, NOW()))");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(Arrays.asList("PAY-BACKOFF-DUE", "PAY-MAX-DUE"),
+                    mapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100));
+            assertEquals(Arrays.asList("PAY-BACKOFF-DUE", "PAY-MAX-DUE"),
+                    mapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 1, 100));
+            assertEquals(5, mapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100).size());
+            assertEquals(5, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(2, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+        }
+    }
+
+    @Test
+    void shouldNotQueryPaymentUsingAliasedPrepayAttemptOrStatus() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, channel_code, status, created_at) "
+                    + "VALUES ('PAY-Q-PREPAY-ALIAS', 'wx_h5', 'WAIT_CALLBACK', TIMESTAMPADD(MINUTE, -10, NOW())), "
+                    + "('PAY-Q-ATTEMPT-ALIAS', 'wx_h5', 'WAIT_CALLBACK', TIMESTAMPADD(MINUTE, -10, NOW())), "
+                    + "('PAY-Q-STATUS-ALIAS', 'wx_h5', 'wait_callback', TIMESTAMPADD(MINUTE, -10, NOW()))");
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES "
+                    + "('pay-q-prepay-alias', TIMESTAMPADD(HOUR, 1, NOW())), "
+                    + "('PAY-Q-ATTEMPT-ALIAS', TIMESTAMPADD(HOUR, 1, NOW())), "
+                    + "('PAY-Q-STATUS-ALIAS', TIMESTAMPADD(HOUR, 1, NOW()))");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-Q-PREPAY-ALIAS', '待回调', TIMESTAMPADD(MINUTE, -10, NOW())), "
+                    + "('pay-q-attempt-alias', '待回调', TIMESTAMPADD(MINUTE, -10, NOW())), "
+                    + "('PAY-Q-STATUS-ALIAS', '待回调', TIMESTAMPADD(MINUTE, -10, NOW()))");
+
+            assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            assertEquals(6, mapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100).size());
+            assertEquals(3, mapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100).size());
+        }
+    }
+
+    @Test
+    void shouldNotBackOffPaymentQueryForAliasNotifyHistory() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_notify_log(payment_order_id, notify_status, created_at) "
+                    + "VALUES ('pay-no-history', '已查单', NOW())");
+
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+
+            statement.executeUpdate("INSERT INTO t_payment_notify_log(payment_order_id, notify_status, created_at) "
+                    + "VALUES ('PAY-NO-HISTORY ', '查单失败', NOW())");
+            session.clearCache();
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+
+            statement.executeUpdate("INSERT INTO t_payment_notify_log(payment_order_id, notify_status, created_at) "
+                    + "VALUES ('PAY-NO-HISTORY', '已查单', NOW())");
+            session.clearCache();
+            assertEquals(2, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+        }
+    }
+
+    @Test
+    void shouldUseExactLatestPaymentAttemptForQueryAge() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('pay-no-history', '渠道提交中', NOW())");
+            assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 20, 100).contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-NO-HISTORY', '渠道提交中', NOW())");
+            session.clearCache();
+            assertEquals(5, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(2, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 20, 100).contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
         }
     }
 
@@ -254,12 +486,238 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotQueryRefundUsingAliasAttemptEventOrStatus() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, "
+                    + "channel_code, channel_refund_no, attempt_status, submitted_at, created_at) VALUES "
+                    + "('RFA-REF-NO-TRACE-ALIAS', 'ref-no-trace', 'wx_h5', 'CHANNEL-ALIAS', "
+                    + "'ACCEPTED', TIMESTAMPADD(MINUTE, -20, NOW()), NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_event(event_no, payment_order_id, biz_no, "
+                    + "event_type, publish_status, created_at) VALUES "
+                    + "('EVTR-REF-UNKNOWN-PENDING-ALIAS', 'PAY-REF-UNKNOWN-PENDING', "
+                    + "'rfa-ref-unknown-pending', 'REFUND_SUBMIT', 'UNKNOWN', "
+                    + "TIMESTAMPADD(MINUTE, -20, NOW()))");
+            insertRefund(session.getConnection(), "REF-STATUS-ALIAS", "wx_h5", "processing",
+                    LocalDateTime.now().minusMinutes(20), true);
+
+            assertEquals(9, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(5, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+            assertEquals(9, mapper.findPendingRefundOrderIdsForManualQuery(30, 20, 100).size());
+            assertEquals(5, mapper.findDuePendingRefundOrderIdsForQuery(30, 60, 2, 900, 20, 100).size());
+        }
+    }
+
+    @Test
+    void shouldNotBackOffRefundQueryForAliasOrOtherRefundLog() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_refund_operation_log("
+                    + "refund_order_id, refund_attempt_no, action_code, created_at) VALUES "
+                    + "('ref-no-history', 'rfa-ref-no-history', 'CHANNEL_QUERY', NOW()), "
+                    + "('REF-NO-HISTORY ', 'RFA-REF-NO-HISTORY', 'CHANNEL_QUERY', NOW()), "
+                    + "('REF-NO-HISTORY', 'RFA-REF-NO-HISTORY ', 'CHANNEL_QUERY', NOW()), "
+                    + "('REF-NO-HISTORY', 'RFA-REF-NO-HISTORY', 'channel_query', NOW()), "
+                    + "('REF-OTHER', 'RFA-REF-NO-HISTORY', 'CHANNEL_QUERY_FAILED', NOW())");
+
+            assertEquals(5, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("REF-NO-HISTORY"));
+
+            statement.executeUpdate("INSERT INTO t_refund_operation_log("
+                    + "refund_order_id, refund_attempt_no, action_code, created_at) VALUES "
+                    + "('REF-NO-HISTORY', 'RFA-REF-NO-HISTORY', 'CHANNEL_QUERY', NOW())");
+            session.clearCache();
+            assertEquals(4, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("REF-NO-HISTORY"));
+        }
+    }
+
+    @Test
+    void shouldNotQueryUnknownRefundUsingWrongSubmitEventIdentity() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_event(event_no, payment_order_id, biz_no, "
+                    + "event_type, downstream_system, event_topic, publish_status, created_at) VALUES "
+                    + "('EVTR-UNKNOWN-WRONG-PARENT', 'pay-ref-unknown-pending', "
+                    + "'RFA-REF-UNKNOWN-PENDING', 'REFUND_SUBMIT', 'gateway-access', "
+                    + "'payment.refund.submitted.v1', 'UNKNOWN', TIMESTAMPADD(MINUTE, -20, NOW())), "
+                    + "('EVTR-UNKNOWN-WRONG-DOWNSTREAM', 'PAY-REF-UNKNOWN-PENDING', "
+                    + "'RFA-REF-UNKNOWN-PENDING', 'REFUND_SUBMIT', 'GATEWAY-ACCESS', "
+                    + "'payment.refund.submitted.v1', 'UNKNOWN', TIMESTAMPADD(MINUTE, -20, NOW())), "
+                    + "('EVTR-UNKNOWN-WRONG-TOPIC', 'PAY-REF-UNKNOWN-PENDING', "
+                    + "'RFA-REF-UNKNOWN-PENDING', 'REFUND_SUBMIT', 'gateway-access', "
+                    + "'PAYMENT.REFUND.SUBMITTED.V1', 'UNKNOWN', TIMESTAMPADD(MINUTE, -20, NOW()))");
+
+            assertEquals(9, mapper.countPendingRefundQueryBacklog(30));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findPendingRefundOrderIdsForManualQuery(
+                    30, 20, 100).contains("REF-UNKNOWN-PENDING"));
+
+            statement.executeUpdate("INSERT INTO t_payment_event(event_no, payment_order_id, biz_no, "
+                    + "event_type, downstream_system, event_topic, publish_status, created_at) VALUES "
+                    + "('EVTR-UNKNOWN-EXACT', 'PAY-REF-UNKNOWN-PENDING', "
+                    + "'RFA-REF-UNKNOWN-PENDING', 'REFUND_SUBMIT', 'gateway-access', "
+                    + "'payment.refund.submitted.v1', 'UNKNOWN', TIMESTAMPADD(MINUTE, -20, NOW()))");
+            session.clearCache();
+            assertEquals(10, mapper.countPendingRefundQueryBacklog(30));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findPendingRefundOrderIdsForManualQuery(
+                    30, 20, 100).contains("REF-UNKNOWN-PENDING"));
+        }
+    }
+
+    @Test
+    void shouldUseExactLatestRefundAttemptForQueryAge() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, "
+                    + "channel_code, channel_refund_no, attempt_status, submitted_at, created_at) VALUES "
+                    + "('RFA-REF-NO-HISTORY-ALIAS', 'ref-no-history', 'wx_h5', 'CHANNEL-ALIAS', "
+                    + "'ACCEPTED', NOW(), NOW())");
+            assertEquals(9, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(5, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findPendingRefundOrderIdsForManualQuery(
+                    30, 20, 100).contains("REF-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("REF-NO-HISTORY"));
+
+            statement.executeUpdate("INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, "
+                    + "channel_code, channel_refund_no, attempt_status, submitted_at, created_at) VALUES "
+                    + "('RFA-REF-NO-HISTORY-EXACT', 'REF-NO-HISTORY', 'wx_h5', 'CHANNEL-EXACT', "
+                    + "'ACCEPTED', NOW(), NOW())");
+            session.clearCache();
+            assertEquals(8, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(4, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findPendingRefundOrderIdsForManualQuery(
+                    30, 20, 100).contains("REF-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("REF-NO-HISTORY"));
+        }
+    }
+
+    @Test
+    void shouldRequireExactUnknownRefundAttemptAndPublishStatuses() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("UPDATE t_payment_event SET publish_status = 'unknown' "
+                    + "WHERE event_no = 'EVTR-REF-UNKNOWN-PENDING'");
+            assertEquals(9, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(9, mapper.findPendingRefundOrderIdsForManualQuery(30, 20, 100).size());
+
+            statement.executeUpdate("UPDATE t_payment_event SET publish_status = 'UNKNOWN' "
+                    + "WHERE event_no = 'EVTR-REF-UNKNOWN-PENDING'");
+            statement.executeUpdate("UPDATE t_refund_attempt SET attempt_status = 'unknown' "
+                    + "WHERE refund_attempt_no = 'RFA-REF-UNKNOWN-PENDING'");
+            session.clearCache();
+            assertEquals(9, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(9, mapper.findPendingRefundOrderIdsForManualQuery(30, 20, 100).size());
+
+            statement.executeUpdate("UPDATE t_refund_attempt SET attempt_status = 'UNKNOWN' "
+                    + "WHERE refund_attempt_no = 'RFA-REF-UNKNOWN-PENDING'");
+            session.clearCache();
+            assertEquals(10, mapper.countPendingRefundQueryBacklog(30));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findPendingRefundOrderIdsForManualQuery(
+                    30, 20, 100).contains("REF-UNKNOWN-PENDING"));
+        }
+    }
+
+    @Test
     void shouldSeparateDueAndBackingOffExpiryCloseBacklogs() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
 
             assertEquals(2, mapper.countDueExpiredPayments());
             assertEquals(1, mapper.countBackingOffExpiredPayments());
+        }
+    }
+
+    @Test
+    void shouldCountOnlyExpiryBacklogsEligibleForActualClose() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at, created_at) "
+                    + "VALUES ('pay-expiry-due', TIMESTAMPADD(MINUTE, 30, NOW()), "
+                    + "TIMESTAMPADD(MINUTE, 1, NOW()))");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-EXPIRY-DUE ', 'SUCCESS', NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_expiry_close_retry(payment_order_id, next_retry_at) "
+                    + "VALUES ('pay-expiry-due', TIMESTAMPADD(MINUTE, 30, NOW()))");
+            session.clearCache();
+
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = NOW() "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-DUE'");
+            statement.executeUpdate("UPDATE t_payment_order SET status = 'prepay_created' "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-RETRY-DUE'");
+            session.clearCache();
+            assertEquals(0, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(1, mapper.findOverviewSummary().getExpiredPaymentCount());
+        }
+    }
+
+    @Test
+    void shouldExcludePaymentFromExpiryBacklogWhenLatestPrepayIsValid() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) "
+                    + "VALUES ('PAY-EXPIRY-DUE', TIMESTAMPADD(MINUTE, 30, NOW()))");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(1, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(2, mapper.findOverviewSummary().getExpiredPaymentCount());
+        }
+    }
+
+    @Test
+    void shouldExcludeMultipleExactPrepayBindingsFromExpiryBacklogs() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at, created_at) VALUES "
+                    + "('PAY-EXPIRY-DUE', TIMESTAMPADD(MINUTE, -1, NOW()), NOW()), "
+                    + "('PAY-EXPIRY-RETRY-DUE', TIMESTAMPADD(MINUTE, -1, NOW()), NOW())");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(0, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(1, mapper.findOverviewSummary().getExpiredPaymentCount());
+        }
+    }
+
+    @Test
+    void shouldExcludeDriftedPrepayBindingsFromExpiryBacklogs() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET amount = 99.00 "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-DUE'");
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-OTHER' "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-RETRY-DUE'");
+            statement.executeUpdate("UPDATE t_prepay_order SET amount = 0 "
+                    + "WHERE payment_order_id = 'PAY-EXPIRY-BACKOFF'");
+            session.clearCache();
+
+            assertEquals(0, mapper.countDueExpiredPayments());
+            assertEquals(0, mapper.countBackingOffExpiredPayments());
+            assertEquals(0, mapper.findOverviewSummary().getExpiredPaymentCount());
         }
     }
 
@@ -384,6 +842,136 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotLinkDayEndBatchToAliasedTaskRunReferences() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            String bizDate = "2026-09-11";
+            String batchNo = "DEB-20260911-AUTO-001";
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun(
+                    "PTL-ALIAS-CASE", "deb-20260911-auto-001")));
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(1, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun(
+                    "PTL-ALIAS-SPACE", batchNo + " ")));
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(2, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun("PTL-EXACT-1", batchNo)));
+            session.clearCache();
+            assertEquals(0, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(2, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun("PTL-EXACT-2", batchNo)));
+            session.clearCache();
+            assertEquals(1, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+        }
+    }
+
+    @Test
+    void shouldRequireExactAutoDayEndTaskRunProvenance() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            String bizDate = "2026-09-11";
+            String batchNo = "DEB-20260911-AUTO-001";
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun("PTL-PROVENANCE-1", batchNo)));
+
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET task_code = 'payment_day_end' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET task_code = 'PAYMENT_DAY_END', "
+                    + "run_mode = 'auto' WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET run_mode = 'AUTO', "
+                    + "triggered_by = 'PAYMENT-DAY-END-SCHEDULER' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            statement.executeUpdate("UPDATE t_payment_task_run_log "
+                    + "SET triggered_by = 'payment-day-end-scheduler', task_status = 'success' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET task_status = 'SUCCESS' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(0, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+            statement.executeUpdate("UPDATE t_payment_day_end_batch SET run_mode = 'auto' "
+                    + "WHERE batch_no = 'DEB-20260911-AUTO-001'");
+            session.clearCache();
+            assertEquals(0, mapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate));
+            assertEquals(1, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate));
+
+            statement.executeUpdate("UPDATE t_payment_day_end_batch SET run_mode = 'AUTO' "
+                    + "WHERE batch_no = 'DEB-20260911-AUTO-001'");
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun("PTL-PROVENANCE-2", batchNo)));
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET task_code = 'payment_day_end' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+            statement.executeUpdate("UPDATE t_payment_task_run_log SET task_code = 'PAYMENT_DAY_END' "
+                    + "WHERE task_log_no = 'PTL-PROVENANCE-1'");
+            session.clearCache();
+            assertEquals(1, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate));
+        }
+    }
+
+    @Test
+    void shouldRequireExactTaskRunNumberAndFilterValues() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(1, mapper.insertTaskRunLog(buildCompletedDayEndRun(
+                    "PTL-FILTER-EXACT", "DEB-20260911-AUTO-001")));
+            assertNull(mapper.findTaskRunByNo("ptl-filter-exact"));
+            assertNull(mapper.findTaskRunByNo("PTL-FILTER-EXACT "));
+            assertEquals("PTL-FILTER-EXACT", mapper.findTaskRunByNo("PTL-FILTER-EXACT").getTaskLogNo());
+
+            PaymentTaskRunLogQueryDTO query = new PaymentTaskRunLogQueryDTO();
+            query.setBizDate("2026-09-11");
+            query.setTaskCode("payment_day_end");
+            assertNoTaskRunMatches(mapper, query);
+            query.setTaskCode("PAYMENT_DAY_END");
+            query.setRunMode("auto");
+            assertNoTaskRunMatches(mapper, query);
+            query.setRunMode("AUTO");
+            query.setTaskStatus("success");
+            assertNoTaskRunMatches(mapper, query);
+            query.setTaskStatus("SUCCESS");
+            query.setSeverityLevel("p3");
+            assertNoTaskRunMatches(mapper, query);
+            query.setSeverityLevel("P3");
+            assertEquals(1, mapper.countTaskRunLogs(query));
+            assertEquals(1, mapper.findTaskRunLogs(query).size());
+            assertEquals(1, mapper.findTaskRunLogsForExport(query).size());
+
+            PaymentTaskRunLogEntity alias = buildCompletedDayEndRun(
+                    "PTL-FILTER-ALIAS", "DEB-20260911-AUTO-001");
+            alias.setTaskCode("payment_day_end");
+            assertEquals(1, mapper.insertTaskRunLog(alias));
+            session.clearCache();
+            assertEquals(1, mapper.countTaskRunLogs(query));
+            assertEquals("PTL-FILTER-EXACT", mapper.findTaskRunLogs(query).get(0).getTaskLogNo());
+            assertEquals("PTL-FILTER-EXACT", mapper.findTaskRunLogsForExport(query).get(0).getTaskLogNo());
+        }
+    }
+
+    @Test
     void shouldSummarizeRecentPaymentAndRefundQueryTrendWithinLookbackWindow() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -399,6 +987,35 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldExcludeAliasedQueryActionsFromRecentCountsAndTrend() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_notify_log(payment_order_id, notify_status, created_at) "
+                    + "VALUES ('PAY-ALIAS-QUERY', '已查单 ', NOW()), "
+                    + "('PAY-ALIAS-FAIL', '查单失败 ', NOW())");
+            statement.executeUpdate("INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) "
+                    + "VALUES ('REF-ALIAS-QUERY', 'channel_query', NOW()), "
+                    + "('REF-ALIAS-FAIL', 'CHANNEL_QUERY_FAILED ', NOW())");
+
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(36, mapper.countRecentChannelQueries(24));
+            assertEquals(4, mapper.countRecentChannelQueryFailures(24));
+            List<PaymentQueryTrendPointDTO> trends = mapper.findRecentChannelQueryTrends(24);
+            assertEquals(36, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
+            assertEquals(4, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getFailureCount).sum());
+
+            statement.executeUpdate("INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) "
+                    + "VALUES ('REF-EXACT-FAIL', 'CHANNEL_QUERY_FAILED', NOW())");
+            session.clearCache();
+            assertEquals(37, mapper.countRecentChannelQueries(24));
+            assertEquals(5, mapper.countRecentChannelQueryFailures(24));
+            List<PaymentQueryTrendPointDTO> updatedTrends = mapper.findRecentChannelQueryTrends(24);
+            assertEquals(37, updatedTrends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
+            assertEquals(5, updatedTrends.stream().mapToInt(PaymentQueryTrendPointDTO::getFailureCount).sum());
+        }
+    }
+
+    @Test
     void shouldOnlyCountRecentUnacknowledgedQueryMonitorOutboxAlerts() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -407,6 +1024,69 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     "主动查单失败趋势", 60));
             assertEquals(0, mapper.countRecentUnacknowledgedQueryMonitorAlerts(
                     "主动查单限流拒绝", 60));
+        }
+    }
+
+    @Test
+    void shouldAlignPendingOutboxMetricsWithDispatchCandidatesAndLocks() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_issue_alert_log SET ack_status = '已确认' "
+                    + "WHERE source_alert_no IS NULL");
+            statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                    + "alert_no, issue_no, alert_channel, ack_status, alert_status, created_at) VALUES "
+                    + "('PIA-METRIC-LEGACY', 'ISSUE-METRIC-LEGACY', 'IN_APP_OUTBOX', NULL, '已生成', "
+                    + "TIMESTAMPADD(MINUTE, -10, NOW())), "
+                    + "('PIA-METRIC-EXACT', 'ISSUE-METRIC-EXACT', 'IN_APP_OUTBOX', '待确认', '派发失败', "
+                    + "TIMESTAMPADD(MINUTE, -5, NOW())), "
+                    + "('PIA-METRIC-CHANNEL-ALIAS', 'ISSUE-METRIC-CHANNEL-ALIAS', 'in_app_outbox', "
+                    + "'待确认', '已生成', TIMESTAMPADD(MINUTE, -40, NOW())), "
+                    + "('PIA-METRIC-STATUS-ALIAS', 'ISSUE-METRIC-STATUS-ALIAS', 'IN_APP_OUTBOX', "
+                    + "'待确认', '已生成 ', TIMESTAMPADD(MINUTE, -35, NOW())), "
+                    + "('PIA-METRIC-ACK-ALIAS', 'ISSUE-METRIC-ACK-ALIAS', 'IN_APP_OUTBOX', "
+                    + "'待确认 ', '已生成', TIMESTAMPADD(MINUTE, -30, NOW()))");
+
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(2, mapper.countPendingIssueAlertDispatches());
+            assertEquals(1, mapper.countFailedIssueAlertDispatches());
+            assertEquals(10, mapper.findOldestPendingIssueAlertDispatchMinutes());
+            assertEquals(Arrays.asList("PIA-METRIC-LEGACY", "PIA-METRIC-EXACT"),
+                    mapper.findPendingOutboxAlerts(10).stream()
+                            .map(PaymentIssueAlertDispatchItemDTO::getAlertNo)
+                            .collect(java.util.stream.Collectors.toList()));
+            org.junit.jupiter.api.Assertions.assertTrue(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-METRIC-LEGACY", "ISSUE-METRIC-LEGACY")));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-METRIC-CHANNEL-ALIAS", "ISSUE-METRIC-CHANNEL-ALIAS")));
+            PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
+            update.setAlertStatus("已派发");
+            update.setAckStatus("待确认");
+            update.setTriggeredBy("payment-core-admin");
+            for (String aliasKind : Arrays.asList("CHANNEL", "STATUS", "ACK")) {
+                update.setAlertNo("PIA-METRIC-" + aliasKind + "-ALIAS");
+                update.setIssueNo("ISSUE-METRIC-" + aliasKind + "-ALIAS");
+                assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
+            }
+        }
+    }
+
+    @Test
+    void shouldNotSuppressQueryMonitorAlertWithAliasedCooldownFields() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                    + "issue_type, alert_channel, ack_status, created_at) VALUES "
+                    + "('主动查单限流拒绝 ', 'IN_APP_OUTBOX', '待确认', NOW()), "
+                    + "('主动查单限流拒绝', 'in_app_outbox', '待确认', NOW()), "
+                    + "('主动查单限流拒绝', 'IN_APP_OUTBOX', '待确认 ', NOW())");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(0, mapper.countRecentUnacknowledgedQueryMonitorAlerts("主动查单限流拒绝", 60));
+
+            statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                    + "issue_type, alert_channel, ack_status, created_at) "
+                    + "VALUES ('主动查单限流拒绝', 'IN_APP_OUTBOX', '待确认', NOW())");
+            session.clearCache();
+            assertEquals(1, mapper.countRecentUnacknowledgedQueryMonitorAlerts("主动查单限流拒绝", 60));
         }
     }
 
@@ -773,6 +1453,76 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldKeepIssueAlertGenerationCandidateWhenOnlyAliasAlertsExist() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            String issueNo = mapper.findOverdueIssueAlertCandidates(10).get(0).getIssueNo();
+            assertEquals(1, mapper.countPendingIssueAlertGenerationCandidates());
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "INSERT INTO t_payment_issue_alert_log(alert_no, issue_no, alert_channel, "
+                            + "ack_status, alert_status, created_at) VALUES (?, ?, 'IN_APP_OUTBOX', "
+                            + "'待确认', '已生成', NOW())")) {
+                statement.setString(1, "PIA-ALIAS-GEN-LOWER");
+                statement.setString(2, issueNo.toLowerCase(java.util.Locale.ROOT));
+                assertEquals(1, statement.executeUpdate());
+                statement.setString(1, "PIA-ALIAS-GEN-SPACE");
+                statement.setString(2, issueNo + " ");
+                assertEquals(1, statement.executeUpdate());
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(issueNo, mapper.findOverdueIssueAlertCandidates(10).get(0).getIssueNo());
+
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "INSERT INTO t_payment_issue_alert_log(alert_no, issue_no, alert_channel, "
+                            + "ack_status, alert_status, created_at) VALUES (?, ?, 'IN_APP_OUTBOX', "
+                            + "'待确认', '已生成', NOW())")) {
+                statement.setString(1, "PIA-EXACT-GEN");
+                statement.setString(2, issueNo);
+                assertEquals(1, statement.executeUpdate());
+            }
+            session.clearCache();
+            assertEquals(0, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(0, mapper.findOverdueIssueAlertCandidates(10).size());
+        }
+    }
+
+    @Test
+    void shouldNotCountDisabledChannelSlaForAliasedPaymentChannel() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_channel_config(channel_code, status) "
+                        + "VALUES ('wx_h5', 'DISABLED')");
+                statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, channel_code, "
+                        + "status, created_at) VALUES "
+                        + "('PAY-CHANNEL-ALIAS-CASE', 'WX_H5', 'CLOSED', "
+                        + "TIMESTAMPADD(MINUTE, -130, NOW())), "
+                        + "('PAY-CHANNEL-ALIAS-SPACE', 'wx_h5 ', 'CLOSED', "
+                        + "TIMESTAMPADD(MINUTE, -130, NOW()))");
+            }
+
+            assertEquals(1, mapper.countOverduePaymentIssues());
+            assertEquals(1, mapper.findOverviewSummary().getOverdueIssueCount());
+            assertEquals(1, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(1, mapper.findOverdueIssueAlertCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, channel_code, "
+                        + "status, created_at) VALUES ('PAY-CHANNEL-EXACT', 'wx_h5', 'CLOSED', "
+                        + "TIMESTAMPADD(MINUTE, -130, NOW()))");
+            }
+            session.clearCache();
+            assertEquals(2, mapper.countOverduePaymentIssues());
+            assertEquals(2, mapper.findOverviewSummary().getOverdueIssueCount());
+            assertEquals(2, mapper.countPendingIssueAlertGenerationCandidates());
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findOverdueIssueAlertCandidates(10).stream()
+                    .anyMatch(candidate -> "ISSUE-CHANNEL-PAY-CHANNEL-EXACT".equals(candidate.getIssueNo())));
+            assertEquals(2, mapper.findOverdueIssueAlertCandidates(10).size());
+        }
+    }
+
+    @Test
     void shouldLimitOverdueIssueAlertCandidatesAndKeepOldestFirst() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -822,6 +1572,92 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotSuppressEscalationWithAliasedSourceIssueOrLegacyContent() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET ack_status = '已确认' "
+                        + "WHERE alert_channel = 'IN_APP_OUTBOX'");
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, issue_no, source_alert_no, issue_type, severity, alert_channel, "
+                        + "ack_status, alert_status, alert_content, created_at) VALUES "
+                        + "('PIA-ESC-EXACT', 'ISSUE-ESC-EXACT', NULL, '待回调未收口', 'P1', "
+                        + "'IN_APP_OUTBOX', '待确认', '已生成', '来源告警', "
+                        + "TIMESTAMPADD(MINUTE, -40, NOW())), "
+                        + "('PIA-ESC-FOLLOWUP', 'ISSUE-ESC-EXACT', 'pia-esc-exact', '待回调未收口', "
+                        + "'P1', 'IN_APP_OUTBOX', '待确认', '已生成', '历史升级记录', NOW())");
+            }
+
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals("PIA-ESC-EXACT", mapper.findUnacknowledgedIssueAlertEscalationCandidates(10)
+                    .get(0).getSourceAlertNo());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET source_alert_no = 'PIA-ESC-EXACT ' WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET source_alert_no = 'PIA-ESC-EXACT', "
+                        + "issue_no = 'issue-esc-exact' WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET issue_no = 'ISSUE-ESC-EXACT', "
+                        + "source_alert_no = 'pia-esc-exact', "
+                        + "alert_content = '升级来源告警 PIA-ESC-EXACT 已超过 30 分钟' "
+                        + "WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET issue_no = 'ISSUE-ESC-EXACT', "
+                        + "source_alert_no = NULL, alert_content = "
+                        + "'升级来源告警 PIA-ESC-EXACT-SUFFIX 已超过 30 分钟' "
+                        + "WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET alert_content = "
+                        + "'升级来源告警 pia-esc-exact 已超过 30 分钟' "
+                        + "WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET alert_content = "
+                        + "'升级来源告警 PIA-ESC-EXACT 已超过 30 分钟' "
+                        + "WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(0, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(0, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET source_alert_no = 'PIA-ESC-EXACT', alert_content = '历史升级记录' "
+                        + "WHERE alert_no = 'PIA-ESC-FOLLOWUP'");
+            }
+            session.clearCache();
+            assertEquals(0, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(0, mapper.findUnacknowledgedIssueAlertEscalationCandidates(10).size());
+        }
+    }
+
+    @Test
     void shouldRejectDuplicateIssueAlertGenerationKeyWithoutOverwritingOriginalAlert() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -854,6 +1690,196 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, taskCenterMapper.insertIssueAlertLog(replacement));
             assertEquals(1, countAlertsByGenerationKey(
                     session.getConnection(), "ISSUE_ACTIVE:ISSUE-IDEMPOTENT"));
+        }
+    }
+
+    @Test
+    void shouldNotReadAlertByAliasOfAlertNumber() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper taskCenterMapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
+            assertEquals(1, taskCenterMapper.insertIssueAlertLog(buildIssueAlertLog("PIA-EXACT-NUMBER")));
+            PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+            query.setReceiptQueryMinAgeSeconds(60);
+            query.setReceiptQueryMaxAttempts(10);
+            query.setReceiptQueryClaimTimeoutSeconds(30);
+            assertNull(issueMapper.findAlertLogByAlertNo("pia-exact-number", query));
+            assertNull(issueMapper.findAlertLogByAlertNo("PIA-EXACT-NUMBER ", query));
+            assertEquals("PIA-EXACT-NUMBER", issueMapper.findAlertLogByAlertNo("PIA-EXACT-NUMBER", query)
+                    .getAlertNo());
+        }
+    }
+
+    @Test
+    void shouldRequireExactOutboxAlertAndIssueNumbersForDispatch() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity source = buildIssueAlertLog("PIA-DISPATCH-EXACT");
+            assertEquals(1, mapper.insertIssueAlertLog(source));
+
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("pia-dispatch-exact", source.getIssueNo())));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-DISPATCH-EXACT ", source.getIssueNo())));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert(source.getAlertNo(), "issue-idempotent")));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert(source.getAlertNo(), "ISSUE-IDEMPOTENT ")));
+            org.junit.jupiter.api.Assertions.assertTrue(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert(source.getAlertNo(), source.getIssueNo())));
+
+            PaymentIssueAlertLogEntity update = buildIssueAlertLog("PIA-DISPATCH-EXACT");
+            update.setAlertStatus("已派发");
+            update.setAlertStatusType("success");
+            update.setAlertNo("pia-dispatch-exact");
+            assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
+            update.setAlertNo("PIA-DISPATCH-EXACT ");
+            assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
+            update.setAlertNo(source.getAlertNo());
+            update.setIssueNo("issue-idempotent");
+            assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
+            update.setIssueNo("ISSUE-IDEMPOTENT ");
+            assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
+            update.setIssueNo(source.getIssueNo());
+            assertEquals(1, mapper.updateIssueAlertDeliveryStatus(update));
+        }
+    }
+
+    @Test
+    void shouldNotReuseDeliveryHistoryWithAliasOfSourceAlertNumber() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity source = buildIssueAlertLog("PIA-DISPATCH-SOURCE");
+            assertEquals(1, mapper.insertIssueAlertLog(source));
+            PaymentIssueAlertLogEntity delivery = buildIssueAlertLog("PIA-DISPATCH-DELIVERY");
+            delivery.setGenerationKey("ISSUE_DELIVERY:PIA-DISPATCH-DELIVERY");
+            delivery.setSourceAlertNo("pia-dispatch-source");
+            delivery.setAlertChannel("IM");
+            delivery.setAlertStatus("已派发");
+            delivery.setProviderCode("ALERT_ALIAS_SOURCE");
+            delivery.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(delivery));
+
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.hasSuccessfulIssueAlertChannelDelivery(
+                    delivery.getSourceAlertNo(), "IM"));
+            assertNull(mapper.findLatestIssueAlertChannelDeliveryLog(delivery.getSourceAlertNo(), "IM"));
+            assertEquals(0, mapper.countFailedIssueAlertChannelDeliveries(delivery.getSourceAlertNo(), "IM"));
+            delivery.setSourceAlertNo(source.getAlertNo());
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.hasSuccessfulIssueAlertChannelDelivery(
+                    source.getAlertNo(), "IM"));
+            assertNull(mapper.findLatestIssueAlertChannelDeliveryLog(source.getAlertNo(), "IM"));
+            assertEquals(0, mapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                    "ALERT_ALIAS_SOURCE", "IM", "2000-01-01 00:00:00", 10).size());
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "UPDATE t_payment_issue_alert_log SET alert_status = '派发失败', "
+                            + "provider_delivery_status = 'FAILED' WHERE alert_no = ?")) {
+                statement.setString(1, delivery.getAlertNo());
+                assertEquals(1, statement.executeUpdate());
+            }
+            assertEquals(0, mapper.countFailedIssueAlertChannelDeliveries(source.getAlertNo(), "IM"));
+            assertEquals(0, mapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                    "ALERT_ALIAS_SOURCE", "IM", "2000-01-01 00:00:00", 10).size());
+        }
+    }
+
+    @Test
+    void shouldRejectReceiptClaimForAliasedSourceAndDeliveryIdentifiers() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity source = buildIssueAlertLog("PIA-RECEIPT-EXACT-SOURCE");
+            assertEquals(1, mapper.insertIssueAlertLog(source));
+            PaymentIssueAlertLogEntity delivery = buildIssueAlertLog("PIA-RECEIPT-EXACT-DELIVERY");
+            delivery.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-EXACT-DELIVERY");
+            delivery.setSourceAlertNo("pia-receipt-exact-source");
+            delivery.setAlertChannel("IM");
+            delivery.setAlertStatus("已派发");
+            delivery.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(delivery));
+
+            assertEquals(0, mapper.findAcceptedIssueAlertDeliveryLogs(0, 10).size());
+            assertNull(mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(delivery.getAlertNo()));
+            assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(0, 10, 30, 10).size());
+            assertEquals(0, mapper.countManualIssueAlertReceipts(30));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(delivery.getAlertNo(),
+                    delivery.getSourceAlertNo(), delivery.getIssueNo(), 0, true, 10, 30));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingPendingSourceIssueAlert(
+                    delivery.getSourceAlertNo(), delivery.getIssueNo()));
+
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "UPDATE t_payment_issue_alert_log SET source_alert_no = ? WHERE alert_no = ?")) {
+                statement.setString(1, source.getAlertNo());
+                statement.setString(2, delivery.getAlertNo());
+                assertEquals(1, statement.executeUpdate());
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countManualIssueAlertReceipts(30));
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "UPDATE t_payment_issue_alert_log SET issue_no = ? WHERE alert_no = ?")) {
+                statement.setString(1, "issue-idempotent");
+                statement.setString(2, delivery.getAlertNo());
+                assertEquals(1, statement.executeUpdate());
+                session.clearCache();
+                assertEquals(0, mapper.countManualIssueAlertReceipts(30));
+                statement.setString(1, source.getIssueNo());
+                assertEquals(1, statement.executeUpdate());
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countManualIssueAlertReceipts(30));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery("pia-receipt-exact-delivery",
+                    source.getAlertNo(), source.getIssueNo(), 0, true, 10, 30));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(delivery.getAlertNo(),
+                    "PIA-RECEIPT-EXACT-SOURCE ", source.getIssueNo(), 0, true, 10, 30));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(delivery.getAlertNo(),
+                    source.getAlertNo(), "issue-idempotent", 0, true, 10, 30));
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(delivery.getAlertNo(),
+                    source.getAlertNo(), source.getIssueNo(), 0, true, 10, 30));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt("pia-receipt-exact-delivery",
+                    source.getAlertNo(), source.getIssueNo(), 1, "FAILED", 60, 10));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(delivery.getAlertNo(),
+                    "PIA-RECEIPT-EXACT-SOURCE ", source.getIssueNo(), 1, "FAILED", 60, 10));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(delivery.getAlertNo(),
+                    source.getAlertNo(), "issue-idempotent", 1, "FAILED", 60, 10));
+            assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(delivery.getAlertNo(),
+                    source.getAlertNo(), source.getIssueNo(), 1, "FAILED", 60, 10));
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(delivery.getAlertNo(),
+                    source.getAlertNo(), source.getIssueNo(), 1, true, 10, 30));
+
+            PaymentIssueAlertLogEntity receipt = new PaymentIssueAlertLogEntity();
+            receipt.setAlertNo(delivery.getAlertNo());
+            receipt.setSourceAlertNo(source.getAlertNo());
+            receipt.setIssueNo(source.getIssueNo());
+            receipt.setProviderDeliveryStatus("DELIVERED");
+            receipt.setAckStatus("已确认");
+            receipt.setAckStatusType("success");
+            receipt.setReceiptQueryCount(2);
+            receipt.setAlertNo("pia-receipt-exact-delivery");
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(receipt));
+            receipt.setAlertNo(delivery.getAlertNo());
+            receipt.setSourceAlertNo("PIA-RECEIPT-EXACT-SOURCE ");
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(receipt));
+            receipt.setSourceAlertNo(source.getAlertNo());
+            receipt.setIssueNo("issue-idempotent");
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(receipt));
+            receipt.setIssueNo(source.getIssueNo());
+            assertEquals(1, mapper.updateIssueAlertProviderReceipt(receipt));
+
+            PaymentIssueAlertLogEntity acknowledgement = new PaymentIssueAlertLogEntity();
+            acknowledgement.setAlertNo("pia-receipt-exact-source");
+            acknowledgement.setIssueNo(source.getIssueNo());
+            acknowledgement.setAckStatus("已确认");
+            acknowledgement.setAckStatusType("success");
+            assertEquals(0, mapper.updateSourceIssueAlertAcknowledgement(acknowledgement));
+            acknowledgement.setAlertNo(source.getAlertNo());
+            acknowledgement.setIssueNo("issue-idempotent");
+            assertEquals(0, mapper.updateSourceIssueAlertAcknowledgement(acknowledgement));
+            acknowledgement.setIssueNo(source.getIssueNo());
+            assertEquals(1, mapper.updateSourceIssueAlertAcknowledgement(acknowledgement));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    "pia-receipt-exact-source", source.getIssueNo()));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    source.getAlertNo(), "ISSUE-IDEMPOTENT "));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    source.getAlertNo(), source.getIssueNo()));
         }
     }
 
@@ -1184,6 +2210,42 @@ public class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldNotAcquireOrChangeTaskLeaseThroughCodeAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("INSERT INTO t_payment_task_lease(task_code, lock_owner, updated_at) "
+                    + "VALUES ('payment_lease_alias', NULL, NOW())");
+
+            assertEquals(0, mapper.initTaskLease("PAYMENT_LEASE_ALIAS"));
+            assertEquals(0, mapper.acquireTaskLease("PAYMENT_LEASE_ALIAS", "owner-a", 120));
+            statement.executeUpdate("UPDATE t_payment_task_lease SET lock_owner = 'owner-a', "
+                    + "lock_expires_at = TIMESTAMPADD(SECOND, 60, NOW()) "
+                    + "WHERE task_code = 'payment_lease_alias'");
+            assertEquals(0, mapper.renewTaskLease("PAYMENT_LEASE_ALIAS", "owner-a", 120));
+            assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_ALIAS", "owner-a"));
+            try (java.sql.ResultSet row = statement.executeQuery(
+                    "SELECT lock_owner FROM t_payment_task_lease WHERE task_code = 'payment_lease_alias'")) {
+                assertEquals(true, row.next());
+                assertEquals("owner-a", row.getString(1));
+            }
+        }
+    }
+
+    @Test
+    void shouldNotRenewOrReleaseTaskLeaseThroughOwnerAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(1, mapper.initTaskLease("PAYMENT_LEASE_OWNER"));
+            assertEquals(1, mapper.acquireTaskLease("PAYMENT_LEASE_OWNER", "owner-a", 120));
+            assertEquals(0, mapper.renewTaskLease("PAYMENT_LEASE_OWNER", "OWNER-A", 120));
+            assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_OWNER", "OWNER-A"));
+            assertEquals(1, mapper.renewTaskLease("PAYMENT_LEASE_OWNER", "owner-a", 120));
+            assertEquals(1, mapper.releaseTaskLease("PAYMENT_LEASE_OWNER", "owner-a"));
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -1206,6 +2268,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
+            statement.execute("DROP TABLE IF EXISTS t_payment_alert_provider_config");
             statement.execute("DROP TABLE IF EXISTS t_payment_control_policy");
             statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
@@ -1216,42 +2279,51 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "order_no VARCHAR(64) DEFAULT 'ORD-TEST', "
                     + "channel_code VARCHAR(64), channel_transaction_no VARCHAR(128), "
-                    + "status VARCHAR(32), created_at DATETIME)");
+                    + "status VARCHAR_IGNORECASE(32), success_at DATETIME, "
+                    + "amount DECIMAL(18, 2) DEFAULT 100.00, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
-                    + "payment_order_id VARCHAR(64), expires_at DATETIME)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
+                    + "order_no VARCHAR(64) DEFAULT 'ORD-TEST', amount DECIMAL(18, 2) DEFAULT 100.00, "
+                    + "expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_payment_attempt ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_expiry_close_retry ("
-                    + "payment_order_id VARCHAR(64) NOT NULL UNIQUE, next_retry_at DATETIME NOT NULL)");
+                    + "payment_order_id VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, next_retry_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_notify_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, notify_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), "
-                    + "notify_status VARCHAR(32), created_at DATETIME)");
+                    + "payment_order_id VARCHAR_IGNORECASE(64), "
+                    + "notify_status VARCHAR_IGNORECASE(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), biz_no VARCHAR(64), "
-                    + "event_type VARCHAR(64), publish_status VARCHAR(32), "
+                    + "payment_order_id VARCHAR_IGNORECASE(64), biz_no VARCHAR_IGNORECASE(64), "
+                    + "event_type VARCHAR(64), downstream_system VARCHAR_IGNORECASE(64), "
+                    + "event_topic VARCHAR_IGNORECASE(128), "
+                    + "publish_status VARCHAR_IGNORECASE(32), "
                     + "last_published_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_config ("
-                    + "channel_code VARCHAR(64), status VARCHAR(32))");
+                    + "channel_code VARCHAR_IGNORECASE(64), status VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_control_policy ("
                     + "status VARCHAR(32), self_check_status VARCHAR(32))");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
+                    + "payment_order_id VARCHAR(64) NOT NULL DEFAULT 'PAY-NO-HISTORY', "
+                    + "refund_amount DECIMAL(18, 2) NOT NULL DEFAULT 1.00, "
                     + "channel_code VARCHAR(64), channel_refund_no VARCHAR(128), "
-                    + "channel_submitted_at DATETIME, status VARCHAR(32), success_at DATETIME, "
+                    + "channel_submitted_at DATETIME, status VARCHAR_IGNORECASE(32), status_type VARCHAR(32), success_at DATETIME, "
                     + "terminal_at DATETIME, applied_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_attempt_no VARCHAR(64), "
-                    + "refund_order_id VARCHAR(64), channel_code VARCHAR(64), "
-                    + "channel_refund_no VARCHAR(128), attempt_status VARCHAR(32), "
+                    + "refund_order_id VARCHAR_IGNORECASE(64), channel_code VARCHAR(64), "
+                    + "channel_refund_no VARCHAR(128), attempt_status VARCHAR_IGNORECASE(32), "
                     + "attempt_status_type VARCHAR(32), submitted_at DATETIME, "
                     + "completed_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_operation_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
-                    + "refund_attempt_no VARCHAR(64), action_code VARCHAR(64), created_at DATETIME)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR_IGNORECASE(64), "
+                    + "refund_attempt_no VARCHAR_IGNORECASE(64), action_code VARCHAR_IGNORECASE(64), "
+                    + "created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
@@ -1261,32 +2333,32 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "channel_code VARCHAR(64), refund_order_id VARCHAR(64), "
                     + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_task_lease ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR(64) NOT NULL UNIQUE, "
-                    + "lock_owner VARCHAR(128), lock_expires_at DATETIME, updated_at DATETIME NOT NULL)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
+                    + "lock_owner VARCHAR_IGNORECASE(128), lock_expires_at DATETIME, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_task_run_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_log_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "task_code VARCHAR(64) NOT NULL, task_name VARCHAR(128) NOT NULL, biz_date DATE, "
-                    + "business_ref_no VARCHAR(64), "
-                    + "run_mode VARCHAR(32) NOT NULL, task_status VARCHAR(32) NOT NULL, "
-                    + "task_status_type VARCHAR(32) NOT NULL, severity_level VARCHAR(32) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_log_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
+                    + "task_code VARCHAR_IGNORECASE(64) NOT NULL, task_name VARCHAR(128) NOT NULL, biz_date DATE, "
+                    + "business_ref_no VARCHAR_IGNORECASE(64), "
+                    + "run_mode VARCHAR_IGNORECASE(32) NOT NULL, task_status VARCHAR_IGNORECASE(32) NOT NULL, "
+                    + "task_status_type VARCHAR(32) NOT NULL, severity_level VARCHAR_IGNORECASE(32) NOT NULL, "
                     + "severity_level_type VARCHAR(32) NOT NULL, escalation_status VARCHAR(32) NOT NULL, "
                     + "escalation_status_type VARCHAR(32) NOT NULL, processed_count INT NOT NULL, "
                     + "success_count INT NOT NULL, warning_count INT NOT NULL, fail_count INT NOT NULL, "
                     + "summary_comment VARCHAR(512) NOT NULL, suggested_action VARCHAR(255) NOT NULL, "
-                    + "recommended_route VARCHAR(255) NOT NULL, triggered_by VARCHAR(64) NOT NULL, "
+                    + "recommended_route VARCHAR(255) NOT NULL, triggered_by VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "started_at DATETIME NOT NULL, completed_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_day_end_batch ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, batch_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "biz_date DATE NOT NULL, run_mode VARCHAR(32) NOT NULL, batch_status VARCHAR(32))");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, batch_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
+                    + "biz_date DATE NOT NULL, run_mode VARCHAR_IGNORECASE(32) NOT NULL, batch_status VARCHAR(32))");
             statement.execute("INSERT INTO t_payment_day_end_batch ("
                     + "batch_no, biz_date, run_mode, batch_status) VALUES "
                     + "('DEB-20260911-AUTO-001', '2026-09-11', 'AUTO', 'SUCCESS')");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
-                    + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "
-                    + "issue_type VARCHAR(64), severity VARCHAR(32), responsibility_group VARCHAR(64), "
-                    + "alert_channel VARCHAR(32), receiver VARCHAR(64), alert_status VARCHAR(32), "
-                    + "alert_status_type VARCHAR(32), ack_status VARCHAR(32), ack_status_type VARCHAR(32), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR_IGNORECASE(64), source_alert_no VARCHAR(64), "
+                    + "generation_key VARCHAR(191), issue_no VARCHAR_IGNORECASE(128), payment_order_id VARCHAR(64), "
+                    + "issue_type VARCHAR_IGNORECASE(64), severity VARCHAR(32), responsibility_group VARCHAR(64), "
+                    + "alert_channel VARCHAR_IGNORECASE(32), receiver VARCHAR(64), alert_status VARCHAR_IGNORECASE(32), "
+                    + "alert_status_type VARCHAR(32), ack_status VARCHAR_IGNORECASE(32), ack_status_type VARCHAR(32), "
                     + "alert_content VARCHAR(512), provider_code VARCHAR(64), provider_name VARCHAR(128), "
                     + "endpoint_alias VARCHAR(128), template_code VARCHAR(128), "
                     + "provider_receipt_snapshot VARCHAR(2048), provider_receipt_no VARCHAR(128), "
@@ -1304,6 +2376,14 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "escalation_timeout_minutes INT, schedule_tag VARCHAR(64), "
                     + "effective_start_hour INT, effective_end_hour INT, weekday_scope VARCHAR(32), "
                     + "holiday_strategy VARCHAR(32), status VARCHAR(32))");
+            statement.execute("CREATE TABLE t_payment_alert_provider_config ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, provider_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "provider_name VARCHAR(64) NOT NULL, channel_code VARCHAR_IGNORECASE(32) NOT NULL, "
+                    + "endpoint_alias VARCHAR(64) NOT NULL, template_code VARCHAR(64) NOT NULL, "
+                    + "template_body VARCHAR(1024) NOT NULL, route_rule VARCHAR(255) NOT NULL, "
+                    + "route_priority INT NOT NULL, retry_policy VARCHAR(128) NOT NULL, "
+                    + "rate_limit_policy VARCHAR(128) NOT NULL, status VARCHAR(32) NOT NULL, "
+                    + "status_type VARCHAR(32) NOT NULL, updated_at DATETIME NOT NULL)");
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
@@ -1430,6 +2510,37 @@ public class PaymentTaskCenterMapperIntegrationTest {
         entity.setAlertContent("幂等测试告警");
         entity.setTriggeredBy("integration-test");
         return entity;
+    }
+
+    private PaymentTaskRunLogEntity buildCompletedDayEndRun(String taskLogNo, String businessRefNo) {
+        PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+        entity.setTaskLogNo(taskLogNo);
+        entity.setTaskCode("PAYMENT_DAY_END");
+        entity.setTaskName("支付日终处理");
+        entity.setBizDate("2026-09-11");
+        entity.setBusinessRefNo(businessRefNo);
+        entity.setRunMode("AUTO");
+        entity.setTaskStatus("SUCCESS");
+        entity.setTaskStatusType("success");
+        entity.setSeverityLevel("P3");
+        entity.setSeverityLevelType("success");
+        entity.setEscalationStatus("正常");
+        entity.setEscalationStatusType("success");
+        entity.setProcessedCount(1);
+        entity.setSuccessCount(1);
+        entity.setWarningCount(0);
+        entity.setFailCount(0);
+        entity.setSummaryComment("已完成");
+        entity.setSuggestedAction("无需处理");
+        entity.setRecommendedRoute("/payment-day-end");
+        entity.setTriggeredBy("payment-day-end-scheduler");
+        return entity;
+    }
+
+    private void assertNoTaskRunMatches(PaymentTaskCenterMapper mapper, PaymentTaskRunLogQueryDTO query) {
+        assertEquals(0, mapper.countTaskRunLogs(query));
+        assertEquals(0, mapper.findTaskRunLogs(query).size());
+        assertEquals(0, mapper.findTaskRunLogsForExport(query).size());
     }
 
     public static int findInSet(String value, String values) {
@@ -1728,19 +2839,21 @@ public class PaymentTaskCenterMapperIntegrationTest {
             String publishStatus,
             LocalDateTime eventAt) throws Exception {
         try (PreparedStatement refundStatement = connection.prepareStatement(
-                "INSERT INTO t_refund_order(refund_order_id, channel_code, channel_refund_no, "
-                        + "channel_submitted_at, status, applied_at) VALUES (?, ?, NULL, NULL, 'PROCESSING', ?)");
+                "INSERT INTO t_refund_order(refund_order_id, payment_order_id, channel_code, channel_refund_no, "
+                        + "channel_submitted_at, status, applied_at) VALUES (?, ?, ?, NULL, NULL, 'PROCESSING', ?)");
              PreparedStatement attemptStatement = connection.prepareStatement(
                      "INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, channel_code, "
                              + "channel_refund_no, attempt_status, attempt_status_type, submitted_at, "
                              + "completed_at, created_at) VALUES (?, ?, ?, NULL, 'UNKNOWN', 'warn', ?, NULL, ?)");
              PreparedStatement eventStatement = connection.prepareStatement(
                      "INSERT INTO t_payment_event(event_no, payment_order_id, biz_no, event_type, "
-                             + "publish_status, last_published_at, created_at) "
-                             + "VALUES (?, ?, ?, 'REFUND_SUBMIT', ?, ?, ?)")) {
+                             + "downstream_system, event_topic, publish_status, last_published_at, created_at) "
+                             + "VALUES (?, ?, ?, 'REFUND_SUBMIT', 'gateway-access', "
+                             + "'payment.refund.submitted.v1', ?, ?, ?)")) {
             refundStatement.setString(1, refundOrderId);
-            refundStatement.setString(2, channelCode);
-            refundStatement.setTimestamp(3, Timestamp.valueOf(eventAt));
+            refundStatement.setString(2, "PAY-" + refundOrderId);
+            refundStatement.setString(3, channelCode);
+            refundStatement.setTimestamp(4, Timestamp.valueOf(eventAt));
             refundStatement.executeUpdate();
             String refundAttemptNo = "RFA-" + refundOrderId;
             attemptStatement.setString(1, refundAttemptNo);

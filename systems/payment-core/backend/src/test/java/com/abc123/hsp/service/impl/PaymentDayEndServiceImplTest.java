@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -31,6 +32,13 @@ class PaymentDayEndServiceImplTest {
 
     @Mock
     private PaymentDayEndMapper paymentDayEndMapper;
+
+    @BeforeEach
+    void defaultBatchInsertSucceeds() {
+        org.mockito.Mockito.lenient()
+                .when(paymentDayEndMapper.insertBatch(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+    }
 
     @Test
     void shouldLoadOverview() {
@@ -174,6 +182,7 @@ class PaymentDayEndServiceImplTest {
         batch.setBizDate("2026-08-02");
         batch.setRunMode("MANUAL");
         batch.setBatchStatus("WARNING");
+        batch.setBatchStatusType("warn");
         batch.setPaymentTotalCount(2);
         batch.setPaymentSuccessCount(1);
         batch.setPaymentSuccessAmount("¥268.00");
@@ -207,12 +216,16 @@ class PaymentDayEndServiceImplTest {
 
         verify(paymentDayEndMapper).findAllBatchesForExport();
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("批次号,业务日期"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("批次状态,批次状态样式,支付总单量"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"DEB001\""));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("待收口支付,待收口支付金额"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("退款终态事实不一致"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("退款失败单量,退款失败金额"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("支付成功事实不一致"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("BLOCKED"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"WARNING\",\"warn\""));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"BLOCKED\",\"danger\""));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("对账准入,对账准入样式,准入说明"));
     }
 
     private String repeat(char value, int count) {
@@ -266,6 +279,23 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
         org.junit.jupiter.api.Assertions.assertEquals("RERUN", captor.getValue().getRunMode());
         org.junit.jupiter.api.Assertions.assertEquals("finance-ops", captor.getValue().getTriggeredBy());
+    }
+
+    @Test
+    void shouldStopDayEndBatchWhenInsertDoesNotTakeEffect() {
+        when(paymentDayEndMapper.countBatchesByDate("2026-07-19")).thenReturn(0);
+        when(paymentDayEndMapper.insertBatch(org.mockito.ArgumentMatchers.any())).thenReturn(0);
+
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate("2026-07-19");
+        request.setTriggeredBy("finance-ops");
+
+        IllegalStateException error = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("支付日终批次新增未实际生效", error.getMessage());
+        verify(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

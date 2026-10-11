@@ -4,19 +4,63 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentTaskCenterMapper">
 
+    <sql id="exactFailedEventStatus">
+        publish_status = 'FAILED'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('FAILED')
+        AND CAST(publish_status AS BINARY(32)) = CAST('FAILED' AS BINARY(32))
+    </sql>
+
+    <sql id="exactDeadLetterEventStatus">
+        publish_status = 'DEAD_LETTER'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('DEAD_LETTER')
+        AND CAST(publish_status AS BINARY(32)) = CAST('DEAD_LETTER' AS BINARY(32))
+    </sql>
+
+    <sql id="exactFailedOrDeadLetterEventStatus">
+        ((<include refid="exactFailedEventStatus"/>)
+         OR (<include refid="exactDeadLetterEventStatus"/>))
+    </sql>
+
+    <sql id="verifiedExpiryPrepayBinding">
+        p.amount &gt; 0
+        AND pr.amount &gt; 0
+        AND pr.amount = p.amount
+        AND pr.order_no = p.order_no
+        AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+        AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+    </sql>
+
     <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO">
         SELECT
             COALESCE((
                 SELECT COUNT(DISTINCT p.payment_order_id)
                 FROM t_payment_order p
-                INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                INNER JOIN t_prepay_order pr ON pr.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
                 WHERE p.status = 'PREPAY_CREATED'
+                  AND CHAR_LENGTH(p.status) = CHAR_LENGTH('PREPAY_CREATED')
+                  AND CAST(p.status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32))
+                  AND p.success_at IS NULL
                   AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
                   AND pr.expires_at &lt; NOW()
+                  AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                       WHERE all_prepay.payment_order_id = p.payment_order_id
+                         AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                         AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                  AND <include refid="verifiedExpiryPrepayBinding"/>
                   AND NOT EXISTS (
                     SELECT 1
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                   )
             ), 0) AS expiredPaymentCount,
             COALESCE((
@@ -27,17 +71,17 @@
             COALESCE((
                 SELECT COUNT(1)
                 FROM t_payment_event
-                WHERE publish_status IN ('FAILED', 'DEAD_LETTER')
+                WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
             ), 0) AS failedEventCount,
             COALESCE((
                 SELECT COUNT(1)
                 FROM t_payment_event
-                WHERE publish_status = 'FAILED'
+                WHERE <include refid="exactFailedEventStatus"/>
             ), 0) AS retryableFailedEventCount,
             COALESCE((
                 SELECT COUNT(1)
                 FROM t_payment_event
-                WHERE publish_status = 'DEAD_LETTER'
+                WHERE <include refid="exactDeadLetterEventStatus"/>
             ), 0) AS deadLetterEventCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -48,43 +92,13 @@
                 SELECT COUNT(1)
                 FROM t_refund_order refund_order
                 WHERE refund_order.status = 'FAIL'
-                  AND refund_order.terminal_at IS NOT NULL
-                  AND refund_order.success_at IS NULL
-                  AND EXISTS (
-                    SELECT 1
-                    FROM t_refund_attempt terminal_attempt
-                    WHERE terminal_attempt.id = (
-                        SELECT latest_attempt.id
-                        FROM t_refund_attempt latest_attempt
-                        WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
-                        ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
-                        LIMIT 1
-                    )
-                      AND terminal_attempt.attempt_status = 'FAIL'
-                      AND terminal_attempt.completed_at IS NOT NULL
-                  )
+                  AND NOT (<include refid="com.abc123.hsp.mapper.RefundMapper.refundTerminalFactMismatchCondition"/>)
             ), 0) AS retryableFailedRefundCount,
             COALESCE((
                 SELECT COUNT(1)
                 FROM t_refund_order refund_order
                 WHERE refund_order.status = 'FAIL'
-                  AND (
-                    refund_order.terminal_at IS NULL
-                    OR refund_order.success_at IS NOT NULL
-                    OR NOT EXISTS (
-                        SELECT 1
-                        FROM t_refund_attempt terminal_attempt
-                        WHERE terminal_attempt.id = (
-                            SELECT latest_attempt.id
-                            FROM t_refund_attempt latest_attempt
-                            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
-                            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
-                            LIMIT 1
-                        )
-                          AND terminal_attempt.attempt_status = 'FAIL'
-                          AND terminal_attempt.completed_at IS NOT NULL
-                    )
-                  )
+                  AND (<include refid="com.abc123.hsp.mapper.RefundMapper.refundTerminalFactMismatchCondition"/>)
             ), 0) AS blockedFailedRefundCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -115,7 +129,7 @@
                     UNION ALL
                     SELECT pe.created_at, 'P2' AS severity
                     FROM t_payment_event pe
-                    WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+                    WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
                     UNION ALL
                     SELECT COALESCE(pe.last_published_at, pe.created_at), 'P1' AS severity
                     FROM t_payment_event pe
@@ -125,6 +139,8 @@
                     SELECT po.created_at, 'P2' AS severity
                     FROM t_payment_order po
                              INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                                 AND CHAR_LENGTH(pcc.channel_code) = CHAR_LENGTH(po.channel_code)
+                                 AND CAST(pcc.channel_code AS BINARY(256)) = CAST(po.channel_code AS BINARY(256))
                     WHERE pcc.status = 'DISABLED'
                 ) issue_sla
                 WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
@@ -135,32 +151,72 @@
     <select id="countDueExpiredPayments" resultType="int">
         SELECT COUNT(DISTINCT p.payment_order_id)
         FROM t_payment_order p
-        INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        INNER JOIN t_prepay_order pr ON pr.id = (
+            SELECT latest_pr.id
+            FROM t_prepay_order latest_pr
+            WHERE latest_pr.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+            ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+            LIMIT 1
+        )
         LEFT JOIN t_payment_expiry_close_retry retry ON retry.payment_order_id = p.payment_order_id
+            AND CHAR_LENGTH(retry.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+            AND CAST(retry.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
         WHERE p.status = 'PREPAY_CREATED'
+          AND CHAR_LENGTH(p.status) = CHAR_LENGTH('PREPAY_CREATED')
+          AND CAST(p.status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32))
+          AND p.success_at IS NULL
           AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
           AND pr.expires_at &lt; NOW()
+          AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+               WHERE all_prepay.payment_order_id = p.payment_order_id
+                 AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                 AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+          AND <include refid="verifiedExpiryPrepayBinding"/>
           AND (retry.next_retry_at IS NULL OR retry.next_retry_at &lt;= NOW())
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
             WHERE pa.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
           )
     </select>
 
     <select id="countBackingOffExpiredPayments" resultType="int">
         SELECT COUNT(DISTINCT p.payment_order_id)
         FROM t_payment_order p
-        INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        INNER JOIN t_prepay_order pr ON pr.id = (
+            SELECT latest_pr.id
+            FROM t_prepay_order latest_pr
+            WHERE latest_pr.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+            ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+            LIMIT 1
+        )
         INNER JOIN t_payment_expiry_close_retry retry ON retry.payment_order_id = p.payment_order_id
+            AND CHAR_LENGTH(retry.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+            AND CAST(retry.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
         WHERE p.status = 'PREPAY_CREATED'
+          AND CHAR_LENGTH(p.status) = CHAR_LENGTH('PREPAY_CREATED')
+          AND CAST(p.status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32))
+          AND p.success_at IS NULL
           AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
           AND pr.expires_at &lt; NOW()
+          AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+               WHERE all_prepay.payment_order_id = p.payment_order_id
+                 AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                 AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+          AND <include refid="verifiedExpiryPrepayBinding"/>
           AND retry.next_retry_at > NOW()
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
             WHERE pa.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
           )
     </select>
 
@@ -184,7 +240,7 @@
             UNION ALL
             SELECT pe.created_at, 'P2' AS severity
             FROM t_payment_event pe
-            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+            WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
             UNION ALL
             SELECT COALESCE(pe.last_published_at, pe.created_at), 'P1' AS severity
             FROM t_payment_event pe
@@ -194,6 +250,8 @@
             SELECT po.created_at, 'P2' AS severity
             FROM t_payment_order po
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                         AND CHAR_LENGTH(pcc.channel_code) = CHAR_LENGTH(po.channel_code)
+                         AND CAST(pcc.channel_code AS BINARY(256)) = CAST(po.channel_code AS BINARY(256))
             WHERE pcc.status = 'DISABLED'
         ) issue_sla
         WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
@@ -219,7 +277,7 @@
                    pe.created_at,
                    'P2' AS severity
             FROM t_payment_event pe
-            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+            WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
             UNION ALL
             SELECT CONCAT('ISSUE-REFUND-SUBMIT-UNKNOWN-', pe.event_no) AS issue_no,
                    COALESCE(pe.last_published_at, pe.created_at) AS created_at,
@@ -233,6 +291,8 @@
                    'P2' AS severity
             FROM t_payment_order po
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                         AND CHAR_LENGTH(pcc.channel_code) = CHAR_LENGTH(po.channel_code)
+                         AND CAST(pcc.channel_code AS BINARY(256)) = CAST(po.channel_code AS BINARY(256))
             WHERE pcc.status = 'DISABLED'
         ) issue_sla
         WHERE ((issue_sla.severity = 'P1'
@@ -243,6 +303,8 @@
               SELECT 1
               FROM t_payment_issue_alert_log alert_log
               WHERE alert_log.issue_no = issue_sla.issue_no
+                AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(issue_sla.issue_no)
+                AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(issue_sla.issue_no AS BINARY(256))
                 AND alert_log.ack_status = '待确认'
           )
     </select>
@@ -290,11 +352,19 @@
               SELECT 1
               FROM t_payment_issue_alert_log escalated_alert
               WHERE escalated_alert.issue_no = source_alert.issue_no
+                AND CHAR_LENGTH(escalated_alert.issue_no) = CHAR_LENGTH(source_alert.issue_no)
+                AND CAST(escalated_alert.issue_no AS BINARY(256)) = CAST(source_alert.issue_no AS BINARY(256))
                 AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
                 AND (
-                    escalated_alert.source_alert_no = source_alert.alert_no
-                    OR escalated_alert.alert_content LIKE CONCAT(
-                        '%升级来源告警 ', source_alert.alert_no, '%')
+                    (escalated_alert.source_alert_no = source_alert.alert_no
+                     AND CHAR_LENGTH(escalated_alert.source_alert_no) = CHAR_LENGTH(source_alert.alert_no)
+                     AND CAST(escalated_alert.source_alert_no AS BINARY(256)) =
+                         CAST(source_alert.alert_no AS BINARY(256)))
+                    OR (escalated_alert.source_alert_no IS NULL
+                        AND CAST(LEFT(escalated_alert.alert_content,
+                            CHAR_LENGTH(CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过')))
+                            AS BINARY(256)) =
+                            CAST(CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过') AS BINARY(256)))
                 )
           )
     </select>
@@ -352,7 +422,7 @@
                    'P2' AS severity,
                    pe.created_at
             FROM t_payment_event pe
-            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+            WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
             UNION ALL
             SELECT CONCAT('ISSUE-REFUND-SUBMIT-UNKNOWN-', pe.event_no) AS issue_no,
                    pe.payment_order_id,
@@ -370,6 +440,8 @@
                    po.created_at
             FROM t_payment_order po
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                         AND CHAR_LENGTH(pcc.channel_code) = CHAR_LENGTH(po.channel_code)
+                         AND CAST(pcc.channel_code AS BINARY(256)) = CAST(po.channel_code AS BINARY(256))
             WHERE pcc.status = 'DISABLED'
         ) issue_sla
         LEFT JOIN (
@@ -384,6 +456,8 @@
               SELECT 1
               FROM t_payment_issue_alert_log alert_log
               WHERE alert_log.issue_no = issue_sla.issue_no
+                AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(issue_sla.issue_no)
+                AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(issue_sla.issue_no AS BINARY(256))
                 AND alert_log.ack_status = '待确认'
           )
         ORDER BY issue_sla.created_at ASC, issue_no ASC
@@ -430,10 +504,19 @@
               SELECT 1
               FROM t_payment_issue_alert_log escalated_alert
               WHERE escalated_alert.issue_no = source_alert.issue_no
+                AND CHAR_LENGTH(escalated_alert.issue_no) = CHAR_LENGTH(source_alert.issue_no)
+                AND CAST(escalated_alert.issue_no AS BINARY(256)) = CAST(source_alert.issue_no AS BINARY(256))
                 AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
                 AND (
-                    escalated_alert.source_alert_no = source_alert.alert_no
-                    OR escalated_alert.alert_content LIKE CONCAT('%升级来源告警 ', source_alert.alert_no, '%')
+                    (escalated_alert.source_alert_no = source_alert.alert_no
+                     AND CHAR_LENGTH(escalated_alert.source_alert_no) = CHAR_LENGTH(source_alert.alert_no)
+                     AND CAST(escalated_alert.source_alert_no AS BINARY(256)) =
+                         CAST(source_alert.alert_no AS BINARY(256)))
+                    OR (escalated_alert.source_alert_no IS NULL
+                        AND CAST(LEFT(escalated_alert.alert_content,
+                            CHAR_LENGTH(CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过')))
+                            AS BINARY(256)) =
+                            CAST(CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过') AS BINARY(256)))
                 )
           )
         ORDER BY source_alert.created_at ASC, source_alert.id ASC
@@ -462,6 +545,34 @@
         LIMIT 10
     </select>
 
+    <sql id="taskRunFilters">
+        <where>
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+                AND CHAR_LENGTH(task_code) = CHAR_LENGTH(#{taskCode})
+                AND CAST(task_code AS BINARY(256)) = CAST(#{taskCode} AS BINARY(256))
+            </if>
+            <if test="bizDate != null and bizDate != ''">
+                AND biz_date = #{bizDate}
+            </if>
+            <if test="runMode != null and runMode != '' and runMode != '全部'">
+                AND run_mode = #{runMode}
+                AND CHAR_LENGTH(run_mode) = CHAR_LENGTH(#{runMode})
+                AND CAST(run_mode AS BINARY(256)) = CAST(#{runMode} AS BINARY(256))
+            </if>
+            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
+                AND task_status = #{taskStatus}
+                AND CHAR_LENGTH(task_status) = CHAR_LENGTH(#{taskStatus})
+                AND CAST(task_status AS BINARY(256)) = CAST(#{taskStatus} AS BINARY(256))
+            </if>
+            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
+                AND severity_level = #{severityLevel}
+                AND CHAR_LENGTH(severity_level) = CHAR_LENGTH(#{severityLevel})
+                AND CAST(severity_level AS BINARY(256)) = CAST(#{severityLevel} AS BINARY(256))
+            </if>
+        </where>
+    </sql>
+
     <select id="findTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO"
             resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
         SELECT task_log_no AS taskLogNo,
@@ -487,23 +598,7 @@
                DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
                DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
         FROM t_payment_task_run_log
-        <where>
-            <if test="taskCode != null and taskCode != ''">
-                AND task_code = #{taskCode}
-            </if>
-            <if test="bizDate != null and bizDate != ''">
-                AND biz_date = #{bizDate}
-            </if>
-            <if test="runMode != null and runMode != '' and runMode != '全部'">
-                AND run_mode = #{runMode}
-            </if>
-            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
-                AND task_status = #{taskStatus}
-            </if>
-            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
-                AND severity_level = #{severityLevel}
-            </if>
-        </where>
+        <include refid="taskRunFilters"/>
         ORDER BY started_at DESC, id DESC
         LIMIT #{pageSize} OFFSET #{offset}
     </select>
@@ -533,6 +628,8 @@
                DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
         FROM t_payment_task_run_log
         WHERE task_log_no = #{taskLogNo}
+          AND CHAR_LENGTH(task_log_no) = CHAR_LENGTH(#{taskLogNo})
+          AND CAST(task_log_no AS BINARY(256)) = CAST(#{taskLogNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -561,23 +658,7 @@
                DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
                DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
         FROM t_payment_task_run_log
-        <where>
-            <if test="taskCode != null and taskCode != ''">
-                AND task_code = #{taskCode}
-            </if>
-            <if test="bizDate != null and bizDate != ''">
-                AND biz_date = #{bizDate}
-            </if>
-            <if test="runMode != null and runMode != '' and runMode != '全部'">
-                AND run_mode = #{runMode}
-            </if>
-            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
-                AND task_status = #{taskStatus}
-            </if>
-            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
-                AND severity_level = #{severityLevel}
-            </if>
-        </where>
+        <include refid="taskRunFilters"/>
         ORDER BY started_at DESC, id DESC
         LIMIT 1001
     </select>
@@ -585,23 +666,7 @@
     <select id="countTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO" resultType="long">
         SELECT COUNT(1)
         FROM t_payment_task_run_log
-        <where>
-            <if test="taskCode != null and taskCode != ''">
-                AND task_code = #{taskCode}
-            </if>
-            <if test="bizDate != null and bizDate != ''">
-                AND biz_date = #{bizDate}
-            </if>
-            <if test="runMode != null and runMode != '' and runMode != '全部'">
-                AND run_mode = #{runMode}
-            </if>
-            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
-                AND task_status = #{taskStatus}
-            </if>
-            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
-                AND severity_level = #{severityLevel}
-            </if>
-        </where>
+        <include refid="taskRunFilters"/>
     </select>
 
     <select id="countUnlinkedAutoDayEndBatchesByBizDate" resultType="int">
@@ -609,21 +674,36 @@
         FROM t_payment_day_end_batch batch
         WHERE batch.biz_date = #{bizDate}
           AND batch.run_mode = 'AUTO'
+          AND CHAR_LENGTH(batch.run_mode) = CHAR_LENGTH('AUTO')
+          AND CAST(batch.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
           AND NOT EXISTS (
               SELECT 1
               FROM t_payment_task_run_log task_log
               WHERE task_log.task_code = 'PAYMENT_DAY_END'
+                AND CHAR_LENGTH(task_log.task_code) = CHAR_LENGTH('PAYMENT_DAY_END')
+                AND CAST(task_log.task_code AS BINARY(64)) = CAST('PAYMENT_DAY_END' AS BINARY(64))
                 AND task_log.run_mode = 'AUTO'
+                AND CHAR_LENGTH(task_log.run_mode) = CHAR_LENGTH('AUTO')
+                AND CAST(task_log.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
                 AND task_log.triggered_by = 'payment-day-end-scheduler'
+                AND CHAR_LENGTH(task_log.triggered_by) = CHAR_LENGTH('payment-day-end-scheduler')
+                AND CAST(task_log.triggered_by AS BINARY(128)) =
+                    CAST('payment-day-end-scheduler' AS BINARY(128))
                 AND task_log.biz_date = batch.biz_date
                 AND task_log.business_ref_no = batch.batch_no
+                AND CHAR_LENGTH(task_log.business_ref_no) = CHAR_LENGTH(batch.batch_no)
+                AND CAST(task_log.business_ref_no AS BINARY(256)) = CAST(batch.batch_no AS BINARY(256))
                 AND task_log.processed_count = 1
                 AND task_log.fail_count = 0
                 AND (
                     (task_log.task_status = 'SUCCESS'
+                        AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('SUCCESS')
+                        AND CAST(task_log.task_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
                         AND task_log.success_count = 1
                         AND task_log.warning_count = 0)
                     OR (task_log.task_status = 'WARNING'
+                        AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('WARNING')
+                        AND CAST(task_log.task_status AS BINARY(32)) = CAST('WARNING' AS BINARY(32))
                         AND task_log.success_count = 0
                         AND task_log.warning_count = 1)
                 )
@@ -634,16 +714,26 @@
         SELECT COUNT(1)
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND CHAR_LENGTH(task_log.task_code) = CHAR_LENGTH('PAYMENT_DAY_END')
+          AND CAST(task_log.task_code AS BINARY(64)) = CAST('PAYMENT_DAY_END' AS BINARY(64))
           AND task_log.run_mode = 'AUTO'
+          AND CHAR_LENGTH(task_log.run_mode) = CHAR_LENGTH('AUTO')
+          AND CAST(task_log.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
           AND task_log.triggered_by = 'payment-day-end-scheduler'
+          AND CHAR_LENGTH(task_log.triggered_by) = CHAR_LENGTH('payment-day-end-scheduler')
+          AND CAST(task_log.triggered_by AS BINARY(128)) = CAST('payment-day-end-scheduler' AS BINARY(128))
           AND task_log.biz_date = #{bizDate}
           AND task_log.processed_count = 1
           AND task_log.fail_count = 0
           AND (
               (task_log.task_status = 'SUCCESS'
+                  AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('SUCCESS')
+                  AND CAST(task_log.task_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
                   AND task_log.success_count = 1
                   AND task_log.warning_count = 0)
               OR (task_log.task_status = 'WARNING'
+                  AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('WARNING')
+                  AND CAST(task_log.task_status AS BINARY(32)) = CAST('WARNING' AS BINARY(32))
                   AND task_log.success_count = 0
                   AND task_log.warning_count = 1)
           )
@@ -652,7 +742,11 @@
               FROM t_payment_day_end_batch batch
               WHERE batch.biz_date = task_log.biz_date
                 AND batch.batch_no = task_log.business_ref_no
+                AND CHAR_LENGTH(batch.batch_no) = CHAR_LENGTH(task_log.business_ref_no)
+                AND CAST(batch.batch_no AS BINARY(256)) = CAST(task_log.business_ref_no AS BINARY(256))
                 AND batch.run_mode = 'AUTO'
+                AND CHAR_LENGTH(batch.run_mode) = CHAR_LENGTH('AUTO')
+                AND CAST(batch.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
           )
     </select>
 
@@ -660,16 +754,26 @@
         SELECT COUNT(1)
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND CHAR_LENGTH(task_log.task_code) = CHAR_LENGTH('PAYMENT_DAY_END')
+          AND CAST(task_log.task_code AS BINARY(64)) = CAST('PAYMENT_DAY_END' AS BINARY(64))
           AND task_log.run_mode = 'AUTO'
+          AND CHAR_LENGTH(task_log.run_mode) = CHAR_LENGTH('AUTO')
+          AND CAST(task_log.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
           AND task_log.triggered_by = 'payment-day-end-scheduler'
+          AND CHAR_LENGTH(task_log.triggered_by) = CHAR_LENGTH('payment-day-end-scheduler')
+          AND CAST(task_log.triggered_by AS BINARY(128)) = CAST('payment-day-end-scheduler' AS BINARY(128))
           AND task_log.biz_date = #{bizDate}
           AND task_log.processed_count = 1
           AND task_log.fail_count = 0
           AND (
               (task_log.task_status = 'SUCCESS'
+                  AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('SUCCESS')
+                  AND CAST(task_log.task_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
                   AND task_log.success_count = 1
                   AND task_log.warning_count = 0)
               OR (task_log.task_status = 'WARNING'
+                  AND CHAR_LENGTH(task_log.task_status) = CHAR_LENGTH('WARNING')
+                  AND CAST(task_log.task_status AS BINARY(32)) = CAST('WARNING' AS BINARY(32))
                   AND task_log.success_count = 0
                   AND task_log.warning_count = 1)
           )
@@ -678,29 +782,65 @@
               FROM t_payment_day_end_batch batch
               WHERE batch.biz_date = task_log.biz_date
                 AND batch.batch_no = task_log.business_ref_no
+                AND CHAR_LENGTH(batch.batch_no) = CHAR_LENGTH(task_log.business_ref_no)
+                AND CAST(batch.batch_no AS BINARY(256)) = CAST(task_log.business_ref_no AS BINARY(256))
                 AND batch.run_mode = 'AUTO'
+                AND CHAR_LENGTH(batch.run_mode) = CHAR_LENGTH('AUTO')
+                AND CAST(batch.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
           )
           AND EXISTS (
               SELECT 1
               FROM t_payment_task_run_log earlier_log
               WHERE earlier_log.task_code = task_log.task_code
+                AND CHAR_LENGTH(earlier_log.task_code) = CHAR_LENGTH(task_log.task_code)
+                AND CAST(earlier_log.task_code AS BINARY(64)) = CAST(task_log.task_code AS BINARY(64))
                 AND earlier_log.run_mode = 'AUTO'
+                AND CHAR_LENGTH(earlier_log.run_mode) = CHAR_LENGTH('AUTO')
+                AND CAST(earlier_log.run_mode AS BINARY(32)) = CAST('AUTO' AS BINARY(32))
                 AND earlier_log.triggered_by = 'payment-day-end-scheduler'
+                AND CHAR_LENGTH(earlier_log.triggered_by) = CHAR_LENGTH('payment-day-end-scheduler')
+                AND CAST(earlier_log.triggered_by AS BINARY(128)) =
+                    CAST('payment-day-end-scheduler' AS BINARY(128))
                 AND earlier_log.biz_date = task_log.biz_date
                 AND earlier_log.business_ref_no = task_log.business_ref_no
+                AND CHAR_LENGTH(earlier_log.business_ref_no) = CHAR_LENGTH(task_log.business_ref_no)
+                AND CAST(earlier_log.business_ref_no AS BINARY(256)) =
+                    CAST(task_log.business_ref_no AS BINARY(256))
                 AND earlier_log.processed_count = 1
                 AND earlier_log.fail_count = 0
                 AND (
                     (earlier_log.task_status = 'SUCCESS'
+                        AND CHAR_LENGTH(earlier_log.task_status) = CHAR_LENGTH('SUCCESS')
+                        AND CAST(earlier_log.task_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
                         AND earlier_log.success_count = 1
                         AND earlier_log.warning_count = 0)
                     OR (earlier_log.task_status = 'WARNING'
+                        AND CHAR_LENGTH(earlier_log.task_status) = CHAR_LENGTH('WARNING')
+                        AND CAST(earlier_log.task_status AS BINARY(32)) = CAST('WARNING' AS BINARY(32))
                         AND earlier_log.success_count = 0
                         AND earlier_log.warning_count = 1)
                 )
                 AND earlier_log.id &lt; task_log.id
           )
     </select>
+
+    <sql id="verifiedPaymentQueryPrepayBinding">
+        EXISTS (SELECT 1 FROM t_prepay_order pr
+                WHERE pr.payment_order_id = p.payment_order_id
+                  AND CHAR_LENGTH(pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                  AND CAST(pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                  AND p.amount &gt; 0
+                  AND pr.amount &gt; 0
+                  AND pr.amount = p.amount
+                  AND pr.order_no = p.order_no
+                  AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+                  AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                  AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+                       WHERE bound_prepay.payment_order_id = p.payment_order_id
+                         AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                         AND CAST(bound_prepay.payment_order_id AS BINARY(256)) =
+                             CAST(p.payment_order_id AS BINARY(256))) = 1)
+    </sql>
 
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
         SELECT candidates.payment_order_id
@@ -712,15 +852,19 @@
                        ORDER BY latest_attempt.created_at, latest_attempt.id
                    ) AS channel_rank
             FROM t_payment_order p
-                     INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                      INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
                         SELECT pa.id
                         FROM t_payment_attempt pa
                         WHERE pa.payment_order_id = p.payment_order_id
+                          AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                          AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                         ORDER BY pa.created_at DESC, pa.id DESC
                         LIMIT 1
                      )
             WHERE p.status = 'WAIT_CALLBACK'
+              AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
+              AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+              AND <include refid="verifiedPaymentQueryPrepayBinding" />
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
@@ -738,11 +882,12 @@
                        ORDER BY latest_attempt.created_at, latest_attempt.id
                    ) AS channel_rank
             FROM t_payment_order p
-                     INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                      INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
                         SELECT pa.id
                         FROM t_payment_attempt pa
                         WHERE pa.payment_order_id = p.payment_order_id
+                          AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                          AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                         ORDER BY pa.created_at DESC, pa.id DESC
                         LIMIT 1
                      )
@@ -752,9 +897,15 @@
                                MAX(created_at) AS latest_query_at
                         FROM t_payment_notify_log
                         WHERE notify_status IN ('已查单', '查单失败')
-                        GROUP BY payment_order_id
+                        GROUP BY payment_order_id, CHAR_LENGTH(payment_order_id),
+                                 CAST(payment_order_id AS BINARY(256))
                      ) query_history ON query_history.payment_order_id = p.payment_order_id
+                         AND CHAR_LENGTH(query_history.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                         AND CAST(query_history.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
             WHERE p.status = 'WAIT_CALLBACK'
+              AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
+              AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+              AND <include refid="verifiedPaymentQueryPrepayBinding" />
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
               AND (
                 query_history.latest_query_at IS NULL
@@ -772,6 +923,25 @@
         ORDER BY candidates.attempt_created_at, candidates.payment_order_id
         LIMIT #{batchSize}
     </select>
+
+    <sql id="refundQueryHistory">
+        SELECT log.refund_order_id,
+               log.refund_attempt_no,
+               COUNT(1) AS query_count,
+               MAX(log.created_at) AS latest_query_at
+        FROM t_refund_operation_log log
+        WHERE log.action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
+          AND (
+            (CHAR_LENGTH(log.action_code) = CHAR_LENGTH('CHANNEL_QUERY')
+                AND CAST(log.action_code AS BINARY(64)) = CAST('CHANNEL_QUERY' AS BINARY(64)))
+            OR (CHAR_LENGTH(log.action_code) = CHAR_LENGTH('CHANNEL_QUERY_FAILED')
+                AND CAST(log.action_code AS BINARY(64)) = CAST('CHANNEL_QUERY_FAILED' AS BINARY(64)))
+          )
+        GROUP BY log.refund_order_id, CHAR_LENGTH(log.refund_order_id),
+                 CAST(log.refund_order_id AS BINARY(256)),
+                 log.refund_attempt_no, CHAR_LENGTH(log.refund_attempt_no),
+                 CAST(log.refund_attempt_no AS BINARY(256))
+    </sql>
 
     <select id="findPendingRefundOrderIdsForManualQuery" resultType="string">
         SELECT candidates.refund_order_id
@@ -794,6 +964,9 @@
                         SELECT latest_attempt.id
                         FROM t_refund_attempt latest_attempt
                         WHERE latest_attempt.refund_order_id = refund.refund_order_id
+                          AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                          AND CAST(latest_attempt.refund_order_id AS BINARY(256)) =
+                              CAST(refund.refund_order_id AS BINARY(256))
                         ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                         LIMIT 1
                      )
@@ -801,17 +974,37 @@
                         SELECT event.id
                         FROM t_payment_event event
                         WHERE event.event_type = 'REFUND_SUBMIT'
+                          AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                          AND CAST(event.event_type AS BINARY(64)) = CAST('REFUND_SUBMIT' AS BINARY(64))
                           AND event.biz_no = refund_attempt.refund_attempt_no
+                          AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                          AND CAST(event.biz_no AS BINARY(256)) = CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                          AND event.payment_order_id = refund.payment_order_id
+                          AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund.payment_order_id)
+                          AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund.payment_order_id AS BINARY(256))
+                          AND event.downstream_system = 'gateway-access'
+                          AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                          AND CAST(event.downstream_system AS BINARY(64)) = CAST('gateway-access' AS BINARY(64))
+                          AND event.event_topic = 'payment.refund.submitted.v1'
+                          AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                          AND CAST(event.event_topic AS BINARY(128)) =
+                              CAST('payment.refund.submitted.v1' AS BINARY(128))
                         ORDER BY event.id DESC
                         LIMIT 1
                      )
             WHERE refund.status = 'PROCESSING'
+              AND CHAR_LENGTH(refund.status) = CHAR_LENGTH('PROCESSING')
+              AND CAST(refund.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
               AND refund_attempt.channel_code IS NOT NULL
               AND (
                 (refund_attempt.channel_refund_no IS NOT NULL AND refund_attempt.submitted_at IS NOT NULL)
                 OR (refund_attempt.channel_refund_no IS NULL
                     AND refund_attempt.attempt_status = 'UNKNOWN'
-                    AND refund_submit.publish_status = 'UNKNOWN')
+                    AND CHAR_LENGTH(refund_attempt.attempt_status) = CHAR_LENGTH('UNKNOWN')
+                    AND CAST(refund_attempt.attempt_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+                    AND refund_submit.publish_status = 'UNKNOWN'
+                    AND CHAR_LENGTH(refund_submit.publish_status) = CHAR_LENGTH('UNKNOWN')
+                    AND CAST(refund_submit.publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32)))
               )
               AND TIMESTAMPDIFF(
                     SECOND,
@@ -848,6 +1041,9 @@
                         SELECT latest_attempt.id
                         FROM t_refund_attempt latest_attempt
                         WHERE latest_attempt.refund_order_id = refund.refund_order_id
+                          AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                          AND CAST(latest_attempt.refund_order_id AS BINARY(256)) =
+                              CAST(refund.refund_order_id AS BINARY(256))
                         ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                         LIMIT 1
                      )
@@ -855,28 +1051,47 @@
                         SELECT event.id
                         FROM t_payment_event event
                         WHERE event.event_type = 'REFUND_SUBMIT'
+                          AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                          AND CAST(event.event_type AS BINARY(64)) = CAST('REFUND_SUBMIT' AS BINARY(64))
                           AND event.biz_no = refund_attempt.refund_attempt_no
+                          AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                          AND CAST(event.biz_no AS BINARY(256)) = CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                          AND event.payment_order_id = refund.payment_order_id
+                          AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund.payment_order_id)
+                          AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund.payment_order_id AS BINARY(256))
+                          AND event.downstream_system = 'gateway-access'
+                          AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                          AND CAST(event.downstream_system AS BINARY(64)) = CAST('gateway-access' AS BINARY(64))
+                          AND event.event_topic = 'payment.refund.submitted.v1'
+                          AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                          AND CAST(event.event_topic AS BINARY(128)) =
+                              CAST('payment.refund.submitted.v1' AS BINARY(128))
                         ORDER BY event.id DESC
                         LIMIT 1
                      )
                      LEFT JOIN (
-                        SELECT attempt.refund_attempt_no,
-                               COUNT(log.id) AS query_count,
-                               MAX(log.created_at) AS latest_query_at
-                        FROM t_refund_attempt attempt
-                        LEFT JOIN t_refund_operation_log log
-                          ON log.refund_attempt_no = attempt.refund_attempt_no
-                         AND log.action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
-                        GROUP BY attempt.refund_attempt_no
+                         <include refid="refundQueryHistory"/>
                      ) query_history
                        ON query_history.refund_attempt_no = refund_attempt.refund_attempt_no
+                      AND CHAR_LENGTH(query_history.refund_attempt_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                      AND CAST(query_history.refund_attempt_no AS BINARY(256)) =
+                          CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                      AND query_history.refund_order_id = refund.refund_order_id
+                      AND CHAR_LENGTH(query_history.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                      AND CAST(query_history.refund_order_id AS BINARY(256)) = CAST(refund.refund_order_id AS BINARY(256))
             WHERE refund.status = 'PROCESSING'
+              AND CHAR_LENGTH(refund.status) = CHAR_LENGTH('PROCESSING')
+              AND CAST(refund.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
               AND refund_attempt.channel_code IS NOT NULL
               AND (
                 (refund_attempt.channel_refund_no IS NOT NULL AND refund_attempt.submitted_at IS NOT NULL)
                 OR (refund_attempt.channel_refund_no IS NULL
                     AND refund_attempt.attempt_status = 'UNKNOWN'
-                    AND refund_submit.publish_status = 'UNKNOWN')
+                    AND CHAR_LENGTH(refund_attempt.attempt_status) = CHAR_LENGTH('UNKNOWN')
+                    AND CAST(refund_attempt.attempt_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+                    AND refund_submit.publish_status = 'UNKNOWN'
+                    AND CHAR_LENGTH(refund_submit.publish_status) = CHAR_LENGTH('UNKNOWN')
+                    AND CAST(refund_submit.publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32)))
               )
               AND TIMESTAMPDIFF(
                     SECOND,
@@ -906,26 +1121,31 @@
     <select id="countPendingPaymentQueryBacklog" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_order p
-                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                  INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
                     SELECT pa.id
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY pa.created_at DESC, pa.id DESC
                     LIMIT 1
                  )
         WHERE p.status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+          AND <include refid="verifiedPaymentQueryPrepayBinding" />
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
     </select>
 
     <select id="countDuePendingPaymentQueries" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_order p
-                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                  INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
                     SELECT pa.id
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY pa.created_at DESC, pa.id DESC
                     LIMIT 1
                  )
@@ -935,9 +1155,15 @@
                            MAX(created_at) AS latest_query_at
                     FROM t_payment_notify_log
                     WHERE notify_status IN ('已查单', '查单失败')
-                    GROUP BY payment_order_id
+                    GROUP BY payment_order_id, CHAR_LENGTH(payment_order_id),
+                             CAST(payment_order_id AS BINARY(256))
                  ) query_history ON query_history.payment_order_id = p.payment_order_id
+                     AND CHAR_LENGTH(query_history.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                     AND CAST(query_history.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
         WHERE p.status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+          AND <include refid="verifiedPaymentQueryPrepayBinding" />
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL
@@ -959,6 +1185,9 @@
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
                     WHERE latest_attempt.refund_order_id = refund.refund_order_id
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) =
+                          CAST(refund.refund_order_id AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
                  )
@@ -966,17 +1195,37 @@
                     SELECT event.id
                     FROM t_payment_event event
                     WHERE event.event_type = 'REFUND_SUBMIT'
+                      AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                      AND CAST(event.event_type AS BINARY(64)) = CAST('REFUND_SUBMIT' AS BINARY(64))
                       AND event.biz_no = refund_attempt.refund_attempt_no
+                      AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                      AND CAST(event.biz_no AS BINARY(256)) = CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                      AND event.payment_order_id = refund.payment_order_id
+                      AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund.payment_order_id)
+                      AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund.payment_order_id AS BINARY(256))
+                      AND event.downstream_system = 'gateway-access'
+                      AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                      AND CAST(event.downstream_system AS BINARY(64)) = CAST('gateway-access' AS BINARY(64))
+                      AND event.event_topic = 'payment.refund.submitted.v1'
+                      AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                      AND CAST(event.event_topic AS BINARY(128)) =
+                          CAST('payment.refund.submitted.v1' AS BINARY(128))
                     ORDER BY event.id DESC
                     LIMIT 1
                  )
         WHERE refund.status = 'PROCESSING'
+          AND CHAR_LENGTH(refund.status) = CHAR_LENGTH('PROCESSING')
+          AND CAST(refund.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
           AND refund_attempt.channel_code IS NOT NULL
           AND (
             (refund_attempt.channel_refund_no IS NOT NULL AND refund_attempt.submitted_at IS NOT NULL)
             OR (refund_attempt.channel_refund_no IS NULL
                 AND refund_attempt.attempt_status = 'UNKNOWN'
-                AND refund_submit.publish_status = 'UNKNOWN')
+                AND CHAR_LENGTH(refund_attempt.attempt_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(refund_attempt.attempt_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+                AND refund_submit.publish_status = 'UNKNOWN'
+                AND CHAR_LENGTH(refund_submit.publish_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(refund_submit.publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32)))
           )
           AND TIMESTAMPDIFF(
                 SECOND,
@@ -995,6 +1244,9 @@
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
                     WHERE latest_attempt.refund_order_id = refund.refund_order_id
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) =
+                          CAST(refund.refund_order_id AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
                  )
@@ -1002,28 +1254,47 @@
                     SELECT event.id
                     FROM t_payment_event event
                     WHERE event.event_type = 'REFUND_SUBMIT'
+                      AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                      AND CAST(event.event_type AS BINARY(64)) = CAST('REFUND_SUBMIT' AS BINARY(64))
                       AND event.biz_no = refund_attempt.refund_attempt_no
+                      AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                      AND CAST(event.biz_no AS BINARY(256)) = CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                      AND event.payment_order_id = refund.payment_order_id
+                      AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund.payment_order_id)
+                      AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund.payment_order_id AS BINARY(256))
+                      AND event.downstream_system = 'gateway-access'
+                      AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                      AND CAST(event.downstream_system AS BINARY(64)) = CAST('gateway-access' AS BINARY(64))
+                      AND event.event_topic = 'payment.refund.submitted.v1'
+                      AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                      AND CAST(event.event_topic AS BINARY(128)) =
+                          CAST('payment.refund.submitted.v1' AS BINARY(128))
                     ORDER BY event.id DESC
                     LIMIT 1
                  )
                  LEFT JOIN (
-                    SELECT attempt.refund_attempt_no,
-                           COUNT(log.id) AS query_count,
-                           MAX(log.created_at) AS latest_query_at
-                    FROM t_refund_attempt attempt
-                    LEFT JOIN t_refund_operation_log log
-                      ON log.refund_attempt_no = attempt.refund_attempt_no
-                     AND log.action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
-                    GROUP BY attempt.refund_attempt_no
+                     <include refid="refundQueryHistory"/>
                  ) query_history
                    ON query_history.refund_attempt_no = refund_attempt.refund_attempt_no
+                  AND CHAR_LENGTH(query_history.refund_attempt_no) = CHAR_LENGTH(refund_attempt.refund_attempt_no)
+                  AND CAST(query_history.refund_attempt_no AS BINARY(256)) =
+                      CAST(refund_attempt.refund_attempt_no AS BINARY(256))
+                  AND query_history.refund_order_id = refund.refund_order_id
+                  AND CHAR_LENGTH(query_history.refund_order_id) = CHAR_LENGTH(refund.refund_order_id)
+                  AND CAST(query_history.refund_order_id AS BINARY(256)) = CAST(refund.refund_order_id AS BINARY(256))
         WHERE refund.status = 'PROCESSING'
+          AND CHAR_LENGTH(refund.status) = CHAR_LENGTH('PROCESSING')
+          AND CAST(refund.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
           AND refund_attempt.channel_code IS NOT NULL
           AND (
             (refund_attempt.channel_refund_no IS NOT NULL AND refund_attempt.submitted_at IS NOT NULL)
             OR (refund_attempt.channel_refund_no IS NULL
                 AND refund_attempt.attempt_status = 'UNKNOWN'
-                AND refund_submit.publish_status = 'UNKNOWN')
+                AND CHAR_LENGTH(refund_attempt.attempt_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(refund_attempt.attempt_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+                AND refund_submit.publish_status = 'UNKNOWN'
+                AND CHAR_LENGTH(refund_submit.publish_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(refund_submit.publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32)))
           )
           AND TIMESTAMPDIFF(
                 SECOND,
@@ -1046,22 +1317,41 @@
           )
     </select>
 
+    <sql id="exactPaymentQueryNotifyStatus">
+        (notify_status = '已查单'
+         AND CHAR_LENGTH(notify_status) = CHAR_LENGTH('已查单')
+         AND CAST(notify_status AS BINARY(32)) = CAST('已查单' AS BINARY(32)))
+        OR (notify_status = '查单失败'
+            AND CHAR_LENGTH(notify_status) = CHAR_LENGTH('查单失败')
+            AND CAST(notify_status AS BINARY(32)) = CAST('查单失败' AS BINARY(32)))
+    </sql>
+
+    <sql id="exactRefundQueryActionCode">
+        (action_code = 'CHANNEL_QUERY'
+         AND CHAR_LENGTH(action_code) = CHAR_LENGTH('CHANNEL_QUERY')
+         AND CAST(action_code AS BINARY(64)) = CAST('CHANNEL_QUERY' AS BINARY(64)))
+        OR (action_code = 'CHANNEL_QUERY_SUCCESS'
+            AND CHAR_LENGTH(action_code) = CHAR_LENGTH('CHANNEL_QUERY_SUCCESS')
+            AND CAST(action_code AS BINARY(64)) = CAST('CHANNEL_QUERY_SUCCESS' AS BINARY(64)))
+        OR (action_code = 'CHANNEL_QUERY_FAIL'
+            AND CHAR_LENGTH(action_code) = CHAR_LENGTH('CHANNEL_QUERY_FAIL')
+            AND CAST(action_code AS BINARY(64)) = CAST('CHANNEL_QUERY_FAIL' AS BINARY(64)))
+        OR (action_code = 'CHANNEL_QUERY_FAILED'
+            AND CHAR_LENGTH(action_code) = CHAR_LENGTH('CHANNEL_QUERY_FAILED')
+            AND CAST(action_code AS BINARY(64)) = CAST('CHANNEL_QUERY_FAILED' AS BINARY(64)))
+    </sql>
+
     <select id="countRecentChannelQueries" resultType="int">
         SELECT SUM(query_count)
         FROM (
             SELECT COUNT(1) AS query_count
             FROM t_payment_notify_log
-            WHERE notify_status IN ('已查单', '查单失败')
+            WHERE (<include refid="exactPaymentQueryNotifyStatus"/>)
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
             UNION ALL
             SELECT COUNT(1) AS query_count
             FROM t_refund_operation_log
-            WHERE action_code IN (
-                'CHANNEL_QUERY',
-                'CHANNEL_QUERY_SUCCESS',
-                'CHANNEL_QUERY_FAIL',
-                'CHANNEL_QUERY_FAILED'
-            )
+            WHERE (<include refid="exactRefundQueryActionCode"/>)
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
         ) query_counts
     </select>
@@ -1072,11 +1362,15 @@
             SELECT COUNT(1) AS failure_count
             FROM t_payment_notify_log
             WHERE notify_status = '查单失败'
+              AND CHAR_LENGTH(notify_status) = CHAR_LENGTH('查单失败')
+              AND CAST(notify_status AS BINARY(32)) = CAST('查单失败' AS BINARY(32))
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
             UNION ALL
             SELECT COUNT(1) AS failure_count
             FROM t_refund_operation_log
             WHERE action_code = 'CHANNEL_QUERY_FAILED'
+              AND CHAR_LENGTH(action_code) = CHAR_LENGTH('CHANNEL_QUERY_FAILED')
+              AND CAST(action_code AS BINARY(64)) = CAST('CHANNEL_QUERY_FAILED' AS BINARY(64))
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
         ) failure_counts
     </select>
@@ -1098,37 +1392,64 @@
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
         WHERE issue_type = #{issueType}
+          AND CHAR_LENGTH(issue_type) = CHAR_LENGTH(#{issueType})
+          AND CAST(issue_type AS BINARY(256)) = CAST(#{issueType} AS BINARY(256))
           AND alert_channel = 'IN_APP_OUTBOX'
+          AND CHAR_LENGTH(alert_channel) = CHAR_LENGTH('IN_APP_OUTBOX')
+          AND CAST(alert_channel AS BINARY(32)) = CAST('IN_APP_OUTBOX' AS BINARY(32))
           AND source_alert_no IS NULL
           AND ack_status = '待确认'
+          AND CHAR_LENGTH(ack_status) = CHAR_LENGTH('待确认')
+          AND CAST(ack_status AS BINARY(32)) = CAST('待确认' AS BINARY(32))
           AND created_at &gt;= TIMESTAMPADD(MINUTE, -#{cooldownMinutes}, NOW())
     </select>
+
+    <sql id="pendingOutboxAlertCondition">
+        source_alert_no IS NULL
+        AND alert_channel = 'IN_APP_OUTBOX'
+        AND CHAR_LENGTH(alert_channel) = CHAR_LENGTH('IN_APP_OUTBOX')
+        AND CAST(alert_channel AS BINARY(32)) = CAST('IN_APP_OUTBOX' AS BINARY(32))
+        AND (
+            (alert_status = '已生成'
+             AND CHAR_LENGTH(alert_status) = CHAR_LENGTH('已生成')
+             AND CAST(alert_status AS BINARY(32)) = CAST('已生成' AS BINARY(32)))
+            OR (alert_status = '部分失败'
+                AND CHAR_LENGTH(alert_status) = CHAR_LENGTH('部分失败')
+                AND CAST(alert_status AS BINARY(32)) = CAST('部分失败' AS BINARY(32)))
+            OR (alert_status = '派发失败'
+                AND CHAR_LENGTH(alert_status) = CHAR_LENGTH('派发失败')
+                AND CAST(alert_status AS BINARY(32)) = CAST('派发失败' AS BINARY(32)))
+        )
+        AND (ack_status IS NULL
+             OR (ack_status = '待确认'
+                 AND CHAR_LENGTH(ack_status) = CHAR_LENGTH('待确认')
+                 AND CAST(ack_status AS BINARY(32)) = CAST('待确认' AS BINARY(32))))
+    </sql>
 
     <select id="countPendingIssueAlertDispatches" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE source_alert_no IS NULL
-          AND alert_channel = 'IN_APP_OUTBOX'
-          AND ack_status = '待确认'
-          AND alert_status IN ('已生成', '部分失败', '派发失败')
+        WHERE <include refid="pendingOutboxAlertCondition"/>
     </select>
 
     <select id="countFailedIssueAlertDispatches" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE source_alert_no IS NULL
-          AND alert_channel = 'IN_APP_OUTBOX'
-          AND ack_status = '待确认'
-          AND alert_status IN ('部分失败', '派发失败')
+        WHERE <include refid="pendingOutboxAlertCondition"/>
+          AND (
+              (alert_status = '部分失败'
+               AND CHAR_LENGTH(alert_status) = CHAR_LENGTH('部分失败')
+               AND CAST(alert_status AS BINARY(32)) = CAST('部分失败' AS BINARY(32)))
+              OR (alert_status = '派发失败'
+                  AND CHAR_LENGTH(alert_status) = CHAR_LENGTH('派发失败')
+                  AND CAST(alert_status AS BINARY(32)) = CAST('派发失败' AS BINARY(32)))
+          )
     </select>
 
     <select id="findOldestPendingIssueAlertDispatchMinutes" resultType="int">
         SELECT COALESCE(MAX(TIMESTAMPDIFF(MINUTE, created_at, NOW())), 0)
         FROM t_payment_issue_alert_log
-        WHERE source_alert_no IS NULL
-          AND alert_channel = 'IN_APP_OUTBOX'
-          AND ack_status = '待确认'
-          AND alert_status IN ('已生成', '部分失败', '派发失败')
+        WHERE <include refid="pendingOutboxAlertCondition"/>
     </select>
 
     <select id="countPendingIssueAlertReceipts" resultType="int">
@@ -1158,7 +1479,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = delivery.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(delivery.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(delivery.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = delivery.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(delivery.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(delivery.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
               AND source_alert.ack_status = '待确认'
@@ -1253,7 +1578,7 @@
                    ) AS time_bucket,
                    CASE WHEN notify_status = '查单失败' THEN 1 ELSE 0 END AS is_failure
             FROM t_payment_notify_log
-            WHERE notify_status IN ('已查单', '查单失败')
+            WHERE (<include refid="exactPaymentQueryNotifyStatus"/>)
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
             UNION ALL
             SELECT CONCAT(
@@ -1264,12 +1589,7 @@
                    ) AS time_bucket,
                    CASE WHEN action_code = 'CHANNEL_QUERY_FAILED' THEN 1 ELSE 0 END AS is_failure
             FROM t_refund_operation_log
-            WHERE action_code IN (
-                'CHANNEL_QUERY',
-                'CHANNEL_QUERY_SUCCESS',
-                'CHANNEL_QUERY_FAIL',
-                'CHANNEL_QUERY_FAILED'
-            )
+            WHERE (<include refid="exactRefundQueryActionCode"/>)
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
         ) query_bucket
         GROUP BY query_bucket.time_bucket
@@ -1406,10 +1726,7 @@
           ON roster.issue_type = outbox.issue_type
          AND roster.severity = outbox.severity
          AND roster.match_rank = 1
-        WHERE alert_channel = 'IN_APP_OUTBOX'
-          AND outbox.source_alert_no IS NULL
-          AND alert_status IN ('已生成', '部分失败', '派发失败')
-          AND COALESCE(outbox.ack_status, '待确认') = '待确认'
+        WHERE <include refid="pendingOutboxAlertCondition"/>
         ORDER BY outbox.created_at ASC, outbox.id ASC
         LIMIT #{batchSize}
     </select>
@@ -1418,11 +1735,12 @@
         SELECT TRUE
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
-          AND alert_channel = 'IN_APP_OUTBOX'
-          AND source_alert_no IS NULL
-          AND alert_status IN ('已生成', '部分失败', '派发失败')
-          AND COALESCE(ack_status, '待确认') = '待确认'
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
+          AND <include refid="pendingOutboxAlertCondition"/>
         FOR UPDATE
     </select>
 
@@ -1430,6 +1748,8 @@
         SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
         FROM t_payment_issue_alert_log delivery
         WHERE delivery.source_alert_no = #{param1}
+          AND CHAR_LENGTH(delivery.source_alert_no) = CHAR_LENGTH(#{param1})
+          AND CAST(delivery.source_alert_no AS BINARY(256)) = CAST(#{param1} AS BINARY(256))
           AND delivery.alert_channel = #{param2}
           AND delivery.alert_status = '已派发'
           AND delivery.provider_delivery_status IN ('ACCEPTED', 'DELIVERED')
@@ -1437,7 +1757,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = delivery.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(delivery.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(delivery.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = delivery.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(delivery.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(delivery.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
           )
@@ -1447,6 +1771,8 @@
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log delivery
         WHERE delivery.source_alert_no = #{param1}
+          AND CHAR_LENGTH(delivery.source_alert_no) = CHAR_LENGTH(#{param1})
+          AND CAST(delivery.source_alert_no AS BINARY(256)) = CAST(#{param1} AS BINARY(256))
           AND delivery.alert_channel = #{param2}
           AND delivery.alert_status = '派发失败'
           AND delivery.provider_delivery_status IN ('FAILED', 'SEND_EXCEPTION')
@@ -1454,7 +1780,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = delivery.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(delivery.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(delivery.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = delivery.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(delivery.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(delivery.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
           )
@@ -1490,13 +1820,19 @@
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log delivery
         WHERE delivery.source_alert_no = #{param1}
+          AND CHAR_LENGTH(delivery.source_alert_no) = CHAR_LENGTH(#{param1})
+          AND CAST(delivery.source_alert_no AS BINARY(256)) = CAST(#{param1} AS BINARY(256))
           AND delivery.alert_channel = #{param2}
           AND delivery.provider_delivery_status IN ('ACCEPTED', 'DELIVERED', 'FAILED', 'SEND_EXCEPTION')
           AND EXISTS (
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = delivery.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(delivery.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(delivery.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = delivery.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(delivery.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(delivery.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
           )
@@ -1524,7 +1860,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = delivery.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(delivery.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(delivery.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = delivery.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(delivery.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(delivery.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
           )
@@ -1548,6 +1888,8 @@
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_alert_provider_config
         WHERE channel_code = #{param1}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{param1})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{param1} AS BINARY(256))
           AND status = 'ENABLED'
         ORDER BY route_priority ASC, updated_at DESC, id DESC
     </select>
@@ -1560,11 +1902,12 @@
             ack_status_type = #{ackStatusType},
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
-          AND alert_channel = 'IN_APP_OUTBOX'
-          AND source_alert_no IS NULL
-          AND alert_status IN ('已生成', '部分失败', '派发失败')
-          AND COALESCE(ack_status, '待确认') = '待确认'
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
+          AND <include refid="pendingOutboxAlertCondition"/>
     </update>
 
     <select id="findAcceptedIssueAlertDeliveryLogs" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
@@ -1610,7 +1953,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = t_payment_issue_alert_log.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(t_payment_issue_alert_log.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = t_payment_issue_alert_log.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(t_payment_issue_alert_log.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
               AND source_alert.ack_status = '待确认'
@@ -1650,6 +1997,8 @@
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND source_alert_no IS NOT NULL
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
@@ -1659,7 +2008,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = t_payment_issue_alert_log.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(t_payment_issue_alert_log.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = t_payment_issue_alert_log.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(t_payment_issue_alert_log.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
               AND source_alert.ack_status = '待确认'
@@ -1706,7 +2059,11 @@
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
             WHERE source_alert.alert_no = t_payment_issue_alert_log.source_alert_no
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(t_payment_issue_alert_log.source_alert_no)
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.source_alert_no AS BINARY(256))
               AND source_alert.issue_no = t_payment_issue_alert_log.issue_no
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(t_payment_issue_alert_log.issue_no)
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(t_payment_issue_alert_log.issue_no AS BINARY(256))
               AND source_alert.alert_channel = 'IN_APP_OUTBOX'
               AND source_alert.source_alert_no IS NULL
               AND source_alert.ack_status = '待确认'
@@ -1727,7 +2084,11 @@
         SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{sourceAlertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel = 'IN_APP_OUTBOX'
           AND source_alert_no IS NULL
           AND ack_status = '待确认'
@@ -1740,8 +2101,14 @@
             next_receipt_query_at = TIMESTAMPADD(SECOND, #{claimTimeoutSeconds}, NOW()),
             receipt_query_result = 'QUERYING'
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND source_alert_no = #{sourceAlertNo}
+          AND CHAR_LENGTH(source_alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+          AND CAST(source_alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
@@ -1757,6 +2124,11 @@
                   AND ack_status = '待确认'
             ) source_alert
             WHERE source_alert.issue_no = #{issueNo}
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(#{issueNo})
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
+              AND source_alert.alert_no = #{sourceAlertNo}
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           )
           AND receipt_query_count = #{expectedAttemptCount}
           AND (
@@ -1778,8 +2150,14 @@
                 ELSE TIMESTAMPADD(SECOND, #{nextDelaySeconds}, NOW())
             END
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND source_alert_no = #{sourceAlertNo}
+          AND CHAR_LENGTH(source_alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+          AND CAST(source_alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
@@ -1794,6 +2172,11 @@
                   AND source_alert_no IS NULL
             ) source_alert
             WHERE source_alert.issue_no = #{issueNo}
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(#{issueNo})
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
+              AND source_alert.alert_no = #{sourceAlertNo}
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           )
           AND receipt_query_count = #{attemptCount}
           AND receipt_query_result = 'QUERYING'
@@ -1813,8 +2196,14 @@
             ack_at = NOW(),
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND source_alert_no = #{sourceAlertNo}
+          AND CHAR_LENGTH(source_alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+          AND CAST(source_alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
@@ -1829,6 +2218,11 @@
                   AND source_alert_no IS NULL
             ) source_alert
             WHERE source_alert.issue_no = #{issueNo}
+              AND CHAR_LENGTH(source_alert.issue_no) = CHAR_LENGTH(#{issueNo})
+              AND CAST(source_alert.issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
+              AND source_alert.alert_no = #{sourceAlertNo}
+              AND CHAR_LENGTH(source_alert.alert_no) = CHAR_LENGTH(#{sourceAlertNo})
+              AND CAST(source_alert.alert_no AS BINARY(256)) = CAST(#{sourceAlertNo} AS BINARY(256))
           )
           AND receipt_query_count = #{receiptQueryCount}
           AND receipt_query_result = 'QUERYING'
@@ -1842,7 +2236,11 @@
             ack_at = NOW(),
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel = 'IN_APP_OUTBOX'
           AND source_alert_no IS NULL
           AND ack_status = '待确认'
@@ -1852,7 +2250,11 @@
         SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND alert_channel = 'IN_APP_OUTBOX'
           AND source_alert_no IS NULL
           AND ack_status = '已确认'
@@ -1878,6 +2280,8 @@
             lock_expires_at = TIMESTAMPADD(SECOND, #{leaseSeconds}, NOW()),
             updated_at = NOW()
         WHERE task_code = #{taskCode}
+          AND CHAR_LENGTH(task_code) = CHAR_LENGTH(#{taskCode})
+          AND CAST(task_code AS BINARY(256)) = CAST(#{taskCode} AS BINARY(256))
           AND (
               lock_owner IS NULL
               OR lock_expires_at IS NULL
@@ -1890,7 +2294,11 @@
         SET lock_expires_at = TIMESTAMPADD(SECOND, #{leaseSeconds}, NOW()),
             updated_at = NOW()
         WHERE task_code = #{taskCode}
+          AND CHAR_LENGTH(task_code) = CHAR_LENGTH(#{taskCode})
+          AND CAST(task_code AS BINARY(256)) = CAST(#{taskCode} AS BINARY(256))
           AND lock_owner = #{lockOwner}
+          AND CHAR_LENGTH(lock_owner) = CHAR_LENGTH(#{lockOwner})
+          AND CAST(lock_owner AS BINARY(256)) = CAST(#{lockOwner} AS BINARY(256))
           AND lock_expires_at &gt; NOW()
     </update>
 
@@ -1900,6 +2308,10 @@
             lock_expires_at = NULL,
             updated_at = NOW()
         WHERE task_code = #{taskCode}
+          AND CHAR_LENGTH(task_code) = CHAR_LENGTH(#{taskCode})
+          AND CAST(task_code AS BINARY(256)) = CAST(#{taskCode} AS BINARY(256))
           AND lock_owner = #{lockOwner}
+          AND CHAR_LENGTH(lock_owner) = CHAR_LENGTH(#{lockOwner})
+          AND CAST(lock_owner AS BINARY(256)) = CAST(#{lockOwner} AS BINARY(256))
     </update>
 </mapper>

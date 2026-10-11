@@ -112,7 +112,9 @@
             resolution_note = #{resolutionNote}, replay_count = replay_count + 1,
             last_replay_at = NOW(), resolved_at = NOW(), updated_at = NOW()
         WHERE task_no = #{taskNo}
-          AND task_status = 'READY_TO_REPLAY'
+          AND (task_status = 'READY_TO_REPLAY'
+               OR (task_status = 'REPLAYING'
+                   AND updated_at &lt;= TIMESTAMPADD(MINUTE, -10, NOW())))
     </update>
 
     <update id="markReplayed">

@@ -27,6 +27,8 @@
                     SELECT pa.id
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = po.payment_order_id
+                      AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(po.payment_order_id)
+                      AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(po.payment_order_id AS BINARY(256))
                     ORDER BY pa.created_at DESC, pa.id DESC
                     LIMIT 1
                 )
@@ -34,6 +36,8 @@
                     SELECT pnl.id
                     FROM t_payment_notify_log pnl
                     WHERE pnl.payment_order_id = po.payment_order_id
+                      AND CHAR_LENGTH(pnl.payment_order_id) = CHAR_LENGTH(po.payment_order_id)
+                      AND CAST(pnl.payment_order_id AS BINARY(256)) = CAST(po.payment_order_id AS BINARY(256))
                     ORDER BY pnl.created_at DESC, pnl.id DESC
                     LIMIT 1
                 )
@@ -60,6 +64,8 @@
                DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_notify_log pnl
                  INNER JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+                     AND CHAR_LENGTH(po.payment_order_id) = CHAR_LENGTH(pnl.payment_order_id)
+                     AND CAST(po.payment_order_id AS BINARY(256)) = CAST(pnl.payment_order_id AS BINARY(256))
         WHERE pnl.notify_status = '待处理'
 
         UNION ALL
@@ -83,6 +89,8 @@
                DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+                     AND CHAR_LENGTH(po.payment_order_id) = CHAR_LENGTH(pe.payment_order_id)
+                     AND CAST(po.payment_order_id AS BINARY(256)) = CAST(pe.payment_order_id AS BINARY(256))
         WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
 
         UNION ALL
@@ -108,6 +116,8 @@
                DATE_FORMAT(COALESCE(pe.last_published_at, pe.created_at), '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+                     AND CHAR_LENGTH(po.payment_order_id) = CHAR_LENGTH(pe.payment_order_id)
+                     AND CAST(po.payment_order_id AS BINARY(256)) = CAST(pe.payment_order_id AS BINARY(256))
         WHERE pe.event_type = 'REFUND_SUBMIT'
           AND pe.publish_status = 'UNKNOWN'
 
@@ -132,6 +142,8 @@
                DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_order po
                  INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                     AND CHAR_LENGTH(pcc.channel_code) = CHAR_LENGTH(po.channel_code)
+                     AND CAST(pcc.channel_code AS BINARY(256)) = CAST(po.channel_code AS BINARY(256))
         WHERE pcc.status = 'DISABLED'
 
         UNION ALL
@@ -164,8 +176,13 @@
                    MAX(success_payment.id) AS latest_payment_id
             FROM t_payment_order success_payment
                      INNER JOIN t_order source_order ON source_order.order_no = success_payment.order_no
+                         AND CHAR_LENGTH(source_order.order_no) = CHAR_LENGTH(success_payment.order_no)
+                         AND CAST(source_order.order_no AS BINARY(256)) = CAST(success_payment.order_no AS BINARY(256))
             WHERE success_payment.status = 'SUCCESS'
-            GROUP BY success_payment.order_no
+              AND success_payment.amount &gt; 0
+            GROUP BY success_payment.order_no,
+                     CHAR_LENGTH(success_payment.order_no),
+                     CAST(success_payment.order_no AS BINARY(256))
             HAVING SUM(success_payment.amount) &gt; MAX(source_order.order_amount)
         ) overpaid_success
                  INNER JOIN t_payment_order po ON po.id = overpaid_success.latest_payment_id
@@ -289,6 +306,8 @@
                     SELECT action_log.id
                     FROM t_payment_issue_action_log action_log
                     WHERE action_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(action_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(action_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                     ORDER BY action_log.created_at DESC, action_log.id DESC
                     LIMIT 1
                 )
@@ -296,6 +315,8 @@
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                       AND alert_log.alert_channel = 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
@@ -304,6 +325,8 @@
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                       AND alert_log.alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
@@ -314,8 +337,10 @@
                            COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
                            COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
                     FROM t_payment_issue_alert_log
-                    GROUP BY issue_no
+                    GROUP BY issue_no, CHAR_LENGTH(issue_no), CAST(issue_no AS BINARY(256))
                 ) channel_delivery_summary ON channel_delivery_summary.summaryIssueNo = payment_issue_union.issue_no
+                    AND CHAR_LENGTH(channel_delivery_summary.summaryIssueNo) = CHAR_LENGTH(payment_issue_union.issue_no)
+                    AND CAST(channel_delivery_summary.summaryIssueNo AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 payment_issue_union.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -458,6 +483,8 @@
                     SELECT action_log.id
                     FROM t_payment_issue_action_log action_log
                     WHERE action_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(action_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(action_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                     ORDER BY action_log.created_at DESC, action_log.id DESC
                     LIMIT 1
                 )
@@ -465,6 +492,8 @@
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                       AND alert_log.alert_channel = 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
@@ -473,6 +502,8 @@
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND CHAR_LENGTH(alert_log.issue_no) = CHAR_LENGTH(payment_issue_union.issue_no)
+                      AND CAST(alert_log.issue_no AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
                       AND alert_log.alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
@@ -483,11 +514,33 @@
                            COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
                            COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
                     FROM t_payment_issue_alert_log
-                    GROUP BY issue_no
+                    GROUP BY issue_no, CHAR_LENGTH(issue_no), CAST(issue_no AS BINARY(256))
                 ) channel_delivery_summary ON channel_delivery_summary.summaryIssueNo = payment_issue_union.issue_no
+                    AND CHAR_LENGTH(channel_delivery_summary.summaryIssueNo) = CHAR_LENGTH(payment_issue_union.issue_no)
+                    AND CAST(channel_delivery_summary.summaryIssueNo AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
         WHERE payment_issue_union.issue_no = #{issueNo}
+          AND CHAR_LENGTH(payment_issue_union.issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(payment_issue_union.issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
         LIMIT 1
     </select>
+
+    <insert id="claimActionRequest">
+        INSERT INTO t_payment_issue_action_request (idempotency_key_hash, request_fingerprint, claim_token, created_at)
+        VALUES (#{idempotencyKeyHash}, #{requestFingerprint}, #{claimToken}, NOW())
+        ON DUPLICATE KEY UPDATE idempotency_key_hash = idempotency_key_hash
+    </insert>
+
+    <select id="findActionRequest" resultType="com.abc123.hsp.dto.PaymentIssueActionRequestRecordDTO">
+        SELECT request_fingerprint AS requestFingerprint, claim_token AS claimToken,
+               response_json AS responseJson
+        FROM t_payment_issue_action_request WHERE idempotency_key_hash = #{idempotencyKeyHash}
+    </select>
+
+    <update id="completeActionRequest">
+        UPDATE t_payment_issue_action_request SET response_json = #{responseJson}
+        WHERE idempotency_key_hash = #{idempotencyKeyHash} AND claim_token = #{claimToken}
+          AND response_json IS NULL
+    </update>
 
     <insert id="insertActionLog">
         INSERT INTO t_payment_issue_action_log (
@@ -794,6 +847,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -862,6 +917,8 @@
                 ELSE generation_key
             END
         WHERE issue_no = #{issueNo}
+          AND CHAR_LENGTH(issue_no) = CHAR_LENGTH(#{issueNo})
+          AND CAST(issue_no AS BINARY(256)) = CAST(#{issueNo} AS BINARY(256))
           AND ack_status = '待确认'
     </update>
 
@@ -876,6 +933,8 @@
                 ELSE generation_key
             END
         WHERE alert_no = #{alertNo}
+          AND CHAR_LENGTH(alert_no) = CHAR_LENGTH(#{alertNo})
+          AND CAST(alert_no AS BINARY(256)) = CAST(#{alertNo} AS BINARY(256))
           AND ack_status = '待确认'
     </update>
 </mapper>

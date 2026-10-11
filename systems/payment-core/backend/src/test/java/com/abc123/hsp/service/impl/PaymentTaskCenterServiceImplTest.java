@@ -40,6 +40,7 @@ import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundQueryTaskService;
 import java.util.Arrays;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +81,22 @@ class PaymentTaskCenterServiceImplTest {
     private PlatformTransactionManager transactionManager;
     @Mock
     private TransactionStatus transactionStatus;
+
+    @BeforeEach
+    void defaultTaskRunLogInsertSucceeds() {
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.insertTaskRunLog(any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ESCALATE"), anyString(), eq(120))).thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), anyString(), eq(120))).thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_CONTROL_SELF_CHECK"), anyString(), eq(120))).thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_DISPATCH"), anyString(), eq(120))).thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"), anyString(), eq(120))).thenReturn(1);
+    }
 
     @Test
     void shouldExposeRetryableAndDeadLetterEventsAsImmediateP1Alert() {
@@ -270,6 +287,79 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipt("PIA-IM-001", "支付运营");
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertNotNull(result.getOverview());
+    }
+
+    @Test
+    void shouldRejectNullSpecifiedIssueAlertReceiptQueryResult() {
+        when(paymentIssueAlertDeliveryService.reconcileDeliveryReceipt("PIA-IM-001", "支付运营"))
+                .thenReturn(null);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService()
+                        .runReconcileIssueAlertReceipt("PIA-IM-001", "支付运营"));
+
+        Assertions.assertEquals("异常告警回执对账服务返回空结果", error.getMessage());
+        verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipt("PIA-IM-001", "支付运营");
+        verify(paymentTaskCenterMapper, never()).findOverviewSummary();
+    }
+
+    @Test
+    void shouldSkipManualSpecifiedIssueAlertReceiptQueryWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runReconcileIssueAlertReceipt("PIA-IM-001", "payment-core-admin");
+
+        verify(paymentIssueAlertDeliveryService, never()).reconcileDeliveryReceipt(anyString(), anyString());
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
+    void shouldRejectNullIssueAlertReceiptQueryBatchResult() {
+        when(paymentIssueAlertDeliveryService.reconcileDeliveryReceipts("支付运营"))
+                .thenReturn(null);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runReconcileIssueAlertReceipts("支付运营"));
+
+        Assertions.assertEquals("异常告警回执批量对账服务返回空结果", error.getMessage());
+        verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipts("支付运营");
+        verify(paymentTaskCenterMapper, never()).findOverviewSummary();
+    }
+
+    @Test
+    void shouldSkipManualIssueAlertReceiptReconcileWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runReconcileIssueAlertReceipts("payment-core-admin");
+
+        verify(paymentIssueAlertDeliveryService, never()).reconcileDeliveryReceipts(anyString());
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
+    void shouldRejectNullAutomaticIssueAlertReceiptQueryResult() {
+        when(paymentIssueAlertDeliveryService.autoReconcileDeliveryReceipts())
+                .thenReturn(null);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoReconcileIssueAlertReceipts());
+
+        Assertions.assertEquals("自动异常告警回执对账服务返回空结果", error.getMessage());
+        verify(paymentIssueAlertDeliveryService).autoReconcileDeliveryReceipts();
+        verify(paymentTaskCenterMapper, never()).findOverviewSummary();
     }
 
     @Test
@@ -474,6 +564,27 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullPendingPaymentCandidatesAsEmptyBatch() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("payment-operator"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
+                .thenReturn(null);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runPendingPaymentQueries("payment-operator");
+
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        verifyNoInteractions(paymentService);
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("payment-operator"));
+    }
+
+    @Test
     void shouldRejectInvalidManualTaskOperatorBeforeReadingCandidates() {
         PaymentTaskCenterServiceImpl service = buildQueryTaskCenterService();
 
@@ -501,6 +612,18 @@ class PaymentTaskCenterServiceImplTest {
                         org.mockito.ArgumentMatchers.anyInt(),
                         org.mockito.ArgumentMatchers.anyInt(),
                         org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void shouldStopTaskResultWhenRunLogInsertDoesNotTakeEffect() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("payment-operator"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.insertTaskRunLog(any())).thenReturn(0);
+
+        Assertions.assertThrows(IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runPendingPaymentQueries("payment-operator"));
     }
 
     @Test
@@ -585,6 +708,53 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRecordFailureWhenPendingRefundQueryReturnsNull() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(refundQueryTaskService.queryPendingRefunds("payment-core-admin")).thenReturn(null);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runPendingRefundQueries("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("返回空结果"));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "REFUND_PENDING_QUERY".equals(entity.getTaskCode())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && entity.getFailCount() == 1
+                        && entity.getSummaryComment().contains("返回空结果")));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
+    void shouldTreatNullFailedRefundListAsEmpty() {
+        RefundQueryTaskResultDTO queryResult = new RefundQueryTaskResultDTO();
+        queryResult.setProcessedCount(1);
+        queryResult.setFailCount(1);
+        queryResult.setFailedRefundOrderIds(null);
+        when(refundQueryTaskService.queryPendingRefunds("payment-core-admin")).thenReturn(queryResult);
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runPendingRefundQueries("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertFalse(result.getSummaryComment().contains("查询失败退款单："));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
     void shouldUseLeaseForAutomaticPendingRefundQueries() {
         when(paymentTaskCenterMapper.acquireTaskLease(
                 eq("REFUND_PENDING_QUERY"), leaseOwner("refund-query-scheduler"), eq(120))).thenReturn(1);
@@ -647,6 +817,27 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldStopQueryMonitorTaskWhenAlertLogInsertDoesNotTakeEffect() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.countRecentChannelQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentChannelQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(24)).thenReturn(0);
+        when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单失败趋势", 60)).thenReturn(0);
+        when(paymentTaskCenterMapper.insertIssueAlertLog(any(PaymentIssueAlertLogEntity.class))).thenReturn(0);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runGenerateQueryMonitorAlerts("payment-core-admin"));
+
+        Assertions.assertEquals("主动查单监控告警日志新增未实际生效", error.getMessage());
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
     void shouldRunCloseExpiredPayments() {
         PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
         closeResult.setProcessedCount(3);
@@ -682,6 +873,27 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldSkipManualCloseExpiredPaymentsWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runCloseExpiredPayments("payment-core-admin");
+
+        verify(paymentExpiryTaskService, never()).closeExpiredPayments();
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
     void shouldExportTaskRunsCsv() {
         PaymentTaskRunLogItemDTO item = new PaymentTaskRunLogItemDTO();
         item.setTaskLogNo("LOG-001");
@@ -691,8 +903,11 @@ class PaymentTaskCenterServiceImplTest {
         item.setBusinessRefNo("DEB-20260911-AUTO-001");
         item.setRunMode("MANUAL");
         item.setTaskStatus("SUCCESS");
+        item.setTaskStatusType("success");
         item.setSeverityLevel("P2");
+        item.setSeverityLevelType("danger");
         item.setEscalationStatus("纳入当班跟进");
+        item.setEscalationStatusType("warn");
         item.setProcessedCount(2);
         item.setSuccessCount(2);
         item.setWarningCount(0);
@@ -717,6 +932,8 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentTaskCenterMapper).findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class));
         Assertions.assertTrue(csv.contains("日志号,任务编码"));
+        Assertions.assertTrue(csv.contains("任务状态,任务状态样式,严重等级,严重等级样式,升级状态,升级状态样式"));
+        Assertions.assertTrue(csv.contains("\"SUCCESS\",\"success\",\"P2\",\"warn\",\"纳入当班跟进\",\"warn\""));
         Assertions.assertTrue(csv.contains("\"LOG-001\""));
         Assertions.assertTrue(csv.contains("\"2026-09-11\""));
         Assertions.assertTrue(csv.contains("\"DEB-20260911-AUTO-001\""));
@@ -836,6 +1053,34 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldTreatNullFailedEventListAsEmpty() {
+        PaymentEventRetryResultDTO retryResult = new PaymentEventRetryResultDTO();
+        retryResult.setProcessedCount(1);
+        retryResult.setFailCount(1);
+        retryResult.setFailedEventNos(null);
+        when(paymentEventRetryTaskService.retryFailedEvents(false, "finance-ops")).thenReturn(retryResult);
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EVENT_RETRY"), leaseOwner("finance-ops"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runRepublishFailedEvents("finance-ops");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertFalse(result.getSummaryComment().contains("失败事件："));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_EVENT_RETRY"), leaseOwner("finance-ops"));
+    }
+
+    @Test
     void shouldRunAutoRepublishFailedEvents() {
         PaymentEventRetryResultDTO retryResult = new PaymentEventRetryResultDTO();
         retryResult.setProcessedCount(1);
@@ -862,6 +1107,37 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRecordFailureWhenFailedEventRepublishReturnsNull() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EVENT_RETRY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(paymentEventRetryTaskService.retryFailedEvents(false, "payment-core-admin")).thenReturn(null);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runRepublishFailedEvents("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("返回空结果"));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_EVENT_RETRY".equals(entity.getTaskCode())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && entity.getFailCount() == 1
+                        && entity.getSummaryComment().contains("返回空结果")));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_EVENT_RETRY"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
     void shouldRunAutoCloseExpiredPayments() {
         PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
         closeResult.setProcessedCount(1);
@@ -883,6 +1159,65 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentExpiryTaskService).closeExpiredPayments();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.any());
         verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"));
+    }
+
+    @Test
+    void shouldRecordFailureWhenExpiredPaymentCloseReturnsNull() {
+        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(null);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"), eq(120))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runAutoCloseExpiredPayments();
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("返回空结果"));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_EXPIRE_CLOSE".equals(entity.getTaskCode())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && entity.getFailCount() == 1
+                        && entity.getSummaryComment().contains("返回空结果")));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"));
+    }
+
+    @Test
+    void shouldTreatNullFailedPaymentListAsEmpty() {
+        PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
+        closeResult.setProcessedCount(1);
+        closeResult.setFailCount(1);
+        closeResult.setFailedPaymentOrderIds(null);
+        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(closeResult);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"), eq(120))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runAutoCloseExpiredPayments();
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertFalse(result.getSummaryComment().contains("失败支付单："));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"));
     }
 
     @Test
@@ -965,6 +1300,22 @@ class PaymentTaskCenterServiceImplTest {
                         && entity.getFailCount() == 1
                         && "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())
                         && !entity.getSummaryComment().contains("database-password-secret")));
+    }
+
+    @Test
+    void shouldPreserveAutomaticDayEndFailureWhenFailedRunLogInsertDoesNotTakeEffect() {
+        IllegalStateException failure = new IllegalStateException("day-end failed");
+        when(paymentDayEndService.runAutomatically()).thenThrow(failure);
+        when(paymentTaskCenterMapper.insertTaskRunLog(any())).thenReturn(0);
+
+        IllegalStateException thrown = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertSame(failure, thrown);
+        Assertions.assertEquals(1, thrown.getSuppressed().length);
+        Assertions.assertEquals("支付任务失败运行日志新增未实际生效", thrown.getSuppressed()[0].getMessage());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any());
     }
 
     @Test
@@ -1231,6 +1582,59 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRecordFailureWhenFailedRefundRetryReturnsNull() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_FAIL_RETRY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(refundRetryTaskService.retryFailedRefunds("payment-core-admin")).thenReturn(null);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runRetryFailedRefunds("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("返回空结果"));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "REFUND_FAIL_RETRY".equals(entity.getTaskCode())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && entity.getFailCount() == 1
+                        && entity.getSummaryComment().contains("返回空结果")));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_FAIL_RETRY"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
+    void shouldTreatNullFailedRefundRetryListAsEmpty() {
+        RefundRetryResultDTO retryResult = new RefundRetryResultDTO();
+        retryResult.setProcessedCount(1);
+        retryResult.setFailCount(1);
+        retryResult.setFailedRefundOrderIds(null);
+        when(refundRetryTaskService.retryFailedRefunds("payment-core-admin")).thenReturn(retryResult);
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_FAIL_RETRY"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runRetryFailedRefunds("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertFalse(result.getSummaryComment().contains("失败退款单："));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_FAIL_RETRY"), leaseOwner("payment-core-admin"));
+    }
+
+    @Test
     void shouldRunIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(3);
         PaymentIssueAlertCandidateDTO candidate = new PaymentIssueAlertCandidateDTO();
@@ -1454,6 +1858,27 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldSkipManualIssueSlaCandidateQueriesWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ESCALATE"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runEscalateOverdueIssues("payment-core-admin");
+
+        verify(paymentTaskCenterMapper, never()).findOverdueIssueAlertCandidates(anyInt());
+        verify(paymentTaskCenterMapper, never()).findUnacknowledgedIssueAlertEscalationCandidates(anyInt());
+    }
+
+    @Test
     void shouldRollbackFailedIssueAlertAndContinueEscalationBatch() {
         PaymentIssueAlertCandidateDTO first = buildIssueAlertCandidate("ISSUE-1", "PAY-1");
         PaymentIssueAlertCandidateDTO failed = buildIssueAlertCandidate("ISSUE-FAIL", "PAY-2");
@@ -1547,6 +1972,34 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldTreatUnexpectedIssueAlertInsertCountAsFailure() {
+        PaymentIssueAlertCandidateDTO candidate = buildIssueAlertCandidate("ISSUE-COUNT", "PAY-COUNT");
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100))
+                .thenReturn(Collections.singletonList(candidate));
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.insertIssueAlertLog(any(PaymentIssueAlertLogEntity.class)))
+                .thenReturn(2);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runEscalateOverdueIssues("payment-core-admin");
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("ISSUE-COUNT"));
+    }
+
+    @Test
     void shouldSkipAutoCloseExpiredPaymentsWhenLeaseHeldByAnotherInstance() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -1568,6 +2021,27 @@ class PaymentTaskCenterServiceImplTest {
         ));
         verify(paymentExpiryTaskService, org.mockito.Mockito.never()).closeExpiredPayments();
         Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
+    void shouldStopLeaseSkippedTaskWhenRunLogInsertDoesNotTakeEffect() {
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_EXPIRE_CLOSE"),
+                leaseOwner("payment-expiry-scheduler"), eq(120))).thenReturn(0);
+        when(paymentTaskCenterMapper.insertTaskRunLog(any())).thenReturn(0);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentTaskCenterServiceImpl(
+                        paymentTaskCenterMapper,
+                        paymentExpiryTaskService,
+                        paymentEventRetryTaskService,
+                        refundRetryTaskService,
+                        paymentConfigService,
+                        paymentIssueAlertDeliveryService
+                ).runAutoCloseExpiredPayments());
+
+        Assertions.assertEquals("支付任务租约跳过运行日志新增未实际生效", error.getMessage());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any());
     }
 
     @Test
@@ -1722,6 +2196,27 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldSkipManualControlPolicySelfCheckWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_CONTROL_SELF_CHECK"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runControlPolicySelfChecks("payment-core-admin");
+
+        verify(paymentConfigService, never()).runAllEnabledControlPolicySelfChecks();
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
     void shouldRunAutoControlPolicySelfCheckTask() {
         PaymentControlPolicySelfCheckSummaryDTO summary = new PaymentControlPolicySelfCheckSummaryDTO();
         summary.setProcessedCount(1);
@@ -1771,6 +2266,48 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRejectNullIssueAlertDispatchResult() {
+        when(paymentIssueAlertDeliveryService.dispatchPendingAlerts("payment-core-admin"))
+                .thenReturn(null);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentTaskCenterServiceImpl(
+                        paymentTaskCenterMapper,
+                        paymentExpiryTaskService,
+                        paymentEventRetryTaskService,
+                        refundRetryTaskService,
+                        paymentConfigService,
+                        paymentIssueAlertDeliveryService
+                ).runDispatchIssueAlerts("payment-core-admin"));
+
+        Assertions.assertEquals("异常告警派发服务返回空结果", error.getMessage());
+        verify(paymentIssueAlertDeliveryService).dispatchPendingAlerts("payment-core-admin");
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findOverviewSummary();
+    }
+
+    @Test
+    void shouldSkipManualIssueAlertDispatchWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_DISPATCH"), leaseOwner("payment-core-admin"), eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runDispatchIssueAlerts("payment-core-admin");
+
+        verify(paymentIssueAlertDeliveryService, never()).dispatchPendingAlerts(anyString());
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
     void shouldAutoDispatchIssueAlerts() {
         when(paymentIssueAlertDeliveryService.autoDispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
@@ -1787,6 +2324,26 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentIssueAlertDeliveryService).autoDispatchPendingAlerts();
         Assertions.assertNotNull(result.getOverview());
+    }
+
+    @Test
+    void shouldRejectNullAutomaticIssueAlertDispatchResult() {
+        when(paymentIssueAlertDeliveryService.autoDispatchPendingAlerts()).thenReturn(null);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentTaskCenterServiceImpl(
+                        paymentTaskCenterMapper,
+                        paymentExpiryTaskService,
+                        paymentEventRetryTaskService,
+                        refundRetryTaskService,
+                        paymentConfigService,
+                        paymentIssueAlertDeliveryService
+                ).runAutoDispatchIssueAlerts());
+
+        Assertions.assertEquals("自动异常告警派发服务返回空结果", error.getMessage());
+        verify(paymentIssueAlertDeliveryService).autoDispatchPendingAlerts();
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findOverviewSummary();
     }
 
     private String repeat(String value, int times) {

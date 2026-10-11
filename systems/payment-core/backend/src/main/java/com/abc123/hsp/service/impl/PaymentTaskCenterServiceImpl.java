@@ -70,6 +70,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
+    private static final String TASK_CODE_ISSUE_ALERT_DISPATCH = "PAYMENT_ISSUE_ALERT_DISPATCH";
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int TASK_CODE_MAX_LENGTH = 64;
@@ -423,7 +424,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 enrichTaskRuns(CsvExportRowLimiter.requireWithinLimit(
                         paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("日志号,任务编码,任务名称,业务日期,业务关联号,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
+        builder.append("日志号,任务编码,任务名称,业务日期,业务关联号,运行方式,任务状态,任务状态样式,严重等级,严重等级样式,升级状态,升级状态样式,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
         for (PaymentTaskRunLogItemDTO item : items) {
             builder.append(csvCell(item.getTaskLogNo())).append(',')
                     .append(csvCell(item.getTaskCode())).append(',')
@@ -432,8 +433,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     .append(csvCell(item.getBusinessRefNo())).append(',')
                     .append(csvCell(item.getRunMode())).append(',')
                     .append(csvCell(item.getTaskStatus())).append(',')
+                    .append(csvCell(item.getTaskStatusType())).append(',')
                     .append(csvCell(item.getSeverityLevel())).append(',')
+                    .append(csvCell(item.getSeverityLevelType())).append(',')
                     .append(csvCell(item.getEscalationStatus())).append(',')
+                    .append(csvCell(item.getEscalationStatusType())).append(',')
                     .append(csvCell(valueOf(item.getProcessedCount()))).append(',')
                     .append(csvCell(valueOf(item.getSuccessCount()))).append(',')
                     .append(csvCell(valueOf(item.getWarningCount()))).append(',')
@@ -451,7 +455,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runCloseExpiredPayments(String operator) {
-        return runCloseExpiredPaymentsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator), "人工触发");
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_EXPIRE_CLOSE,
+                "支付超时关单",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runCloseExpiredPaymentsByMode(RUN_MODE_MANUAL, normalizedOperator, "人工触发");
+                    }
+                }
+        );
     }
 
     @Override
@@ -843,16 +859,43 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runEscalateOverdueIssues(String operator) {
-        return runEscalateOverdueIssuesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_ISSUE_ESCALATE,
+                "异常 SLA 升级巡检",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runEscalateOverdueIssuesByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runDispatchIssueAlerts(String operator) {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.dispatchPendingAlerts(
-                normalizeManualOperator(operator));
-        result.setOverview(overview());
-        return result;
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_ISSUE_ALERT_DISPATCH,
+                "异常告警派发",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.dispatchPendingAlerts(
+                                normalizedOperator);
+                        if (result == null) {
+                            throw new IllegalStateException("异常告警派发服务返回空结果");
+                        }
+                        result.setOverview(overview());
+                        return result;
+                    }
+                }
+        );
     }
 
     @Override
@@ -875,6 +918,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Transactional
     public PaymentTaskActionResultDTO runAutoDispatchIssueAlerts() {
         PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.autoDispatchPendingAlerts();
+        if (result == null) {
+            throw new IllegalStateException("自动异常告警派发服务返回空结果");
+        }
         result.setOverview(overview());
         return result;
     }
@@ -882,25 +928,58 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runReconcileIssueAlertReceipts(String operator) {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipts(
-                normalizeManualOperator(operator));
-        result.setOverview(overview());
-        return result;
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE,
+                "异常告警回执回查",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipts(
+                                normalizedOperator);
+                        if (result == null) {
+                            throw new IllegalStateException("异常告警回执批量对账服务返回空结果");
+                        }
+                        result.setOverview(overview());
+                        return result;
+                    }
+                }
+        );
     }
 
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo, String operator) {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipt(
-                alertNo, normalizeManualOperator(operator));
-        result.setOverview(overview());
-        return result;
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE,
+                "异常告警回执回查",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipt(
+                                alertNo, normalizedOperator);
+                        if (result == null) {
+                            throw new IllegalStateException("异常告警回执对账服务返回空结果");
+                        }
+                        result.setOverview(overview());
+                        return result;
+                    }
+                }
+        );
     }
 
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoReconcileIssueAlertReceipts() {
         PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.autoReconcileDeliveryReceipts();
+        if (result == null) {
+            throw new IllegalStateException("自动异常告警回执对账服务返回空结果");
+        }
         result.setOverview(overview());
         return result;
     }
@@ -908,7 +987,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runControlPolicySelfChecks(String operator) {
-        return runControlPolicySelfChecksByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
+        final String normalizedOperator = normalizeManualOperator(operator);
+        return runTaskWithLease(
+                TASK_CODE_CONTROL_SELF_CHECK,
+                "支付控制策略自动巡检",
+                RUN_MODE_MANUAL,
+                normalizedOperator,
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runControlPolicySelfChecksByMode(RUN_MODE_MANUAL, normalizedOperator);
+                    }
+                }
+        );
     }
 
     @Override
@@ -1057,7 +1148,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setAckStatusType("warn");
         entity.setAlertContent(truncateIssueAlertContent(alertContent));
         entity.setTriggeredBy(triggeredBy);
-        return paymentTaskCenterMapper.insertIssueAlertLog(entity);
+        if (paymentTaskCenterMapper.insertIssueAlertLog(entity) != 1) {
+            throw new IllegalStateException("主动查单监控告警日志新增未实际生效");
+        }
+        return 1;
     }
 
     private PaymentTaskActionResultDTO runControlPolicySelfChecksByMode(String runMode, String triggeredBy) {
@@ -1139,7 +1233,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         try {
             Integer insertedRows = executeIssueAlertTransaction(() ->
                     paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy)));
-            if (valueOrZero(insertedRows) > 0) {
+            if (valueOrZero(insertedRows) == 1) {
                 return IssueAlertGenerationResult.GENERATED;
             }
         } catch (SanitizedIssueAlertWriteException exception) {
@@ -1275,12 +1369,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
         PaymentEventRetryResultDTO retryResult = paymentEventRetryTaskService.retryFailedEvents(
                 RUN_MODE_AUTO.equals(runMode), triggeredBy);
+        if (retryResult == null) {
+            return buildAndRecordResult(
+                    TASK_CODE_EVENT_RETRY,
+                    "失败事件重发",
+                    runMode,
+                    triggeredBy,
+                    1,
+                    0,
+                    0,
+                    1,
+                    "失败事件重发服务返回空结果，未能确认本批次处理事实，请核对事件重发任务并重试。"
+            );
+        }
         int processedCount = retryResult.getProcessedCount();
         int successCount = retryResult.getSuccessCount();
         int failCount = retryResult.getFailCount();
-        String failedEventHint = retryResult.getFailedEventNos().isEmpty()
+        List<String> failedEventNos = safeList(retryResult.getFailedEventNos());
+        String failedEventHint = failedEventNos.isEmpty()
                 ? ""
-                : "，失败事件：" + String.join("/", retryResult.getFailedEventNos());
+                : "，失败事件：" + String.join("/", failedEventNos);
         return buildAndRecordResult(
                 TASK_CODE_EVENT_RETRY,
                 "失败事件重发",
@@ -1301,7 +1409,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (paymentService == null) {
             throw new IllegalStateException("payment service is required for pending payment queries");
         }
-        List<String> paymentOrderIds = RUN_MODE_MANUAL.equals(runMode)
+        List<String> paymentOrderIds = safeList(RUN_MODE_MANUAL.equals(runMode)
                 ? paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(
                         pendingQueryMinAgeSeconds,
                         pendingQueryPerChannelBatchSize,
@@ -1312,7 +1420,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                         pendingQueryRetryBackoffFactor,
                         pendingQueryMaxRetryIntervalSeconds,
                         pendingQueryPerChannelBatchSize,
-                        pendingQueryBatchSize);
+                        pendingQueryBatchSize));
         int successCount = 0;
         int warningCount = 0;
         int failCount = 0;
@@ -1360,9 +1468,23 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         RefundQueryTaskResultDTO queryResult = RUN_MODE_MANUAL.equals(runMode)
                 ? refundQueryTaskService.queryPendingRefunds(triggeredBy)
                 : refundQueryTaskService.queryDueRefunds(triggeredBy);
-        String failedRefundHint = queryResult.getFailedRefundOrderIds().isEmpty()
+        if (queryResult == null) {
+            return buildAndRecordResult(
+                    TASK_CODE_REFUND_PENDING_QUERY,
+                    "处理中退款主动查单",
+                    runMode,
+                    triggeredBy,
+                    1,
+                    0,
+                    0,
+                    1,
+                    "退款主动查单服务返回空结果，未能确认本批次处理事实，请核对退款查单任务并重试。"
+            );
+        }
+        List<String> failedRefundOrderIds = safeList(queryResult.getFailedRefundOrderIds());
+        String failedRefundHint = failedRefundOrderIds.isEmpty()
                 ? ""
-                : "，查询失败退款单：" + String.join("/", queryResult.getFailedRefundOrderIds());
+                : "，查询失败退款单：" + String.join("/", failedRefundOrderIds);
         return buildAndRecordResult(
                 TASK_CODE_REFUND_PENDING_QUERY,
                 "处理中退款主动查单",
@@ -1385,12 +1507,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runRetryFailedRefundsByMode(String runMode, String triggeredBy) {
         RefundRetryResultDTO retryResult = refundRetryTaskService.retryFailedRefunds(triggeredBy);
+        if (retryResult == null) {
+            return buildAndRecordResult(
+                    TASK_CODE_REFUND_RETRY,
+                    "失败退款重试",
+                    runMode,
+                    triggeredBy,
+                    1,
+                    0,
+                    0,
+                    1,
+                    "失败退款重试服务返回空结果，未能确认本批次处理事实，请核对退款重试任务并重试。"
+            );
+        }
         int processedCount = retryResult.getProcessedCount();
         int successCount = retryResult.getSuccessCount();
         int failCount = retryResult.getFailCount();
-        String failedRefundHint = retryResult.getFailedRefundOrderIds().isEmpty()
+        List<String> failedRefundOrderIds = safeList(retryResult.getFailedRefundOrderIds());
+        String failedRefundHint = failedRefundOrderIds.isEmpty()
                 ? ""
-                : "，失败退款单：" + String.join("/", retryResult.getFailedRefundOrderIds());
+                : "，失败退款单：" + String.join("/", failedRefundOrderIds);
         return buildAndRecordResult(
                 TASK_CODE_REFUND_RETRY,
                 "失败退款重试",
@@ -1482,7 +1618,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setSuggestedAction(resolveSuggestedAction(taskCode, warningCount, failCount, processedCount));
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        if (paymentTaskCenterMapper.insertTaskRunLog(entity) != 1) {
+            throw new IllegalStateException("支付任务运行日志新增未实际生效");
+        }
         return buildActionResult(taskCode, taskName, processedCount, successCount,
                 warningCount, failCount, summaryComment);
     }
@@ -1512,8 +1650,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                      String triggeredBy,
                                      String failureCode,
                                      String bizDate) {
-        paymentTaskCenterMapper.insertTaskRunLog(buildFailedTaskRun(
-                buildTaskLogNo(), taskCode, taskName, runMode, triggeredBy, failureCode, bizDate));
+        if (paymentTaskCenterMapper.insertTaskRunLog(buildFailedTaskRun(
+                buildTaskLogNo(), taskCode, taskName, runMode, triggeredBy, failureCode, bizDate)) != 1) {
+            throw new IllegalStateException("支付任务失败运行日志新增未实际生效");
+        }
     }
 
     private PaymentTaskRunLogEntity buildFailedTaskRun(String taskLogNo,
@@ -1548,13 +1688,27 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runCloseExpiredPaymentsByMode(String runMode, String triggeredBy, String modeLabel) {
         PaymentExpiryCloseResultDTO closeResult = paymentExpiryTaskService.closeExpiredPayments();
+        if (closeResult == null) {
+            return buildAndRecordResult(
+                    TASK_CODE_EXPIRE_CLOSE,
+                    "支付超时关单",
+                    runMode,
+                    triggeredBy,
+                    1,
+                    0,
+                    0,
+                    1,
+                    modeLabel + "超时关单服务返回空结果，未能确认本批次处理事实，请核对超时关单任务并重试。"
+            );
+        }
         int processedCount = closeResult.getProcessedCount();
         int successCount = closeResult.getSuccessCount();
         int skippedCount = closeResult.getSkippedCount();
         int failCount = closeResult.getFailCount();
-        String failedPaymentHint = closeResult.getFailedPaymentOrderIds().isEmpty()
+        List<String> failedPaymentOrderIds = safeList(closeResult.getFailedPaymentOrderIds());
+        String failedPaymentHint = failedPaymentOrderIds.isEmpty()
                 ? ""
-                : "，失败支付单：" + String.join("/", closeResult.getFailedPaymentOrderIds());
+                : "，失败支付单：" + String.join("/", failedPaymentOrderIds);
         return buildAndRecordResult(
                 TASK_CODE_EXPIRE_CLOSE,
                 "支付超时关单",
@@ -1594,7 +1748,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setSuggestedAction("继续观察当前实例执行结果，避免重复调度同一任务。");
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        if (paymentTaskCenterMapper.insertTaskRunLog(entity) != 1) {
+            throw new IllegalStateException("支付任务租约跳过运行日志新增未实际生效");
+        }
 
         PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
         result.setTaskCode(taskCode);

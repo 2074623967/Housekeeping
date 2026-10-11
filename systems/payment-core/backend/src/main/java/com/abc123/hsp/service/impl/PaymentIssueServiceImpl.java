@@ -4,6 +4,7 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueActionRequestRecordDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
@@ -16,6 +17,11 @@ import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +64,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
 
     private final PaymentIssueMapper paymentIssueMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
+    private final ObjectMapper objectMapper;
     private final int receiptQueryMinAgeSeconds;
     private final int receiptQueryMaxAttempts;
     private final int receiptQueryClaimTimeoutSeconds;
@@ -65,6 +72,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Autowired
     public PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper,
                                    PaymentSensitiveDataMasker sensitiveDataMasker,
+                                   ObjectMapper objectMapper,
                                    @Value("${payment.issue-alert.receipt-query.compensation.min-age-seconds:60}")
                                            int receiptQueryMinAgeSeconds,
                                    @Value("${payment.issue-alert.receipt-query.compensation.max-attempts:10}")
@@ -73,13 +81,14 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                                            int receiptQueryClaimTimeoutSeconds) {
         this.paymentIssueMapper = paymentIssueMapper;
         this.sensitiveDataMasker = sensitiveDataMasker;
+        this.objectMapper = objectMapper;
         this.receiptQueryMinAgeSeconds = Math.max(receiptQueryMinAgeSeconds, 1);
         this.receiptQueryMaxAttempts = Math.max(receiptQueryMaxAttempts, 1);
         this.receiptQueryClaimTimeoutSeconds = Math.max(receiptQueryClaimTimeoutSeconds, 1);
     }
 
     PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper) {
-        this(paymentIssueMapper, new PaymentSensitiveDataMasker(new ObjectMapper()), 60, 10, 30);
+        this(paymentIssueMapper, new PaymentSensitiveDataMasker(new ObjectMapper()), new ObjectMapper(), 60, 10, 30);
     }
 
     @Override
@@ -150,7 +159,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Override
     public PaymentIssueAlertLogRowDTO alertDetail(String alertNo) {
         String normalizedAlertNo = normalizeText(alertNo, "告警编号", ALERT_NO_MAX_LENGTH, false);
-        PaymentIssueAlertLogRowDTO item = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
+        PaymentIssueAlertLogRowDTO item = paymentIssueMapper.findAlertLogByAlertNo(
+                normalizedAlertNo, normalizeAlertLogQuery(null));
         if (item == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ISSUE_ALERT_NOT_FOUND, "支付异常告警不存在");
         }
@@ -167,18 +177,21 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 CsvExportRowLimiter.requireWithinLimit(exportRows));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回查队列状态,回查次数,最近回查时间,下次自动回查时间,最近回查结果,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
+        builder.append("告警编号,异常编号,支付单号,业务链路,异常类型,严重等级,责任组,告警通道,接收人,告警状态,告警状态样式,回执状态,回执状态样式,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回查队列状态,回查次数,最近回查时间,下次自动回查时间,最近回查结果,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
         for (PaymentIssueAlertLogRowDTO item : records) {
             builder.append(csv(item.getAlertNo())).append(',')
                     .append(csv(item.getIssueNo())).append(',')
                     .append(csv(item.getPaymentOrderId())).append(',')
+                    .append(csv(item.getBusinessChainId())).append(',')
                     .append(csv(item.getIssueType())).append(',')
                     .append(csv(item.getSeverity())).append(',')
                     .append(csv(item.getResponsibilityGroup())).append(',')
                     .append(csv(item.getAlertChannel())).append(',')
                     .append(csv(item.getReceiver())).append(',')
                     .append(csv(item.getAlertStatus())).append(',')
+                    .append(csv(item.getAlertStatusType())).append(',')
                     .append(csv(item.getAckStatus())).append(',')
+                    .append(csv(item.getAckStatusType())).append(',')
                     .append(csv(item.getProviderCode())).append(',')
                     .append(csv(item.getProviderName())).append(',')
                     .append(csv(item.getEndpointAlias())).append(',')
@@ -207,7 +220,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         String normalizedAlertNo = normalizeText(alertNo, "告警编号", ALERT_NO_MAX_LENGTH, false);
         String operator = request == null ? null : request.getOperator();
         String normalizedOperator = normalizeOperator(operator, "确认人不能为空");
-        PaymentIssueAlertLogRowDTO alertLog = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
+        PaymentIssueAlertLogRowDTO alertLog = paymentIssueMapper.findAlertLogByAlertNo(
+                normalizedAlertNo, normalizeAlertLogQuery(null));
         if (alertLog == null) {
             throw new IllegalArgumentException("支付异常告警不存在：" + normalizedAlertNo);
         }
@@ -217,9 +231,12 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if ("已确认".equals(alertLog.getAckStatus())) {
             return maskedAlertLogCopy(alertLog);
         }
-        paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, normalizedOperator);
+        if (paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, normalizedOperator) != 1) {
+            throw new IllegalStateException("payment issue alert acknowledgement must affect exactly one row");
+        }
         acknowledgeSourceAlertIfNeeded(alertLog, normalizedOperator);
-        return maskedAlertLogCopy(paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo));
+        return maskedAlertLogCopy(paymentIssueMapper.findAlertLogByAlertNo(
+                normalizedAlertNo, normalizeAlertLogQuery(null)));
     }
 
     @Override
@@ -243,12 +260,47 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (distinctIssueNos.size() != normalizedIssueNos.size()) {
             throw new IllegalArgumentException("异常编号不能重复");
         }
+        String idempotencyKey = request.getIdempotencyKey() == null ? null
+                : normalizeText(request.getIdempotencyKey(), "幂等键", 128, false);
+        if (idempotencyKey != null && !StandardCharsets.UTF_8.newEncoder().canEncode(idempotencyKey)) {
+            throw new IllegalArgumentException("幂等键包含无效字符");
+        }
+        String idempotencyKeyHash = idempotencyKey == null ? null
+                : sha256(idempotencyKey.getBytes(StandardCharsets.UTF_8));
+        String claimToken = null;
+        if (idempotencyKey != null) {
+            String fingerprint = actionFingerprint(normalizedIssueNos, actionType, assignee, operator, remark);
+            claimToken = UUID.randomUUID().toString();
+            paymentIssueMapper.claimActionRequest(idempotencyKeyHash, fingerprint, claimToken);
+            PaymentIssueActionRequestRecordDTO record = paymentIssueMapper.findActionRequest(idempotencyKeyHash);
+            if (record == null) {
+                throw new IllegalStateException("payment issue action request claim missing");
+            }
+            if (!fingerprint.equals(record.getRequestFingerprint())) {
+                throw new BusinessException(ErrorCode.PAYMENT_ISSUE_ACTION_IDEMPOTENCY_CONFLICT,
+                        "批量动作幂等键已用于不同请求");
+            }
+            if (!claimToken.equals(record.getClaimToken())) {
+                if (record.getResponseJson() == null) {
+                    throw new IllegalStateException("payment issue action request has no committed response");
+                }
+                try {
+                    List<PaymentIssueRowDTO> items = objectMapper.readValue(record.getResponseJson(),
+                            new TypeReference<List<PaymentIssueRowDTO>>() { });
+                    return new PageResultDTO<>(items, items.size(), 1, items.size());
+                } catch (JsonProcessingException exception) {
+                    throw new IllegalStateException("payment issue action response is invalid", exception);
+                }
+            }
+        }
+        List<PaymentIssueRowDTO> originalIssues = new ArrayList<>(normalizedIssueNos.size());
         for (String normalizedIssueNo : normalizedIssueNos) {
             PaymentIssueRowDTO issue = paymentIssueMapper.findByIssueNo(normalizedIssueNo);
             if (issue == null) {
                 throw new IllegalArgumentException("支付交易异常不存在：" + normalizedIssueNo);
             }
-            paymentIssueMapper.insertActionLog(
+            originalIssues.add(issue);
+            if (paymentIssueMapper.insertActionLog(
                     "ISSACT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
                     normalizedIssueNo,
                     issue.getPaymentOrderId(),
@@ -259,12 +311,64 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                     handlingStatus.statusType,
                     remark,
                     operator
-            );
+            ) != 1) {
+                throw new IllegalStateException("payment issue action log insert must affect exactly one row");
+            }
             if ("已处理".equals(handlingStatus.status)) {
                 paymentIssueMapper.acknowledgePendingAlerts(normalizedIssueNo, operator);
             }
         }
-        return list(new PaymentIssueQueryDTO());
+        List<PaymentIssueRowDTO> processedIssues = new ArrayList<>(normalizedIssueNos.size());
+        for (int index = 0; index < normalizedIssueNos.size(); index++) {
+            PaymentIssueRowDTO refreshed = paymentIssueMapper.findByIssueNo(normalizedIssueNos.get(index));
+            PaymentIssueRowDTO original = originalIssues.get(index);
+            if (refreshed == null
+                    || !normalizedIssueNos.get(index).equals(refreshed.getIssueNo())
+                    || !StringUtils.hasText(original.getPaymentOrderId())
+                    || !StringUtils.hasText(original.getIssueType())
+                    || !original.getPaymentOrderId().equals(refreshed.getPaymentOrderId())
+                    || !original.getIssueType().equals(refreshed.getIssueType())) {
+                throw new IllegalStateException("payment issue action result no longer matches the selected issue");
+            }
+            processedIssues.add(maskedCopy(refreshed));
+        }
+        if (idempotencyKey != null) {
+            try {
+                if (paymentIssueMapper.completeActionRequest(idempotencyKeyHash, claimToken,
+                        objectMapper.writeValueAsString(processedIssues)) != 1) {
+                    throw new IllegalStateException("payment issue action request completion must affect one row");
+                }
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException("payment issue action response cannot be saved", exception);
+            }
+        }
+        return new PageResultDTO<>(processedIssues, processedIssues.size(), 1, processedIssues.size());
+    }
+
+    private String actionFingerprint(List<String> issueNos, String actionType, String assignee,
+                                     String operator, String remark) {
+        List<String> sortedIssueNos = new ArrayList<>(issueNos);
+        Collections.sort(sortedIssueNos);
+        try {
+            byte[] requestBytes = objectMapper.writeValueAsBytes(
+                    Arrays.asList(sortedIssueNos, actionType, assignee, operator, remark));
+            return sha256(requestBytes);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("payment issue action request cannot be fingerprinted", exception);
+        }
+    }
+
+    private String sha256(byte[] input) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(input);
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte value : digest) {
+                hex.append(String.format("%02x", value & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private String normalizeText(String text, String fieldName, int maxLength, boolean defaultRemark) {
@@ -404,7 +508,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             return "";
         }
         String escaped = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
-        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+        if (escaped.contains(",") || escaped.contains("\"")
+                || escaped.contains("\n") || escaped.contains("\r")) {
             return "\"" + escaped + "\"";
         }
         return escaped;

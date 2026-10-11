@@ -11,6 +11,8 @@ public class PaymentIssueActionRequestDTO {
 
     /** 待处理异常编号列表。 */
     private List<String> issueNos;
+    /** 同一次批量处理重试时保持不变；旧客户端可暂不传。 */
+    private String idempotencyKey;
     /** 处理动作类型。 */
     private String actionType;
     /** 当前处理人。 */

@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
+import com.abc123.hsp.dto.PaymentIssueActionRequestRecordDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
@@ -12,6 +13,16 @@ import org.apache.ibatis.annotations.Param;
  * 支付交易异常中心 Mapper。
  */
 public interface PaymentIssueMapper {
+
+    int claimActionRequest(@Param("idempotencyKeyHash") String idempotencyKeyHash,
+                           @Param("requestFingerprint") String requestFingerprint,
+                           @Param("claimToken") String claimToken);
+
+    PaymentIssueActionRequestRecordDTO findActionRequest(@Param("idempotencyKeyHash") String idempotencyKeyHash);
+
+    int completeActionRequest(@Param("idempotencyKeyHash") String idempotencyKeyHash,
+                              @Param("claimToken") String claimToken,
+                              @Param("responseJson") String responseJson);
 
     /**
      * 查询支付交易异常列表。
@@ -41,7 +52,8 @@ public interface PaymentIssueMapper {
     /**
      * 按告警编号查询支付异常告警明细。
      */
-    PaymentIssueAlertLogRowDTO findAlertLogByAlertNo(@Param("alertNo") String alertNo);
+    PaymentIssueAlertLogRowDTO findAlertLogByAlertNo(@Param("alertNo") String alertNo,
+                                                      @Param("query") PaymentIssueAlertLogQueryDTO query);
 
     /**
      * 按异常编号查询当前聚合异常。
@@ -51,7 +63,7 @@ public interface PaymentIssueMapper {
     /**
      * 写入支付交易异常处理动作。
      */
-    void insertActionLog(@Param("actionNo") String actionNo,
+    int insertActionLog(@Param("actionNo") String actionNo,
                          @Param("issueNo") String issueNo,
                          @Param("paymentOrderId") String paymentOrderId,
                          @Param("issueType") String issueType,

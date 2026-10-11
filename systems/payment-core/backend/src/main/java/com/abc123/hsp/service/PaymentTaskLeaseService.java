@@ -59,7 +59,7 @@ public class PaymentTaskLeaseService implements DisposableBean {
             paymentTaskCenterMapper.initTaskLease(taskCode);
             return paymentTaskCenterMapper.acquireTaskLease(taskCode, lockOwner, leaseSeconds);
         });
-        if (lockedRows <= 0) {
+        if (lockedRows != 1) {
             return null;
         }
         Lease lease = new Lease(taskCode, lockOwner, leaseSeconds);
@@ -153,7 +153,7 @@ public class PaymentTaskLeaseService implements DisposableBean {
                 return;
             }
             try {
-                if (renew(taskCode, lockOwner, leaseSeconds) <= 0) {
+                if (renew(taskCode, lockOwner, leaseSeconds) != 1) {
                     close();
                 }
             } catch (RuntimeException exception) {
@@ -167,7 +167,16 @@ public class PaymentTaskLeaseService implements DisposableBean {
             if (!stopRenewal()) {
                 return;
             }
-            release(taskCode, lockOwner);
+            try {
+                int releasedRows = release(taskCode, lockOwner);
+                if (releasedRows != 1) {
+                    LOGGER.warn("支付任务租约释放未影响恰好一行, taskCode={}, lockOwner={}, affectedRows={}",
+                            taskCode, lockOwner, releasedRows);
+                }
+            } catch (RuntimeException exception) {
+                LOGGER.warn("支付任务租约释放失败，将等待租约自然过期, taskCode={}, lockOwner={}, exceptionType={}",
+                        taskCode, lockOwner, exceptionType(exception));
+            }
         }
 
         /**

@@ -92,6 +92,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RECEIPT_QUERY_RESULT_QUERY_ERROR = "QUERY_ERROR";
     private static final String RECEIPT_QUERY_RESULT_EMPTY = "EMPTY";
     private static final String RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT = "RECEIPT_CONFLICT";
+    private static final String RECEIPT_QUERY_RESULT_WRITE_CONFLICT = "WRITE_CONFLICT";
     private static final String ITEM_TRANSACTION_FAILURE_CODE = "PAYMENT_ISSUE_ALERT_ITEM_TRANSACTION_FAILED";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
     private static final List<String> PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED", "FAILED");
@@ -365,7 +366,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     DispatchOutcome currentOutcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
                     int updated = paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
                             buildSourceAlertStatus(item, triggeredBy, currentOutcome));
-                    if (updated <= 0) {
+                    if (updated != 1) {
                         throw new IllegalStateException("告警来源派发状态更新失败");
                     }
                     if (currentOutcome.hasConfirmedDelivery()
@@ -435,7 +436,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     item
             );
             if (candidateProviders.isEmpty()) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                insertIssueAlertLog(buildDeliveryLog(
                         item,
                         triggeredBy,
                         channelCode,
@@ -448,7 +449,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             }
             PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
             if (notifier == null) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                insertIssueAlertLog(buildDeliveryLog(
                         buildDeliveryItem(item, candidateProviders.get(0)),
                         triggeredBy,
                         channelCode,
@@ -484,7 +485,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             DispatchGuard dispatchGuard = resolveDispatchGuard(providerConfig, deliveryItem, channelCode);
             if (dispatchGuard.getFailure() != null) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
@@ -503,7 +504,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         "供应商已受理告警"
                 );
                 if (!isSuccessfulProviderDeliveryStatus(normalizedResult.getProviderDeliveryStatus())) {
-                    paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                    insertIssueAlertLog(buildDeliveryLog(
                             deliveryItem,
                             triggeredBy,
                             channelCode,
@@ -513,7 +514,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     ));
                     continue;
                 }
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
@@ -522,9 +523,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         normalizedResult
                 ));
                 return normalizedResult.getProviderDeliveryStatus();
+            } catch (IssueAlertLogWriteException ex) {
+                throw ex;
             } catch (RuntimeException ex) {
                 PaymentIssueAlertDeliveryResultDTO failureResult = buildFailureResult("SEND_EXCEPTION", ex.getMessage(), deliveryItem);
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
@@ -537,6 +540,12 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             }
         }
         return null;
+    }
+
+    private void insertIssueAlertLog(PaymentIssueAlertLogEntity entity) {
+        if (paymentTaskCenterMapper.insertIssueAlertLog(entity) != 1) {
+            throw new IssueAlertLogWriteException("支付告警派发日志新增未实际生效");
+        }
     }
 
     /**
@@ -1376,7 +1385,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, queryResult, triggeredBy);
         receiptUpdate.setReceiptQueryCount(previousAttemptCount + 1);
         int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
-        if (affectedRows <= 0) {
+        if (affectedRows != 1) {
+            completeReceiptQueryAttempt(
+                    acceptedLog,
+                    previousAttemptCount,
+                    RECEIPT_QUERY_RESULT_WRITE_CONFLICT);
             return false;
         }
         acknowledgeSourceAlertFromReceipt(acceptedLog, receiptUpdate);
@@ -1449,7 +1462,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 queryResult,
                 calculateReceiptQueryRetryDelaySeconds(previousAttemptCount),
                 receiptQueryMaxAttempts);
-        if (affectedRows <= 0) {
+        if (affectedRows != 1) {
             throw new IllegalStateException("告警供应商回执回查尝试状态更新失败");
         }
     }
@@ -1598,7 +1611,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         sourceAckUpdate.setAckOperator(ackOperator);
         sourceAckUpdate.setTriggeredBy(triggeredBy);
         int affectedRows = paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
-        return affectedRows > 0 || paymentTaskCenterMapper.isMatchingSourceIssueAlertAcknowledged(
+        return affectedRows == 1 || paymentTaskCenterMapper.isMatchingSourceIssueAlertAcknowledged(
                 normalizedSourceAlertNo, normalizedIssueNo);
     }
 
@@ -1666,7 +1679,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 : "继续保持供应商回执回查任务自动巡检");
         entity.setRecommendedRoute("/payment-issue-alerts");
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        insertTaskRunLog(entity);
 
         PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
         result.setTaskCode(TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE);
@@ -1714,7 +1727,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 : "继续保持派发/补发队列巡检");
         entity.setRecommendedRoute("/payment-issues");
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        insertTaskRunLog(entity);
 
         PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
         result.setTaskCode(TASK_CODE_ISSUE_ALERT_DISPATCH);
@@ -1749,7 +1762,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setSuggestedAction("继续观察当前实例执行结果，避免重复派发或重复回查。");
         entity.setRecommendedRoute("/task-center");
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        insertTaskRunLog(entity);
 
         PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
         result.setTaskCode(taskCode);
@@ -1760,6 +1773,21 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         result.setFailCount(0);
         result.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
         return result;
+    }
+
+    private void insertTaskRunLog(PaymentTaskRunLogEntity entity) {
+        if (paymentTaskCenterMapper.insertTaskRunLog(entity) != 1) {
+            throw new IllegalStateException("支付告警任务运行日志新增未实际生效");
+        }
+    }
+
+    private static final class IssueAlertLogWriteException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private IssueAlertLogWriteException(String message) {
+            super(message);
+        }
     }
 
     private static final class SanitizedItemTransactionException extends RuntimeException {

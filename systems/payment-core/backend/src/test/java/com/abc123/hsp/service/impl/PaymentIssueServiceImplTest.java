@@ -7,9 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
@@ -27,7 +30,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -41,6 +48,13 @@ class PaymentIssueServiceImplTest {
 
     @Mock
     private PaymentIssueMapper paymentIssueMapper;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        lenient().when(paymentIssueMapper.insertActionLog(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString())).thenReturn(1);
+    }
 
     @Test
     void shouldTrimFiltersAndNormalizePaging() {
@@ -126,6 +140,7 @@ class PaymentIssueServiceImplTest {
     void shouldMaskPaymentIssueListWithoutChangingMapperDto() {
         PaymentIssueRowDTO row = new PaymentIssueRowDTO();
         row.setIssueNo("ISSUE-001");
+        row.setPaymentOrderId("PAY-001");
         row.setCustomerName("张女士");
         when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class)))
                 .thenReturn(Collections.singletonList(row));
@@ -135,6 +150,7 @@ class PaymentIssueServiceImplTest {
                 new PaymentIssueServiceImpl(paymentIssueMapper).list(new PaymentIssueQueryDTO());
 
         assertEquals("张*", result.getItems().get(0).getCustomerName());
+        assertEquals("CHAIN-PAY-001", result.getItems().get(0).getBusinessChainId());
         assertEquals("张女士", row.getCustomerName());
     }
 
@@ -166,6 +182,7 @@ class PaymentIssueServiceImplTest {
     void shouldNormalizeAndReturnMaskedPaymentIssueDetail() {
         PaymentIssueRowDTO row = new PaymentIssueRowDTO();
         row.setIssueNo("ISSUE-001");
+        row.setPaymentOrderId("PAY-001");
         row.setCustomerName("张女士");
         row.setHandlingStatus("跟进中");
         when(paymentIssueMapper.findByIssueNo("ISSUE-001")).thenReturn(row);
@@ -174,6 +191,7 @@ class PaymentIssueServiceImplTest {
                 .detail(" ISSUE-001 ");
 
         assertEquals("ISSUE-001", result.getIssueNo());
+        assertEquals("CHAIN-PAY-001", result.getBusinessChainId());
         assertEquals("张*", result.getCustomerName());
         assertEquals("跟进中", result.getHandlingStatus());
         assertEquals("张女士", row.getCustomerName());
@@ -373,7 +391,8 @@ class PaymentIssueServiceImplTest {
         PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
         row.setAlertNo("PIA-DETAIL-001");
         row.setProviderReceiptSnapshot("{\"phone\":\"13800138000\"}");
-        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-DETAIL-001")).thenReturn(row);
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-DETAIL-001"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(row);
 
         PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
                 .alertDetail(" PIA-DETAIL-001 ");
@@ -381,11 +400,18 @@ class PaymentIssueServiceImplTest {
         assertEquals("PIA-DETAIL-001", result.getAlertNo());
         assertTrue(result.getProviderReceiptSnapshot().contains("138****8000"));
         assertTrue(row.getProviderReceiptSnapshot().contains("13800138000"));
+        ArgumentCaptor<PaymentIssueAlertLogQueryDTO> queryCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogQueryDTO.class);
+        verify(paymentIssueMapper).findAlertLogByAlertNo(eq("PIA-DETAIL-001"), queryCaptor.capture());
+        assertEquals(60, queryCaptor.getValue().getReceiptQueryMinAgeSeconds());
+        assertEquals(10, queryCaptor.getValue().getReceiptQueryMaxAttempts());
+        assertEquals(30, queryCaptor.getValue().getReceiptQueryClaimTimeoutSeconds());
     }
 
     @Test
     void shouldUseStableErrorCodeWhenAlertDetailMissing() {
-        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-404")).thenReturn(null);
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-404"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper).alertDetail("PIA-404"));
@@ -406,7 +432,9 @@ class PaymentIssueServiceImplTest {
         row.setAlertChannel("IM");
         row.setReceiver("支付运营");
         row.setAlertStatus("已派发");
+        row.setAlertStatusType("success");
         row.setAckStatus("待确认");
+        row.setAckStatusType("warn");
         row.setProviderCode("im_provider");
         row.setProviderName("企业IM");
         row.setEndpointAlias("主Webhook");
@@ -433,6 +461,10 @@ class PaymentIssueServiceImplTest {
         String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(query);
 
         assertTrue(csv.contains("PIA-EXPORT-001"));
+        assertTrue(csv.contains("支付单号,业务链路,异常类型"));
+        assertTrue(csv.contains("CHAIN-PAY-EXPORT-001"));
+        assertTrue(csv.contains("告警状态,告警状态样式,回执状态,回执状态样式"));
+        assertTrue(csv.contains("已派发,success,待确认,warn"));
         assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.invalid\"\",\"\"支付异常告警内容\"\")"));
         assertFalse(csv.contains("\"=HYPERLINK"));
         assertTrue(csv.contains("BACKING_OFF,3,2026-08-07 09:45:00,2026-08-07 09:49:00,ACCEPTED"));
@@ -462,6 +494,24 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldKeepCarriageReturnInsideAlertCsvCell() throws Exception {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-CR");
+        row.setProviderDeliveryMessage("remote\r=1+1");
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(Collections.singletonList(row));
+
+        String csv = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
+
+        try (CSVParser parser = CSVParser.parse(csv, CSVFormat.DEFAULT)) {
+            List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertEquals("remote\r=1+1", records.get(1).get(18));
+        }
+    }
+
+    @Test
     void shouldExportAlertLogsAtLimit() {
         PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
         row.setAlertNo("PIA-EXPORT-LIMIT");
@@ -485,7 +535,8 @@ class PaymentIssueServiceImplTest {
         acknowledgedRow.setAckStatus("已确认");
         acknowledgedRow.setAckOperator("支付运营");
         acknowledgedRow.setProviderReceiptSnapshot("{\"phone\":\"13800138000\"}");
-        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACK-001")).thenReturn(pendingRow, acknowledgedRow);
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-ACK-001"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(pendingRow, acknowledgedRow);
         when(paymentIssueMapper.acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营")).thenReturn(1);
 
         PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
@@ -533,7 +584,8 @@ class PaymentIssueServiceImplTest {
         acknowledgedRow.setAlertNo("PIA-ACKED-001");
         acknowledgedRow.setAckStatus("已确认");
         acknowledgedRow.setProviderReceiptSnapshot("provider response: 13800138000");
-        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACKED-001")).thenReturn(acknowledgedRow);
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-ACKED-001"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(acknowledgedRow);
         PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
         request.setOperator(" 支付运营 ");
 
@@ -549,7 +601,8 @@ class PaymentIssueServiceImplTest {
         PaymentIssueAlertLogRowDTO noAckRow = new PaymentIssueAlertLogRowDTO();
         noAckRow.setAlertNo("PIA-NOACK-001");
         noAckRow.setAckStatus("无需回执");
-        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-NOACK-001")).thenReturn(noAckRow);
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-NOACK-001"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(noAckRow);
 
         PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
         request.setOperator(" 支付运营 ");
@@ -561,14 +614,32 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldRejectAcknowledgeWhenAlertUpdateDoesNotAffectExactlyOneRow() {
+        PaymentIssueAlertLogRowDTO pendingRow = new PaymentIssueAlertLogRowDTO();
+        pendingRow.setAlertNo("PIA-ACK-UPDATE-001");
+        pendingRow.setAckStatus("待确认");
+        when(paymentIssueMapper.findAlertLogByAlertNo(eq("PIA-ACK-UPDATE-001"), any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(pendingRow);
+        when(paymentIssueMapper.acknowledgeAlertByAlertNo("PIA-ACK-UPDATE-001", "支付运营")).thenReturn(0);
+
+        PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
+        request.setOperator("支付运营");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert("PIA-ACK-UPDATE-001", request));
+
+        assertEquals("payment issue alert acknowledgement must affect exactly one row", exception.getMessage());
+    }
+
+    @Test
     void shouldBatchAssignIssueAndWriteActionLog() {
         PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
         issue.setIssueNo("ISSUE-WAIT-PAY-001");
         issue.setPaymentOrderId("PAY-001");
         issue.setIssueType("待回调未收口");
         when(paymentIssueMapper.findByIssueNo("ISSUE-WAIT-PAY-001")).thenReturn(issue);
-        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
-        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
 
         PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
         request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));
@@ -593,14 +664,58 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldReturnEverySelectedIssueBeyondTheDefaultListPage() {
+        List<String> issueNos = IntStream.rangeClosed(1, 25)
+                .mapToObj(index -> "ISSUE-BATCH-" + index)
+                .collect(Collectors.toList());
+        when(paymentIssueMapper.findByIssueNo(anyString())).thenAnswer(invocation -> {
+            String issueNo = invocation.getArgument(0);
+            PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+            issue.setIssueNo(issueNo);
+            issue.setPaymentOrderId("PAY-" + issueNo);
+            issue.setIssueType("待回调未收口");
+            return issue;
+        });
+        PaymentIssueActionRequestDTO request = validBatchActionRequest();
+        request.setIssueNos(issueNos);
+
+        PageResultDTO<PaymentIssueRowDTO> result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .batchAction(request);
+
+        assertEquals(issueNos, result.getItems().stream()
+                .map(PaymentIssueRowDTO::getIssueNo).collect(Collectors.toList()));
+        assertEquals(25, result.getTotal());
+        assertEquals(1, result.getPageNo());
+        assertEquals(25, result.getPageSize());
+        verify(paymentIssueMapper, never()).findAll(any(PaymentIssueQueryDTO.class));
+    }
+
+    @Test
+    void shouldRejectBatchActionWhenReadbackChangesIssueIdentity() {
+        PaymentIssueRowDTO original = new PaymentIssueRowDTO();
+        original.setIssueNo("ISSUE-001");
+        original.setPaymentOrderId("PAY-001");
+        original.setIssueType("待回调未收口");
+        PaymentIssueRowDTO changed = new PaymentIssueRowDTO();
+        changed.setIssueNo("ISSUE-001");
+        changed.setPaymentOrderId("PAY-OTHER");
+        changed.setIssueType("待回调未收口");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-001")).thenReturn(original, changed);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .batchAction(validBatchActionRequest()));
+
+        assertEquals("payment issue action result no longer matches the selected issue", exception.getMessage());
+    }
+
+    @Test
     void shouldAcknowledgeAlertWhenMarkedProcessed() {
         PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
         issue.setIssueNo("ISSUE-WAIT-PAY-002");
         issue.setPaymentOrderId("PAY-002");
         issue.setIssueType("待回调未收口");
         when(paymentIssueMapper.findByIssueNo("ISSUE-WAIT-PAY-002")).thenReturn(issue);
-        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
-        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
         when(paymentIssueMapper.acknowledgePendingAlerts("ISSUE-WAIT-PAY-002", "支付运营")).thenReturn(1);
 
         PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
@@ -613,6 +728,32 @@ class PaymentIssueServiceImplTest {
         new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request);
 
         verify(paymentIssueMapper).acknowledgePendingAlerts("ISSUE-WAIT-PAY-002", "支付运营");
+    }
+
+    @Test
+    void shouldStopIssueActionWhenActionLogInsertDoesNotAffectExactlyOneRow() {
+        PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+        issue.setIssueNo("ISSUE-ACTION-INSERT-001");
+        issue.setPaymentOrderId("PAY-ACTION-001");
+        issue.setIssueType("待回调未收口");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-ACTION-INSERT-001")).thenReturn(issue);
+        when(paymentIssueMapper.insertActionLog(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString())).thenReturn(0);
+
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Collections.singletonList("ISSUE-ACTION-INSERT-001"));
+        request.setActionType("标记已处理");
+        request.setAssignee("后端值班");
+        request.setOperator("支付运营");
+        request.setRemark("异常已收口");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request));
+
+        assertEquals("payment issue action log insert must affect exactly one row", exception.getMessage());
+        verify(paymentIssueMapper, never()).acknowledgePendingAlerts(anyString(), anyString());
     }
 
     @Test
@@ -714,6 +855,26 @@ class PaymentIssueServiceImplTest {
         overlongIssueNoAfterTrim.setIssueNos(Arrays.asList("ISSUE-001", String.join("", Collections.nCopies(128, "a")) + " "));
         assertThrows(IllegalArgumentException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongIssueNoAfterTrim));
+
+        PaymentIssueActionRequestDTO emptyKey = validBatchActionRequest();
+        emptyKey.setIdempotencyKey("   ");
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(emptyKey));
+
+        PaymentIssueActionRequestDTO controlKey = validBatchActionRequest();
+        controlKey.setIdempotencyKey("attempt\n001");
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(controlKey));
+
+        PaymentIssueActionRequestDTO overlongKey = validBatchActionRequest();
+        overlongKey.setIdempotencyKey(String.join("", Collections.nCopies(129, "a")));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongKey));
+
+        PaymentIssueActionRequestDTO invalidUnicodeKey = validBatchActionRequest();
+        invalidUnicodeKey.setIdempotencyKey("key-\uD800");
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(invalidUnicodeKey));
         verifyNoInteractions(paymentIssueMapper);
     }
 
@@ -724,8 +885,6 @@ class PaymentIssueServiceImplTest {
         issue.setPaymentOrderId("PAY-001");
         issue.setIssueType("待回调未收口");
         when(paymentIssueMapper.findByIssueNo("ISSUE-001")).thenReturn(issue);
-        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
-        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
         PaymentIssueActionRequestDTO request = validBatchActionRequest();
         request.setIssueNos(Collections.singletonList(" ISSUE-001 "));
         request.setAssignee(" 后端值班 ");

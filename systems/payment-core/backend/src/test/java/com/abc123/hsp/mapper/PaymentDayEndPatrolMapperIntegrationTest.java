@@ -35,6 +35,10 @@ public class PaymentDayEndPatrolMapperIntegrationTest {
                 "test", new JdbcTransactionFactory(), dataSource));
         configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.addMapper(PaymentDayEndMapper.class);
+        try (InputStream mapperXml = Resources.getResourceAsStream("mapper/RefundMapper.xml")) {
+            new XMLMapperBuilder(mapperXml, configuration, "mapper/RefundMapper.xml",
+                    configuration.getSqlFragments()).parse();
+        }
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentDayEndMapper.xml")) {
             new XMLMapperBuilder(
                     mapperXml,

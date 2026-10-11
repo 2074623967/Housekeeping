@@ -59,17 +59,26 @@ public class PaymentIssueAlertReceiptQueryRateLimitServiceImpl
         }
         String normalizedChannelCode = channelCode.trim().toUpperCase(Locale.ROOT);
         mapper.initBucket(normalizedChannelCode);
-        if (mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries) == 0) {
-            mapper.insertRejection(
+        int affectedRows = mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries);
+        if (affectedRows == 0) {
+            if (mapper.insertRejection(
                     "IARQRL" + UUID.randomUUID().toString().replace("-", ""),
                     normalizedChannelCode,
                     alertNo,
                     windowSeconds,
-                    maxQueries);
+                    maxQueries) != 1) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED,
+                        "alert receipt query rate limit rejection fact could not be recorded");
+            }
             throw new BusinessException(
                     ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED,
                     String.format("alert receipt query rate limit exceeded: %d requests per %d seconds",
                             maxQueries, windowSeconds));
+        }
+        if (affectedRows != 1) {
+            throw new IllegalStateException(
+                    "alert receipt query rate limit acquisition must affect exactly one row");
         }
     }
 }

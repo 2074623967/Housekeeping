@@ -239,7 +239,9 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setSummaryComment(buildSummaryComment(entity));
         entity.setBatchStatus(resolveBatchStatus(entity));
         entity.setBatchStatusType(resolveBatchStatusType(entity.getBatchStatus()));
-        paymentDayEndMapper.insertBatch(entity);
+        if (paymentDayEndMapper.insertBatch(entity) != 1) {
+            throw new IllegalStateException("支付日终批次新增未实际生效");
+        }
         return DayEndExecutionOutcome.executed(entity);
     }
 
@@ -263,12 +265,13 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 enrichRecentBatches(CsvExportRowLimiter.requireWithinLimit(
                         paymentDayEndMapper.findAllBatchesForExport()));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("批次号,业务日期,运行方式,批次状态,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,待收口支付,待收口支付金额,支付成功时间缺失,支付成功事实不一致,退款成功单量,退款成功金额,退款失败单量,退款失败金额,退款成功时间缺失,退款终态事实不一致,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,准入说明,备注,触发人,创建时间,完成时间\n");
+        builder.append("批次号,业务日期,运行方式,批次状态,批次状态样式,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,待收口支付,待收口支付金额,支付成功时间缺失,支付成功事实不一致,退款成功单量,退款成功金额,退款失败单量,退款失败金额,退款成功时间缺失,退款终态事实不一致,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,对账准入样式,准入说明,备注,触发人,创建时间,完成时间\n");
         for (PaymentDayEndBatchListItemDTO batch : batches) {
             builder.append(csvCell(batch.getBatchNo())).append(',')
                     .append(csvCell(batch.getBizDate())).append(',')
                     .append(csvCell(batch.getRunMode())).append(',')
                     .append(csvCell(batch.getBatchStatus())).append(',')
+                    .append(csvCell(batch.getBatchStatusType())).append(',')
                     .append(csvCell(valueOf(batch.getPaymentTotalCount()))).append(',')
                     .append(csvCell(valueOf(batch.getPaymentSuccessCount()))).append(',')
                     .append(csvCell(batch.getPaymentSuccessAmount())).append(',')
@@ -293,6 +296,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                     .append(csvCell(valueOf(batch.getPendingRefundCount()))).append(',')
                     .append(csvCell(batch.getPendingRefundAmount())).append(',')
                     .append(csvCell(batch.getReconciliationReadinessStatus())).append(',')
+                    .append(csvCell(batch.getReconciliationReadinessType())).append(',')
                     .append(csvCell(batch.getReconciliationReadinessSummary())).append(',')
                     .append(csvCell(batch.getSummaryComment())).append(',')
                     .append(csvCell(batch.getTriggeredBy())).append(',')
