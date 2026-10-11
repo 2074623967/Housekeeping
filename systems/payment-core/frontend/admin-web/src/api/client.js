@@ -1547,6 +1547,7 @@ function isConsistentPaymentRequestStatus(status, statusType) {
     "失败": "danger",
     "处理中": "warn",
     "等待回调": "warn",
+    "待回调": "warn",
     "渠道提交中": "warn",
     "待人工确认": "warn",
     "已关闭": "danger"

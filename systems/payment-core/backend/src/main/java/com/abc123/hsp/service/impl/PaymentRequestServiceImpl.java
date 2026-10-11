@@ -245,6 +245,7 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         aliases.put("已关闭", "已关闭");
         aliases.put("处理中", "处理中");
         aliases.put("等待回调", "等待回调");
+        aliases.put("待回调", "等待回调");
         aliases.put("成功", "成功");
         aliases.put("失败", "失败");
         aliases.put("全部", "全部");

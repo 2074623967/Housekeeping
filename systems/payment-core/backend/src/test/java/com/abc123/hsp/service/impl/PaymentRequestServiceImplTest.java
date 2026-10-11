@@ -110,6 +110,15 @@ class PaymentRequestServiceImplTest {
     }
 
     @Test
+    void shouldNormalizePersistedCallbackStatusForOverviewFilter() {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        query.setRequestStatus(" 待回调 ");
+        new PaymentRequestServiceImpl(paymentRequestMapper).overview(query);
+        assertEquals("等待回调", query.getRequestStatus());
+        verify(paymentRequestMapper).findOverviewSummary(query);
+    }
+
+    @Test
     void shouldRejectOversizedPaymentRequestQueryBeforeMapperAccess() {
         PaymentRequestQueryDTO requestNoQuery = new PaymentRequestQueryDTO();
         requestNoQuery.setRequestNo(repeat("R", 65));

@@ -2462,7 +2462,7 @@ test("rejects empty or mismatched payment request detail responses", async (cont
     requestPayload: "{}", responsePayload: null, completedAt: "2026-09-27 10:01:00",
     createdAt: "2026-09-27 10:00:00"
   };
-  for (const requestStatus of ["渠道提交中", "待人工确认", "已关闭"]) {
+  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭"]) {
     const statusType = requestStatus === "已关闭" ? "danger" : "warn";
     assert.equal(normalizePaymentRequestDetailResult({
       ...validDetail, successFactIssue: null, requestStatus,
@@ -2569,7 +2569,7 @@ test("rejects payment request pages with inconsistent status and associations", 
     normalizePaymentRequestListPage({ items: [validRow], total: 1 }).items,
     [validRow]
   );
-  for (const requestStatus of ["渠道提交中", "待人工确认", "已关闭"]) {
+  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭"]) {
     const statusType = requestStatus === "已关闭" ? "danger" : "warn";
     assert.equal(normalizePaymentRequestListPage({ items: [{
       ...validRow, requestStatus, requestStatusType: statusType

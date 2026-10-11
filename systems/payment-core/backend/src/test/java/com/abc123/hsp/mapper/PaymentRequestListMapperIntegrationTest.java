@@ -276,7 +276,7 @@ class PaymentRequestListMapperIntegrationTest {
             assertEquals(1L, mapper.count(submittingQuery));
             assertEquals("ATTEMPT-VIRTUAL-001", mapper.findAll(submittingQuery).get(0).getRequestNo());
 
-            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '等待回调' "
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '待回调' "
                     + "WHERE attempt_no = 'ATTEMPT-VIRTUAL-001'");
             session.clearCache();
             assertEquals(7L, mapper.findOverviewSummary(overviewQuery).getTotalRequestCount());
@@ -284,6 +284,17 @@ class PaymentRequestListMapperIntegrationTest {
             assertEquals(1L, mapper.findOverviewSummary(overviewQuery).getWaitingCallbackRequestCount());
             assertEquals(4L, mapper.count(processingQuery));
             assertEquals(0L, mapper.count(submittingQuery));
+            PaymentRequestQueryDTO callbackQuery = new PaymentRequestQueryDTO();
+            callbackQuery.setRequestStatus("等待回调");
+            assertEquals(1L, mapper.count(callbackQuery));
+            assertEquals("待回调", mapper.findAllForExport(callbackQuery).get(0).getRequestStatus());
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '等待回调' "
+                    + "WHERE attempt_no = 'ATTEMPT-STABLE-003'");
+            session.clearCache();
+            assertEquals(3L, mapper.findOverviewSummary(overviewQuery).getProcessingRequestCount());
+            assertEquals(2L, mapper.findOverviewSummary(overviewQuery).getWaitingCallbackRequestCount());
+            assertEquals(2L, mapper.count(callbackQuery));
         }
     }
 
