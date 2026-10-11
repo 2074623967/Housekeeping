@@ -332,6 +332,10 @@ test("maps payment terminal states without inventing success", () => {
   assert.equal(resultMeta("CLOSED").tone, "danger");
   assert.equal(resultMeta("WAIT_CALLBACK").title, "支付处理中");
   assert.equal(resultMeta("UNKNOWN").title, "支付处理中");
+  assert.equal(resultMeta("PAYING").title, "支付提交处理中");
+  assert.match(resultMeta("PAYING").hint, /刷新/);
+  assert.match(resultMeta("PAYING").hint, /不可主动查单或关单/);
+  assert.doesNotMatch(resultMeta("PAYING").hint, /请等待渠道回调|超时后可主动查单/);
 });
 
 test("auto refreshes only asynchronously advancing payment states", () => {

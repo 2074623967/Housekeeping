@@ -336,6 +336,13 @@ function resultMeta(status) {
   if (status === "PREPAY_CREATED") {
     return { title: "待发起支付", tone: "warn", hint: "预付单已创建，尚未提交支付渠道。" };
   }
+  if (status === "PAYING") {
+    return {
+      title: "支付提交处理中",
+      tone: "info",
+      hint: "渠道受理尚未确认，请刷新支付详情并等待状态推进，勿重复付款；当前不可主动查单或关单。"
+    };
+  }
   return { title: "支付处理中", tone: "warn", hint: "请等待渠道回调，超时后可主动查单。" };
 }
 

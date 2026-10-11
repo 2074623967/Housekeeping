@@ -125,6 +125,35 @@ function paymentDetail(status = "WAIT_CALLBACK") {
   };
 }
 
+test("keeps PAYING result read-only until channel acceptance is confirmed", async () => {
+  let status = "PAYING";
+  let queryCalls = 0;
+  paymentApi.getDetail = () => Promise.resolve({
+    ...paymentDetail(status),
+    channelTransactionNo: status === "PAYING" ? null : "WX-1",
+    latestAttemptStatus: status === "PAYING" ? "渠道提交中" : "处理中"
+  });
+  paymentApi.query = () => { queryCalls += 1; return Promise.resolve(paymentDetail()); };
+  const page = createPage();
+  page.onLoad({ paymentOrderId: "PAY-1", prepayOrderNo: "PRE-TRUSTED", scene: "balance-pay" });
+  try {
+    await flushPromises();
+    assert.equal(page.data.meta.title, "支付提交处理中");
+    assert.match(page.data.meta.hint, /刷新/);
+    assert.equal(page.data.canQuery, false);
+    assert.equal(page.data.canClose, false);
+    await page.queryPayment();
+    assert.equal(queryCalls, 0);
+
+    status = "WAIT_CALLBACK";
+    await page.loadDetail();
+    assert.equal(page.data.meta.title, "支付处理中");
+    assert.equal(page.data.canQuery, true);
+  } finally {
+    page.onUnload();
+  }
+});
+
 test("does not load or act on a payment result for an unsupported external scene", async () => {
   let requestCount = 0;
   paymentApi.getDetail = () => {
