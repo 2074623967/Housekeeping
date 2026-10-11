@@ -65,8 +65,21 @@
             ), 0) AS expiredPaymentCount,
             COALESCE((
                 SELECT COUNT(1)
-                FROM t_payment_order
-                WHERE status = 'WAIT_CALLBACK'
+                FROM t_payment_order po
+                WHERE po.status = 'WAIT_CALLBACK'
+                  AND NOT (NULLIF(TRIM(po.channel_transaction_no), '') IS NULL
+                      AND EXISTS (SELECT 1
+                                  FROM t_payment_attempt latest_attempt
+                                  WHERE latest_attempt.id = (
+                                      SELECT attempt.id
+                                      FROM t_payment_attempt attempt
+                                      WHERE attempt.payment_order_id = po.payment_order_id
+                                        AND CHAR_LENGTH(attempt.payment_order_id) = CHAR_LENGTH(po.payment_order_id)
+                                        AND CAST(attempt.payment_order_id AS BINARY(256)) = CAST(po.payment_order_id AS BINARY(256))
+                                      ORDER BY attempt.created_at DESC, attempt.id DESC
+                                      LIMIT 1
+                                  )
+                                    AND latest_attempt.attempt_status = '渠道提交中'))
             ), 0) AS pendingCallbackCount,
             COALESCE((
                 SELECT COUNT(1)
