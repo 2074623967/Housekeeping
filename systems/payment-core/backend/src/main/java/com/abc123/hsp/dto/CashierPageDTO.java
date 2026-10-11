@@ -11,6 +11,13 @@ public class CashierPageDTO {
 
     /** 支付单号。 */
     private String paymentOrderId;
+
+    /** 统一业务链路标识。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
+
     /** 预付单号。 */
     private String prepayOrderNo;
     /** 订单号。 */
@@ -31,8 +38,19 @@ public class CashierPageDTO {
     private String statusType;
     /** 支付单状态。 */
     private String paymentStatus;
+    /** 已核验的支付渠道；未受理时为空。 */
+    private String channel;
+    /** 已受理的支付方式；未受理时为空。 */
+    private String paymentMethod;
+    private String reviewPaymentMethod;
+    private String reviewChannelCode;
+    private String channelTransactionNo;
     /** 最近一次支付尝试状态。 */
     private String latestAttemptStatus;
+    /** 最近一次支付尝试状态对应的前端展示样式。 */
+    private String latestAttemptStatusType;
+    /** 最近一次支付尝试的终态完成时间。 */
+    private String latestAttemptCompletedAt;
     /** 过期时间。 */
     private String expiresAt;
     /** 可选支付渠道列表。 */

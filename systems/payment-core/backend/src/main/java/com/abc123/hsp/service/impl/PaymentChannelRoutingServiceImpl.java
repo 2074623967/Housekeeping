@@ -98,6 +98,7 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                                                    List<PaymentChannelRoutingConfigDTO> enabledChannels,
                                                    List<PaymentRouteRuleRuntimeDTO> enabledRules,
                                                    Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
+        String requestedChannelCode = normalizeRequestedChannelCode(routeContext.getRequestedChannelCode());
         for (PaymentRouteRuleRuntimeDTO rule : enabledRules) {
             if (!matchesScene(routeContext, rule.getMatchScene()) || !matchesExpression(routeContext, rule.getMatchExpression())) {
                 continue;
@@ -106,11 +107,13 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                 continue;
             }
             PaymentChannelRoutingConfigDTO targetChannel = findEnabledChannel(enabledChannels, rule.getTargetChannelCode());
-            if (isRouteAvailable(routeContext, targetChannel, channelHealth)) {
+            if (matchesRequestedChannel(requestedChannelCode, targetChannel)
+                    && isRouteAvailable(routeContext, targetChannel, channelHealth)) {
                 return buildDecision(targetChannel.getChannelCode(), rule.getRuleCode(), rule.getRuleName() + " -> " + targetChannel.getChannelCode());
             }
             PaymentChannelRoutingConfigDTO fallbackChannel = findEnabledChannel(enabledChannels, rule.getFallbackChannelCode());
-            if (isRouteAvailable(routeContext, fallbackChannel, channelHealth)) {
+            if (matchesRequestedChannel(requestedChannelCode, fallbackChannel)
+                    && isRouteAvailable(routeContext, fallbackChannel, channelHealth)) {
                 boolean targetHealthBlocked = targetChannel != null && !isChannelHealthy(targetChannel, channelHealth);
                 return buildDecision(
                         fallbackChannel.getChannelCode(),
@@ -158,12 +161,14 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     private PaymentRouteDecisionDTO resolveByRequestedChannel(PaymentRouteContextDTO routeContext,
                                                               List<PaymentChannelRoutingConfigDTO> enabledChannels,
                                                               Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
-        String normalizedRequestedChannel = normalizeChannelCode(routeContext.getRequestedChannelCode());
+        String normalizedRequestedChannel = normalizeRequestedChannelCode(routeContext.getRequestedChannelCode());
         if (!StringUtils.hasText(normalizedRequestedChannel)) {
             return null;
         }
         PaymentChannelRoutingConfigDTO requestedChannel = findEnabledChannel(enabledChannels, normalizedRequestedChannel);
-        if (requestedChannel == null) {
+        if (requestedChannel == null
+                || !normalizePaymentMethod(requestedChannel.getPaymentMethod())
+                        .equals(normalizePaymentMethod(routeContext.getPaymentMethod()))) {
             throw new BusinessException(ErrorCode.PAYMENT_REQUESTED_CHANNEL_INVALID, "requested channel is disabled or missing");
         }
         if (!matchesChannelScene(routeContext, requestedChannel)) {
@@ -187,10 +192,10 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     private PaymentRouteDecisionDTO resolveByPaymentMethod(PaymentRouteContextDTO routeContext,
                                                            List<PaymentChannelRoutingConfigDTO> enabledChannels,
                                                            Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
-        String normalizedMethod = normalizeText(routeContext.getPaymentMethod());
+        String normalizedMethod = normalizePaymentMethod(routeContext.getPaymentMethod());
         List<PaymentChannelRoutingConfigDTO> candidates = new ArrayList<>();
         for (PaymentChannelRoutingConfigDTO channel : enabledChannels) {
-            if (normalizeText(channel.getPaymentMethod()).equals(normalizedMethod)
+            if (normalizePaymentMethod(channel.getPaymentMethod()).equals(normalizedMethod)
                     && routeWeight(channel) > 0
                     && isRouteAvailable(routeContext, channel, channelHealth)) {
                 candidates.add(channel);
@@ -256,9 +261,16 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                                      PaymentChannelRoutingConfigDTO channel,
                                      Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         return channel != null
+                && normalizePaymentMethod(routeContext.getPaymentMethod())
+                        .equals(normalizePaymentMethod(channel.getPaymentMethod()))
                 && matchesChannelScene(routeContext, channel)
                 && isChannelHealthy(channel, channelHealth)
                 && matchesChannelDailyLimit(routeContext, channel);
+    }
+
+    private boolean matchesRequestedChannel(String requestedChannelCode, PaymentChannelRoutingConfigDTO channel) {
+        return channel != null && (!StringUtils.hasText(requestedChannelCode)
+                || requestedChannelCode.equals(normalizeText(channel.getChannelCode())));
     }
 
     private Map<String, PaymentChannelQueryHealthDTO> loadChannelHealth() {
@@ -342,9 +354,9 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     }
 
     private PaymentChannelRoutingConfigDTO findEnabledChannel(List<PaymentChannelRoutingConfigDTO> enabledChannels, String channelCode) {
-        String normalizedChannelCode = normalizeChannelCode(channelCode);
+        String normalizedChannelCode = normalizeText(channelCode);
         for (PaymentChannelRoutingConfigDTO channel : enabledChannels) {
-            if (normalizeChannelCode(channel.getChannelCode()).equals(normalizedChannelCode)) {
+            if (normalizeText(channel.getChannelCode()).equals(normalizedChannelCode)) {
                 return channel;
             }
         }
@@ -366,6 +378,16 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
 
     private String normalizeText(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizePaymentMethod(String paymentMethod) {
+        String normalizedMethod = normalizeText(paymentMethod);
+        return "银行卡".equals(normalizedMethod) ? "银行转账" : normalizedMethod;
+    }
+
+    private String normalizeRequestedChannelCode(String channelCode) {
+        String normalizedChannel = normalizeText(channelCode);
+        return "bank_card".equals(normalizedChannel) ? "offline_bank" : normalizedChannel;
     }
 
     private String normalizeChannelCode(String channelCode) {

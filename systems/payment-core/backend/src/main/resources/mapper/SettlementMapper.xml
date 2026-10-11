@@ -45,14 +45,14 @@
 
     <select id="findWorkerOverview" resultType="com.abc123.hsp.dto.WorkerSettlementOverviewDTO">
         SELECT COUNT(1) AS totalSettlementCount,
-               SUM(CASE WHEN status = '待审核' THEN 1 ELSE 0 END) AS pendingAuditCount,
-               SUM(CASE WHEN payout_status = '待出款' THEN 1 ELSE 0 END) AS payoutPendingCount,
-               SUM(CASE WHEN payout_status = '出款中' THEN 1 ELSE 0 END) AS payingCount,
-               SUM(CASE WHEN payout_status = '出款成功' THEN 1 ELSE 0 END) AS payoutSuccessCount,
+               COALESCE(SUM(CASE WHEN status = '待审核' THEN 1 ELSE 0 END), 0) AS pendingAuditCount,
+               COALESCE(SUM(CASE WHEN payout_status = '待出款' THEN 1 ELSE 0 END), 0) AS payoutPendingCount,
+               COALESCE(SUM(CASE WHEN payout_status = '出款中' THEN 1 ELSE 0 END), 0) AS payingCount,
+               COALESCE(SUM(CASE WHEN payout_status = '出款成功' THEN 1 ELSE 0 END), 0) AS payoutSuccessCount,
                CONCAT('¥', FORMAT(COALESCE(SUM(amount_net_settle), 0), 2)) AS totalNetSettleAmount,
                CONCAT('¥', FORMAT(COALESCE(SUM(deduct_amount), 0), 2)) AS totalDeductAmount,
                CONCAT('¥', FORMAT(COALESCE(SUM(deposit_impact_amount), 0), 2)) AS totalDepositImpactAmount,
-               SUM(CASE WHEN amount_net_settle &lt; 0 THEN 1 ELSE 0 END) AS negativeNetSettleCount
+               COALESCE(SUM(CASE WHEN amount_net_settle &lt; 0 THEN 1 ELSE 0 END), 0) AS negativeNetSettleCount
         FROM t_worker_settlement_order
         <include refid="workerSettlementWhere"/>
     </select>

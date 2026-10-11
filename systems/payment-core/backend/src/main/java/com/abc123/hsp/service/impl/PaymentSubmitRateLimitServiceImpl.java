@@ -61,8 +61,12 @@ public class PaymentSubmitRateLimitServiceImpl implements PaymentSubmitRateLimit
             return;
         }
         mapper.initBucket(scopeType, scopeKey);
-        if (mapper.acquire(scopeType, scopeKey, WINDOW_SECONDS, maxRequests) == 0) {
+        int affectedRows = mapper.acquire(scopeType, scopeKey, WINDOW_SECONDS, maxRequests);
+        if (affectedRows == 0) {
             throw new BusinessException(errorCode, errorMessage);
+        }
+        if (affectedRows != 1) {
+            throw new IllegalStateException("payment submit rate limit acquisition must affect exactly one row");
         }
     }
 

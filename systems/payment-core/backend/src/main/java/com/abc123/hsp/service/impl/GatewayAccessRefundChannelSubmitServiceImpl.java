@@ -147,11 +147,11 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         if (containsIsoControl(value)) {
             throw invalidRequest();
         }
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
         if (value.length() > maxLength) {
             throw invalidRequest();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
         String normalized = value.trim();
         return normalized;
@@ -169,9 +169,20 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         result.setChannelRefundNo(required(result.getChannelRefundNo(), "channel refund number", 128));
         result.setStatus(required(result.getStatus(), "status", 32).toUpperCase(Locale.ROOT));
         result.setStatusType(required(result.getStatusType(), "status type", 32).toLowerCase(Locale.ROOT));
-        if (!STATUSES.contains(result.getStatus()) || !STATUS_TYPES.contains(result.getStatusType())) {
+        if (!STATUSES.contains(result.getStatus()) || !STATUS_TYPES.contains(result.getStatusType())
+                || !isConsistentStatusType(result.getStatus(), result.getStatusType())) {
             throw submitFailed("gateway-access returned an unsupported refund acceptance status", true);
         }
+    }
+
+    private boolean isConsistentStatusType(String status, String statusType) {
+        if ("SUCCESS".equals(status)) {
+            return "success".equals(statusType);
+        }
+        if ("PROCESSING".equals(status)) {
+            return "warn".equals(statusType);
+        }
+        return "danger".equals(statusType);
     }
 
     private String required(String value, String fieldName, int maxLength) {

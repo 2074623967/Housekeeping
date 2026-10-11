@@ -60,17 +60,25 @@ public class PaymentChannelQueryRateLimitServiceImpl implements PaymentChannelQu
         }
         String normalizedChannelCode = channelCode.trim().toLowerCase(Locale.ROOT);
         mapper.initBucket(normalizedChannelCode);
-        if (mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries) == 0) {
-            mapper.insertRejection(
+        int affectedRows = mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries);
+        if (affectedRows == 0) {
+            if (mapper.insertRejection(
                     "QRL" + UUID.randomUUID().toString().replace("-", ""),
                     normalizedChannelCode,
                     paymentOrderId,
                     windowSeconds,
-                    maxQueries);
+                    maxQueries) != 1) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
+                        "channel query rate limit rejection fact could not be recorded");
+            }
             throw new BusinessException(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
                     String.format("channel query rate limit exceeded: %d requests per %d seconds",
                             maxQueries, windowSeconds));
+        }
+        if (affectedRows != 1) {
+            throw new IllegalStateException("payment channel query rate limit acquisition must affect exactly one row");
         }
     }
 }

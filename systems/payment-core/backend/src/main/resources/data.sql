@@ -111,8 +111,8 @@ INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_a
 ('ORD202607180118', '企业客户-晨星科技', '企业保洁', '企业服务组', 3600.00, 3600.00, '已完成', 'success', '已验收', 'success', '2026-07-18 18:40:07');
 
 INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, payment_method, channel_code, channel_transaction_no, status, status_type, success_at, created_at) VALUES
-('PAY202607190001', 'ORD202607190001', '张女士', 268.00, '微信', 'wx_jsapi', 'WX99887766', 'SUCCESS', 'success', '2026-07-19 09:21:22', '2026-07-19 09:21:18'),
-('PAY202607190002', 'ORD202607190002', '王先生', 2000.00, '支付宝', 'alipay_h5', 'ALI77665544', 'WAIT_CALLBACK', 'warn', NULL, '2026-07-19 10:03:01'),
+('PAY202607190001', 'ORD202607190001', '张女士', 268.00, '微信', 'wx_jsapi', 'WX99887766', 'SUCCESS', 'success', '2026-07-19 09:21:22', '2026-07-19 09:20:57'),
+('PAY202607190002', 'ORD202607190002', '王先生', 6800.00, '支付宝', 'alipay_h5', 'ALI77665544', 'WAIT_CALLBACK', 'warn', NULL, '2026-07-19 10:03:01'),
 ('PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 3600.00, '银行转账', 'offline_bank', 'BANK332211', 'SUCCESS', 'success', '2026-07-18 18:41:20', '2026-07-18 18:41:09');
 
 INSERT INTO t_bill (bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at) VALUES
@@ -120,15 +120,23 @@ INSERT INTO t_bill (bill_no, order_no, customer_name, bill_amount, paid_amount, 
 ('BILL202607190002', 'ORD202607190002', '王先生', 8800.00, 2000.00, '部分支付', 'warn', '2026-07-21 23:59:59', '2026-07-19 10:02:51'),
 ('BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 3600.00, '已结清', 'success', '2026-07-19 23:59:59', '2026-07-18 18:40:18');
 
-INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at) VALUES
-('PRE202607190001', 'BILL202607190001', 'ORD202607190001', '张女士', 268.00, 'H5', '家政服务收银台', '待支付', 'warn', 'PAY202607190001', '2026-07-19 09:20:58', '2026-07-19 10:20:58'),
-('PRE202607190002', 'BILL202607190002', 'ORD202607190002', '王先生', 6800.00, 'H5', '家政服务收银台', '支付中', 'info', 'PAY202607190002', '2026-07-19 10:03:00', '2026-07-19 11:03:00'),
-('PRE202607180118', 'BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 'PC', '企业客户收银台', '已完成', 'success', 'PAY202607180074', '2026-07-18 18:40:52', '2026-07-18 19:40:52');
+INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, source_kind, created_at, expires_at) VALUES
+('PRE202607190001', 'BILL202607190001', 'ORD202607190001', '张女士', 268.00, 'H5', '家政服务收银台', '待支付', 'warn', 'PAY202607190001', 'STANDARD_ORDER', '2026-07-19 09:20:58', '2026-07-19 10:20:58'),
+('PRE202607190002', 'BILL202607190002', 'ORD202607190002', '王先生', 6800.00, 'H5', '家政服务收银台', '支付中', 'info', 'PAY202607190002', 'STANDARD_ORDER', '2026-07-19 10:03:00', '2026-07-19 11:03:00'),
+('PRE202607180118', 'BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 'PC', '企业客户收银台', '已完成', 'success', 'PAY202607180074', 'STANDARD_ORDER', '2026-07-18 18:40:52', '2026-07-18 19:40:52');
 
 INSERT INTO t_payment_attempt (attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at) VALUES
 ('ATT202607190001', 'PRE202607190001', 'PAY202607190001', 'wx_jsapi', '微信', 'housekeeping-h5-web', 'MOBILE_WEB', '127.0.0.1', 'PRE202607190001|微信|wx_jsapi', '{"scene":"H5","amount":268.00}', '{"payUrl":"https://pay.example.com/wx/1"}', '成功', 'success', '2026-07-19 09:21:10'),
 ('ATT202607190002', 'PRE202607190002', 'PAY202607190002', 'alipay_h5', '支付宝', 'housekeeping-app-web', 'APP', '127.0.0.1', 'PRE202607190002|支付宝|alipay_h5', '{"scene":"H5","amount":6800.00}', '{"payUrl":"https://pay.example.com/ali/2"}', '等待回调', 'warn', '2026-07-19 10:03:11'),
 ('ATT202607180074', 'PRE202607180118', 'PAY202607180074', 'offline_bank', '银行转账', 'housekeeping-pc-web', 'PC_WEB', '127.0.0.1', 'PRE202607180118|银行转账|offline_bank', '{"scene":"PC","amount":3600.00}', '{"bankNo":"BANK332211"}', '成功', 'success', '2026-07-18 18:41:11');
+
+UPDATE t_payment_attempt
+SET completed_at = '2026-07-19 09:21:23'
+WHERE attempt_no = 'ATT202607190001';
+
+UPDATE t_payment_attempt
+SET completed_at = '2026-07-18 18:41:20'
+WHERE attempt_no = 'ATT202607180074';
 
 INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, notify_type, notify_payload, notify_result, notify_status, notify_status_type, created_at) VALUES
 ('NTF202607190001', 'PAY202607190001', 'wx_jsapi', 'SUCCESS', '{"tradeState":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-19 09:21:22'),
@@ -191,6 +199,10 @@ INSERT INTO t_refund_attempt (refund_attempt_no, refund_order_id, channel_code, 
 ('RFA202607190001', 'REF202607190001', 'wx_jsapi', NULL, 'PENDING', 'warn', NULL, NULL, '2026-07-19 11:08:20'),
 ('RFA202607180019', 'REF202607180019', 'offline_bank', 'BANK-REF-202607180019', 'SUCCESS', 'success', '2026-07-18 19:01:15', '2026-07-18 19:03:26', '2026-07-18 19:01:10'),
 ('RFA202607170088', 'REF202607170088', 'legacy_unknown', 'LEGACY-REF-202607170088', 'FAIL', 'danger', '2026-07-17 15:12:10', '2026-07-17 15:18:21', '2026-07-17 15:12:00');
+
+UPDATE t_refund_order
+SET terminal_at = '2026-07-18 19:03:26'
+WHERE refund_order_id = 'REF202607180019';
 
 INSERT INTO t_refund_operation_log (log_no, refund_order_id, action_code, action_name, from_status, to_status, operator_name, operation_remark, created_at) VALUES
 ('ROL202607190001', 'REF202607190001', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '客户取消服务', '2026-07-19 11:05:10'),

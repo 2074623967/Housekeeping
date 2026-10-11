@@ -38,6 +38,14 @@ class RefundRetryTaskServiceImplTest {
     private TransactionStatus transactionStatus;
 
     @Test
+    void shouldRejectInvalidRetryOperatorBeforeLoadingRefunds() {
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new RefundRetryTaskServiceImpl(refundMapper, refundService, transactionManager)
+                        .retryFailedRefunds("ops\nuser"));
+        verify(refundMapper, org.mockito.Mockito.never()).findFailedRefundOrderIds(100);
+    }
+
+    @Test
     void shouldContinueRetryingRefundsAfterOneTransactionFails() {
         String sensitiveMessage = "jdbc:mysql://internal/payment password=refund-secret\ninvalid SQL";
         when(refundMapper.findFailedRefundOrderIds(100))

@@ -28,4 +28,6 @@ public class BillListItemDTO {
     private String dueAt;
     /** 账单创建时间。 */
     private String createdAt;
+    /** 最近预付单支付场景。 */
+    private String latestPayScene;
 }

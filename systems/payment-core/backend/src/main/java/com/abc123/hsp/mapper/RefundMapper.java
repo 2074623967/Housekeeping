@@ -110,6 +110,13 @@ public interface RefundMapper {
                                 @Param("refundAttemptNo") String refundAttemptNo,
                                 @Param("paymentOrderId") String paymentOrderId);
 
+    boolean isMatchingPendingRefundSubmitEvent(@Param("eventNo") String eventNo,
+                                               @Param("refundAttemptNo") String refundAttemptNo,
+                                               @Param("paymentOrderId") String paymentOrderId);
+
+    boolean isMatchingSuccessfulRefundSubmitEvent(@Param("eventNo") String eventNo,
+                                                  @Param("refundAttemptNo") String refundAttemptNo);
+
     /**
      * 将当前尝试绑定为渠道已受理。
      */
@@ -158,7 +165,8 @@ public interface RefundMapper {
     /**
      * 记录结果未知的退款提交实际调用渠道，不伪造渠道受理号。
      */
-    int recordUnknownRefundSubmitChannel(@Param("refundOrderId") String refundOrderId,
+    int recordUnknownRefundSubmitChannel(@Param("eventNo") String eventNo,
+                                         @Param("refundOrderId") String refundOrderId,
                                          @Param("refundAttemptNo") String refundAttemptNo,
                                          @Param("channelCode") String channelCode);
 
@@ -173,9 +181,14 @@ public interface RefundMapper {
     BigDecimal sumActiveRefundAmount(String paymentOrderId);
 
     /**
+     * 统计原支付单活动退款中的空值及非正金额事实。
+     */
+    long countInvalidActiveRefundAmounts(String paymentOrderId);
+
+    /**
      * 插入退款申请单。
      */
-    void insertRefund(@Param("refundOrderId") String refundOrderId,
+    int insertRefund(@Param("refundOrderId") String refundOrderId,
                       @Param("source") RefundPaymentSourceDTO source,
                       @Param("request") RefundApplyRequestDTO request,
                       @Param("status") String status,

@@ -80,11 +80,11 @@ final class PaymentChannelQueryResultValidator {
                 throw invalidResult();
             }
         }
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
         if (value.length() > maxLength) {
             throw invalidResult();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
         String normalized = value.trim();
         return normalized;

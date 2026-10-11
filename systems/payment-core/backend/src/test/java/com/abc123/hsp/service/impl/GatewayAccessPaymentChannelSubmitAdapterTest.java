@@ -48,6 +48,7 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
         data.setChannelTransactionNo("WX-1001");
+        data.setGatewayCode(" GW_WX ");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
         data.setChannelReturnCode("USERPAYING");
@@ -66,10 +67,21 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         PaymentChannelSubmitResultDTO result = adapter(restTemplate).submit(miniProgramRequest);
 
         assertEquals("WX-1001", result.getChannelTransactionNo());
+        assertEquals("GW_WX", result.getGatewayCode());
         assertEquals("USERPAYING", result.getChannelReturnCode());
         assertEquals("prepay_id=wx-prepay", result.getNativePaymentParams().get("package"));
         assertTrue(result.getResponsePayload().contains("\"source\":\"gateway-access\""));
+        assertTrue(result.getResponsePayload().contains("\"gatewayCode\":\"GW_WX\""));
         assertFalse(result.getResponsePayload().contains("secret"));
+
+        data.setGatewayCode(null);
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                assertThrows(BusinessException.class,
+                        () -> adapter(restTemplate).submit(miniProgramRequest)).getCode());
+        data.setGatewayCode("GW_WX\n");
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                assertThrows(BusinessException.class,
+                        () -> adapter(restTemplate).submit(miniProgramRequest)).getCode());
     }
 
     @Test
@@ -88,6 +100,11 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         invalidOptional.setCustomerName("customer\nname");
         assertInvalidRequest(assertThrows(
                 BusinessException.class, () -> adapter.submit(invalidOptional)));
+
+        PaymentChannelSubmitRequestDTO oversizedOptional = request();
+        oversizedOptional.setRequestedChannelCode(repeat(" ", 65));
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.submit(oversizedOptional)));
 
         PaymentChannelSubmitRequestDTO oversized = request();
         oversized.setPaymentMethod(repeat("M", 32) + " ");
@@ -185,6 +202,7 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
         data.setChannelTransactionNo("WX-1001");
+        data.setGatewayCode("GW_WX");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
         data.setChannelReturnCode("USERPAYING");
@@ -232,6 +250,7 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
             AtomicReference<PaymentChannelSubmitRequestDTO> sentRequest) {
         PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
         data.setChannelTransactionNo("WX-1001");
+        data.setGatewayCode("GW_WX");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
         data.setChannelReturnCode("USERPAYING");

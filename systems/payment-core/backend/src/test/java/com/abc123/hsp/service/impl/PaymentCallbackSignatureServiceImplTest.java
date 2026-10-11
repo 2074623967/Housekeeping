@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,6 +39,13 @@ class PaymentCallbackSignatureServiceImplTest {
 
     @Mock
     private PaymentCallbackSecurityMapper paymentCallbackSecurityMapper;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(paymentCallbackSecurityMapper.insertCallbackNonce(
+                anyString(), anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(1);
+    }
 
     @Test
     void shouldVerifyValidSignedCallback() throws Exception {
@@ -100,6 +109,27 @@ class PaymentCallbackSignatureServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectCallbackWhenNonceInsertDoesNotAffectExactlyOneRow() throws Exception {
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-insert-zero", timestamp);
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5"))
+                .thenReturn(buildHmacProfile("wx_h5", "test-secret"));
+        when(paymentCallbackSecurityMapper.insertCallbackNonce(
+                "wx_h5", "nonce-insert-zero", "PAYMENT", "PAY-TEST-001", 601))
+                .thenReturn(0);
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                601
+        );
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class, () -> service.verify("wx_h5", request));
+        assertEquals("payment callback nonce insert must affect exactly one row", exception.getMessage());
+        verify(paymentCallbackSecurityMapper).deleteExpiredNonce("wx_h5", "nonce-insert-zero");
     }
 
     @Test

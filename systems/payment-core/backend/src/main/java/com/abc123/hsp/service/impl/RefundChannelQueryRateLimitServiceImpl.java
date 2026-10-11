@@ -60,17 +60,25 @@ public class RefundChannelQueryRateLimitServiceImpl implements RefundChannelQuer
         }
         String normalizedChannelCode = channelCode.trim().toLowerCase(Locale.ROOT);
         mapper.initBucket(normalizedChannelCode);
-        if (mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries) == 0) {
-            mapper.insertRejection(
+        int affectedRows = mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries);
+        if (affectedRows == 0) {
+            if (mapper.insertRejection(
                     "RQRL" + UUID.randomUUID().toString().replace("-", ""),
                     normalizedChannelCode,
                     refundOrderId,
                     windowSeconds,
-                    maxQueries);
+                    maxQueries) != 1) {
+                throw new BusinessException(
+                        ErrorCode.REFUND_CHANNEL_QUERY_RATE_LIMITED,
+                        "refund channel query rate limit rejection fact could not be recorded");
+            }
             throw new BusinessException(
                     ErrorCode.REFUND_CHANNEL_QUERY_RATE_LIMITED,
                     String.format("refund channel query rate limit exceeded: %d requests per %d seconds",
                             maxQueries, windowSeconds));
+        }
+        if (affectedRows != 1) {
+            throw new IllegalStateException("refund channel query rate limit acquisition must affect exactly one row");
         }
     }
 }

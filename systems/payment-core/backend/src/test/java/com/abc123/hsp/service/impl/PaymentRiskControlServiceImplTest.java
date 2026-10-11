@@ -65,6 +65,12 @@ class PaymentRiskControlServiceImplTest {
                 BusinessException.class,
                 () -> service.evaluateSubmitRisk(missingRequired)));
 
+        PaymentRiskDecisionRequestDTO missingSourceApp = validRequest();
+        missingSourceApp.setSourceAppId("   ");
+        assertInvalidRiskRequest(assertThrows(
+                BusinessException.class,
+                () -> service.evaluateSubmitRisk(missingSourceApp)));
+
         PaymentRiskDecisionRequestDTO invalidOptional = validRequest();
         invalidOptional.setClientDeviceId("device\n001");
         assertInvalidRiskRequest(assertThrows(
@@ -100,6 +106,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", decision("PASS", "success"));
         PaymentRiskDecisionRequestDTO request = validRequest();
         request.setBusinessNo(" PAY-001 ");
+        request.setSourceAppId(" housekeeping-app-web ");
         request.setClientDeviceId("   ");
         request.setPayerPhone(" 13800138000 ");
 
@@ -114,9 +121,11 @@ class PaymentRiskControlServiceImplTest {
         PaymentRiskDecisionRequestDTO sent = captor.getValue();
         assertNotSame(request, sent);
         assertEquals("PAY-001", sent.getBusinessNo());
+        assertEquals("housekeeping-app-web", sent.getSourceAppId());
         assertNull(sent.getClientDeviceId());
         assertEquals("13800138000", sent.getPayerPhone());
         assertEquals(" PAY-001 ", request.getBusinessNo());
+        assertEquals(" housekeeping-app-web ", request.getSourceAppId());
         assertEquals("   ", request.getClientDeviceId());
     }
 
@@ -406,6 +415,7 @@ class PaymentRiskControlServiceImplTest {
         PaymentRiskDecisionRequestDTO request = new PaymentRiskDecisionRequestDTO();
         request.setBusinessNo("PAY-001");
         request.setSourceSystem("payment-core");
+        request.setSourceAppId("housekeeping-app-web");
         request.setSceneCode("PAY_CONSUME");
         request.setPayScene("HOME_SERVICE");
         request.setPaymentMethod("WECHAT");

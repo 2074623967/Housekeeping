@@ -34,7 +34,8 @@ final class PaymentChannelSubmitResultValidator {
     private PaymentChannelSubmitResultValidator() {
     }
 
-    static PaymentChannelSubmitResultDTO validateAndNormalize(PaymentChannelSubmitResultDTO result) {
+    static PaymentChannelSubmitResultDTO validateAndNormalize(
+            PaymentChannelSubmitResultDTO result, String terminal) {
         if (result == null) {
             throw invalidResult();
         }
@@ -45,6 +46,9 @@ final class PaymentChannelSubmitResultValidator {
                 result.getAttemptStatusType(), ATTEMPT_STATUS_TYPE_MAX_LENGTH)
                 .toLowerCase(Locale.ROOT);
         if (!ATTEMPT_STATUS_TYPES.contains(attemptStatusType)) {
+            throw invalidResult();
+        }
+        if (!isConsistentAttemptStatusType(result.getAttemptStatus(), attemptStatusType)) {
             throw invalidResult();
         }
         result.setAttemptStatusType(attemptStatusType);
@@ -61,13 +65,31 @@ final class PaymentChannelSubmitResultValidator {
         result.setManualInterventionRequired(normalizeOptional(
                 result.getManualInterventionRequired(), BOOLEAN_TEXT_MAX_LENGTH));
         result.setMappingVersion(normalizeOptional(result.getMappingVersion(), MAPPING_VERSION_MAX_LENGTH));
-        result.setNativePaymentParams(normalizeNativePaymentParams(result.getNativePaymentParams()));
+        result.setNativePaymentParams(normalizeNativePaymentParams(
+                result.getNativePaymentParams(), terminal));
         return result;
     }
 
-    private static Map<String, String> normalizeNativePaymentParams(Map<String, String> params) {
+    private static boolean isConsistentAttemptStatusType(String attemptStatus, String attemptStatusType) {
+        String normalizedStatus = attemptStatus.trim().toUpperCase(Locale.ROOT);
+        if ("成功".equals(normalizedStatus) || "支付成功".equals(normalizedStatus)
+                || "SUCCESS".equals(normalizedStatus)) {
+            return "success".equals(attemptStatusType);
+        }
+        if ("失败".equals(normalizedStatus) || "支付失败".equals(normalizedStatus)
+                || "FAIL".equals(normalizedStatus) || "FAILED".equals(normalizedStatus)) {
+            return "danger".equals(attemptStatusType);
+        }
+        return true;
+    }
+
+    private static Map<String, String> normalizeNativePaymentParams(
+            Map<String, String> params, String terminal) {
         if (params == null || params.isEmpty()) {
             return null;
+        }
+        if (!"MINI_PROGRAM".equalsIgnoreCase(terminal == null ? null : terminal.trim())) {
+            throw invalidResult();
         }
         Map<String, String> normalized = new HashMap<>();
         for (String field : NATIVE_PAYMENT_PARAM_FIELDS) {
@@ -77,6 +99,12 @@ final class PaymentChannelSubmitResultValidator {
                 throw invalidResult();
             }
             normalized.put(field, normalizedValue);
+        }
+        if (!normalized.get("timeStamp").matches("\\d+")
+                || !normalized.get("package").matches("prepay_id=.+")
+                || !("RSA".equals(normalized.get("signType"))
+                || "HMAC-SHA256".equals(normalized.get("signType")))) {
+            throw invalidResult();
         }
         return normalized;
     }

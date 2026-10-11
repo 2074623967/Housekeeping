@@ -12,6 +12,15 @@ public class RefundListItemDTO {
     private String refundOrderId;
     /** 原支付单号。 */
     private String paymentOrderId;
+    /** 原支付所属业务场景。 */
+    private String payScene;
+
+    /** 统一业务链路标识。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
+
     /** 原业务订单号。 */
     private String orderNo;
     /** 申请退款客户名称。 */
@@ -28,4 +37,12 @@ public class RefundListItemDTO {
     private String appliedAt;
     /** 退款成功时间。 */
     private String successAt;
+    /** 退款终态时间。 */
+    private String terminalAt;
+    /** 实际受理退款的渠道编码。 */
+    private String channelCode;
+    /** 渠道侧退款单号。 */
+    private String channelRefundNo;
+    /** 首次获得渠道受理号的时间。 */
+    private String channelSubmittedAt;
 }

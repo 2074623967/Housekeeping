@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import com.abc123.hsp.dto.PaymentAttemptIdempotencyDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
@@ -40,6 +41,12 @@ import com.abc123.hsp.service.PaymentSubmitRateLimitService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -53,8 +60,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -79,6 +88,8 @@ public class PaymentServiceImpl implements PaymentService {
     private static final int PAYMENT_LIST_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
+    private static final DateTimeFormatter PAYMENT_FACT_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(ResolverStyle.STRICT);
 
     private static final int SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     private static final int SUBMIT_PREPAY_ORDER_NO_MAX_LENGTH = 64;
@@ -300,7 +311,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PageResultDTO<PaymentListItemDTO> list(PaymentListQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskPaymentItems(paymentMapper.findAll(query)),
                 paymentMapper.count(query),
@@ -311,21 +322,29 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public String exportCsv(PaymentListQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentListItemDTO> items = maskPaymentItems(
                 CsvExportRowLimiter.requireWithinLimit(paymentMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("支付单号,订单号,客户名称,支付金额,支付方式,支付渠道,渠道交易号,支付状态,创建时间\n");
+        builder.append("支付单号,业务链路,订单号,支付场景,客户名称,支付金额,支付方式,支付渠道,渠道交易号,支付状态,支付状态样式,最近尝试状态,最近尝试状态样式,最近尝试完成时间,创建时间,成功事实异常类型,预付归属异常类型\n");
         for (PaymentListItemDTO item : items) {
             builder.append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getPayScene())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')
                     .append(csvCell(item.getAmount())).append(',')
                     .append(csvCell(item.getPaymentMethod())).append(',')
                     .append(csvCell(item.getChannel())).append(',')
                     .append(csvCell(item.getChannelTransactionNo())).append(',')
                     .append(csvCell(item.getStatus())).append(',')
-                    .append(csvCell(item.getCreatedAt())).append('\n');
+                    .append(csvCell(item.getStatusType())).append(',')
+                    .append(csvCell(item.getLatestAttemptStatus())).append(',')
+                    .append(csvCell(item.getLatestAttemptStatusType())).append(',')
+                    .append(csvCell(item.getLatestAttemptCompletedAt())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getSuccessFactIssue())).append(',')
+                    .append(csvCell(item.getPrepayBindingIssue())).append('\n');
         }
         return builder.toString();
     }
@@ -334,9 +353,13 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentDetailDTO detail(String paymentOrderId) {
         String normalizedPaymentOrderId = normalizeRequiredRequestField(
                 paymentOrderId, "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH);
-        PaymentDetailDTO detail = paymentMapper.findDetail(normalizedPaymentOrderId);
-        if (detail == null) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        PaymentDetailDTO detail = requireRequestedPaymentDetail(
+                paymentMapper.findDetail(normalizedPaymentOrderId), normalizedPaymentOrderId);
+        requireNonSuccessfulPaymentPrepayBinding(detail);
+        if ("WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())) {
+            requireWaitingChannelSubmissionFact(normalizedPaymentOrderId, detail);
+        } else if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+            validatePaymentSuccessFacts(detail);
         }
         return outwardDetail(detail);
     }
@@ -364,6 +387,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (virtualSource) {
             validateVirtualPrepayRequest(request);
         } else {
+            if (orderAmount.compareTo(BigDecimal.ZERO) <= 0
+                    || paidAmount.compareTo(BigDecimal.ZERO) < 0) {
+                throw prepayRequestConflict("订单当前金额无效，无法创建预付单");
+            }
             remainAmount = orderAmount.subtract(paidAmount);
             if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new BusinessException(
@@ -371,16 +398,51 @@ public class PaymentServiceImpl implements PaymentService {
                         "订单已结清或已超额支付，无需再次创建支付单");
             }
             customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
+            if (!StringUtils.hasText(customerName)) {
+                throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单客户数据不完整");
+            }
             validateStandardPrepayRequest(request, customerName, remainAmount);
         }
         PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
         if (activePrepay != null) {
+            validatePrepayAmountBinding(activePrepay);
+            if (!Integer.valueOf(1).equals(activePrepay.getActivePrepayCandidateCount())) {
+                throw new IllegalStateException("active prepay orders for the same order are ambiguous");
+            }
+            String expectedSourceKind = virtualSource ? "VIRTUAL" : "STANDARD_ORDER";
+            if (!expectedSourceKind.equals(activePrepay.getSourceKind())) {
+                throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "预付单订单来源与当前来源不一致");
+            }
             validateActivePrepayRequest(activePrepay, request);
             if (!virtualSource) {
                 validateActivePrepayOrderFacts(activePrepay, customerName, remainAmount);
             }
+            if ("WAIT_CALLBACK".equalsIgnoreCase(activePrepay.getPaymentStatus())) {
+                requireWaitingChannelSubmissionFact(activePrepay.getPaymentOrderId(),
+                        paymentMapper.findSubmissionFact(activePrepay.getPaymentOrderId()));
+            }
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
-            return activePrepay;
+            PrepayOrderDTO reusablePrepay = withDefaultPrepayPaymentStatus(activePrepay);
+            if ("PREPAY_CREATED".equalsIgnoreCase(reusablePrepay.getPaymentStatus())) {
+                reusablePrepay.setCashierStatus("待支付");
+                reusablePrepay.setCashierStatusType("warn");
+            } else if ("RISK_REVIEW".equalsIgnoreCase(reusablePrepay.getPaymentStatus())) {
+                reusablePrepay.setCashierStatus("待风控复核");
+                reusablePrepay.setCashierStatusType("warn");
+            } else if ("PAYING".equalsIgnoreCase(reusablePrepay.getPaymentStatus())) {
+                reusablePrepay.setCashierStatus("支付中");
+                reusablePrepay.setCashierStatusType("info");
+            } else if ("WAIT_CALLBACK".equalsIgnoreCase(reusablePrepay.getPaymentStatus())
+                    && !("待回调".equals(reusablePrepay.getCashierStatus())
+                    && "warn".equals(reusablePrepay.getCashierStatusType()))
+                    && !("结果待确认".equals(reusablePrepay.getCashierStatus())
+                    && "danger".equals(reusablePrepay.getCashierStatusType()))
+                    && !("支付中".equals(reusablePrepay.getCashierStatus())
+                    && "info".equals(reusablePrepay.getCashierStatusType()))) {
+                reusablePrepay.setCashierStatus("待回调");
+                reusablePrepay.setCashierStatusType("warn");
+            }
+            return reusablePrepay;
         }
         if (virtualSource) {
             return createVirtualPrepay(request);
@@ -390,19 +452,25 @@ public class PaymentServiceImpl implements PaymentService {
             billNo = buildBusinessNo("BILL");
             String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
             String billStatusType = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "success" : "warn";
-            paymentMapper.insertBill(billNo, request.getOrderNo(), customerName, orderAmount, paidAmount, billStatus, billStatusType);
+            if (paymentMapper.insertBill(
+                    billNo, request.getOrderNo(), customerName, orderAmount, paidAmount,
+                    billStatus, billStatusType) != 1) {
+                throw new IllegalStateException("payment bill was not created atomically");
+            }
         }
         // 每次拉起收银台都生成独立支付单，避免多个预付单复用同一支付单造成状态串单。
         String paymentOrderId = buildBusinessNo("PAY");
-        paymentMapper.insertPaymentOrder(
+        if (paymentMapper.insertPaymentOrder(
                 paymentOrderId,
                 request.getOrderNo(),
                 customerName,
                 remainAmount,
                 request.getPayScene()
-        );
+        ) != 1) {
+            throw new IllegalStateException("payment order was not created atomically");
+        }
         String prepayOrderNo = buildBusinessNo("PRE");
-        paymentMapper.insertPrepayOrder(
+        if (paymentMapper.insertPrepayOrder(
                 prepayOrderNo,
                 billNo,
                 request.getOrderNo(),
@@ -410,10 +478,13 @@ public class PaymentServiceImpl implements PaymentService {
                 remainAmount,
                 request.getPayScene(),
                 resolveCashierTitle(request),
-                paymentOrderId
-        );
+                paymentOrderId,
+                "STANDARD_ORDER"
+        ) != 1) {
+            throw new IllegalStateException("payment prepay order was not created atomically");
+        }
         recordPrepayRemark(request, paymentOrderId, request.getOrderNo(), prepayOrderNo);
-        return paymentMapper.findPrepay(prepayOrderNo);
+        return requirePrepayResponse(paymentMapper.findPrepay(prepayOrderNo));
     }
 
     /**
@@ -426,24 +497,28 @@ public class PaymentServiceImpl implements PaymentService {
                 ? request.getCashierTitle().trim()
                 : "家政服务收银台";
         String billNo = buildBusinessNo("BILL");
-        paymentMapper.insertBill(
+        if (paymentMapper.insertBill(
                 billNo,
                 request.getOrderNo(),
                 customerName,
                 request.getAmount(),
                 BigDecimal.ZERO,
                 "待支付",
-                "warn");
+                "warn") != 1) {
+            throw new IllegalStateException("payment bill was not created atomically");
+        }
         String paymentOrderId = buildBusinessNo("PAY");
-        paymentMapper.insertPaymentOrder(
+        if (paymentMapper.insertPaymentOrder(
                 paymentOrderId,
                 request.getOrderNo(),
                 customerName,
                 request.getAmount(),
                 request.getPayScene()
-        );
+        ) != 1) {
+            throw new IllegalStateException("payment order was not created atomically");
+        }
         String prepayOrderNo = buildBusinessNo("PRE");
-        paymentMapper.insertPrepayOrder(
+        if (paymentMapper.insertPrepayOrder(
                 prepayOrderNo,
                 billNo,
                 request.getOrderNo(),
@@ -451,10 +526,151 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getAmount(),
                 request.getPayScene(),
                 cashierTitle,
-                paymentOrderId
-        );
+                paymentOrderId,
+                "VIRTUAL"
+        ) != 1) {
+            throw new IllegalStateException("payment prepay order was not created atomically");
+        }
         recordPrepayRemark(request, paymentOrderId, request.getOrderNo(), prepayOrderNo);
-        return paymentMapper.findPrepay(prepayOrderNo);
+        return requirePrepayResponse(paymentMapper.findPrepay(prepayOrderNo));
+    }
+
+    private PrepayOrderDTO withDefaultPrepayPaymentStatus(PrepayOrderDTO prepay) {
+        if (prepay != null && !StringUtils.hasText(prepay.getPaymentStatus())) {
+            prepay.setPaymentStatus("PREPAY_CREATED");
+        }
+        return prepay;
+    }
+
+    private PrepayOrderDTO requirePrepayResponse(PrepayOrderDTO prepay) {
+        if (prepay == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "预付单已写入但读取失败");
+        }
+        validatePrepayAmountBinding(prepay);
+        return withDefaultPrepayPaymentStatus(prepay);
+    }
+
+    private void validatePrepayAmountBinding(PrepayOrderDTO prepay) {
+        if (!Boolean.TRUE.equals(prepay.getPrepayAmountBindingValid())) {
+            throw new IllegalStateException("prepay and payment order amounts are inconsistent");
+        }
+    }
+
+    private void validateNoOtherActivePrepay(PrepayOrderDTO currentPrepay) {
+        PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(
+                currentPrepay.getOrderNo());
+        if (activePrepay != null
+                && (!Integer.valueOf(1).equals(activePrepay.getActivePrepayCandidateCount())
+                || !currentPrepay.getPrepayOrderNo().equals(activePrepay.getPrepayOrderNo()))) {
+            throw new IllegalStateException("active prepay orders for the same order are ambiguous");
+        }
+    }
+
+    private void validateCurrentOrderSourceForSubmit(PrepayOrderDTO currentPrepay) {
+        String orderNo = currentPrepay.getOrderNo();
+        BigDecimal orderAmount = paymentMapper.findOrderAmount(orderNo);
+        BigDecimal paidAmount = paymentMapper.findPaidAmount(orderNo);
+        if (orderAmount == null && paidAmount == null) {
+            if ("VIRTUAL".equals(currentPrepay.getSourceKind())) {
+                return;
+            }
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "预付单原订单来源已不存在或无法确认");
+        }
+        if (orderAmount == null || paidAmount == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单金额数据不完整");
+        }
+        if (!"STANDARD_ORDER".equals(currentPrepay.getSourceKind())) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "预付单订单来源与当前来源不一致");
+        }
+        String customerName = paymentMapper.findCustomerNameByOrderNo(orderNo);
+        if (!StringUtils.hasText(customerName)) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单客户数据不完整");
+        }
+        if (orderAmount.compareTo(BigDecimal.ZERO) <= 0 || paidAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw prepayRequestConflict("订单当前金额无效，无法提交原预付单");
+        }
+        BigDecimal remainAmount = orderAmount.subtract(paidAmount);
+        if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED, "订单已结清或已超额支付");
+        }
+        validateActivePrepayOrderFacts(currentPrepay, customerName, remainAmount);
+    }
+
+    private void lockPrepayOrderAndValidateSubmit(PrepayOrderDTO currentPrepay) {
+        String orderNo = currentPrepay.getOrderNo();
+        if (!StringUtils.hasText(orderNo)) {
+            throw new IllegalStateException("payment order number is missing");
+        }
+        paymentMapper.initPrepayCreationLock(orderNo);
+        if (!orderNo.equals(paymentMapper.lockPrepayCreation(orderNo))) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付提交并发锁获取失败");
+        }
+        validateNoOtherActivePrepay(currentPrepay);
+        if (paymentMapper.isPrepayExpired(currentPrepay.getPrepayOrderNo())) {
+            throw new BusinessException(ErrorCode.PAYMENT_PREPAY_EXPIRED, "预付单已过期，请重新发起支付");
+        }
+        validateCurrentOrderSourceForSubmit(currentPrepay);
+    }
+
+    private PrepayOrderDTO requireCurrentSubmitPrepay(PrepayOrderDTO expectedPrepay) {
+        PrepayOrderDTO latestPrepay = paymentMapper.findPrepay(expectedPrepay.getPrepayOrderNo());
+        if (latestPrepay == null
+                || !expectedPrepay.getPrepayOrderNo().equals(latestPrepay.getPrepayOrderNo())
+                || !expectedPrepay.getPaymentOrderId().equals(latestPrepay.getPaymentOrderId())) {
+            throw new IllegalStateException("prepay and payment order amounts are inconsistent");
+        }
+        validatePrepayAmountBinding(latestPrepay);
+        latestPrepay.setPaymentMethod(expectedPrepay.getPaymentMethod());
+        return latestPrepay;
+    }
+
+    private PrepayOrderDTO validateConcurrentSubmitResult(
+            PrepayOrderDTO latestPrepay, PaymentDetailDTO latestDetail, String paymentOrderId,
+            String paymentMethod, String resolvedChannelCode) {
+        if ("SUCCESS".equalsIgnoreCase(latestPrepay.getPaymentStatus())
+                && (latestDetail == null || !"SUCCESS".equalsIgnoreCase(latestDetail.getStatus()))) {
+            throw new IllegalStateException("payment success facts are inconsistent");
+        }
+        if (latestDetail == null) {
+            return latestPrepay;
+        }
+        boolean pending = "WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus());
+        boolean success = "SUCCESS".equalsIgnoreCase(latestDetail.getStatus());
+        if (pending || success) {
+            if (!paymentOrderId.equals(latestDetail.getPaymentOrderId())) {
+                throw new IllegalStateException("payment success facts are inconsistent");
+            }
+            if (!StringUtils.hasText(latestDetail.getChannel())) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
+                        "payment has no bound channel submission fact");
+            }
+            if (!resolvedChannelCode.equals(latestDetail.getChannel())) {
+                throw invalidSubmitRequest("支付渠道与已受理支付单不一致");
+            }
+            if (StringUtils.hasText(latestDetail.getPaymentMethod())
+                    && !paymentMethod.equalsIgnoreCase(latestDetail.getPaymentMethod())) {
+                throw invalidSubmitRequest("支付方式与已受理支付单不一致");
+            }
+            if (pending) {
+                requireChannelSubmissionFact(latestDetail);
+                if (!"结果待确认".equals(latestPrepay.getCashierStatus())
+                        && !"支付中".equals(latestPrepay.getCashierStatus())) {
+                    latestPrepay.setCashierStatus("待回调");
+                    latestPrepay.setCashierStatusType("warn");
+                }
+            } else {
+                validatePaymentSuccessFacts(latestDetail);
+                latestPrepay.setCashierStatus("支付成功");
+                latestPrepay.setCashierStatusType("success");
+            }
+            latestPrepay.setPaymentStatus(latestDetail.getStatus());
+            attachPaymentChannelFacts(latestPrepay, latestDetail);
+            if (!StringUtils.hasText(latestDetail.getPaymentMethod())) {
+                latestPrepay.setPaymentMethod(paymentMethod);
+            }
+        }
+        return latestPrepay;
     }
 
     private void recordPrepayRemark(
@@ -476,12 +692,18 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public CashierPageDTO cashier(String prepayOrderNo) {
+        return cashier(prepayOrderNo, null);
+    }
+
+    @Override
+    public CashierPageDTO cashier(String prepayOrderNo, String terminal) {
         String normalizedPrepayOrderNo = normalizeRequiredRequestField(
                 prepayOrderNo, "预付单号", PREPAY_ORDER_NO_MAX_LENGTH);
         PrepayOrderDTO prepayOrder = paymentMapper.findPrepay(normalizedPrepayOrderNo);
-        if (prepayOrder == null) {
-            throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在");
+        if (prepayOrder == null || !StringUtils.hasText(prepayOrder.getPaymentOrderId())) {
+            throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在或未绑定支付单");
         }
+        validatePrepayAmountBinding(prepayOrder);
         CashierPageDTO cashierPage = new CashierPageDTO();
         cashierPage.setPaymentOrderId(prepayOrder.getPaymentOrderId());
         cashierPage.setPrepayOrderNo(prepayOrder.getPrepayOrderNo());
@@ -493,14 +715,151 @@ public class PaymentServiceImpl implements PaymentService {
         cashierPage.setTitle(prepayOrder.getCashierTitle());
         cashierPage.setStatus(prepayOrder.getCashierStatus());
         cashierPage.setStatusType(prepayOrder.getCashierStatusType());
+        cashierPage.setPaymentStatus(StringUtils.hasText(prepayOrder.getPaymentStatus())
+                ? prepayOrder.getPaymentStatus()
+                : "PREPAY_CREATED");
+        applyCashierPaymentStatus(cashierPage);
         PaymentDetailDTO submissionFact = paymentMapper.findSubmissionFact(prepayOrder.getPaymentOrderId());
         if (submissionFact != null) {
             cashierPage.setPaymentStatus(submissionFact.getStatus());
             cashierPage.setLatestAttemptStatus(submissionFact.getLatestAttemptStatus());
+            cashierPage.setLatestAttemptStatusType(submissionFact.getLatestAttemptStatusType());
+            cashierPage.setLatestAttemptCompletedAt(submissionFact.getLatestAttemptCompletedAt());
+            if ("RISK_REVIEW".equals(submissionFact.getStatus())) {
+                cashierPage.setReviewPaymentMethod(submissionFact.getPaymentMethod());
+                cashierPage.setReviewChannelCode(submissionFact.getChannel());
+                cashierPage.setChannelTransactionNo(submissionFact.getChannelTransactionNo());
+            }
+            applyCashierPaymentStatus(cashierPage);
+        }
+        if ("WAIT_CALLBACK".equalsIgnoreCase(cashierPage.getPaymentStatus())) {
+            requireWaitingChannelSubmissionFact(prepayOrder.getPaymentOrderId(), submissionFact);
+            cashierPage.setChannel(submissionFact.getChannel());
+            cashierPage.setPaymentMethod(submissionFact.getPaymentMethod());
+            cashierPage.setChannelTransactionNo(submissionFact.getChannelTransactionNo());
+        }
+        if ("SUCCESS".equalsIgnoreCase(cashierPage.getPaymentStatus())) {
+            PaymentDetailDTO successDetail = paymentMapper.findDetail(prepayOrder.getPaymentOrderId());
+            if (successDetail == null
+                    || !prepayOrder.getPaymentOrderId().equals(successDetail.getPaymentOrderId())) {
+                throw new IllegalStateException("payment success facts are inconsistent");
+            }
+            validatePaymentSuccessFacts(successDetail);
+            cashierPage.setChannel(successDetail.getChannel());
+            cashierPage.setPaymentMethod(successDetail.getPaymentMethod());
+            cashierPage.setChannelTransactionNo(successDetail.getChannelTransactionNo());
+            cashierPage.setLatestAttemptStatus(successDetail.getLatestAttemptStatus());
+            cashierPage.setLatestAttemptStatusType(successDetail.getLatestAttemptStatusType());
+            cashierPage.setLatestAttemptCompletedAt(successDetail.getLatestAttemptCompletedAt());
+        }
+        if ("PREPAY_CREATED".equalsIgnoreCase(cashierPage.getPaymentStatus())
+                && paymentMapper.isPrepayExpired(normalizedPrepayOrderNo)) {
+            cashierPage.setStatus("已失效");
+            cashierPage.setStatusType("danger");
         }
         cashierPage.setExpiresAt(prepayOrder.getExpiresAt());
-        cashierPage.setChannels(Arrays.asList("微信支付", "支付宝", "银行卡"));
+        cashierPage.setChannels(resolveCashierChannels(terminal));
         return cashierPage;
+    }
+
+    private void applyCashierPaymentStatus(CashierPageDTO cashierPage) {
+        String paymentStatus = cashierPage.getPaymentStatus();
+        if (!StringUtils.hasText(paymentStatus)) {
+            return;
+        }
+        switch (paymentStatus.trim().toUpperCase(Locale.ROOT)) {
+            case "PREPAY_CREATED":
+                cashierPage.setStatus("待支付");
+                cashierPage.setStatusType("warn");
+                break;
+            case "WAIT_CALLBACK":
+                cashierPage.setStatus("待回调");
+                cashierPage.setStatusType("warn");
+                break;
+            case "RISK_REVIEW":
+                cashierPage.setStatus("待风控复核");
+                cashierPage.setStatusType("warn");
+                break;
+            case "RISK_BLOCKED":
+                cashierPage.setStatus("风控拦截");
+                cashierPage.setStatusType("danger");
+                break;
+            case "RISK_REJECTED":
+                cashierPage.setStatus("风控拒绝");
+                cashierPage.setStatusType("danger");
+                break;
+            case "PAYING":
+                cashierPage.setStatus("支付中");
+                cashierPage.setStatusType("info");
+                break;
+            case "SUCCESS":
+                cashierPage.setStatus("支付成功");
+                cashierPage.setStatusType("success");
+                break;
+            case "CLOSED":
+                cashierPage.setStatus("已关闭");
+                cashierPage.setStatusType("danger");
+                break;
+            case "FAIL":
+                cashierPage.setStatus("结果待确认");
+                cashierPage.setStatusType("danger");
+                break;
+            default:
+                break;
+        }
+    }
+
+    private List<String> resolveCashierChannels(String terminal) {
+        if (!StringUtils.hasText(terminal)) {
+            return Arrays.asList("微信支付", "支付宝", "银行卡");
+        }
+        String normalizedTerminal = terminal.trim().toUpperCase(Locale.ROOT);
+        String sourceAppId = resolveSourceAppIdForTerminal(normalizedTerminal);
+        PaymentControlPolicyDTO controlPolicy = sourceAppId == null
+                ? null
+                : paymentMapper.findActiveControlPolicyBySourceAppId(sourceAppId);
+        if (controlPolicy != null) {
+            if (!"开启".equals(controlPolicy.getStrictMode())
+                    && !"关闭".equals(controlPolicy.getStrictMode())) {
+                return Collections.emptyList();
+            }
+            if ("开启".equals(controlPolicy.getStrictMode())
+                    && !"PASS".equals(controlPolicy.getSelfCheckStatus())) {
+                return Collections.emptyList();
+            }
+            List<String> configuredChannels = new ArrayList<String>();
+            for (String paymentMethod : Arrays.asList("微信支付", "支付宝", "银行卡")) {
+                if (containsConfiguredValue(controlPolicy.getAllowedPaymentMethods(), paymentMethod)) {
+                    configuredChannels.add(paymentMethod);
+                }
+            }
+            return configuredChannels;
+        }
+        if ("PC_WEB".equals(normalizedTerminal)) {
+            return Arrays.asList("支付宝", "银行卡");
+        }
+        if ("APP_WEB".equals(normalizedTerminal)
+                || "H5_WEB".equals(normalizedTerminal)
+                || "MINI_PROGRAM".equals(normalizedTerminal)) {
+            return Arrays.asList("微信支付", "支付宝");
+        }
+        return Arrays.asList("微信支付", "支付宝", "银行卡");
+    }
+
+    private String resolveSourceAppIdForTerminal(String terminal) {
+        if ("PC_WEB".equals(terminal)) {
+            return "housekeeping-pc-web";
+        }
+        if ("H5_WEB".equals(terminal)) {
+            return "housekeeping-h5-web";
+        }
+        if ("MINI_PROGRAM".equals(terminal)) {
+            return "housekeeping-mini-program";
+        }
+        if ("APP_WEB".equals(terminal)) {
+            return "housekeeping-app-web";
+        }
+        return null;
     }
 
     @Override
@@ -510,34 +869,72 @@ public class PaymentServiceImpl implements PaymentService {
         if (currentPrepay == null || !StringUtils.hasText(currentPrepay.getPaymentOrderId())) {
             throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在或未绑定支付单");
         }
+        validatePrepayAmountBinding(currentPrepay);
         String paymentOrderId = currentPrepay.getPaymentOrderId();
         PaymentDetailDTO currentDetail = paymentMapper.findDetail(paymentOrderId);
         if (currentDetail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
+        if (parseAmount(currentPrepay.getAmount()).compareTo(parseAmount(currentDetail.getAmount())) != 0) {
+            throw new IllegalStateException("prepay and payment order amounts are inconsistent");
+        }
+        if ("PREPAY_CREATED".equalsIgnoreCase(currentDetail.getStatus())
+                && paymentMapper.isPrepayExpired(request.getPrepayOrderNo())) {
+            throw new BusinessException(ErrorCode.PAYMENT_PREPAY_EXPIRED, "预付单已过期，请重新发起支付");
+        }
+        if (!"SUCCESS".equalsIgnoreCase(currentDetail.getStatus())
+                && !"CLOSED".equalsIgnoreCase(currentDetail.getStatus())) {
+            validateNoOtherActivePrepay(currentPrepay);
+            validateCurrentOrderSourceForSubmit(currentPrepay);
+        }
+        boolean reuseCurrentStatus = "WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
                 || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus())
                 || "CLOSED".equalsIgnoreCase(currentDetail.getStatus())
                 || "RISK_BLOCKED".equalsIgnoreCase(currentDetail.getStatus())
-                || "RISK_REJECTED".equalsIgnoreCase(currentDetail.getStatus())) {
-            // 收银台重复点击提交按钮时直接复用当前支付状态，避免重复写支付尝试、路由和待回调日志。
-            return currentPrepay;
-        }
+                || "RISK_REJECTED".equalsIgnoreCase(currentDetail.getStatus());
         String terminal = request.getTerminal();
         String clientIp = request.getClientIp();
         String sourceAppId = resolveSourceAppId(request);
+        boolean reuseSubmittedChannel = reuseCurrentStatus
+                && ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
+                || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus()))
+                && StringUtils.hasText(currentDetail.getChannel())
+                && (!StringUtils.hasText(request.getChannelCode())
+                || request.getChannelCode().equalsIgnoreCase(currentDetail.getChannel()));
+        if (reuseSubmittedChannel) {
+            if (StringUtils.hasText(request.getPaymentMethod())
+                    && StringUtils.hasText(currentDetail.getPaymentMethod())
+                    && !request.getPaymentMethod().equalsIgnoreCase(currentDetail.getPaymentMethod())) {
+                throw invalidSubmitRequest("支付方式与已受理支付单不一致");
+            }
+            if (!StringUtils.hasText(request.getPaymentMethod())
+                    && StringUtils.hasText(currentDetail.getPaymentMethod())) {
+                request.setPaymentMethod(currentDetail.getPaymentMethod());
+            }
+            if (!StringUtils.hasText(request.getChannelCode())) {
+                request.setChannelCode(currentDetail.getChannel());
+            }
+        }
         Long opsConfigSnapshotVersion = applyOpsConfigDefaults(request, currentPrepay, terminal);
         normalizeAndValidateResolvedSubmitFields(request);
-        PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
-                buildRouteContext(request, currentPrepay, terminal));
-        String resolvedChannelCode = routeDecision.getChannelCode();
+        currentPrepay.setPaymentMethod(request.getPaymentMethod());
+        PaymentRouteDecisionDTO routeDecision = reuseSubmittedChannel ? null
+                : paymentChannelRoutingService.resolve(buildRouteContext(request, currentPrepay, terminal));
+        String resolvedChannelCode = reuseSubmittedChannel
+                ? currentDetail.getChannel() : routeDecision.getChannelCode();
         validateRequiredSubmitField(
                 resolvedChannelCode,
                 "支付路由渠道",
                 SUBMIT_CHANNEL_CODE_MAX_LENGTH);
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         validateSubmitIdempotencyKey(idempotencyKey);
+        String requestFingerprint = submitRequestFingerprint(
+                request, currentPrepay, paymentOrderId, sourceAppId, resolvedChannelCode, terminal);
         boolean existingAttempt = paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey);
+        if (existingAttempt) {
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+        }
         validateSubmitControlPolicy(
                 sourceAppId,
                 request.getMerchantNo(),
@@ -547,11 +944,43 @@ public class PaymentServiceImpl implements PaymentService {
                 terminal,
                 clientIp,
                 existingAttempt);
+        if (("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
+                || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus()))
+                && StringUtils.hasText(currentDetail.getChannel())
+                && !currentDetail.getChannel().equalsIgnoreCase(resolvedChannelCode)) {
+            throw invalidSubmitRequest("支付渠道与已受理支付单不一致");
+        }
+        if ("SUCCESS".equalsIgnoreCase(currentPrepay.getPaymentStatus())
+                && !"SUCCESS".equalsIgnoreCase(currentDetail.getStatus())) {
+            throw new IllegalStateException("payment success facts are inconsistent");
+        }
+        if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
+                && !StringUtils.hasText(currentDetail.getChannel())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
+                    "payment has no bound channel submission fact");
+        }
+        if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())) {
+            requireChannelSubmissionFact(currentDetail);
+        }
+        if (reuseCurrentStatus) {
+            // 重复提交只复用当前支付状态，但必须先完成来源应用和访问令牌校验。
+            if ("SUCCESS".equalsIgnoreCase(currentDetail.getStatus())) {
+                if (!paymentOrderId.equals(currentDetail.getPaymentOrderId())) {
+                    throw new IllegalStateException("payment success facts are inconsistent");
+                }
+                validatePaymentSuccessFacts(currentDetail);
+            }
+            PrepayOrderDTO response = requireCurrentSubmitPrepay(currentPrepay);
+            attachPaymentChannelFacts(response, currentDetail);
+            return response;
+        }
         PaymentRiskDecisionResultDTO riskDecision = paymentRiskControlService.evaluateSubmitRisk(
                 buildRiskDecisionRequest(
                         request,
                         currentPrepay,
                         paymentOrderId,
+                        sourceAppId,
                         resolvedChannelCode,
                         terminal,
                         clientIp));
@@ -565,7 +994,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (existingAttempt || paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
-            return currentPrepay;
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            return validateConcurrentSubmitResult(
+                    requireCurrentSubmitPrepay(currentPrepay), paymentMapper.findDetail(paymentOrderId),
+                    paymentOrderId, request.getPaymentMethod(), resolvedChannelCode);
         }
         paymentChannelSubmitService.ensureAdapterAvailable(resolvedChannelCode);
         String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
@@ -573,20 +1006,38 @@ public class PaymentServiceImpl implements PaymentService {
         String attemptNo = buildBusinessNo("ATT");
         String requestPayload = buildSubmitRequestPayload(
                 request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode);
-        PrepayOrderDTO concurrentResult = executeSubmitTransaction(() -> prepareSubmit(
-                request,
-                currentPrepay,
-                paymentOrderId,
-                sourceAppId,
-                terminal,
-                clientIp,
-                idempotencyKey,
-                routeDecision,
-                orderNo,
-                routeNo,
-                attemptNo,
-                requestPayload,
-                opsConfigSnapshotVersion));
+        PrepayOrderDTO concurrentResult;
+        try {
+            concurrentResult = executeSubmitTransaction(() -> prepareSubmit(
+                    request,
+                    currentPrepay,
+                    paymentOrderId,
+                    sourceAppId,
+                    terminal,
+                    clientIp,
+                    idempotencyKey,
+                    routeDecision,
+                    orderNo,
+                    routeNo,
+                    attemptNo,
+                    requestPayload,
+                    requestFingerprint,
+                    opsConfigSnapshotVersion));
+        } catch (SanitizedSubmitTransactionException exception) {
+            if (exception.duplicateKey) {
+                try {
+                    if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+                        validateSubmitIdempotencyOwnership(
+                                idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+                    }
+                } catch (BusinessException conflict) {
+                    throw conflict;
+                } catch (RuntimeException lookupFailure) {
+                    throw exception;
+                }
+            }
+            throw exception;
+        }
         if (concurrentResult != null) {
             return concurrentResult;
         }
@@ -602,6 +1053,7 @@ public class PaymentServiceImpl implements PaymentService {
                             terminal,
                             clientIp,
                             idempotencyKey));
+            validatePaymentSubmitAcceptanceResult(submitResult);
             PaymentChannelSubmitResultDTO finalSubmitResult = submitResult;
             return executeSubmitTransaction(() -> completeSubmit(
                     request,
@@ -615,7 +1067,8 @@ public class PaymentServiceImpl implements PaymentService {
             try {
                 executeSubmitTransaction(() -> {
                     markSubmitResultUnknown(
-                            paymentOrderId, resolvedChannelCode, attemptNo, uncertainResult);
+                            paymentOrderId, request.getPaymentMethod(),
+                            resolvedChannelCode, attemptNo, uncertainResult);
                     return null;
                 });
             } catch (RuntimeException recoveryException) {
@@ -623,6 +1076,37 @@ public class PaymentServiceImpl implements PaymentService {
             }
             throw exception;
         }
+    }
+
+    private void validatePaymentSubmitAcceptanceResult(PaymentChannelSubmitResultDTO submitResult) {
+        if (submitResult == null) {
+            throw BusinessException.sanitized(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                    "payment channel submit result is invalid");
+        }
+        String attemptStatus = submitResult.getAttemptStatus();
+        if (attemptStatus == null) {
+            return;
+        }
+        if (isTerminalAttemptStatus(attemptStatus)) {
+            throw BusinessException.sanitized(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                    "payment channel submit returned a terminal attempt status; query before retrying");
+        }
+    }
+
+    private boolean isTerminalAttemptStatus(String attemptStatus) {
+        if (!StringUtils.hasText(attemptStatus)) {
+            return false;
+        }
+        String normalizedStatus = attemptStatus.trim();
+        return "成功".equals(normalizedStatus)
+                || "支付成功".equals(normalizedStatus)
+                || "失败".equals(normalizedStatus)
+                || "支付失败".equals(normalizedStatus)
+                || "SUCCESS".equalsIgnoreCase(normalizedStatus)
+                || "FAIL".equalsIgnoreCase(normalizedStatus)
+                || "FAILED".equalsIgnoreCase(normalizedStatus);
     }
 
     private PrepayOrderDTO prepareSubmit(
@@ -638,10 +1122,16 @@ public class PaymentServiceImpl implements PaymentService {
             String routeNo,
             String attemptNo,
             String requestPayload,
+            String requestFingerprint,
             Long opsConfigSnapshotVersion) {
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
-            return currentPrepay;
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, currentPrepay.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            return validateConcurrentSubmitResult(
+                    requireCurrentSubmitPrepay(currentPrepay), paymentMapper.findDetail(paymentOrderId),
+                    paymentOrderId, request.getPaymentMethod(), routeDecision.getChannelCode());
         }
+        lockPrepayOrderAndValidateSubmit(currentPrepay);
         occupySubmitConcurrencyToken(
                 currentPrepay.getPrepayOrderNo(),
                 paymentOrderId,
@@ -650,24 +1140,32 @@ public class PaymentServiceImpl implements PaymentService {
                 clientIp,
                 idempotencyKey);
         int occupiedRows = paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
-        if (occupiedRows == 0) {
-            paymentMapper.releaseSubmitConcurrencyToken(paymentOrderId, "PREPAY_ALREADY_PAYING");
-            PrepayOrderDTO latestPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
+        if (occupiedRows < 0 || occupiedRows > 1) {
+            throw new IllegalStateException("payment prepay status update affected multiple rows");
+        }
+        if (occupiedRows != 1) {
+            PrepayOrderDTO latestPrepay = requireCurrentSubmitPrepay(currentPrepay);
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
+            validateConcurrentSubmitResult(latestPrepay, latestDetail, paymentOrderId,
+                    request.getPaymentMethod(), routeDecision.getChannelCode());
+            validateSubmitIdempotencyOwnership(
+                    idempotencyKey, currentPrepay.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
             if (latestDetail != null && ("WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus())
                     || "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
                     || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
-                return latestPrepay == null ? currentPrepay : latestPrepay;
+                return latestPrepay;
             }
-            if (latestPrepay != null && "支付中".equals(latestPrepay.getCashierStatus())) {
+            if ("支付中".equals(latestPrepay.getCashierStatus())) {
                 return latestPrepay;
             }
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
         }
         String resolvedChannelCode = routeDecision.getChannelCode();
-        paymentMapper.updatePaymentMethodAndChannel(
-                paymentOrderId, request.getPaymentMethod(), resolvedChannelCode, null);
-        paymentMapper.insertPaymentAttempt(
+        if (paymentMapper.updatePaymentMethodAndChannel(
+                paymentOrderId, request.getPrepayOrderNo(), request.getPaymentMethod(), resolvedChannelCode, null) != 1) {
+            throw new IllegalStateException("payment method and channel binding was not applied atomically");
+        }
+        if (paymentMapper.insertPaymentAttempt(
                 attemptNo,
                 request.getPrepayOrderNo(),
                 paymentOrderId,
@@ -680,14 +1178,19 @@ public class PaymentServiceImpl implements PaymentService {
                 requestPayload,
                 null,
                 "渠道提交中",
-                "warn");
-        paymentMapper.insertRouteRecord(
+                "warn",
+                requestFingerprint) != 1) {
+            throw new IllegalStateException("payment attempt was not created atomically");
+        }
+        if (paymentMapper.insertRouteRecord(
                 routeNo,
                 attemptNo,
                 paymentOrderId,
                 resolvedChannelCode,
                 routeDecision.getRouteRule(),
-                routeDecision.getRouteResult());
+                routeDecision.getRouteResult()) != 1) {
+            throw new IllegalStateException("payment route record was not created atomically");
+        }
         recordProcessLog(
                 routeNo,
                 paymentOrderId,
@@ -709,8 +1212,11 @@ public class PaymentServiceImpl implements PaymentService {
                 "支付方式=" + request.getPaymentMethod() + "；请求状态=渠道提交中",
                 resolvedChannelCode);
         if (opsConfigSnapshotVersion != null) {
-            paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion);
-            paymentMapper.updateAttemptOpsConfigSnapshotVersion(attemptNo, opsConfigSnapshotVersion);
+            if (paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion) != 1
+                    || paymentMapper.updateAttemptOpsConfigSnapshotVersion(
+                            attemptNo, opsConfigSnapshotVersion) != 1) {
+                throw new IllegalStateException("payment ops config snapshot was not applied atomically");
+            }
         }
         return null;
     }
@@ -724,14 +1230,20 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentChannelSubmitResultDTO submitResult) {
         int boundRows = paymentMapper.bindPaymentChannelSubmitResult(
                 paymentOrderId,
+                attemptNo,
                 request.getPaymentMethod(),
                 resolvedChannelCode,
                 submitResult.getChannelTransactionNo());
-        if (boundRows == 0) {
+        if (boundRows > 1) {
+            throw new IllegalStateException("payment channel submit result binding affected multiple rows");
+        }
+        if (boundRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
             validatePaymentSubmitResultBinding(
-                    resolvedChannelCode, submitResult.getChannelTransactionNo(), latestDetail);
+                    request.getPaymentMethod(), resolvedChannelCode,
+                    submitResult.getChannelTransactionNo(), latestDetail);
             if (isFinalPaymentState(latestDetail)) {
+                requireLatestSubmitAttempt(paymentOrderId, attemptNo);
                 if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
                     validatePaymentSuccessFacts(latestDetail);
                     updatePaymentAttemptSubmitResult(
@@ -740,13 +1252,17 @@ public class PaymentServiceImpl implements PaymentService {
                             submitResult.getAttemptStatus(),
                             submitResult.getAttemptStatusType());
                 }
+                recordPaymentAttemptGateway(attemptNo, submitResult);
                 return attachNativePaymentParams(
-                        paymentMapper.findPrepay(request.getPrepayOrderNo()), submitResult);
+                        requirePrepayResponse(paymentMapper.findPrepay(request.getPrepayOrderNo())),
+                        resolvedChannelCode,
+                        request.getPaymentMethod(),
+                        submitResult);
             }
             throw new IllegalStateException(
                     "payment channel submit result binding was not applied atomically");
         }
-        paymentMapper.updatePaymentReturnCodeSnapshot(
+        if (paymentMapper.updatePaymentReturnCodeSnapshot(
                 paymentOrderId,
                 submitResult.getChannelReturnCode(),
                 submitResult.getStandardizedCode(),
@@ -755,16 +1271,19 @@ public class PaymentServiceImpl implements PaymentService {
                 submitResult.getRetryable(),
                 submitResult.getManualInterventionRequired(),
                 submitResult.getMappingVersion(),
-                submitResult.getReturnCodeMappingMatched());
+                submitResult.getReturnCodeMappingMatched()) != 1) {
+            throw new IllegalStateException("payment return code snapshot was not applied atomically");
+        }
         updatePaymentAttemptSubmitResult(
                 attemptNo,
                 submitResult.getResponsePayload(),
                 submitResult.getAttemptStatus(),
                 submitResult.getAttemptStatusType());
+        recordPaymentAttemptGateway(attemptNo, submitResult);
         String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"channel\":\"" + escapeJson(resolvedChannelCode)
                 + "\",\"paymentMethod\":\"" + escapeJson(request.getPaymentMethod()) + "\"}";
-        paymentMapper.insertEvent(
+        insertEvent(
                 eventNo,
                 "PAYMENT_SUBMIT",
                 paymentOrderId,
@@ -772,7 +1291,7 @@ public class PaymentServiceImpl implements PaymentService {
                 eventPayload);
         recordEventProcessLog(eventNo, "PAYMENT_SUBMIT", paymentOrderId, orderNo);
         String notifyNo = buildBusinessNo("NTF");
-        paymentMapper.insertNotifyLog(
+        insertNotifyLog(
                 notifyNo,
                 paymentOrderId,
                 resolvedChannelCode,
@@ -791,19 +1310,45 @@ public class PaymentServiceImpl implements PaymentService {
                 "待回调",
                 "warn");
         return attachNativePaymentParams(
-                paymentMapper.findPrepay(request.getPrepayOrderNo()), submitResult);
+                requirePrepayResponse(paymentMapper.findPrepay(request.getPrepayOrderNo())),
+                resolvedChannelCode,
+                request.getPaymentMethod(),
+                submitResult);
     }
 
     private PrepayOrderDTO attachNativePaymentParams(
-            PrepayOrderDTO prepayOrder, PaymentChannelSubmitResultDTO submitResult) {
-        if (prepayOrder != null && submitResult != null) {
+            PrepayOrderDTO prepayOrder,
+            String resolvedChannelCode,
+            String paymentMethod,
+            PaymentChannelSubmitResultDTO submitResult) {
+        prepayOrder.setChannel(resolvedChannelCode);
+        prepayOrder.setPaymentMethod(paymentMethod);
+        if (submitResult != null) {
             prepayOrder.setNativePaymentParams(submitResult.getNativePaymentParams());
+            prepayOrder.setChannelTransactionNo(submitResult.getChannelTransactionNo());
+            prepayOrder.setLatestAttemptStatus(submitResult.getAttemptStatus());
+            prepayOrder.setLatestAttemptStatusType(submitResult.getAttemptStatusType());
+            prepayOrder.setLatestAttemptCompletedAt(null);
         }
         return prepayOrder;
     }
 
+    private void attachPaymentChannelFacts(PrepayOrderDTO prepayOrder, PaymentDetailDTO detail) {
+        if (detail == null) {
+            return;
+        }
+        prepayOrder.setPaymentMethod(detail.getPaymentMethod());
+        prepayOrder.setChannel(detail.getChannel());
+        prepayOrder.setChannelTransactionNo(detail.getChannelTransactionNo());
+        prepayOrder.setLatestAttemptStatus(detail.getLatestAttemptStatus());
+        prepayOrder.setLatestAttemptStatusType(detail.getLatestAttemptStatusType());
+        prepayOrder.setLatestAttemptCompletedAt(detail.getLatestAttemptCompletedAt());
+        prepayOrder.setSuccessAt(detail.getSuccessAt());
+    }
+
     private void markSubmitResultUnknown(
             String paymentOrderId,
+            String paymentMethod,
             String resolvedChannelCode,
             String attemptNo,
             PaymentChannelSubmitResultDTO submitResult) {
@@ -811,7 +1356,7 @@ public class PaymentServiceImpl implements PaymentService {
         String channelTransactionNo = submitResult == null
                 ? null : submitResult.getChannelTransactionNo();
         if (paymentMapper.markPaymentSubmitResultUnknown(
-                paymentOrderId, channelTransactionNo) == 0) {
+                paymentOrderId, attemptNo, paymentMethod, channelTransactionNo) != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
             if (latestDetail == null) {
                 throw new IllegalStateException(
@@ -819,9 +1364,10 @@ public class PaymentServiceImpl implements PaymentService {
             }
             if (submitResult != null) {
                 validatePaymentSubmitResultBinding(
-                        resolvedChannelCode, channelTransactionNo, latestDetail);
+                        paymentMethod, resolvedChannelCode, channelTransactionNo, latestDetail);
             }
             if (isFinalPaymentState(latestDetail)) {
+                requireLatestSubmitAttempt(paymentOrderId, attemptNo);
                 if (submitResult != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
                     validatePaymentSuccessFacts(latestDetail);
                     updatePaymentAttemptSubmitResult(
@@ -830,6 +1376,7 @@ public class PaymentServiceImpl implements PaymentService {
                             submitResult.getAttemptStatus(),
                             submitResult.getAttemptStatusType());
                 }
+                recordPaymentAttemptGateway(attemptNo, submitResult);
                 return;
             }
             throw new IllegalStateException(
@@ -837,7 +1384,12 @@ public class PaymentServiceImpl implements PaymentService {
         }
         updatePaymentAttemptSubmitResult(
                 attemptNo, responsePayload, "结果未知，待查单", "danger");
-        paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "结果待确认", "danger");
+        recordPaymentAttemptGateway(attemptNo, submitResult);
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
+                paymentOrderId, "结果待确认", "danger") != 1) {
+            throw new IllegalStateException(
+                    "payment prepay unknown status was not applied atomically");
+        }
     }
 
     private void updatePaymentAttemptSubmitResult(
@@ -849,6 +1401,15 @@ public class PaymentServiceImpl implements PaymentService {
                 attemptNo, responsePayload, attemptStatus, attemptStatusType) != 1) {
             throw new IllegalStateException(
                     "payment attempt submit result was not applied atomically");
+        }
+    }
+
+    private void recordPaymentAttemptGateway(
+            String attemptNo, PaymentChannelSubmitResultDTO submitResult) {
+        if (submitResult != null && submitResult.getGatewayCode() != null
+                && paymentMapper.recordPaymentAttemptGateway(
+                        attemptNo, submitResult.getGatewayCode()) != 1) {
+            throw new IllegalStateException("payment attempt gateway conflicted or was not recorded atomically");
         }
     }
 
@@ -880,11 +1441,15 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentDetailDTO currentDetail,
             String resolvedChannelCode,
             PaymentRiskDecisionResultDTO riskDecision) {
-        paymentMapper.updatePaymentMethodAndChannel(
+        lockPrepayOrderAndValidateSubmit(currentPrepay);
+        if (paymentMapper.updatePaymentMethodAndChannel(
                 currentDetail.getPaymentOrderId(),
+                currentPrepay.getPrepayOrderNo(),
                 request.getPaymentMethod(),
                 resolvedChannelCode,
-                currentDetail.getChannelTransactionNo());
+                currentDetail.getChannelTransactionNo()) != 1) {
+            throw new IllegalStateException("risk payment method and channel binding was not applied atomically");
+        }
         String eventType;
         String paymentStatus;
         String prepayStatus;
@@ -905,18 +1470,21 @@ public class PaymentServiceImpl implements PaymentService {
             prepayStatus = "风控拦截";
             statusType = "danger";
         }
-        paymentMapper.updatePaymentStatus(
+        if (paymentMapper.updatePaymentRiskStatus(
                 currentDetail.getPaymentOrderId(),
                 paymentStatus,
-                statusType,
-                currentDetail.getChannelTransactionNo());
-        paymentMapper.updatePrepayStatusByPaymentOrderId(
+                statusType) != 1) {
+            throw new IllegalStateException("risk payment status was not applied atomically");
+        }
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
                 currentDetail.getPaymentOrderId(),
                 prepayStatus,
-                statusType);
+                statusType) != 1) {
+            throw new IllegalStateException("risk prepay status was not applied atomically");
+        }
         String eventNo = buildBusinessNo("EVT");
         String eventPayload = buildRiskDecisionPayload(riskDecision, resolvedChannelCode);
-        paymentMapper.insertEvent(
+        insertEvent(
                 eventNo,
                 eventType,
                 currentDetail.getPaymentOrderId(),
@@ -927,7 +1495,7 @@ public class PaymentServiceImpl implements PaymentService {
                 eventType,
                 currentDetail.getPaymentOrderId(),
                 currentDetail.getOrderNo());
-        return paymentMapper.findPrepay(currentPrepay.getPrepayOrderNo());
+        return requirePrepayResponse(paymentMapper.findPrepay(currentPrepay.getPrepayOrderNo()));
     }
 
     @Transactional
@@ -946,15 +1514,20 @@ public class PaymentServiceImpl implements PaymentService {
         validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH, "channel");
         validateCallbackField(request.getPaymentOrderId(), CALLBACK_PAYMENT_ORDER_ID_MAX_LENGTH, "paymentOrderId");
         validateCallbackField(request.getTradeStatus(), CALLBACK_TRADE_STATUS_MAX_LENGTH, "tradeStatus");
+        if (!isSupportedCallbackTradeStatus(request.getTradeStatus())) {
+            throw new IllegalArgumentException("tradeStatus must be SUCCESS, PROCESSING, WAIT_CALLBACK or PAYING");
+        }
         validateCallbackField(
                 request.getChannelTransactionNo(),
                 CALLBACK_CHANNEL_TRANSACTION_NO_MAX_LENGTH,
                 "channelTransactionNo");
         paymentCallbackSignatureService.verify(normalizedChannel, request);
-        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
-        if (detail == null) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
-        }
+        request.setPaymentOrderId(request.getPaymentOrderId().trim());
+        request.setTradeStatus(request.getTradeStatus().trim());
+        request.setChannelTransactionNo(request.getChannelTransactionNo().trim());
+        PaymentDetailDTO detail = requireRequestedPaymentDetail(
+                paymentMapper.findDetail(request.getPaymentOrderId()), request.getPaymentOrderId());
+        requireNonSuccessfulPaymentPrepayBinding(detail);
         validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
@@ -969,6 +1542,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess) {
             detail = lockAndReloadPaymentForSettlement(detail);
             validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
+            requireChannelSubmissionFact(detail);
+            parseAmount(detail.getAmount());
             if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
                 validatePaymentSuccessFacts(detail);
                 paymentMapper.releaseSubmitConcurrencyToken(
@@ -976,25 +1551,49 @@ public class PaymentServiceImpl implements PaymentService {
                 return outwardDetail(detail);
             }
         }
-        if (paySuccess && paymentMapper.markPaymentSuccessFromChannelResult(
-                request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
-            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
+        int callbackSuccessRows = paySuccess
+                ? paymentMapper.markPaymentSuccessFromChannelResult(
+                        request.getPaymentOrderId(), request.getChannelTransactionNo())
+                : 0;
+        if (callbackSuccessRows > 1) {
+            throw new IllegalStateException("payment callback success update affected multiple rows");
+        }
+        if (paySuccess && callbackSuccessRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
-            if (latestDetail != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+            latestDetail = requirePaymentDetailResponse(latestDetail);
+            if (!"SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
+                    && (!"CLOSED".equalsIgnoreCase(latestDetail.getStatus())
+                    || !Boolean.TRUE.equals(latestDetail.getPrepayAmountBindingValid()))) {
+                throw new IllegalStateException("payment success confirmation was not applied atomically");
+            }
+            validatePaymentCallbackBinding(
+                    normalizedChannel, request.getChannelTransactionNo(), latestDetail);
+            if ("CLOSED".equalsIgnoreCase(latestDetail.getStatus())) {
+                throw new IllegalStateException("payment callback success could not recover closed payment");
+            }
+            if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
                 validatePaymentSuccessFacts(latestDetail);
             }
+            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(latestDetail);
         }
-        if (!paySuccess && paymentMapper.markPaymentPendingFromCallback(
-                request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
+        int callbackPendingRows = !paySuccess
+                ? paymentMapper.markPaymentPendingFromCallback(
+                        request.getPaymentOrderId(), request.getChannelTransactionNo())
+                : 0;
+        if (callbackPendingRows > 1) {
+            throw new IllegalStateException("payment callback pending update affected multiple rows");
+        }
+        if (!paySuccess && callbackPendingRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
+            requireNonSuccessfulPaymentPrepayBinding(latestDetail);
             validatePaymentCallbackBinding(
                     normalizedChannel, request.getChannelTransactionNo(), latestDetail);
             return outwardDetail(latestDetail);
         }
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         String notifyNo = buildBusinessNo("NTF");
-        paymentMapper.insertNotifyLog(
+        insertNotifyLog(
                 notifyNo,
                 request.getPaymentOrderId(),
                 normalizedChannel,
@@ -1022,18 +1621,22 @@ public class PaymentServiceImpl implements PaymentService {
                         "payment attempt pending update was not applied atomically");
             }
         }
-        paymentMapper.updatePrepayStatusByPaymentOrderId(
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
                 request.getPaymentOrderId(),
                 paySuccess ? "支付成功" : "待回调",
-                paySuccess ? "success" : "warn"
-        );
+                paySuccess ? "success" : "warn") != 1) {
+            throw new IllegalStateException(
+                    "payment callback prepay status was not applied atomically");
+        }
         if (paySuccess) {
             settleOrderAndBill(detail);
         }
         String eventNo = buildBusinessNo("EVT");
         String eventType = paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING";
-        String eventPayload = "{\"channel\":\"" + escapeJson(normalizedChannel) + "\"}";
-        paymentMapper.insertEvent(
+        String eventPayload = "{\"channel\":\"" + escapeJson(normalizedChannel) + "\""
+                + (paySuccess ? ",\"payScene\":\"" + escapeJson(detail.getPayScene()) + "\"" : "")
+                + "}";
+        insertEvent(
                 eventNo,
                 eventType,
                 request.getPaymentOrderId(),
@@ -1046,7 +1649,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
         }
-        return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        return outwardDetail(requirePaymentDetailResponse(
+                paymentMapper.findDetail(request.getPaymentOrderId())));
     }
 
     private void validatePaymentCallbackBinding(
@@ -1069,12 +1673,14 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void validatePaymentSubmitResultBinding(
-            String channelCode, String channelTransactionNo, PaymentDetailDTO detail) {
+            String paymentMethod, String channelCode, String channelTransactionNo, PaymentDetailDTO detail) {
         if (detail == null) {
             throw new IllegalStateException("payment submit result target does not exist");
         }
         if (!StringUtils.hasText(detail.getChannel())
-                || !detail.getChannel().trim().equalsIgnoreCase(channelCode)
+                || !detail.getChannel().equals(channelCode)
+                || (StringUtils.hasText(detail.getPaymentMethod())
+                && !detail.getPaymentMethod().equals(paymentMethod))
                 || (StringUtils.hasText(detail.getChannelTransactionNo())
                 && !detail.getChannelTransactionNo().equals(channelTransactionNo))) {
             throw new BusinessException(
@@ -1086,6 +1692,12 @@ public class PaymentServiceImpl implements PaymentService {
     private boolean isFinalPaymentState(PaymentDetailDTO detail) {
         return "SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || "CLOSED".equalsIgnoreCase(detail.getStatus());
+    }
+
+    private void requireLatestSubmitAttempt(String paymentOrderId, String attemptNo) {
+        if (!paymentMapper.isLatestPaymentAttemptForOrder(paymentOrderId, attemptNo)) {
+            throw new IllegalStateException("payment submit result belongs to a superseded attempt");
+        }
     }
 
     private void validateCallbackField(String value, int maxLength, String fieldName) {
@@ -1103,13 +1715,21 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
+    private boolean isSupportedCallbackTradeStatus(String tradeStatus) {
+        String normalizedTradeStatus = tradeStatus == null ? null : tradeStatus.trim();
+        return "SUCCESS".equalsIgnoreCase(normalizedTradeStatus)
+                || "PROCESSING".equalsIgnoreCase(normalizedTradeStatus)
+                || "WAIT_CALLBACK".equalsIgnoreCase(normalizedTradeStatus)
+                || "PAYING".equalsIgnoreCase(normalizedTradeStatus);
+    }
+
+    @Transactional(noRollbackFor = BusinessException.class, isolation = Isolation.READ_COMMITTED)
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
         return queryInternal(request, CUSTOMER_SELF_SERVICE_OPERATOR);
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
+    @Transactional(noRollbackFor = BusinessException.class, isolation = Isolation.READ_COMMITTED)
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request, String operator) {
         return queryInternal(request, normalizeOperationOperator(operator));
@@ -1121,12 +1741,16 @@ public class PaymentServiceImpl implements PaymentService {
         }
         request.setPaymentOrderId(normalizeRequiredRequestField(
                 request.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
-        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
-        if (detail == null) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
-        }
+        PaymentDetailDTO detail = requireRequestedPaymentDetail(
+                paymentMapper.findDetail(request.getPaymentOrderId()), request.getPaymentOrderId());
+        requireNonSuccessfulPaymentPrepayBinding(detail);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             validatePaymentSuccessFacts(detail);
+            return outwardDetail(detail);
+        }
+        if ("CLOSED".equalsIgnoreCase(detail.getStatus())
+                && !StringUtils.hasText(detail.getChannelTransactionNo())
+                && !StringUtils.hasText(detail.getLatestAttemptStatus())) {
             return outwardDetail(detail);
         }
         requireChannelSubmissionFact(detail);
@@ -1141,6 +1765,7 @@ public class PaymentServiceImpl implements PaymentService {
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus());
         if (requiresSettlement) {
             detail = lockAndReloadPaymentForSettlement(detail);
+            requireChannelSubmissionFact(detail);
         }
         String queriedChannelTransactionNo = queryResult.getChannelTransactionNo();
         if (StringUtils.hasText(detail.getChannelTransactionNo())
@@ -1165,7 +1790,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw queryFailure;
         }
         applyReturnCodeStandardization(detail, queryResult);
-        paymentMapper.updatePaymentReturnCodeSnapshot(
+        int snapshotRows = paymentMapper.updatePaymentReturnCodeSnapshot(
                 detail.getPaymentOrderId(),
                 queryResult.getChannelReturnCode(),
                 queryResult.getStandardizedCode(),
@@ -1175,6 +1800,27 @@ public class PaymentServiceImpl implements PaymentService {
                 queryResult.getManualInterventionRequired(),
                 queryResult.getMappingVersion(),
                 queryResult.getReturnCodeMappingMatched());
+        if (snapshotRows == 0) {
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
+            if (latestDetail != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                if (!detail.getChannel().equals(latestDetail.getChannel())
+                        || StringUtils.hasText(queryResult.getChannelTransactionNo())
+                        && !queryResult.getChannelTransactionNo().equals(latestDetail.getChannelTransactionNo())) {
+                    BusinessException queryFailure = new BusinessException(
+                            ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                            "channel query transaction does not match payment transaction");
+                    recordChannelQueryFailure(latestDetail, queryFailure, operator);
+                    throw queryFailure;
+                }
+                validatePaymentSuccessFacts(latestDetail);
+                latestDetail.setQuerySource(queryResult.getQuerySource());
+                recordChannelQuery(latestDetail, queryResult, operator);
+                return outwardDetail(latestDetail);
+            }
+        }
+        if (snapshotRows != 1) {
+            throw new IllegalStateException("payment query return code snapshot was not applied atomically");
+        }
         detail.setChannelTransactionNo(channelTransactionNo);
         detail.setQuerySource(queryResult.getQuerySource());
         recordChannelQuery(detail, queryResult, operator);
@@ -1187,27 +1833,55 @@ public class PaymentServiceImpl implements PaymentService {
         }
         int settledRows = paymentMapper.markPaymentSuccessFromChannelResult(
                 detail.getPaymentOrderId(), channelTransactionNo);
-        if (settledRows == 0) {
+        if (settledRows > 1) {
+            throw new IllegalStateException("payment query success update affected multiple rows");
+        }
+        if (settledRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
             if (latestDetail == null) {
                 throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
             }
+            if (!"SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
+                    && (!"CLOSED".equalsIgnoreCase(latestDetail.getStatus())
+                    || !Boolean.TRUE.equals(latestDetail.getPrepayAmountBindingValid()))) {
+                throw new IllegalStateException("payment success confirmation was not applied atomically");
+            }
+            if ("CLOSED".equalsIgnoreCase(latestDetail.getStatus())) {
+                BusinessException queryFailure = new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "channel reports success but payment remains closed; manual reconciliation required");
+                recordChannelQueryFailure(latestDetail, queryFailure, operator);
+                throw queryFailure;
+            }
             if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                if (!detail.getChannel().equals(latestDetail.getChannel())
+                        || !channelTransactionNo.equals(latestDetail.getChannelTransactionNo())) {
+                    BusinessException queryFailure = new BusinessException(
+                            ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                            "channel query transaction does not match payment transaction");
+                    recordChannelQueryFailure(latestDetail, queryFailure, operator);
+                    throw queryFailure;
+                }
                 validatePaymentSuccessFacts(latestDetail);
             }
             latestDetail.setQuerySource(queryResult.getQuerySource());
             applyReturnCodeStandardization(latestDetail, queryResult);
             return outwardDetail(latestDetail);
         }
+        parseAmount(detail.getAmount());
         finalizeLatestPaymentAttemptSuccess(detail.getPaymentOrderId());
-        paymentMapper.updatePrepayStatusByPaymentOrderId(
-                detail.getPaymentOrderId(), "支付成功", "success");
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
+                detail.getPaymentOrderId(), "支付成功", "success") != 1) {
+            throw new IllegalStateException(
+                    "payment query prepay status was not applied atomically");
+        }
         settleOrderAndBill(detail);
         String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"channel\":\"" + escapeJson(detail.getChannel())
+                + "\",\"payScene\":\"" + escapeJson(detail.getPayScene())
                 + "\",\"source\":\"ACTIVE_QUERY\",\"initiatedBy\":\""
                 + escapeJson(operator) + "\"}";
-        paymentMapper.insertEvent(
+        insertEvent(
                 eventNo,
                 "PAYMENT_SUCCESS",
                 detail.getPaymentOrderId(),
@@ -1234,10 +1908,45 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void validatePaymentSuccessFacts(PaymentDetailDTO detail) {
         if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || !Boolean.TRUE.equals(detail.getPrepayAmountBindingValid())
+                || !"success".equalsIgnoreCase(detail.getStatusType())
                 || !"成功".equals(detail.getLatestAttemptStatus())
+                || !"success".equalsIgnoreCase(detail.getLatestAttemptStatusType())
                 || !StringUtils.hasText(detail.getLatestAttemptCompletedAt())
-                || !StringUtils.hasText(detail.getSuccessAt())) {
+                || !StringUtils.hasText(detail.getSuccessAt())
+                || !StringUtils.hasText(detail.getCreatedAt())
+                || !StringUtils.hasText(detail.getChannel())
+                || !StringUtils.hasText(detail.getChannelTransactionNo())
+                || !Boolean.TRUE.equals(detail.getPaymentFactTimelineValid())
+                || !"STANDARD_ORDER".equals(detail.getSourceKind())
+                        && !"VIRTUAL".equals(detail.getSourceKind())) {
             throw new IllegalStateException("payment success facts are inconsistent");
+        }
+        try {
+            BigDecimal currentOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
+            if ("STANDARD_ORDER".equals(detail.getSourceKind())) {
+                if (currentOrderAmount == null || paymentMapper.findPaidAmount(detail.getOrderNo()) == null) {
+                    throw new IllegalStateException("payment success facts are inconsistent");
+                }
+            } else if (currentOrderAmount != null
+                    || paymentMapper.findPaidAmount(detail.getOrderNo()) != null) {
+                throw new IllegalStateException("payment success facts are inconsistent");
+            }
+            parseAmount(detail.getAmount());
+            LocalDateTime attemptCompletedAt = LocalDateTime.parse(
+                    detail.getLatestAttemptCompletedAt().trim(), PAYMENT_FACT_TIME_FORMATTER);
+            LocalDateTime successAt = LocalDateTime.parse(
+                    detail.getSuccessAt().trim(), PAYMENT_FACT_TIME_FORMATTER);
+            LocalDateTime createdAt = LocalDateTime.parse(
+                    detail.getCreatedAt().trim(), PAYMENT_FACT_TIME_FORMATTER);
+            if (createdAt.isAfter(attemptCompletedAt) || createdAt.isAfter(successAt)
+                    || attemptCompletedAt.isAfter(successAt)) {
+                throw new IllegalStateException("payment success facts are inconsistent");
+            }
+        } catch (IllegalStateException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("payment success facts are inconsistent", exception);
         }
     }
 
@@ -1263,13 +1972,32 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    private void requireWaitingChannelSubmissionFact(String paymentOrderId, PaymentDetailDTO detail) {
+        if (detail == null
+                || !paymentOrderId.equals(detail.getPaymentOrderId())
+                || !"WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
+                || !StringUtils.hasText(detail.getChannel())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
+                    "payment has no bound channel submission fact");
+        }
+        requireChannelSubmissionFact(detail);
+    }
+
     private void requireChannelSubmissionFact(PaymentDetailDTO detail) {
-        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
-                || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+        if (!Boolean.TRUE.equals(detail.getPaymentSubmissionChannelValid())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
+                    "payment attempt channel does not match payment channel");
+        }
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             return;
         }
-        if (!"WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
-                || !StringUtils.hasText(detail.getLatestAttemptStatus())) {
+        if ((!"WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
+                && !"CLOSED".equalsIgnoreCase(detail.getStatus()))
+                || !StringUtils.hasText(detail.getLatestAttemptStatus())
+                || isTerminalAttemptStatus(detail.getLatestAttemptStatus())
+                || detail.getLatestAttemptCompletedAt() != null) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
                     "payment has no eligible channel submission fact");
@@ -1309,6 +2037,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (!orderNo.equals(latestDetail.getOrderNo())) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付单关联订单在成功收口前发生变化");
         }
+        parseAmount(latestDetail.getAmount());
+        if (!Boolean.TRUE.equals(latestDetail.getPrepayAmountBindingValid())) {
+            throw new IllegalStateException("prepay and payment order amounts are inconsistent");
+        }
         return latestDetail;
     }
 
@@ -1318,8 +2050,8 @@ public class PaymentServiceImpl implements PaymentService {
             String operator) {
         String notifyNo = buildBusinessNo("QRY");
         String responsePayload = buildChannelQueryResponsePayload(queryResult);
-        String statusType = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info";
-        paymentMapper.insertNotifyLog(
+        String statusType = resolveChannelQueryStatusType(queryResult.getTradeStatus());
+        insertNotifyLog(
                 notifyNo,
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
@@ -1330,6 +2062,19 @@ public class PaymentServiceImpl implements PaymentService {
                 "已查单",
                 statusType);
         recordQueryProcessLog(notifyNo, detail, queryResult.getTradeStatus(), "已查单", statusType, operator);
+    }
+
+    private String resolveChannelQueryStatusType(String tradeStatus) {
+        if ("SUCCESS".equalsIgnoreCase(tradeStatus)) {
+            return "success";
+        }
+        if ("FAIL".equalsIgnoreCase(tradeStatus)
+                || "CLOSED".equalsIgnoreCase(tradeStatus)
+                || "RISK_BLOCKED".equalsIgnoreCase(tradeStatus)
+                || "RISK_REJECTED".equalsIgnoreCase(tradeStatus)) {
+            return "danger";
+        }
+        return "info";
     }
 
     private String buildChannelQueryResponsePayload(PaymentChannelQueryResultDTO queryResult) {
@@ -1368,7 +2113,7 @@ public class PaymentServiceImpl implements PaymentService {
         String notifyNo = buildBusinessNo("QRY");
         String responsePayload = "{\"code\":\"" + escapeJson(exception.getCode())
                 + "\",\"message\":\"channel query failed\"}";
-        paymentMapper.insertNotifyLog(
+        insertNotifyLog(
                 notifyNo,
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
@@ -1399,15 +2144,42 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalStateException("payment bill binding is missing");
         }
         BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
-        BigDecimal settledAmount = latestOrderAmount == null
-                ? parseAmount(detail.getAmount())
-                : latestOrderAmount;
-        if (latestOrderAmount != null && paymentMapper.updateOrderAfterPayment(
-                detail.getOrderNo(), latestOrderAmount, "待履约", "info") != 1) {
-            throw new IllegalStateException("payment order settlement was not applied atomically");
+        BigDecimal settledAmount;
+        BigDecimal expectedBillPaidAmount = BigDecimal.ZERO;
+        if ("VIRTUAL".equals(detail.getSourceKind())) {
+            if (latestOrderAmount != null || paymentMapper.findPaidAmount(detail.getOrderNo()) != null) {
+                throw new IllegalStateException("payment settlement virtual source has changed");
+            }
+            settledAmount = parseAmount(detail.getAmount());
+        } else if ("STANDARD_ORDER".equals(detail.getSourceKind())) {
+            BigDecimal paidAmount = paymentMapper.findPaidAmount(detail.getOrderNo());
+            String customerName = paymentMapper.findCustomerNameByOrderNo(detail.getOrderNo());
+            if (latestOrderAmount == null || paidAmount == null || !StringUtils.hasText(customerName)) {
+                throw new IllegalStateException("payment settlement standard order source is incomplete");
+            }
+            if (latestOrderAmount.compareTo(BigDecimal.ZERO) <= 0 || paidAmount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("payment settlement standard order amount is invalid");
+            }
+            BigDecimal remainAmount = latestOrderAmount.subtract(paidAmount);
+            if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalStateException("payment settlement standard order is already settled");
+            }
+            if (!customerName.equals(detail.getCustomerName())
+                    || remainAmount.compareTo(parseAmount(detail.getAmount())) != 0) {
+                throw new IllegalStateException("payment settlement standard order facts have changed");
+            }
+            settledAmount = latestOrderAmount;
+            expectedBillPaidAmount = paidAmount;
+            if (paymentMapper.updateOrderAfterPayment(
+                    detail.getOrderNo(), settledAmount, "待履约", "info", paidAmount, customerName) != 1) {
+                throw new IllegalStateException("payment order settlement was not applied atomically");
+            }
+        } else {
+            throw new IllegalStateException("payment settlement source kind is unknown");
         }
         if (paymentMapper.updateBillAfterPayment(
-                detail.getBillNo(), settledAmount, "已结清", "success") != 1) {
+                detail.getBillNo(), settledAmount, "已结清", "success",
+                detail.getOrderNo(), detail.getCustomerName(), expectedBillPaidAmount) != 1) {
             throw new IllegalStateException("payment bill settlement was not applied atomically");
         }
     }
@@ -1430,11 +2202,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
         request.setPaymentOrderId(normalizeRequiredRequestField(
                 request.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
-        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
-        if (detail == null) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
-        }
+        PaymentDetailDTO detail = requireRequestedPaymentDetail(
+                paymentMapper.findDetail(request.getPaymentOrderId()), request.getPaymentOrderId());
+        requireNonSuccessfulPaymentPrepayBinding(detail);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+            validatePaymentSuccessFacts(detail);
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
@@ -1445,10 +2217,14 @@ public class PaymentServiceImpl implements PaymentService {
             }
             return outwardDetail(detail);
         }
-        if (paymentMapper.markUnsubmittedPaymentClosed(request.getPaymentOrderId()) == 0) {
+        if (paymentMapper.markUnsubmittedPaymentClosed(request.getPaymentOrderId()) != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
+            requireNonSuccessfulPaymentPrepayBinding(latestDetail);
             if (latestDetail != null && ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
                     || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
+                if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                    validatePaymentSuccessFacts(latestDetail);
+                }
                 if ("CLOSED".equalsIgnoreCase(latestDetail.getStatus())
                         && !StringUtils.hasText(latestDetail.getChannelTransactionNo())
                         && !StringUtils.hasText(latestDetail.getLatestAttemptStatus())) {
@@ -1462,16 +2238,21 @@ public class PaymentServiceImpl implements PaymentService {
                     "支付已提交渠道或结果尚未确认，请先主动查单");
         }
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
-        paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
+                request.getPaymentOrderId(), "已关闭", "danger") != 1) {
+            throw new IllegalStateException(
+                    "payment close prepay status was not applied atomically");
+        }
         String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"close\":\"manual\",\"initiatedBy\":\""
                 + escapeJson(operator) + "\"}";
-        paymentMapper.insertEvent(
+        insertEvent(
                 eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
         recordEventProcessLog(
                 eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), operator);
         paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "MANUAL_CLOSE");
-        return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        return outwardDetail(requirePaymentDetailResponse(
+                paymentMapper.findDetail(request.getPaymentOrderId())));
     }
 
     private void recordNotifyProcessLog(
@@ -1564,7 +2345,43 @@ public class PaymentServiceImpl implements PaymentService {
         processLog.setLogLevelType(statusType);
         processLog.setMessage(message);
         processLog.setSource(source);
-        paymentMapper.insertPaymentProcessLog(processLog);
+        if (paymentMapper.insertPaymentProcessLog(processLog) != 1) {
+            throw new IllegalStateException("payment process log was not created atomically");
+        }
+    }
+
+    private void insertNotifyLog(
+            String notifyNo,
+            String paymentOrderId,
+            String channelCode,
+            String notifyType,
+            String notifyPayload,
+            String notifyResult,
+            String notifyStatus,
+            String notifyStatusType) {
+        if (paymentMapper.insertNotifyLog(
+                notifyNo,
+                paymentOrderId,
+                channelCode,
+                notifyType,
+                notifyPayload,
+                notifyResult,
+                notifyStatus,
+                notifyStatusType) != 1) {
+            throw new IllegalStateException("payment notify log was not created atomically");
+        }
+    }
+
+    private void insertEvent(
+            String eventNo,
+            String eventType,
+            String paymentOrderId,
+            String bizNo,
+            String eventPayload) {
+        if (paymentMapper.insertEvent(
+                eventNo, eventType, paymentOrderId, bizNo, eventPayload) != 1) {
+            throw new IllegalStateException("payment event was not created atomically");
+        }
     }
 
     private String toLogLevel(String statusType) {
@@ -1603,11 +2420,10 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void validatePrepayAmount(BigDecimal amount) {
-        BigDecimal normalizedAmount = amount.stripTrailingZeros();
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw invalidPaymentRequest("预付金额必须大于 0");
         }
-        if (normalizedAmount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+        if (amount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
             throw invalidPaymentRequest("预付金额最多支持 16 位整数和 2 位小数");
         }
     }
@@ -1702,9 +2518,6 @@ public class PaymentServiceImpl implements PaymentService {
         return normalizeRequiredRequestField(operator, "操作人", OPERATOR_MAX_LENGTH);
     }
 
-    /**
-     * 幂等键优先使用前端显式透传值，未透传时退化为预付单+支付方式+渠道的组合键。
-     */
     private String buildIdempotencyKey(
             PaymentSubmitRequestDTO request,
             PrepayOrderDTO currentPrepay,
@@ -1712,7 +2525,28 @@ public class PaymentServiceImpl implements PaymentService {
         if (StringUtils.hasText(request.getIdempotencyKey())) {
             return request.getIdempotencyKey().trim();
         }
-        return currentPrepay.getPrepayOrderNo() + "|" + request.getPaymentMethod() + "|" + resolvedChannelCode;
+        String combined = currentPrepay.getPrepayOrderNo()
+                + "|" + request.getPaymentMethod() + "|" + resolvedChannelCode;
+        if (combined.length() <= SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            return combined;
+        }
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+        for (String value : Arrays.asList(
+                currentPrepay.getPrepayOrderNo(), request.getPaymentMethod(), resolvedChannelCode)) {
+            byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+            int length = bytes.length;
+            digest.update((byte) (length >>> 24));
+            digest.update((byte) (length >>> 16));
+            digest.update((byte) (length >>> 8));
+            digest.update((byte) length);
+            digest.update(bytes);
+        }
+        return "AUTO:" + hexDigest(digest.digest());
     }
 
     private void validateSubmitIdempotencyKey(String idempotencyKey) {
@@ -1733,6 +2567,63 @@ public class PaymentServiceImpl implements PaymentService {
                         "支付幂等键不能包含控制字符");
             }
         }
+        if (!StandardCharsets.UTF_8.newEncoder().canEncode(idempotencyKey)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                    "支付幂等键包含无效字符");
+        }
+    }
+
+    private void validateSubmitIdempotencyOwnership(
+            String idempotencyKey, String prepayOrderNo, String paymentOrderId,
+            String requestFingerprint) {
+        PaymentAttemptIdempotencyDTO existing = paymentMapper.findPaymentAttemptIdempotency(idempotencyKey);
+        if (existing == null
+                || !prepayOrderNo.equals(existing.getPrepayOrderNo())
+                || !paymentOrderId.equals(existing.getPaymentOrderId())
+                || !requestFingerprint.equals(existing.getRequestFingerprint())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_CONFLICT,
+                    "支付幂等键已被其他支付单或不同提交内容使用");
+        }
+    }
+
+    String submitRequestFingerprint(
+            PaymentSubmitRequestDTO request, PrepayOrderDTO prepay, String paymentOrderId,
+            String sourceAppId, String resolvedChannelCode, String terminal) {
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+        for (String value : Arrays.asList(
+                request.getPrepayOrderNo(), paymentOrderId, parseAmount(prepay.getAmount()).toPlainString(),
+                request.getPaymentMethod(), resolvedChannelCode, sourceAppId, request.getMerchantNo(),
+                request.getAccessToken(), terminal, request.getClientDeviceId(), request.getPayerPhone())) {
+            int length = value == null ? -1 : value.length();
+            digest.update((byte) (length >>> 24));
+            digest.update((byte) (length >>> 16));
+            digest.update((byte) (length >>> 8));
+            digest.update((byte) length);
+            if (value != null) {
+                for (int index = 0; index < value.length(); index++) {
+                    char character = value.charAt(index);
+                    digest.update((byte) (character >>> 8));
+                    digest.update((byte) character);
+                }
+            }
+        }
+        return hexDigest(digest.digest());
+    }
+
+    private String hexDigest(byte[] bytes) {
+        StringBuilder result = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            result.append(Character.forDigit((value >>> 4) & 0xf, 16));
+            result.append(Character.forDigit(value & 0xf, 16));
+        }
+        return result.toString();
     }
 
     /**
@@ -1837,6 +2728,9 @@ public class PaymentServiceImpl implements PaymentService {
                 throw invalidSubmitRequest(fieldName + "不能包含控制字符");
             }
         }
+        if (!StandardCharsets.UTF_8.newEncoder().canEncode(value)) {
+            throw invalidSubmitRequest(fieldName + "包含无效字符");
+        }
     }
 
     private void validateSubmitIdempotencyKeyControlCharacters(String idempotencyKey) {
@@ -1859,11 +2753,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (value.length() > maxLength) {
             throw invalidSubmitRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
         }
-        for (int index = 0; index < value.length(); index++) {
-            if (Character.isISOControl(value.charAt(index))) {
-                throw invalidSubmitRequest(fieldName + "不能包含控制字符");
-            }
-        }
+        validateSubmitControlCharacters(value, fieldName);
     }
 
     private BusinessException invalidSubmitRequest(String message) {
@@ -1891,15 +2781,16 @@ public class PaymentServiceImpl implements PaymentService {
                                               String idempotencyKey) {
         PaymentSubmitConcurrencyTokenDTO currentToken = paymentMapper.findSubmitConcurrencyToken(prepayOrderNo, sourceAppId);
         if (currentToken == null) {
-            paymentMapper.insertSubmitConcurrencyToken(
+            if (paymentMapper.insertSubmitConcurrencyToken(
                     prepayOrderNo,
                     paymentOrderId,
                     sourceAppId,
                     idempotencyKey,
                     terminal,
                     clientIp,
-                    SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS
-            );
+                    SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS) != 1) {
+                throw new IllegalStateException("payment submit concurrency token was not created atomically");
+            }
             return;
         }
         if (idempotencyKey.equals(currentToken.getHolderIdempotencyKey())) {
@@ -1914,8 +2805,11 @@ public class PaymentServiceImpl implements PaymentService {
                 clientIp,
                 SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS
         );
-        if (affectedRows > 0) {
+        if (affectedRows == 1) {
             return;
+        }
+        if (affectedRows > 1) {
+            throw new IllegalStateException("payment submit concurrency token update affected multiple rows");
         }
         throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, "当前预付单已存在并发支付提交，请稍后刷新收银台状态");
     }
@@ -1945,12 +2839,20 @@ public class PaymentServiceImpl implements PaymentService {
         if (!containsConfiguredValue(controlPolicy.getAllowedMerchantNos(), merchantNo)) {
             throw new BusinessException(ErrorCode.PAYMENT_MERCHANT_NOT_ALLOWED, "当前来源应用未开通该商户号");
         }
+        if (!"开启".equals(controlPolicy.getTokenAuthRequired())
+                && !"关闭".equals(controlPolicy.getTokenAuthRequired())) {
+            throw new BusinessException(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, "当前来源应用令牌鉴权配置异常");
+        }
         if ("开启".equals(controlPolicy.getTokenAuthRequired())
                 && !matchesAccessToken(controlPolicy.getAccessTokenValue(), accessToken)) {
             throw new BusinessException(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, "当前请求的访问令牌无效或已失效");
         }
+        if (!"开启".equals(controlPolicy.getStrictMode())
+                && !"关闭".equals(controlPolicy.getStrictMode())) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_SELF_CHECK_BLOCKED, "当前来源应用严格模式配置异常");
+        }
         if ("开启".equals(controlPolicy.getStrictMode())
-                && !"PASS".equalsIgnoreCase(controlPolicy.getSelfCheckStatus())) {
+                && !"PASS".equals(controlPolicy.getSelfCheckStatus())) {
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_SELF_CHECK_BLOCKED, controlPolicy.getSelfCheckMessage());
         }
         if (!existingAttempt) {
@@ -2092,12 +2994,14 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentSubmitRequestDTO request,
             PrepayOrderDTO currentPrepay,
             String paymentOrderId,
+            String sourceAppId,
             String resolvedChannelCode,
             String terminal,
             String clientIp) {
         PaymentRiskDecisionRequestDTO decisionRequest = new PaymentRiskDecisionRequestDTO();
         decisionRequest.setBusinessNo(paymentOrderId);
         decisionRequest.setSourceSystem("payment-core");
+        decisionRequest.setSourceAppId(sourceAppId);
         decisionRequest.setSceneCode("PAY_CONSUME");
         decisionRequest.setPayScene(currentPrepay.getPayScene());
         decisionRequest.setPaymentMethod(request.getPaymentMethod());
@@ -2152,13 +3056,24 @@ public class PaymentServiceImpl implements PaymentService {
      */
     private BigDecimal parseAmount(String amountText) {
         if (!StringUtils.hasText(amountText)) {
-            return BigDecimal.ZERO;
+            throw new IllegalArgumentException("支付金额不能为空");
         }
         String normalizedAmount = amountText
                 .replace("¥", "")
                 .replace(",", "")
                 .trim();
-        return new BigDecimal(normalizedAmount);
+        final BigDecimal amount;
+        try {
+            amount = new BigDecimal(normalizedAmount);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("支付金额格式非法", exception);
+        }
+        if (amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE
+                || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException("支付金额必须大于0且最多保留2位小数");
+        }
+        return amount;
     }
 
     private PaymentDetailDTO enrichDetail(PaymentDetailDTO detail) {
@@ -2211,6 +3126,28 @@ public class PaymentServiceImpl implements PaymentService {
         return maskedDetailCopy(enrichDetail(detail));
     }
 
+    private PaymentDetailDTO requirePaymentDetailResponse(PaymentDetailDTO detail) {
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付单已更新但读取失败");
+        }
+        return detail;
+    }
+
+    private PaymentDetailDTO requireRequestedPaymentDetail(PaymentDetailDTO detail, String paymentOrderId) {
+        if (detail == null || !paymentOrderId.equals(detail.getPaymentOrderId())) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        }
+        return detail;
+    }
+
+    private void requireNonSuccessfulPaymentPrepayBinding(PaymentDetailDTO detail) {
+        if (detail != null && !"SUCCESS".equalsIgnoreCase(detail.getStatus())
+                && !Boolean.TRUE.equals(detail.getPrepayAmountBindingValid())) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING,
+                    "支付单预付归属或金额不可确认");
+        }
+    }
+
     private PaymentDetailDTO maskedDetailCopy(PaymentDetailDTO detail) {
         if (detail == null) {
             return null;
@@ -2228,7 +3165,10 @@ public class PaymentServiceImpl implements PaymentService {
     /**
      * 支付单列表统一在服务层收敛分页边界，避免全量拉取影响后台排障性能。
      */
-    private void normalizeQuery(PaymentListQueryDTO query) {
+    private PaymentListQueryDTO normalizeQuery(PaymentListQueryDTO query) {
+        if (query == null) {
+            query = new PaymentListQueryDTO();
+        }
         query.setPaymentOrderId(normalizeOptionalRequestField(
                 query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         query.setOrderNo(normalizeOptionalRequestField(
@@ -2243,6 +3183,7 @@ public class PaymentServiceImpl implements PaymentService {
         query.setStatus(status == null ? "全部" : status);
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String csvCell(String value) {
@@ -2257,9 +3198,11 @@ public class PaymentServiceImpl implements PaymentService {
     private static final class SanitizedSubmitTransactionException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
+        private final boolean duplicateKey;
 
         private SanitizedSubmitTransactionException(RuntimeException exception) {
             super(SUBMIT_TRANSACTION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+            this.duplicateKey = exception instanceof DuplicateKeyException;
         }
 
         private static String exceptionName(RuntimeException exception) {

@@ -13,6 +13,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.CashierSessionDetailDTO;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
@@ -177,8 +178,10 @@ class CashierSessionServiceImplTest {
         CashierSessionListItemDTO item = new CashierSessionListItemDTO();
         item.setSessionNo("PRE-001");
         item.setPrepayOrderNo("PRE-001");
+        item.setPaymentOrderId("PAY-001");
         item.setCustomerName("张\"女士");
         item.setCashierTitle("张\"女士的收银台");
+        item.setPayScene("HOME_CLEAN");
         item.setSessionStatusType("danger");
         when(cashierSessionMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
 
@@ -188,6 +191,9 @@ class CashierSessionServiceImplTest {
         assertEquals("张\"女士", query.getCustomerName());
         assertEquals("asc", query.getSortOrder());
         assertTrue(csv.startsWith("\uFEFF会话编号,预付单号,支付单号"));
+        assertTrue(csv.contains("收银台标题,支付场景,终端"));
+        assertTrue(csv.contains("HOME_CLEAN"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
         assertTrue(csv.contains("\"danger\""));
         assertTrue(csv.contains("\"张*\""));
         assertFalse(csv.contains("\"张\"\"女士\","));
@@ -222,6 +228,24 @@ class CashierSessionServiceImplTest {
         assertEquals(2, result.getExpiringSoonCount());
         assertEquals("¥0.00", result.getTotalAmount());
         verify(cashierSessionMapper).findOverview(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingCashierSessionsWithNullQuery() {
+        when(cashierSessionMapper.findAll(org.mockito.ArgumentMatchers.any(CashierSessionQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(cashierSessionMapper.count(org.mockito.ArgumentMatchers.any(CashierSessionQueryDTO.class)))
+                .thenReturn(0L);
+
+        PageResultDTO<CashierSessionListItemDTO> result =
+                new CashierSessionServiceImpl(cashierSessionMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<CashierSessionQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(CashierSessionQueryDTO.class);
+        verify(cashierSessionMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int times) {

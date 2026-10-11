@@ -38,6 +38,7 @@ DROP TABLE IF EXISTS t_payment_alert_provider_review;
 DROP TABLE IF EXISTS t_payment_alert_provider_config;
 DROP TABLE IF EXISTS t_payment_issue_alert_log;
 DROP TABLE IF EXISTS t_payment_issue_action_log;
+DROP TABLE IF EXISTS t_payment_issue_action_request;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_return_code_import_review;
 DROP TABLE IF EXISTS t_payment_return_code_review;
@@ -693,6 +694,7 @@ CREATE TABLE t_payment_order (
     status_type VARCHAR(32) NOT NULL COMMENT '支付状态样式类型',
     success_at DATETIME DEFAULT NULL COMMENT '支付成功时间',
     created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_payment_order_id (payment_order_id),
     KEY idx_payment_order_no (order_no),
@@ -744,11 +746,13 @@ CREATE TABLE t_prepay_order (
     cashier_status VARCHAR(32) NOT NULL COMMENT '收银台状态',
     cashier_status_type VARCHAR(32) NOT NULL COMMENT '收银台状态样式类型',
     payment_order_id VARCHAR(64) DEFAULT NULL COMMENT '关联支付单号',
+    source_kind VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN' COMMENT '创建时订单来源类型',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     expires_at DATETIME NOT NULL COMMENT '失效时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_prepay_order_no (prepay_order_no),
     KEY idx_prepay_expire_payment (expires_at, payment_order_id),
+    KEY idx_prepay_payment_created (payment_order_id, created_at, id),
     KEY idx_prepay_order_created (order_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预付单表';
 
@@ -767,11 +771,14 @@ CREATE TABLE t_payment_attempt (
     prepay_order_no VARCHAR(64) NOT NULL COMMENT '关联预付单号',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
+    gateway_code VARCHAR(64) DEFAULT NULL COMMENT '渠道受理时的网关编码；历史及模拟支付为空',
     payment_method VARCHAR(32) NOT NULL COMMENT '支付方式',
     source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识',
     terminal VARCHAR(32) NOT NULL COMMENT '发起终端',
     client_ip VARCHAR(64) NOT NULL COMMENT '客户端IP',
     idempotency_key VARCHAR(128) NOT NULL COMMENT '幂等键',
+    idempotency_key_bytes VARBINARY(512) GENERATED ALWAYS AS (CAST(idempotency_key AS BINARY(512))) COMMENT '幂等键 UTF-8 字节及补零精确唯一值',
+    request_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '规范提交请求摘要；历史支付尝试为空',
     request_payload VARCHAR(2048) NOT NULL COMMENT '请求报文',
     response_payload VARCHAR(2048) DEFAULT NULL COMMENT '响应报文',
     attempt_status VARCHAR(32) NOT NULL COMMENT '尝试状态',
@@ -781,7 +788,8 @@ CREATE TABLE t_payment_attempt (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_attempt_no (attempt_no),
-    UNIQUE KEY uk_attempt_idempotency (idempotency_key),
+    UNIQUE KEY uk_attempt_idempotency_bytes (idempotency_key_bytes),
+    KEY idx_attempt_idempotency (idempotency_key),
     KEY idx_attempt_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付尝试表';
 
@@ -947,6 +955,15 @@ CREATE TABLE t_refund_operation_log (
     KEY idx_refund_operation_refund_created (refund_order_id, created_at),
     KEY idx_refund_operation_attempt_action_created (refund_attempt_no, action_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款操作日志表';
+
+CREATE TABLE t_payment_issue_action_request (
+    idempotency_key_hash VARCHAR(64) NOT NULL COMMENT '规范化幂等键的 SHA-256 摘要',
+    request_fingerprint VARCHAR(64) NOT NULL COMMENT '规范化请求摘要',
+    claim_token VARCHAR(36) NOT NULL COMMENT '本次事务占用标记',
+    response_json LONGTEXT DEFAULT NULL COMMENT '提交时脱敏的目标响应',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (idempotency_key_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付异常批量动作请求去重表';
 
 CREATE TABLE t_payment_issue_action_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

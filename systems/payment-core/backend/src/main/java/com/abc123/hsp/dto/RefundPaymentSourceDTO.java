@@ -19,6 +19,8 @@ public class RefundPaymentSourceDTO {
     private BigDecimal paidAmount;
     /** 原支付状态。 */
     private String status;
+    /** 支付成功终态与最近一次尝试在数据库原精度下是否一致。 */
+    private Boolean paymentSuccessFactsValid;
     /** 原支付方式。 */
     private String paymentMethod;
     /** 原支付渠道编码。 */

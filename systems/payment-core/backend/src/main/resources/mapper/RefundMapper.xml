@@ -5,35 +5,173 @@
 <mapper namespace="com.abc123.hsp.mapper.RefundMapper">
 
     <sql id="refundOrderListOrder">
-        ORDER BY applied_at DESC, id DESC
+        ORDER BY refund_order.applied_at DESC, refund_order.id DESC
     </sql>
 
-    <sql id="refundTerminalFactMismatchCondition">
-        status IN ('SUCCESS', 'FAIL')
-        AND (
-            terminal_at IS NULL
-            OR (status = 'FAIL' AND success_at IS NOT NULL)
+    <sql id="latestPaymentPrepayJoin">
+        LEFT JOIN t_prepay_order prepay_order ON prepay_order.id = (
+            SELECT latest_prepay.id
+            FROM t_prepay_order latest_prepay
+            WHERE latest_prepay.payment_order_id = refund_order.payment_order_id
+              AND CHAR_LENGTH(latest_prepay.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+              AND CAST(latest_prepay.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+            ORDER BY latest_prepay.created_at DESC, latest_prepay.id DESC
+            LIMIT 1
+        )
+    </sql>
+
+    <sql id="exactRefundPaymentJoin">
+        INNER JOIN t_payment_order payment_order
+            ON payment_order.payment_order_id = refund_order.payment_order_id
+            AND CHAR_LENGTH(payment_order.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+            AND CAST(payment_order.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+    </sql>
+
+    <sql id="latestRefundAttemptJoin">
+        LEFT JOIN t_refund_attempt attempt ON attempt.id = (
+            SELECT latest_attempt.id
+            FROM t_refund_attempt latest_attempt
+            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+              AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund_order.refund_order_id)
+              AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(refund_order.refund_order_id AS BINARY(256))
+            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+            LIMIT 1
+        )
+    </sql>
+
+    <sql id="refundSubmitEventStatus">
+        (SELECT event.publish_status
+         FROM t_payment_event event
+         WHERE event.event_type = 'REFUND_SUBMIT'
+           AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+           AND CAST(event.event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
+           AND event.biz_no = attempt.refund_attempt_no
+           AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(attempt.refund_attempt_no)
+           AND CAST(event.biz_no AS BINARY(256)) = CAST(attempt.refund_attempt_no AS BINARY(256))
+           AND event.payment_order_id = refund_order.payment_order_id
+           AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+           AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+           AND event.downstream_system = 'gateway-access'
+           AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+           AND CAST(event.downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+           AND event.event_topic = 'payment.refund.submitted.v1'
+           AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+           AND CAST(event.event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
+         ORDER BY event.id DESC
+         LIMIT 1)
+    </sql>
+
+    <sql id="refundTerminalCoreFactMismatchCondition">
+        (
+            refund_order.refund_amount IS NULL
+            OR refund_order.refund_amount &lt;= 0
+            OR NOT EXISTS (
+                SELECT 1
+                FROM t_payment_order refund_payment_order
+                WHERE refund_payment_order.payment_order_id = refund_order.payment_order_id
+                  AND CHAR_LENGTH(refund_payment_order.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+                  AND CAST(refund_payment_order.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+                  AND refund_payment_order.amount &gt; 0
+                  AND refund_order.refund_amount &lt;= refund_payment_order.amount
+            )
+            OR refund_order.terminal_at IS NULL
+            OR (refund_order.status = 'SUCCESS' AND (
+                CHAR_LENGTH(refund_order.status) &lt;&gt; 7
+                OR CAST(refund_order.status AS BINARY(8)) &lt;&gt; CAST('SUCCESS' AS BINARY(8))
+                OR refund_order.status_type IS NULL
+                OR CHAR_LENGTH(refund_order.status_type) &lt;&gt; 7
+                OR LOWER(refund_order.status_type) &lt;&gt; 'success'
+            ))
+            OR (refund_order.status = 'FAIL' AND (
+                CHAR_LENGTH(refund_order.status) &lt;&gt; 4
+                OR CAST(refund_order.status AS BINARY(8)) &lt;&gt; CAST('FAIL' AS BINARY(8))
+                OR refund_order.status_type IS NULL
+                OR CHAR_LENGTH(refund_order.status_type) &lt;&gt; 6
+                OR LOWER(refund_order.status_type) &lt;&gt; 'danger'
+            ))
+            OR (refund_order.status = 'FAIL' AND refund_order.success_at IS NOT NULL)
+            OR NULLIF(TRIM(refund_order.channel_code), '') IS NULL
+            OR NULLIF(TRIM(refund_order.channel_refund_no), '') IS NULL
+            OR refund_order.channel_submitted_at IS NULL
+            OR refund_order.channel_submitted_at &lt; refund_order.applied_at
+            OR refund_order.channel_submitted_at &gt; refund_order.terminal_at
+            OR (refund_order.status = 'SUCCESS' AND refund_order.success_at IS NOT NULL AND (
+                refund_order.success_at &lt; refund_order.applied_at
+                OR refund_order.success_at &gt; refund_order.terminal_at
+            ))
             OR NOT EXISTS (
                 SELECT 1
                 FROM t_refund_attempt terminal_attempt
                 WHERE terminal_attempt.id = (
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
-                    WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                    WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(refund_order.refund_order_id)
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(refund_order.refund_order_id AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
                 )
-                  AND terminal_attempt.attempt_status = t_refund_order.status
+                  AND CHAR_LENGTH(terminal_attempt.attempt_status) = CHAR_LENGTH(refund_order.status)
+                  AND CAST(terminal_attempt.attempt_status AS BINARY(8)) = CAST(refund_order.status AS BINARY(8))
+                  AND CHAR_LENGTH(terminal_attempt.attempt_status_type) = CHAR_LENGTH(refund_order.status_type)
+                  AND LOWER(terminal_attempt.attempt_status_type) = LOWER(refund_order.status_type)
+                  AND CHAR_LENGTH(terminal_attempt.channel_code) = CHAR_LENGTH(refund_order.channel_code)
+                  AND CAST(terminal_attempt.channel_code AS BINARY(256)) = CAST(refund_order.channel_code AS BINARY(256))
+                  AND CHAR_LENGTH(terminal_attempt.channel_refund_no) = CHAR_LENGTH(refund_order.channel_refund_no)
+                  AND CAST(terminal_attempt.channel_refund_no AS BINARY(512)) = CAST(refund_order.channel_refund_no AS BINARY(512))
                   AND terminal_attempt.completed_at IS NOT NULL
+                  AND terminal_attempt.completed_at &gt;= refund_order.applied_at
+                  AND terminal_attempt.completed_at &gt;= refund_order.channel_submitted_at
+                  AND terminal_attempt.completed_at &lt;= refund_order.terminal_at
+                  AND (refund_order.status &lt;&gt; 'SUCCESS'
+                       OR refund_order.success_at IS NULL
+                       OR terminal_attempt.completed_at &lt;= refund_order.success_at)
             )
         )
     </sql>
 
+    <sql id="refundTerminalFactMismatchCondition">
+        refund_order.status IN ('SUCCESS', 'FAIL')
+        AND (
+            <include refid="com.abc123.hsp.mapper.RefundMapper.refundTerminalCoreFactMismatchCondition"/>
+            OR (refund_order.status = 'SUCCESS' AND EXISTS (
+                SELECT 1
+                FROM t_payment_order cumulative_payment_order
+                WHERE cumulative_payment_order.payment_order_id = refund_order.payment_order_id
+                  AND CHAR_LENGTH(cumulative_payment_order.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+                  AND CAST(cumulative_payment_order.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+                  AND cumulative_payment_order.amount &lt; (
+                      SELECT COALESCE(SUM(refund_order.refund_amount), 0)
+                      FROM t_refund_order refund_order
+                      WHERE refund_order.payment_order_id = cumulative_payment_order.payment_order_id
+                        AND CHAR_LENGTH(refund_order.payment_order_id) = CHAR_LENGTH(cumulative_payment_order.payment_order_id)
+                        AND CAST(refund_order.payment_order_id AS BINARY(256)) = CAST(cumulative_payment_order.payment_order_id AS BINARY(256))
+                        AND refund_order.status = 'SUCCESS'
+                        AND refund_order.success_at IS NOT NULL
+                        AND NOT (<include refid="com.abc123.hsp.mapper.RefundMapper.refundTerminalCoreFactMismatchCondition"/>)
+                  )
+            ))
+        )
+    </sql>
+
+    <sql id="trustedRefundSuccessCondition">
+        refund_order.status = 'SUCCESS'
+        AND refund_order.success_at IS NOT NULL
+        AND NOT (<include refid="com.abc123.hsp.mapper.RefundMapper.refundTerminalFactMismatchCondition"/>)
+    </sql>
+
+    <sql id="unverifiedRefundSuccessCondition">
+        refund_order.status = 'SUCCESS'
+        AND (refund_order.success_at IS NULL OR
+             (<include refid="refundTerminalFactMismatchCondition"/>))
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.RefundListItemDTO">
-        SELECT refund_order_id AS refundOrderId,
-               payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               customer_name AS customerName,
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.payment_order_id AS paymentOrderId,
+               prepay_order.pay_scene AS payScene,
+               refund_order.order_no AS orderNo,
+               refund_order.customer_name AS customerName,
                CONCAT('¥', FORMAT(refund_amount, 2)) AS refundAmount,
                refund_method AS refundMethod,
                status,
@@ -42,18 +180,32 @@
                CASE
                    WHEN success_at IS NULL THEN '-'
                    ELSE DATE_FORMAT(success_at, '%Y-%m-%d %H:%i:%s')
-               END AS successAt
-        FROM t_refund_order
+               END AS successAt,
+               CASE
+                   WHEN terminal_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(terminal_at, '%Y-%m-%d %H:%i:%s')
+               END AS terminalAt,
+               channel_code AS channelCode,
+               channel_refund_no AS channelRefundNo,
+               CASE
+                   WHEN channel_submitted_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(channel_submitted_at, '%Y-%m-%d %H:%i:%s')
+               END AS channelSubmittedAt
+        FROM t_refund_order refund_order
+        <include refid="latestPaymentPrepayJoin"/>
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
-                refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'UNVERIFIED_SUCCESS'">
+                    AND <include refid="unverifiedRefundSuccessCondition"/>
                 </when>
                 <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
                     AND <include refid="refundTerminalFactMismatchCondition"/>
@@ -75,7 +227,7 @@
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
-        FROM t_refund_order
+        FROM t_refund_order refund_order
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
                 refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
@@ -86,6 +238,9 @@
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'UNVERIFIED_SUCCESS'">
+                    AND <include refid="unverifiedRefundSuccessCondition"/>
                 </when>
                 <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
                     AND <include refid="refundTerminalFactMismatchCondition"/>
@@ -104,10 +259,11 @@
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.RefundListItemDTO">
-        SELECT refund_order_id AS refundOrderId,
-               payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               customer_name AS customerName,
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.payment_order_id AS paymentOrderId,
+               prepay_order.pay_scene AS payScene,
+               refund_order.order_no AS orderNo,
+               refund_order.customer_name AS customerName,
                CONCAT('¥', FORMAT(refund_amount, 2)) AS refundAmount,
                refund_method AS refundMethod,
                status,
@@ -116,18 +272,32 @@
                CASE
                    WHEN success_at IS NULL THEN '-'
                    ELSE DATE_FORMAT(success_at, '%Y-%m-%d %H:%i:%s')
-               END AS successAt
-        FROM t_refund_order
+               END AS successAt,
+               CASE
+                   WHEN terminal_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(terminal_at, '%Y-%m-%d %H:%i:%s')
+               END AS terminalAt,
+               channel_code AS channelCode,
+               channel_refund_no AS channelRefundNo,
+               CASE
+                   WHEN channel_submitted_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(channel_submitted_at, '%Y-%m-%d %H:%i:%s')
+               END AS channelSubmittedAt
+        FROM t_refund_order refund_order
+        <include refid="latestPaymentPrepayJoin"/>
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
-                refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'UNVERIFIED_SUCCESS'">
+                    AND <include refid="unverifiedRefundSuccessCondition"/>
                 </when>
                 <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
                     AND <include refid="refundTerminalFactMismatchCondition"/>
@@ -148,33 +318,20 @@
     </select>
 
     <select id="findFailedRefundOrderIds" resultType="string">
-        SELECT refund_order_id
-        FROM t_refund_order
-        WHERE status = 'FAIL'
-          AND terminal_at IS NOT NULL
-          AND success_at IS NULL
-          AND EXISTS (
-            SELECT 1
-            FROM t_refund_attempt terminal_attempt
-            WHERE terminal_attempt.id = (
-                SELECT latest_attempt.id
-                FROM t_refund_attempt latest_attempt
-                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
-                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
-                LIMIT 1
-            )
-              AND terminal_attempt.attempt_status = 'FAIL'
-              AND terminal_attempt.completed_at IS NOT NULL
-          )
-        ORDER BY terminal_at ASC, id ASC
+        SELECT refund_order.refund_order_id
+        FROM t_refund_order refund_order
+        WHERE refund_order.status = 'FAIL'
+          AND NOT (<include refid="refundTerminalFactMismatchCondition"/>)
+        ORDER BY refund_order.terminal_at ASC, refund_order.id ASC
         LIMIT #{batchSize}
     </select>
 
     <select id="findByRefundOrderId" resultType="com.abc123.hsp.dto.RefundListItemDTO">
-        SELECT refund_order_id AS refundOrderId,
-               payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               customer_name AS customerName,
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.payment_order_id AS paymentOrderId,
+               prepay_order.pay_scene AS payScene,
+               refund_order.order_no AS orderNo,
+               refund_order.customer_name AS customerName,
                CONCAT('¥', FORMAT(refund_amount, 2)) AS refundAmount,
                refund_method AS refundMethod,
                status,
@@ -183,14 +340,28 @@
                CASE
                    WHEN success_at IS NULL THEN '-'
                    ELSE DATE_FORMAT(success_at, '%Y-%m-%d %H:%i:%s')
-               END AS successAt
-        FROM t_refund_order
-        WHERE refund_order_id = #{refundOrderId}
+               END AS successAt,
+               CASE
+                   WHEN terminal_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(terminal_at, '%Y-%m-%d %H:%i:%s')
+               END AS terminalAt,
+               channel_code AS channelCode,
+               channel_refund_no AS channelRefundNo,
+               CASE
+                   WHEN channel_submitted_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(channel_submitted_at, '%Y-%m-%d %H:%i:%s')
+               END AS channelSubmittedAt
+        FROM t_refund_order refund_order
+        <include refid="latestPaymentPrepayJoin"/>
+        WHERE refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
     </select>
 
     <select id="findDetailByRefundOrderId" resultType="com.abc123.hsp.dto.RefundDetailDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.payment_order_id AS paymentOrderId,
+               prepay_order.pay_scene AS payScene,
                refund_order.order_no AS orderNo,
                refund_order.customer_name AS customerName,
                CONCAT('¥', FORMAT(refund_order.refund_amount, 2)) AS refundAmount,
@@ -217,9 +388,11 @@
                    ELSE DATE_FORMAT(refund_order.channel_submitted_at, '%Y-%m-%d %H:%i:%s')
                END AS channelSubmittedAt
         FROM t_refund_order refund_order
-        INNER JOIN t_payment_order payment_order
-            ON payment_order.payment_order_id = refund_order.payment_order_id
+        <include refid="exactRefundPaymentJoin"/>
+        <include refid="latestPaymentPrepayJoin"/>
         WHERE refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -234,6 +407,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_refund_operation_log
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         ORDER BY created_at DESC, id DESC
     </select>
 
@@ -254,19 +429,85 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_refund_attempt
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         ORDER BY created_at DESC, id DESC
     </select>
 
     <select id="findPaymentSourceForUpdate" resultType="com.abc123.hsp.dto.RefundPaymentSourceDTO">
-        SELECT payment_order_id AS paymentOrderId,
-               order_no AS orderNo,
-               customer_name AS customerName,
-               amount AS paidAmount,
-               status,
-               payment_method AS paymentMethod,
-               channel_code AS channelCode
-        FROM t_payment_order
-        WHERE payment_order_id = #{paymentOrderId}
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.order_no AS orderNo,
+               p.customer_name AS customerName,
+               p.amount AS paidAmount,
+               p.status,
+               p.payment_method AS paymentMethod,
+               p.channel_code AS channelCode,
+               CASE WHEN p.status = 'SUCCESS'
+                         AND CHAR_LENGTH(p.status) = 7
+                         AND CHAR_LENGTH(p.status_type) = 7
+                         AND LOWER(p.status_type) = 'success'
+                         AND p.amount &gt; 0
+                         AND p.created_at &lt;= p.success_at
+                         AND NULLIF(TRIM(p.channel_code), '') IS NOT NULL
+                         AND NULLIF(TRIM(p.channel_transaction_no), '') IS NOT NULL
+                         AND EXISTS (
+                             SELECT 1 FROM t_prepay_order binding_prepay
+                             WHERE binding_prepay.payment_order_id = p.payment_order_id
+                               AND CHAR_LENGTH(binding_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                               AND CAST(binding_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                               AND binding_prepay.order_no = p.order_no
+                               AND CHAR_LENGTH(binding_prepay.order_no) = CHAR_LENGTH(p.order_no)
+                               AND CAST(binding_prepay.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                               AND binding_prepay.amount = p.amount
+                               AND binding_prepay.amount &gt; 0
+                               AND ((CHAR_LENGTH(binding_prepay.source_kind) = 14
+                                     AND CAST(binding_prepay.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16))
+                                     AND EXISTS (SELECT 1 FROM t_order source_order
+                                                 WHERE source_order.order_no = p.order_no
+                                                   AND CHAR_LENGTH(source_order.order_no) = CHAR_LENGTH(p.order_no)
+                                                   AND CAST(source_order.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))))
+                                    OR (CHAR_LENGTH(binding_prepay.source_kind) = 7
+                                        AND CAST(binding_prepay.source_kind AS BINARY(16)) = CAST('VIRTUAL' AS BINARY(16))
+                                        AND NOT EXISTS (SELECT 1 FROM t_order source_order
+                                                        WHERE source_order.order_no = p.order_no
+                                                          AND CHAR_LENGTH(source_order.order_no) = CHAR_LENGTH(p.order_no)
+                                                          AND CAST(source_order.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256)))))
+                               AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                                    WHERE all_prepay.payment_order_id = p.payment_order_id
+                                      AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                                      AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                         )
+                         AND EXISTS (
+                             SELECT 1 FROM t_payment_attempt pa
+                             WHERE pa.id = (
+                                 SELECT latest_pa.id FROM t_payment_attempt latest_pa
+                                 WHERE latest_pa.payment_order_id = p.payment_order_id
+                                   AND CHAR_LENGTH(latest_pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                                   AND CAST(latest_pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                                 ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                                 LIMIT 1
+                             )
+                               AND pa.attempt_status = '成功'
+                               AND CHAR_LENGTH(pa.attempt_status) = 2
+                               AND CHAR_LENGTH(pa.attempt_status_type) = 7
+                               AND LOWER(pa.attempt_status_type) = 'success'
+                               AND pa.channel_code = p.channel_code
+                               AND CHAR_LENGTH(pa.channel_code) = CHAR_LENGTH(p.channel_code)
+                               AND CAST(pa.channel_code AS BINARY(256)) = CAST(p.channel_code AS BINARY(256))
+                               AND CHAR_LENGTH(TRIM(p.payment_method)) &gt; 0
+                               AND pa.payment_method = p.payment_method
+                               AND CHAR_LENGTH(pa.payment_method) = CHAR_LENGTH(p.payment_method)
+                               AND CAST(pa.payment_method AS BINARY(256)) = CAST(p.payment_method AS BINARY(256))
+                               AND pa.created_at IS NOT NULL
+                               AND pa.created_at &gt;= p.created_at
+                               AND pa.completed_at IS NOT NULL
+                               AND pa.completed_at &gt;= pa.created_at
+                               AND pa.completed_at &lt;= p.success_at
+                         ) THEN 1 ELSE 0 END AS paymentSuccessFactsValid
+        FROM t_payment_order p
+        WHERE p.payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(p.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
         FOR UPDATE
     </select>
 
@@ -274,13 +515,18 @@
             resultType="com.abc123.hsp.dto.RefundApplicationIdempotencyDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.payment_order_id AS paymentOrderId,
+               refund_order.idempotency_key AS idempotencyKey,
                refund_order.refund_amount AS refundAmount,
                refund_order.refund_method AS refundMethod,
                refund_order.refund_reason AS refundReason,
                (SELECT operation_log.operator_name
                 FROM t_refund_operation_log operation_log
                 WHERE operation_log.refund_order_id = refund_order.refund_order_id
+                  AND CHAR_LENGTH(operation_log.refund_order_id) = CHAR_LENGTH(refund_order.refund_order_id)
+                  AND CAST(operation_log.refund_order_id AS BINARY(256)) = CAST(refund_order.refund_order_id AS BINARY(256))
                   AND operation_log.action_code = 'APPLY'
+                  AND CHAR_LENGTH(operation_log.action_code) = CHAR_LENGTH('APPLY')
+                  AND CAST(operation_log.action_code AS BINARY(256)) = CAST('APPLY' AS BINARY(256))
                 ORDER BY operation_log.id ASC
                 LIMIT 1) AS operator
         FROM t_refund_order refund_order
@@ -293,9 +539,53 @@
         SELECT refund_order_id AS refundOrderId,
                payment_order_id AS paymentOrderId,
                refund_amount AS refundAmount,
-               status
+               status,
+               status_type AS statusType,
+               channel_code AS channelCode,
+               channel_refund_no AS channelRefundNo,
+               channel_submitted_at AS channelSubmittedAt,
+               applied_at AS appliedAt,
+               success_at AS successAt,
+               terminal_at AS terminalAt,
+               (SELECT latest_attempt.attempt_status
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                  AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(t_refund_order.refund_order_id)
+                  AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(t_refund_order.refund_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1) AS latestAttemptStatus,
+               (SELECT latest_attempt.attempt_status_type
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                  AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(t_refund_order.refund_order_id)
+                  AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(t_refund_order.refund_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1) AS latestAttemptStatusType,
+               (SELECT latest_attempt.channel_code
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                  AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(t_refund_order.refund_order_id)
+                  AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(t_refund_order.refund_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1) AS latestAttemptChannelCode,
+               (SELECT latest_attempt.channel_refund_no
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                  AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(t_refund_order.refund_order_id)
+                  AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(t_refund_order.refund_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1) AS latestAttemptChannelRefundNo,
+               (SELECT latest_attempt.completed_at
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                  AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(t_refund_order.refund_order_id)
+                  AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(t_refund_order.refund_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1) AS latestAttemptCompletedAt
         FROM t_refund_order
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         FOR UPDATE
     </select>
 
@@ -312,9 +602,10 @@
                refund_order.channel_code AS submittedChannelCode,
                refund_order.channel_refund_no AS channelRefundNo
         FROM t_refund_order refund_order
-        INNER JOIN t_payment_order payment_order
-            ON payment_order.payment_order_id = refund_order.payment_order_id
+        <include refid="exactRefundPaymentJoin"/>
         WHERE refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -330,16 +621,24 @@
                attempt.channel_code AS channelCode,
                refund_order.status AS refundStatus,
                attempt.attempt_status AS attemptStatus,
-               attempt.channel_code AS submittedChannelCode,
-               attempt.channel_refund_no AS channelRefundNo
+               refund_order.channel_code AS submittedChannelCode,
+               attempt.channel_refund_no AS channelRefundNo,
+               refund_order.channel_refund_no AS orderChannelRefundNo,
+               CASE WHEN refund_order.channel_submitted_at IS NULL THEN FALSE ELSE TRUE END AS channelSubmitRecorded
         FROM t_refund_attempt attempt
         INNER JOIN t_refund_order refund_order
             ON refund_order.refund_order_id = attempt.refund_order_id
+            AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(attempt.refund_order_id)
+            AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(attempt.refund_order_id AS BINARY(256))
         WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
           AND attempt.id = (
               SELECT latest_attempt.id
               FROM t_refund_attempt latest_attempt
               WHERE latest_attempt.refund_order_id = attempt.refund_order_id
+                AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(attempt.refund_order_id)
+                AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(attempt.refund_order_id AS BINARY(256))
               ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
               LIMIT 1
           )
@@ -372,59 +671,78 @@
 
     <select id="findCallbackSourceForUpdate" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.refund_amount AS refundAmount,
+               payment_order.amount AS paidAmount,
+               CASE WHEN <include refid="refundTerminalFactMismatchCondition"/>
+                    THEN 1 ELSE 0 END AS terminalFactMismatch,
                refund_order.status,
+               refund_order.status_type AS statusType,
+               refund_order.applied_at AS appliedAt,
+               refund_order.channel_submitted_at AS channelSubmittedAt,
                refund_order.success_at AS successAt,
                refund_order.terminal_at AS terminalAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
+               refund_order.channel_code AS orderChannelCode,
+               refund_order.channel_refund_no AS orderChannelRefundNo,
                attempt.attempt_status AS attemptStatus,
+               attempt.attempt_status_type AS attemptStatusType,
                attempt.completed_at AS attemptCompletedAt,
-               (SELECT event.publish_status
-                FROM t_payment_event event
-                WHERE event.event_type = 'REFUND_SUBMIT'
-                  AND event.biz_no = attempt.refund_attempt_no
-                ORDER BY event.id DESC
-                LIMIT 1) AS submitEventStatus
+               <include refid="refundSubmitEventStatus"/> AS submitEventStatus
         FROM t_refund_order refund_order
-        LEFT JOIN t_refund_attempt attempt ON attempt.id = (
-            SELECT latest_attempt.id
-            FROM t_refund_attempt latest_attempt
-            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
-            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
-            LIMIT 1
-        )
+        <include refid="exactRefundPaymentJoin"/>
+        <include refid="latestRefundAttemptJoin"/>
         WHERE refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         FOR UPDATE
     </select>
 
     <select id="findCallbackSourceByRefundOrderId" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.refund_amount AS refundAmount,
+               payment_order.amount AS paidAmount,
+               CASE WHEN <include refid="refundTerminalFactMismatchCondition"/>
+                    THEN 1 ELSE 0 END AS terminalFactMismatch,
                refund_order.status,
+               refund_order.status_type AS statusType,
+               refund_order.applied_at AS appliedAt,
+               refund_order.channel_submitted_at AS channelSubmittedAt,
                refund_order.success_at AS successAt,
                refund_order.terminal_at AS terminalAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
+               refund_order.channel_code AS orderChannelCode,
+               refund_order.channel_refund_no AS orderChannelRefundNo,
                attempt.attempt_status AS attemptStatus,
+               attempt.attempt_status_type AS attemptStatusType,
                attempt.completed_at AS attemptCompletedAt,
-               (SELECT event.publish_status
-                FROM t_payment_event event
-                WHERE event.event_type = 'REFUND_SUBMIT'
-                  AND event.biz_no = attempt.refund_attempt_no
-                ORDER BY event.id DESC
-                LIMIT 1) AS submitEventStatus
+               <include refid="refundSubmitEventStatus"/> AS submitEventStatus
         FROM t_refund_order refund_order
-        LEFT JOIN t_refund_attempt attempt ON attempt.id = (
-            SELECT latest_attempt.id
-            FROM t_refund_attempt latest_attempt
-            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
-            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
-            LIMIT 1
-        )
+        <include refid="exactRefundPaymentJoin"/>
+        <include refid="latestRefundAttemptJoin"/>
         WHERE refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         LIMIT 1
     </select>
+
+    <sql id="exactRefundSubmitEventIdentity">
+        CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+        AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
+        AND CHAR_LENGTH(event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+        AND CAST(event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
+        AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+        AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+        AND CHAR_LENGTH(biz_no) = CHAR_LENGTH(#{refundAttemptNo})
+        AND CAST(biz_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+        AND CHAR_LENGTH(downstream_system) = CHAR_LENGTH('gateway-access')
+        AND CAST(downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+        AND CHAR_LENGTH(event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+        AND CAST(event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
+    </sql>
 
     <insert id="upsertRefundSubmitEvent">
         INSERT INTO t_payment_event(
@@ -457,13 +775,93 @@
             NOW()
         )
         ON DUPLICATE KEY UPDATE
-            publish_status = 'PENDING',
-            publish_status_type = 'warn',
-            retry_count = 0,
-            last_published_at = NULL,
-            next_retry_at = NOW(),
-            event_payload = '退款渠道待下发'
+            publish_status = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN 'PENDING' ELSE publish_status END,
+            publish_status_type = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN 'warn' ELSE publish_status_type END,
+            retry_count = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN 0 ELSE retry_count END,
+            last_published_at = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN NULL ELSE last_published_at END,
+            next_retry_at = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN NOW() ELSE next_retry_at END,
+            event_payload = CASE WHEN <include refid="exactRefundSubmitEventIdentity"/>
+                THEN '退款渠道待下发' ELSE event_payload END
     </insert>
+
+    <select id="isMatchingPendingRefundSubmitEvent" resultType="boolean">
+        SELECT COUNT(1) = 1
+        FROM t_payment_event
+        WHERE event_no = #{eventNo}
+          AND <include refid="exactRefundSubmitEventIdentity"/>
+          AND publish_status = 'PENDING'
+          AND retry_count = 0
+    </select>
+
+    <select id="isMatchingSuccessfulRefundSubmitEvent" resultType="boolean">
+        SELECT COUNT(1) = 1
+        FROM t_payment_event event
+        INNER JOIN t_refund_attempt attempt
+            ON attempt.refund_attempt_no = event.biz_no
+            AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(event.biz_no)
+            AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(event.biz_no AS BINARY(256))
+        INNER JOIN t_refund_order refund_order
+            ON refund_order.refund_order_id = attempt.refund_order_id
+            AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(attempt.refund_order_id)
+            AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(attempt.refund_order_id AS BINARY(256))
+        WHERE event.event_no = #{eventNo}
+          AND CHAR_LENGTH(event.event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event.event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
+          AND event.event_type = 'REFUND_SUBMIT'
+          AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+          AND CAST(event.event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
+          AND event.biz_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(event.biz_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+          AND event.payment_order_id = refund_order.payment_order_id
+          AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+          AND CAST(event.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+          AND event.downstream_system = 'gateway-access'
+          AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+          AND CAST(event.downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+          AND event.event_topic = 'payment.refund.submitted.v1'
+          AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+          AND CAST(event.event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
+          AND event.publish_status = 'SUCCESS'
+          AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('SUCCESS')
+          AND CAST(event.publish_status AS BINARY(256)) = CAST('SUCCESS' AS BINARY(256))
+          AND attempt.submitted_at IS NOT NULL
+          AND attempt.channel_refund_no IS NOT NULL
+          AND refund_order.channel_submitted_at IS NOT NULL
+          AND attempt.channel_code = refund_order.channel_code
+          AND CHAR_LENGTH(attempt.channel_code) = CHAR_LENGTH(refund_order.channel_code)
+          AND CAST(attempt.channel_code AS BINARY(256)) = CAST(refund_order.channel_code AS BINARY(256))
+          AND attempt.channel_refund_no = refund_order.channel_refund_no
+          AND CHAR_LENGTH(attempt.channel_refund_no) = CHAR_LENGTH(refund_order.channel_refund_no)
+          AND CAST(attempt.channel_refund_no AS BINARY(256)) = CAST(refund_order.channel_refund_no AS BINARY(256))
+          AND (
+              (attempt.attempt_status = 'ACCEPTED'
+               AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('ACCEPTED')
+               AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('ACCEPTED' AS BINARY(32)))
+              OR (attempt.attempt_status = 'SUCCESS'
+                  AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('SUCCESS')
+                  AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32)))
+              OR (attempt.attempt_status = 'FAIL'
+                  AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('FAIL')
+                  AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('FAIL' AS BINARY(32)))
+          )
+          AND (
+              (refund_order.status = 'PROCESSING'
+               AND CHAR_LENGTH(refund_order.status) = CHAR_LENGTH('PROCESSING')
+               AND CAST(refund_order.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32)))
+              OR (refund_order.status = 'SUCCESS'
+                  AND CHAR_LENGTH(refund_order.status) = CHAR_LENGTH('SUCCESS')
+                  AND CAST(refund_order.status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32)))
+              OR (refund_order.status = 'FAIL'
+                  AND CHAR_LENGTH(refund_order.status) = CHAR_LENGTH('FAIL')
+                  AND CAST(refund_order.status AS BINARY(32)) = CAST('FAIL' AS BINARY(32)))
+          )
+    </select>
 
     <update id="bindRefundAttemptAccepted">
         UPDATE t_refund_attempt
@@ -472,6 +870,8 @@
             attempt_status_type = 'warn',
             submitted_at = COALESCE(submitted_at, NOW())
         WHERE refund_attempt_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
           AND attempt_status IN ('PENDING', 'FAILED', 'UNKNOWN')
           AND channel_refund_no IS NULL
     </update>
@@ -481,6 +881,8 @@
         SET attempt_status = 'FAILED',
             attempt_status_type = 'danger'
         WHERE refund_attempt_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
           AND attempt_status IN ('PENDING', 'FAILED')
           AND channel_refund_no IS NULL
     </update>
@@ -491,6 +893,8 @@
             attempt_status_type = 'warn',
             submitted_at = COALESCE(submitted_at, NOW())
         WHERE refund_attempt_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
           AND attempt_status IN ('PENDING', 'FAILED')
           AND channel_refund_no IS NULL
     </update>
@@ -499,16 +903,34 @@
         UPDATE t_refund_attempt
         SET attempt_status = #{attemptStatus},
             attempt_status_type = #{attemptStatusType},
-            completed_at = NOW()
+            completed_at = (
+                SELECT refund_order.terminal_at
+                FROM t_refund_order refund_order
+                WHERE refund_order.refund_order_id = t_refund_attempt.refund_order_id
+                  AND refund_order.status = #{attemptStatus}
+            )
         WHERE refund_attempt_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
           AND attempt_status = 'ACCEPTED'
+          AND EXISTS (
+              SELECT 1
+              FROM t_refund_order refund_order
+              WHERE refund_order.refund_order_id = t_refund_attempt.refund_order_id
+                AND refund_order.status = #{attemptStatus}
+                AND refund_order.terminal_at IS NOT NULL
+          )
     </update>
 
     <select id="findAttemptNoByChannelRefundNo" resultType="string">
         SELECT refund_attempt_no
         FROM t_refund_attempt
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND channel_refund_no = #{channelRefundNo}
+          AND CHAR_LENGTH(channel_refund_no) = CHAR_LENGTH(#{channelRefundNo})
+          AND CAST(channel_refund_no AS BINARY(256)) = CAST(#{channelRefundNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -518,20 +940,39 @@
             channel_refund_no = #{channelRefundNo},
             channel_submitted_at = NOW()
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'PROCESSING'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('PROCESSING')
+          AND CAST(status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
+          AND channel_code IS NULL
           AND channel_refund_no IS NULL
+          AND channel_submitted_at IS NULL
           AND EXISTS (
               SELECT 1
               FROM t_refund_attempt attempt
               WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
                 AND attempt.refund_order_id = #{refundOrderId}
+                AND CHAR_LENGTH(attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                AND CAST(attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                 AND attempt.channel_code = #{channelCode}
+                AND CHAR_LENGTH(attempt.channel_code) = CHAR_LENGTH(#{channelCode})
+                AND CAST(attempt.channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
                 AND attempt.channel_refund_no = #{channelRefundNo}
+                AND CHAR_LENGTH(attempt.channel_refund_no) = CHAR_LENGTH(#{channelRefundNo})
+                AND CAST(attempt.channel_refund_no AS BINARY(256)) = CAST(#{channelRefundNo} AS BINARY(256))
                 AND attempt.attempt_status = 'ACCEPTED'
+                AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('ACCEPTED')
+                AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('ACCEPTED' AS BINARY(32))
+                AND attempt.submitted_at IS NOT NULL
                 AND attempt.id = (
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
                     WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
                 )
@@ -544,27 +985,64 @@
             channel_refund_no = #{channelRefundNo},
             channel_submitted_at = NOW()
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'PROCESSING'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('PROCESSING')
+          AND CAST(status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
+          AND (channel_code IS NULL
+               OR (channel_code = #{channelCode}
+                   AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+                   AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))))
           AND channel_refund_no IS NULL
+          AND channel_submitted_at IS NULL
           AND EXISTS (
               SELECT 1
               FROM t_payment_event event
               WHERE event.event_type = 'REFUND_SUBMIT'
+                AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                AND CAST(event.event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
                 AND event.biz_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(event.biz_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+                AND event.payment_order_id = t_refund_order.payment_order_id
+                AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
+                AND CAST(event.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
+                AND event.downstream_system = 'gateway-access'
+                AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                AND CAST(event.downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+                AND event.event_topic = 'payment.refund.submitted.v1'
+                AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                AND CAST(event.event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
                 AND event.publish_status = 'UNKNOWN'
+                AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(event.publish_status AS BINARY(256)) = CAST('UNKNOWN' AS BINARY(256))
           )
           AND EXISTS (
               SELECT 1
               FROM t_refund_attempt attempt
               WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
                 AND attempt.refund_order_id = #{refundOrderId}
+                AND CHAR_LENGTH(attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                AND CAST(attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                 AND attempt.channel_code = #{channelCode}
+                AND CHAR_LENGTH(attempt.channel_code) = CHAR_LENGTH(#{channelCode})
+                AND CAST(attempt.channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
                 AND attempt.channel_refund_no = #{channelRefundNo}
+                AND CHAR_LENGTH(attempt.channel_refund_no) = CHAR_LENGTH(#{channelRefundNo})
+                AND CAST(attempt.channel_refund_no AS BINARY(256)) = CAST(#{channelRefundNo} AS BINARY(256))
                 AND attempt.attempt_status = 'ACCEPTED'
+                AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('ACCEPTED')
+                AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('ACCEPTED' AS BINARY(32))
+                AND attempt.submitted_at IS NOT NULL
                 AND attempt.id = (
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
                     WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
                 )
@@ -575,22 +1053,75 @@
         UPDATE t_refund_order
         SET channel_code = #{channelCode}
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'PROCESSING'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('PROCESSING')
+          AND CAST(status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
+          AND channel_code IS NULL
           AND channel_refund_no IS NULL
+          AND channel_submitted_at IS NULL
           AND EXISTS (
               SELECT 1
               FROM t_refund_attempt attempt
               WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
                 AND attempt.refund_order_id = #{refundOrderId}
+                AND CHAR_LENGTH(attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                AND CAST(attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                 AND attempt.channel_code = #{channelCode}
+                AND CHAR_LENGTH(attempt.channel_code) = CHAR_LENGTH(#{channelCode})
+                AND CAST(attempt.channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
                 AND attempt.channel_refund_no IS NULL
                 AND attempt.attempt_status = 'UNKNOWN'
+                AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('UNKNOWN')
+                AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+                AND attempt.submitted_at IS NOT NULL
                 AND attempt.id = (
                     SELECT latest_attempt.id
                     FROM t_refund_attempt latest_attempt
                     WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
                     ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
                     LIMIT 1
+                )
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_event event
+              WHERE event.event_no = #{eventNo}
+                AND CHAR_LENGTH(event.event_no) = CHAR_LENGTH(#{eventNo})
+                AND CAST(event.event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
+                AND event.event_type = 'REFUND_SUBMIT'
+                AND CHAR_LENGTH(event.event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                AND CAST(event.event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
+                AND event.payment_order_id = t_refund_order.payment_order_id
+                AND CHAR_LENGTH(event.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
+                AND CAST(event.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
+                AND event.biz_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(event.biz_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(event.biz_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+                AND event.downstream_system = 'gateway-access'
+                AND CHAR_LENGTH(event.downstream_system) = CHAR_LENGTH('gateway-access')
+                AND CAST(event.downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+                AND event.event_topic = 'payment.refund.submitted.v1'
+                AND CHAR_LENGTH(event.event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+                AND CAST(event.event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
+                AND (
+                    (event.publish_status = 'PENDING'
+                     AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('PENDING')
+                     AND CAST(event.publish_status AS BINARY(32)) = CAST('PENDING' AS BINARY(32)))
+                    OR (event.publish_status = 'FAILED'
+                        AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('FAILED')
+                        AND CAST(event.publish_status AS BINARY(32)) = CAST('FAILED' AS BINARY(32)))
+                    OR (event.publish_status = 'DEAD_LETTER'
+                        AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('DEAD_LETTER')
+                        AND CAST(event.publish_status AS BINARY(32)) = CAST('DEAD_LETTER' AS BINARY(32)))
+                    OR (event.publish_status = 'UNKNOWN'
+                        AND CHAR_LENGTH(event.publish_status) = CHAR_LENGTH('UNKNOWN')
+                        AND CAST(event.publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32)))
                 )
           )
     </update>
@@ -603,15 +1134,76 @@
             next_retry_at = NULL,
             event_payload = '退款渠道受理事实已由可信核查确认'
         WHERE event_type = 'REFUND_SUBMIT'
+          AND CHAR_LENGTH(event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+          AND CAST(event_type AS BINARY(256)) = CAST('REFUND_SUBMIT' AS BINARY(256))
           AND biz_no = #{refundAttemptNo}
+          AND CHAR_LENGTH(biz_no) = CHAR_LENGTH(#{refundAttemptNo})
+          AND CAST(biz_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+          AND downstream_system = 'gateway-access'
+          AND CHAR_LENGTH(downstream_system) = CHAR_LENGTH('gateway-access')
+          AND CAST(downstream_system AS BINARY(256)) = CAST('gateway-access' AS BINARY(256))
+          AND event_topic = 'payment.refund.submitted.v1'
+          AND CHAR_LENGTH(event_topic) = CHAR_LENGTH('payment.refund.submitted.v1')
+          AND CAST(event_topic AS BINARY(256)) = CAST('payment.refund.submitted.v1' AS BINARY(256))
           AND publish_status = 'UNKNOWN'
+          AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('UNKNOWN')
+          AND CAST(publish_status AS BINARY(256)) = CAST('UNKNOWN' AS BINARY(256))
+          AND EXISTS (
+              SELECT 1
+              FROM t_refund_attempt attempt
+              INNER JOIN t_refund_order refund_order
+                  ON refund_order.refund_order_id = attempt.refund_order_id
+                  AND CHAR_LENGTH(refund_order.refund_order_id) = CHAR_LENGTH(attempt.refund_order_id)
+                  AND CAST(refund_order.refund_order_id AS BINARY(256)) = CAST(attempt.refund_order_id AS BINARY(256))
+              WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND CHAR_LENGTH(attempt.refund_attempt_no) = CHAR_LENGTH(#{refundAttemptNo})
+                AND CAST(attempt.refund_attempt_no AS BINARY(256)) = CAST(#{refundAttemptNo} AS BINARY(256))
+                AND attempt.attempt_status = 'ACCEPTED'
+                AND CHAR_LENGTH(attempt.attempt_status) = CHAR_LENGTH('ACCEPTED')
+                AND CAST(attempt.attempt_status AS BINARY(32)) = CAST('ACCEPTED' AS BINARY(32))
+                AND attempt.submitted_at IS NOT NULL
+                AND refund_order.status = 'PROCESSING'
+                AND CHAR_LENGTH(refund_order.status) = CHAR_LENGTH('PROCESSING')
+                AND CAST(refund_order.status AS BINARY(32)) = CAST('PROCESSING' AS BINARY(32))
+                AND refund_order.channel_submitted_at IS NOT NULL
+                AND attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_refund_attempt latest_attempt
+                    WHERE latest_attempt.refund_order_id = attempt.refund_order_id
+                      AND CHAR_LENGTH(latest_attempt.refund_order_id) = CHAR_LENGTH(attempt.refund_order_id)
+                      AND CAST(latest_attempt.refund_order_id AS BINARY(256)) = CAST(attempt.refund_order_id AS BINARY(256))
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                )
+                AND attempt.channel_code = refund_order.channel_code
+                AND CHAR_LENGTH(attempt.channel_code) = CHAR_LENGTH(refund_order.channel_code)
+                AND CAST(attempt.channel_code AS BINARY(256)) = CAST(refund_order.channel_code AS BINARY(256))
+                AND attempt.channel_refund_no = refund_order.channel_refund_no
+                AND CHAR_LENGTH(attempt.channel_refund_no) = CHAR_LENGTH(refund_order.channel_refund_no)
+                AND CAST(attempt.channel_refund_no AS BINARY(256)) = CAST(refund_order.channel_refund_no AS BINARY(256))
+                AND t_payment_event.payment_order_id = refund_order.payment_order_id
+                AND CHAR_LENGTH(t_payment_event.payment_order_id) = CHAR_LENGTH(refund_order.payment_order_id)
+                AND CAST(t_payment_event.payment_order_id AS BINARY(256)) = CAST(refund_order.payment_order_id AS BINARY(256))
+          )
     </update>
 
     <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND status IN ('REVIEWING', 'PROCESSING', 'SUCCESS')
+    </select>
+
+    <select id="countInvalidActiveRefundAmounts" resultType="long">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND status IN ('REVIEWING', 'PROCESSING', 'SUCCESS')
+          AND (refund_amount IS NULL OR refund_amount &lt;= 0)
     </select>
 
     <insert id="insertRefund">
@@ -634,6 +1226,8 @@
                 ELSE terminal_at
             END
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = #{fromStatus}
     </update>
 
@@ -647,6 +1241,8 @@
             channel_refund_no = NULL,
             channel_submitted_at = NULL
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'FAIL'
     </update>
 

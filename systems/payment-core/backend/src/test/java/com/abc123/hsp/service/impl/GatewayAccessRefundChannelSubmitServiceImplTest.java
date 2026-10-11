@@ -16,16 +16,87 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.service.RefundChannelSubmitException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 class GatewayAccessRefundChannelSubmitServiceImplTest {
+
+    @Test
+    void shouldExchangeGatewayRefundContractOverLoopbackHttp() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicReference<JsonNode> submittedBody = new AtomicReference<>();
+        AtomicReference<String> submittedAppCode = new AtomicReference<>();
+        AtomicReference<String> submittedAccessKey = new AtomicReference<>();
+        AtomicInteger requestCount = new AtomicInteger();
+        AtomicBoolean accepted = new AtomicBoolean(true);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/gateway/refunds/submit", exchange -> {
+            requestCount.incrementAndGet();
+            submittedAppCode.set(exchange.getRequestHeaders().getFirst("X-Gateway-App-Code"));
+            submittedAccessKey.set(exchange.getRequestHeaders().getFirst("X-Gateway-Access-Key"));
+            submittedBody.set(objectMapper.readTree(exchange.getRequestBody()));
+            String response = accepted.get()
+                    ? "{\"code\":\"0\",\"message\":\"success\",\"data\":{"
+                            + "\"channelRefundNo\":\"GW-REF-001\",\"status\":\"PROCESSING\","
+                            + "\"statusType\":\"warn\"},\"requestId\":\"LOCAL-TEST\"}"
+                    : "{\"code\":\"GATEWAY_UPSTREAM_NOT_CONFIGURED\","
+                            + "\"message\":\"upstream unavailable\",\"data\":null}";
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (java.io.OutputStream output = exchange.getResponseBody()) {
+                output.write(bytes);
+            }
+        });
+        server.start();
+        try {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(2000);
+            factory.setReadTimeout(2000);
+            GatewayAccessRefundChannelSubmitServiceImpl adapter =
+                    new GatewayAccessRefundChannelSubmitServiceImpl(
+                            true, "http://127.0.0.1:" + server.getAddress().getPort()
+                                    + "/api/gateway/refunds/submit",
+                            "wx_h5", "APP_PAY_CORE", "local-test-key", new RestTemplate(factory));
+
+            RefundChannelSubmitResultDTO result = adapter.submit(request());
+            assertEquals("GW-REF-001", result.getChannelRefundNo());
+            assertEquals("PROCESSING", result.getStatus());
+            assertEquals("warn", result.getStatusType());
+            assertEquals("APP_PAY_CORE", submittedAppCode.get());
+            assertEquals("local-test-key", submittedAccessKey.get());
+            assertEquals("REF-1001", submittedBody.get().path("refundOrderId").asText());
+            assertEquals("RFA-1001", submittedBody.get().path("refundAttemptNo").asText());
+            assertEquals("PAY-1001", submittedBody.get().path("paymentOrderId").asText());
+            assertEquals("ORD-1001", submittedBody.get().path("orderNo").asText());
+            assertEquals("wx_h5", submittedBody.get().path("channelCode").asText());
+            assertEquals(0, submittedBody.get().path("refundAmount").decimalValue()
+                    .compareTo(new BigDecimal("10.00")));
+            assertFalse(submittedBody.get().toString().contains("local-test-key"));
+
+            accepted.set(false);
+            RefundChannelSubmitException rejected = assertThrows(RefundChannelSubmitException.class,
+                    () -> adapter.submit(request()));
+            assertFalse(rejected.isResultUnknown());
+            assertEquals(2, requestCount.get());
+        } finally {
+            server.stop(0);
+        }
+    }
 
     @Test
     void shouldFailClosedUnlessFullyConfigured() {
@@ -80,6 +151,11 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
         invalidOptional.setRefundReason("customer\nrequest");
         assertInvalidRequest(assertThrows(
                 RefundChannelSubmitException.class, () -> adapter.submit(invalidOptional)));
+
+        RefundChannelSubmitRequestDTO oversizedOptional = request();
+        oversizedOptional.setRefundReason(repeat(" ", 256));
+        assertInvalidRequest(assertThrows(
+                RefundChannelSubmitException.class, () -> adapter.submit(oversizedOptional)));
 
         RefundChannelSubmitRequestDTO oversized = request();
         oversized.setRefundMethod(repeat("M", 32) + " ");
@@ -197,6 +273,34 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
 
         assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
         assertTrue(exception.isResultUnknown());
+    }
+
+    @Test
+    void shouldRejectRefundAcceptanceWithMismatchedStatusStyle() {
+        for (String[] facts : new String[][] {
+            {"PROCESSING", "success"},
+            {"SUCCESS", "warn"},
+            {"FAIL", "info"}
+        }) {
+            RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+            RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+            data.setChannelRefundNo("WX-R-1001");
+            data.setStatus(facts[0]);
+            data.setStatusType(facts[1]);
+            GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse response =
+                    new GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse();
+            response.setCode("0");
+            response.setData(data);
+            when(restTemplate.exchange(
+                    eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                    eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                    .thenReturn(ResponseEntity.ok(response));
+
+            RefundChannelSubmitException exception = assertThrows(
+                    RefundChannelSubmitException.class, () -> adapter(restTemplate).submit(request()));
+            assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+            assertTrue(exception.isResultUnknown());
+        }
     }
 
     private void assertFailure(GatewayAccessRefundChannelSubmitServiceImpl service) {

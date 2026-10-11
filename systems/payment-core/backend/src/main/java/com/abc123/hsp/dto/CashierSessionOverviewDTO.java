@@ -18,6 +18,8 @@ public class CashierSessionOverviewDTO {
     private Long payingSessionCount;
     /** 待支付会话数。 */
     private Long pendingSessionCount;
+    /** 其他生命周期状态会话数。 */
+    private Long otherSessionCount;
     /** 涉及终端数。 */
     private Integer distinctTerminalCount;
     /** 即将失效会话数。 */

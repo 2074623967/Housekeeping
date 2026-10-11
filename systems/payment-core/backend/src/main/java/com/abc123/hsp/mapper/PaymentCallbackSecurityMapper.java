@@ -16,11 +16,11 @@ public interface PaymentCallbackSecurityMapper {
     /**
      * 插入回调 nonce，依赖唯一索引保证防重放。
      */
-    void insertCallbackNonce(@Param("channelCode") String channelCode,
-                             @Param("nonce") String nonce,
-                             @Param("bizType") String bizType,
-                             @Param("bizNo") String bizNo,
-                             @Param("expireSeconds") long expireSeconds);
+    int insertCallbackNonce(@Param("channelCode") String channelCode,
+                            @Param("nonce") String nonce,
+                            @Param("bizType") String bizType,
+                            @Param("bizNo") String bizNo,
+                            @Param("expireSeconds") long expireSeconds);
 
     /**
      * 清理当前渠道已过期的同名 nonce，允许过期后按协议重新使用。

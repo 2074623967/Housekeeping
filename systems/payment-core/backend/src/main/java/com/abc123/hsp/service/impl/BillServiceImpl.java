@@ -12,6 +12,7 @@ import com.abc123.hsp.service.BillService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
@@ -60,7 +61,7 @@ public class BillServiceImpl implements BillService {
 
     @Override
     public PageResultDTO<BillListItemDTO> list(BillQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(billMapper.findAll(query)),
                 billMapper.count(query),
@@ -71,7 +72,7 @@ public class BillServiceImpl implements BillService {
 
     @Override
     public BillOverviewDTO overview(BillQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         BillOverviewDTO overview = billMapper.findOverview(query);
         if (overview == null) {
             overview = new BillOverviewDTO();
@@ -105,9 +106,9 @@ public class BillServiceImpl implements BillService {
 
     @Override
     public String exportCsv(BillQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型,到期时间,创建时间\n");
+        builder.append("账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型,到期时间,创建时间,最近支付场景\n");
         for (BillListItemDTO item : maskItems(
                 CsvExportRowLimiter.requireWithinLimit(billMapper.findAllForExport(query)))) {
             builder.append(csvCell(item.getBillNo())).append(',')
@@ -119,7 +120,8 @@ public class BillServiceImpl implements BillService {
                     .append(csvCell(item.getBillStatus())).append(',')
                     .append(csvCell(item.getBillStatusType())).append(',')
                     .append(csvCell(item.getDueAt())).append(',')
-                    .append(csvCell(item.getCreatedAt())).append('\n');
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getLatestPayScene())).append('\n');
         }
         return builder.toString();
     }
@@ -144,7 +146,10 @@ public class BillServiceImpl implements BillService {
         return outwardItem;
     }
 
-    private void normalizeQuery(BillQueryDTO query) {
+    private BillQueryDTO normalizeQuery(BillQueryDTO query) {
+        if (query == null) {
+            query = new BillQueryDTO();
+        }
         query.setBillNo(normalizeOptionalQueryField(
                 query.getBillNo(), BILL_NO_MAX_LENGTH, "账单号", null));
         query.setOrderNo(normalizeOptionalQueryField(
@@ -153,10 +158,11 @@ public class BillServiceImpl implements BillService {
                 query.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH, "客户名称", null));
         query.setBillStatus(normalizeOptionalQueryField(
                 query.getBillStatus(), BILL_STATUS_MAX_LENGTH, "账单状态", "全部"));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

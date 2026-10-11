@@ -129,11 +129,11 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
                 throw invalidRequest();
             }
         }
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
         if (value.length() > maxLength) {
             throw invalidRequest();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
         String normalized = value.trim();
         return normalized;

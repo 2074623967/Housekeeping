@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionDetailDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -34,6 +35,7 @@ class PaymentRouteExecutionServiceImplTest {
     void shouldNormalizeAndReturnMaskedRouteExecutionDetail() {
         PaymentRouteExecutionDetailDTO detail = new PaymentRouteExecutionDetailDTO();
         detail.setRouteNo("ROUTE-001");
+        detail.setPaymentOrderId("PAY-001");
         detail.setCustomerName("张三");
         detail.setClientIp("10.20.30.40");
         detail.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
@@ -256,6 +258,8 @@ class PaymentRouteExecutionServiceImplTest {
         item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
         item.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
         item.setResponsePayload("{\"code\":\"SUCCESS\"}");
+        item.setRouteResult("命中");
+        item.setRouteResultType("success");
         item.setOpsConfigSnapshotVersion(12L);
         when(paymentRouteExecutionMapper.findAllForExport(query))
                 .thenReturn(Collections.singletonList(item));
@@ -269,7 +273,11 @@ class PaymentRouteExecutionServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         assertEquals(9, query.getPageNo());
         assertEquals(100, query.getPageSize());
-        assertTrue(csv.startsWith("\uFEFF路由记录号,支付单号,订单号,预付单号"));
+        assertTrue(csv.startsWith("\uFEFF路由记录号,支付单号,业务链路,订单号,预付单号"));
+        assertTrue(csv.contains("支付单号,业务链路,订单号"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
+        assertTrue(csv.contains("路由结果,路由结果样式,配置快照版本"));
+        assertTrue(csv.contains("\"命中\",\"success\""));
         assertTrue(csv.contains("\"张*\""));
         assertTrue(csv.contains("\"10.20.*.*\""));
         assertTrue(csv.contains("\"ORDER-****DEFG\""));
@@ -278,6 +286,24 @@ class PaymentRouteExecutionServiceImplTest {
         assertTrue(csv.contains("\"12\""));
         assertEquals("张三", item.getCustomerName());
         verify(paymentRouteExecutionMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingRouteExecutionsWithNullQuery() {
+        when(paymentRouteExecutionMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentRouteExecutionQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentRouteExecutionMapper.count(org.mockito.ArgumentMatchers.any(PaymentRouteExecutionQueryDTO.class)))
+                .thenReturn(0L);
+
+        PageResultDTO<PaymentRouteExecutionListItemDTO> result =
+                new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<PaymentRouteExecutionQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentRouteExecutionQueryDTO.class);
+        verify(paymentRouteExecutionMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int times) {

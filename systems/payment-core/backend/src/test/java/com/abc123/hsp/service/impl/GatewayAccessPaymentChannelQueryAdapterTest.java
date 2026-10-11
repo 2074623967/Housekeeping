@@ -85,6 +85,11 @@ class GatewayAccessPaymentChannelQueryAdapterTest {
         assertInvalidRequest(assertThrows(
                 BusinessException.class, () -> adapter.query(invalidOptional)));
 
+        PaymentDetailDTO oversizedOptional = paymentDetail();
+        oversizedOptional.setChannelTransactionNo(repeat(" ", 129));
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.query(oversizedOptional)));
+
         PaymentDetailDTO oversized = paymentDetail();
         oversized.setChannel(repeat("C", 64) + " ");
         assertInvalidRequest(assertThrows(

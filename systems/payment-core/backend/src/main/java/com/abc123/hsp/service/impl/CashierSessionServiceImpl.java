@@ -12,6 +12,7 @@ import com.abc123.hsp.service.CashierSessionService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
@@ -63,7 +64,7 @@ public class CashierSessionServiceImpl implements CashierSessionService {
 
     @Override
     public PageResultDTO<CashierSessionListItemDTO> list(CashierSessionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(cashierSessionMapper.findAll(query)),
                 cashierSessionMapper.count(query),
@@ -74,7 +75,7 @@ public class CashierSessionServiceImpl implements CashierSessionService {
 
     @Override
     public CashierSessionOverviewDTO overview(CashierSessionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         CashierSessionOverviewDTO overview = cashierSessionMapper.findOverview(query);
         if (overview == null) {
             overview = new CashierSessionOverviewDTO();
@@ -94,6 +95,9 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         if (overview.getPendingSessionCount() == null) {
             overview.setPendingSessionCount(0L);
         }
+        if (overview.getOtherSessionCount() == null) {
+            overview.setOtherSessionCount(0L);
+        }
         if (overview.getDistinctTerminalCount() == null) {
             overview.setDistinctTerminalCount(0);
         }
@@ -108,18 +112,20 @@ public class CashierSessionServiceImpl implements CashierSessionService {
 
     @Override
     public String exportCsv(CashierSessionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("会话编号,预付单号,支付单号,订单号,账单号,客户名称,收银台标题,终端,金额,会话状态,状态类型,创建时间,失效时间\n");
+        builder.append("会话编号,预付单号,支付单号,业务链路,订单号,账单号,客户名称,收银台标题,支付场景,终端,金额,会话状态,状态类型,创建时间,失效时间\n");
         for (CashierSessionListItemDTO item : maskItems(
                 CsvExportRowLimiter.requireWithinLimit(cashierSessionMapper.findAllForExport(query)))) {
             builder.append(csvCell(item.getSessionNo())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getBillNo())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')
                     .append(csvCell(item.getCashierTitle())).append(',')
+                    .append(csvCell(item.getPayScene())).append(',')
                     .append(csvCell(item.getTerminal())).append(',')
                     .append(csvCell(item.getAmount())).append(',')
                     .append(csvCell(item.getSessionStatus())).append(',')
@@ -150,7 +156,10 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         return outwardItem;
     }
 
-    private void normalizeQuery(CashierSessionQueryDTO query) {
+    private CashierSessionQueryDTO normalizeQuery(CashierSessionQueryDTO query) {
+        if (query == null) {
+            query = new CashierSessionQueryDTO();
+        }
         query.setSessionNo(normalizeOptionalQueryField(
                 query.getSessionNo(), SESSION_NO_MAX_LENGTH, "会话号", null));
         query.setPaymentOrderId(normalizeOptionalQueryField(
@@ -163,10 +172,11 @@ public class CashierSessionServiceImpl implements CashierSessionService {
                 query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", "全部"));
         query.setSessionStatus(normalizeOptionalQueryField(
                 query.getSessionStatus(), SESSION_STATUS_MAX_LENGTH, "会话状态", "全部"));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

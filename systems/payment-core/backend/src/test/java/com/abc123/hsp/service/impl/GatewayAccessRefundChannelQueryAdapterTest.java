@@ -124,6 +124,11 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         assertInvalidRequest(assertThrows(
                 BusinessException.class, () -> adapter.query(invalidOptional)));
 
+        RefundCallbackSourceDTO oversizedOptional = refund();
+        oversizedOptional.setChannelRefundNo(repeat(" ", 129));
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.query(oversizedOptional)));
+
         RefundCallbackSourceDTO oversized = refund();
         oversized.setRefundOrderId(repeat("R", 64) + " ");
         assertInvalidRequest(assertThrows(

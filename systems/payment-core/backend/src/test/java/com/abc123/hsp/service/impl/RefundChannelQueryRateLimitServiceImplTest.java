@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -52,6 +53,9 @@ class RefundChannelQueryRateLimitServiceImplTest {
     @Test
     void shouldRejectQueryAndRecordFactWhenSharedQuotaIsExhausted() {
         when(mapper.acquire("alipay_h5", 1, 1)).thenReturn(0);
+        when(mapper.insertRejection(anyString(), org.mockito.ArgumentMatchers.eq("alipay_h5"),
+                org.mockito.ArgumentMatchers.eq("REF-LIMITED"), org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq(1))).thenReturn(1);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> new RefundChannelQueryRateLimitServiceImpl(mapper, true, 0, 0)
@@ -67,5 +71,34 @@ class RefundChannelQueryRateLimitServiceImplTest {
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(1));
         verify(mapper, never()).acquire("alipay_h5", 0, 0);
+    }
+
+    @Test
+    void shouldFailClosedWhenRateLimitRejectionFactIsNotRecordedExactlyOnce() {
+        when(mapper.acquire("alipay_h5", 1, 1)).thenReturn(0);
+        when(mapper.insertRejection(anyString(), org.mockito.ArgumentMatchers.eq("alipay_h5"),
+                org.mockito.ArgumentMatchers.eq("REF-LIMITED"), org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq(1))).thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new RefundChannelQueryRateLimitServiceImpl(mapper, true, 1, 1)
+                        .acquire("alipay_h5", "REF-LIMITED"));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_RATE_LIMITED, exception.getCode());
+        assertEquals("refund channel query rate limit rejection fact could not be recorded",
+                exception.getMessage());
+    }
+
+    @Test
+    void shouldFailClosedWhenRateLimitAcquisitionAffectsMultipleRows() {
+        when(mapper.acquire("alipay_h5", 1, 1)).thenReturn(2);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new RefundChannelQueryRateLimitServiceImpl(mapper, true, 1, 1)
+                        .acquire("alipay_h5", "REF-MULTI"));
+
+        assertEquals("refund channel query rate limit acquisition must affect exactly one row",
+                exception.getMessage());
+        verify(mapper, never()).insertRejection(anyString(), anyString(), anyString(), anyInt(), anyInt());
     }
 }

@@ -82,6 +82,7 @@
                latest_payment.status AS latestPaymentStatus,
                latest_payment.status_type AS latestPaymentStatusType,
                latest_prepay.prepay_order_no AS latestPrepayOrderNo,
+               latest_prepay.pay_scene AS latestPayScene,
                latest_prepay.cashier_status AS latestCashierStatus,
                latest_prepay.cashier_status_type AS latestCashierStatusType,
                DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
@@ -154,6 +155,7 @@
                latest_payment.status AS latestPaymentStatus,
                latest_payment.status_type AS latestPaymentStatusType,
                latest_prepay.prepay_order_no AS latestPrepayOrderNo,
+               latest_prepay.pay_scene AS latestPayScene,
                latest_prepay.cashier_status AS latestCashierStatus,
                latest_prepay.cashier_status_type AS latestCashierStatusType,
                DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt

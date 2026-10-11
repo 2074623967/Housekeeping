@@ -41,7 +41,7 @@ public class SettlementServiceImpl implements SettlementService {
 
     @Override
     public PageResultDTO<WorkerSettlementListItemDTO> workerList(WorkerSettlementQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(settlementMapper.findWorkerSettlements(query)),
                 settlementMapper.count(query),
@@ -52,7 +52,7 @@ public class SettlementServiceImpl implements SettlementService {
 
     @Override
     public WorkerSettlementOverviewDTO workerOverview(WorkerSettlementQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         WorkerSettlementOverviewDTO overview = settlementMapper.findWorkerOverview(query);
         if (overview == null) {
             overview = new WorkerSettlementOverviewDTO();
@@ -89,12 +89,12 @@ public class SettlementServiceImpl implements SettlementService {
 
     @Override
     public String exportCsv(WorkerSettlementQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<WorkerSettlementListItemDTO> items = maskItems(
                 CsvExportRowLimiter.requireWithinLimit(
                         settlementMapper.findWorkerSettlementsForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("结算单号,服务者,账期,应结金额,已扣减金额,实结金额,保证金影响,结算状态,出款状态\n");
+        builder.append("结算单号,服务者,账期,应结金额,已扣减金额,实结金额,保证金影响,结算状态,结算状态样式,出款状态,出款状态样式\n");
         for (WorkerSettlementListItemDTO item : items) {
             builder.append(csvCell(item.getSettlementOrderId())).append(',')
                     .append(csvCell(item.getWorkerName())).append(',')
@@ -104,7 +104,9 @@ public class SettlementServiceImpl implements SettlementService {
                     .append(csvCell(item.getAmountNetSettle())).append(',')
                     .append(csvCell(item.getDepositImpactAmount())).append(',')
                     .append(csvCell(item.getStatus())).append(',')
-                    .append(csvCell(item.getPayoutStatus())).append('\n');
+                    .append(csvCell(item.getStatusType())).append(',')
+                    .append(csvCell(item.getPayoutStatus())).append(',')
+                    .append(csvCell(item.getPayoutStatusType())).append('\n');
         }
         return builder.toString();
     }
@@ -129,7 +131,10 @@ public class SettlementServiceImpl implements SettlementService {
         return outwardItem;
     }
 
-    private void normalizeQuery(WorkerSettlementQueryDTO query) {
+    private WorkerSettlementQueryDTO normalizeQuery(WorkerSettlementQueryDTO query) {
+        if (query == null) {
+            query = new WorkerSettlementQueryDTO();
+        }
         query.setSettlementOrderId(normalizeOptionalQueryField(
                 query.getSettlementOrderId(), SETTLEMENT_ORDER_ID_MAX_LENGTH, "结算单号", null));
         query.setWorkerKeyword(normalizeOptionalQueryField(
@@ -140,6 +145,7 @@ public class SettlementServiceImpl implements SettlementService {
                 query.getPayoutStatus(), PAYOUT_STATUS_MAX_LENGTH, "出款状态", "全部"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

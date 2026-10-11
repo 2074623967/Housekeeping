@@ -10,19 +10,102 @@
 
     <sql id="paymentSuccessFactMismatchCondition">
         p.status = 'SUCCESS'
-        AND NOT EXISTS (
-            SELECT 1
-            FROM t_payment_attempt fact_attempt
-            WHERE fact_attempt.id = (
-                SELECT latest_fact_attempt.id
-                FROM t_payment_attempt latest_fact_attempt
-                WHERE latest_fact_attempt.payment_order_id = p.payment_order_id
-                ORDER BY latest_fact_attempt.created_at DESC, latest_fact_attempt.id DESC
-                LIMIT 1
+        AND p.success_at IS NOT NULL
+        AND (
+            CHAR_LENGTH(p.status) &lt;&gt; 7
+            OR NULLIF(TRIM(p.status_type), '') IS NULL
+            OR CHAR_LENGTH(p.status_type) &lt;&gt; 7
+            OR LOWER(p.status_type) &lt;&gt; 'success'
+            OR p.created_at IS NULL
+            OR p.created_at &gt; p.success_at
+            OR p.amount IS NULL
+            OR p.amount &lt;= 0
+            OR NOT EXISTS (
+                SELECT 1
+                FROM t_prepay_order binding_prepay
+                WHERE binding_prepay.payment_order_id = p.payment_order_id
+                  AND CHAR_LENGTH(binding_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                  AND CAST(binding_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                  AND binding_prepay.order_no = p.order_no
+                  AND CHAR_LENGTH(binding_prepay.order_no) = CHAR_LENGTH(p.order_no)
+                  AND CAST(binding_prepay.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                  AND binding_prepay.amount = p.amount
+                  AND binding_prepay.amount &gt; 0
+                  AND (
+                      (CHAR_LENGTH(binding_prepay.source_kind) = 14
+                          AND CAST(binding_prepay.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16))
+                          AND EXISTS (SELECT 1 FROM t_order source_order
+                                      WHERE source_order.order_no = p.order_no
+                                        AND CHAR_LENGTH(source_order.order_no) = CHAR_LENGTH(p.order_no)
+                                        AND CAST(source_order.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))))
+                      OR (CHAR_LENGTH(binding_prepay.source_kind) = 7
+                          AND CAST(binding_prepay.source_kind AS BINARY(16)) = CAST('VIRTUAL' AS BINARY(16))
+                          AND NOT EXISTS (SELECT 1 FROM t_order source_order
+                                          WHERE source_order.order_no = p.order_no
+                                            AND CHAR_LENGTH(source_order.order_no) = CHAR_LENGTH(p.order_no)
+                                            AND CAST(source_order.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))))
+                  )
+                  AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                       WHERE all_prepay.payment_order_id = p.payment_order_id
+                         AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                         AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
             )
-              AND fact_attempt.attempt_status = '成功'
-              AND fact_attempt.completed_at IS NOT NULL
+            OR NULLIF(TRIM(p.channel_code), '') IS NULL
+            OR NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
+            OR NOT EXISTS (
+                SELECT 1
+                FROM t_payment_attempt fact_attempt
+                WHERE fact_attempt.id = (
+                    SELECT latest_fact_attempt.id
+                    FROM t_payment_attempt latest_fact_attempt
+                    WHERE latest_fact_attempt.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_fact_attempt.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_fact_attempt.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                    ORDER BY latest_fact_attempt.created_at DESC, latest_fact_attempt.id DESC
+                    LIMIT 1
+                )
+                  AND fact_attempt.attempt_status = '成功'
+                  AND CHAR_LENGTH(fact_attempt.attempt_status) = 2
+                  AND CHAR_LENGTH(fact_attempt.attempt_status_type) = 7
+                  AND LOWER(fact_attempt.attempt_status_type) = 'success'
+                  AND fact_attempt.channel_code = p.channel_code
+                  AND CHAR_LENGTH(fact_attempt.channel_code) = CHAR_LENGTH(p.channel_code)
+                  AND CAST(fact_attempt.channel_code AS BINARY(256)) = CAST(p.channel_code AS BINARY(256))
+                  AND CHAR_LENGTH(TRIM(p.payment_method)) &gt; 0
+                  AND fact_attempt.payment_method = p.payment_method
+                  AND CHAR_LENGTH(fact_attempt.payment_method) = CHAR_LENGTH(p.payment_method)
+                  AND CAST(fact_attempt.payment_method AS BINARY(256)) = CAST(p.payment_method AS BINARY(256))
+                  AND fact_attempt.created_at IS NOT NULL
+                  AND fact_attempt.created_at &gt;= p.created_at
+                  AND fact_attempt.completed_at IS NOT NULL
+                  AND fact_attempt.completed_at &gt;= fact_attempt.created_at
+                  AND fact_attempt.completed_at &lt;= p.success_at
+            )
         )
+    </sql>
+
+    <sql id="paymentSuccessFactIssueProjection">
+        CASE
+            WHEN p.status = 'SUCCESS' AND p.success_at IS NULL THEN 'SUCCESS_TIME_MISSING'
+            WHEN <include refid="com.abc123.hsp.mapper.PaymentMapper.paymentSuccessFactMismatchCondition"/> THEN 'SUCCESS_FACT_MISMATCH'
+            ELSE NULL
+        END AS successFactIssue
+    </sql>
+
+    <sql id="prepayBindingIssueProjection">
+        CASE (SELECT COUNT(*) FROM t_prepay_order all_prepay
+              WHERE all_prepay.payment_order_id = p.payment_order_id
+                AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256)))
+            WHEN 0 THEN 'PREPAY_BINDING_MISSING'
+            WHEN 1 THEN NULL
+            ELSE 'MULTIPLE_PREPAY_BINDINGS'
+        END AS prepayBindingIssue
+    </sql>
+
+    <sql id="trustedPaymentSuccessCondition">
+        p.status = 'SUCCESS' AND CHAR_LENGTH(p.status) = 7 AND p.success_at IS NOT NULL
+        AND NOT (<include refid="com.abc123.hsp.mapper.PaymentMapper.paymentSuccessFactMismatchCondition"/>)
     </sql>
 
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentListItemDTO">
@@ -30,18 +113,38 @@
                p.order_no AS orderNo,
                p.customer_name AS customerName,
                CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               pr.pay_scene AS payScene,
+               <include refid="prepayBindingIssueProjection"/>,
                p.payment_method AS paymentMethod,
                p.channel_code AS channel,
                p.channel_transaction_no AS channelTransactionNo,
                p.status,
                p.status_type AS statusType,
                pa.attempt_status AS latestAttemptStatus,
-               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               pa.attempt_status_type AS latestAttemptStatusType,
+               DATE_FORMAT(pa.completed_at, '%Y-%m-%d %H:%i:%s') AS latestAttemptCompletedAt,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentSuccessFactIssueProjection"/>
         FROM t_payment_order p
+                 LEFT JOIN t_prepay_order pr ON pr.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                      AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                           WHERE all_prepay.payment_order_id = p.payment_order_id
+                             AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                             AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
                  LEFT JOIN t_payment_attempt pa ON pa.id = (
                     SELECT latest_pa.id
                     FROM t_payment_attempt latest_pa
                     WHERE latest_pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
                     LIMIT 1
                 )
@@ -115,13 +218,41 @@
                p.order_no AS orderNo,
                p.customer_name AS customerName,
                CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               pr.pay_scene AS payScene,
+               <include refid="prepayBindingIssueProjection"/>,
                p.payment_method AS paymentMethod,
                p.channel_code AS channel,
                p.channel_transaction_no AS channelTransactionNo,
                p.status,
                p.status_type AS statusType,
-               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               pa.attempt_status AS latestAttemptStatus,
+               pa.attempt_status_type AS latestAttemptStatusType,
+               DATE_FORMAT(pa.completed_at, '%Y-%m-%d %H:%i:%s') AS latestAttemptCompletedAt,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentSuccessFactIssueProjection"/>
         FROM t_payment_order p
+                 LEFT JOIN t_prepay_order pr ON pr.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                      AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                           WHERE all_prepay.payment_order_id = p.payment_order_id
+                             AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                             AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_attempt pa ON pa.id = (
+                    SELECT latest_pa.id
+                    FROM t_payment_attempt latest_pa
+                    WHERE latest_pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                    ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                    LIMIT 1
+                )
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -159,20 +290,44 @@
                p.order_no AS orderNo,
                p.channel_transaction_no AS channelTransactionNo
         FROM t_payment_order p
-                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                 INNER JOIN t_prepay_order pr ON pr.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
                  LEFT JOIN t_payment_expiry_close_retry retry
                            ON retry.payment_order_id = p.payment_order_id
+                           AND CHAR_LENGTH(retry.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                           AND CAST(retry.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
         WHERE p.status = 'PREPAY_CREATED'
+          AND CHAR_LENGTH(p.status) = CHAR_LENGTH('PREPAY_CREATED')
+          AND CAST(p.status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32))
+          AND p.success_at IS NULL
           AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
           AND pr.expires_at &lt; NOW()
+          AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+               WHERE all_prepay.payment_order_id = p.payment_order_id
+                 AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                 AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+          AND p.amount &gt; 0
+          AND pr.amount &gt; 0
+          AND pr.amount = p.amount
+          AND pr.order_no = p.order_no
+          AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+          AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
           AND (retry.next_retry_at IS NULL OR retry.next_retry_at &lt;= NOW())
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
             WHERE pa.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
           )
-        GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
-        ORDER BY MIN(pr.expires_at) ASC, p.payment_order_id ASC
+        ORDER BY pr.expires_at ASC, p.payment_order_id ASC
         LIMIT #{batchSize}
     </select>
 
@@ -212,6 +367,8 @@
     <delete id="deleteExpiryCloseRetry">
         DELETE FROM t_payment_expiry_close_retry
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
     </delete>
 
     <delete id="deleteStaleExpiryCloseRetries">
@@ -222,19 +379,44 @@
                 SELECT retry.id
                 FROM t_payment_expiry_close_retry retry
                 LEFT JOIN t_payment_order p ON p.payment_order_id = retry.payment_order_id
+                    AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(retry.payment_order_id)
+                    AND CAST(p.payment_order_id AS BINARY(256)) = CAST(retry.payment_order_id AS BINARY(256))
                 WHERE p.payment_order_id IS NULL
                    OR p.status != 'PREPAY_CREATED'
+                   OR CHAR_LENGTH(p.status) != CHAR_LENGTH('PREPAY_CREATED')
+                   OR CAST(p.status AS BINARY(32)) != CAST('PREPAY_CREATED' AS BINARY(32))
+                   OR p.success_at IS NOT NULL
                    OR NULLIF(TRIM(p.channel_transaction_no), '') IS NOT NULL
                    OR NOT EXISTS (
                         SELECT 1
                         FROM t_prepay_order pr
-                        WHERE pr.payment_order_id = retry.payment_order_id
+                        WHERE pr.id = (
+                            SELECT latest_pr.id
+                            FROM t_prepay_order latest_pr
+                            WHERE latest_pr.payment_order_id = retry.payment_order_id
+                              AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(retry.payment_order_id)
+                              AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(retry.payment_order_id AS BINARY(256))
+                            ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                            LIMIT 1
+                        )
                           AND pr.expires_at &lt; NOW()
+                          AND p.amount &gt; 0
+                          AND pr.amount &gt; 0
+                          AND pr.amount = p.amount
+                          AND pr.order_no = p.order_no
+                          AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+                          AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
                    )
+                   OR (SELECT COUNT(*) FROM t_prepay_order all_prepay
+                       WHERE all_prepay.payment_order_id = retry.payment_order_id
+                         AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(retry.payment_order_id)
+                         AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(retry.payment_order_id AS BINARY(256))) != 1
                    OR EXISTS (
                         SELECT 1
                         FROM t_payment_attempt pa
                         WHERE pa.payment_order_id = retry.payment_order_id
+                          AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(retry.payment_order_id)
+                          AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(retry.payment_order_id AS BINARY(256))
                    )
                 ORDER BY retry.id
                 LIMIT #{batchSize}
@@ -246,9 +428,22 @@
         SELECT p.payment_order_id AS paymentOrderId,
                pr.prepay_order_no AS prepayOrderNo,
                b.bill_no AS billNo,
+               pr.source_kind AS sourceKind,
                p.order_no AS orderNo,
                p.customer_name AS customerName,
                CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               CASE WHEN p.amount &gt; 0
+                         AND pr.amount &gt; 0
+                         AND pr.amount = p.amount
+                         AND pr.order_no = p.order_no
+                         AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+                         AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                         AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+                              WHERE bound_prepay.payment_order_id = p.payment_order_id
+                                AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                                AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                    THEN 1 ELSE 0 END AS prepayAmountBindingValid,
+               pr.pay_scene AS payScene,
                p.payment_method AS paymentMethod,
                p.channel_code AS channel,
                p.channel_transaction_no AS channelTransactionNo,
@@ -272,42 +467,90 @@
                p.status,
                p.status_type AS statusType,
                DATE_FORMAT(p.success_at, '%Y-%m-%d %H:%i:%s') AS successAt,
-               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               CASE WHEN pa.channel_code = p.channel_code
+                          AND CHAR_LENGTH(pa.channel_code) = CHAR_LENGTH(p.channel_code)
+                          AND CAST(pa.channel_code AS BINARY(256)) = CAST(p.channel_code AS BINARY(256))
+                          AND CHAR_LENGTH(TRIM(p.payment_method)) &gt; 0
+                          AND pa.payment_method = p.payment_method
+                          AND CHAR_LENGTH(pa.payment_method) = CHAR_LENGTH(p.payment_method)
+                          AND CAST(pa.payment_method AS BINARY(256)) = CAST(p.payment_method AS BINARY(256))
+                          AND pa.created_at IS NOT NULL
+                          AND p.created_at &lt;= pa.created_at
+                          AND pa.created_at &lt;= pa.completed_at
+                          AND pa.completed_at &lt;= p.success_at
+                    THEN 1 ELSE 0 END AS paymentFactTimelineValid,
+               CASE WHEN pa.channel_code = p.channel_code
+                         AND CHAR_LENGTH(pa.channel_code) = CHAR_LENGTH(p.channel_code)
+                         AND CAST(pa.channel_code AS BINARY(256)) = CAST(p.channel_code AS BINARY(256))
+                         AND CHAR_LENGTH(TRIM(p.payment_method)) &gt; 0
+                         AND pa.payment_method = p.payment_method
+                         AND CHAR_LENGTH(pa.payment_method) = CHAR_LENGTH(p.payment_method)
+                         AND CAST(pa.payment_method AS BINARY(256)) = CAST(p.payment_method AS BINARY(256))
+                    THEN 1 ELSE 0 END AS paymentSubmissionChannelValid
         FROM t_payment_order p
                  LEFT JOIN t_prepay_order pr ON pr.id = (
                     SELECT latest_pr.id
                     FROM t_prepay_order latest_pr
                     WHERE latest_pr.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
                     LIMIT 1
                 )
                  LEFT JOIN t_bill b ON b.bill_no = pr.bill_no
+                     AND CHAR_LENGTH(b.bill_no) = CHAR_LENGTH(pr.bill_no)
+                     AND CAST(b.bill_no AS BINARY(256)) = CAST(pr.bill_no AS BINARY(256))
                  LEFT JOIN t_payment_attempt pa ON pa.id = (
                     SELECT latest_pa.id
                     FROM t_payment_attempt latest_pa
                     WHERE latest_pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
                     LIMIT 1
                 )
         WHERE p.payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(p.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
     </select>
 
     <select id="findSubmissionFact" resultType="com.abc123.hsp.dto.PaymentDetailDTO">
-        SELECT p.status,
-               pa.attempt_status AS latestAttemptStatus
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.status,
+               p.payment_method AS paymentMethod,
+               p.channel_code AS channel,
+               p.channel_transaction_no AS channelTransactionNo,
+               pa.attempt_status AS latestAttemptStatus,
+               pa.attempt_status_type AS latestAttemptStatusType,
+               DATE_FORMAT(pa.completed_at, '%Y-%m-%d %H:%i:%s') AS latestAttemptCompletedAt,
+               CASE WHEN pa.channel_code = p.channel_code
+                         AND CHAR_LENGTH(pa.channel_code) = CHAR_LENGTH(p.channel_code)
+                         AND CAST(pa.channel_code AS BINARY(256)) = CAST(p.channel_code AS BINARY(256))
+                         AND CHAR_LENGTH(TRIM(p.payment_method)) &gt; 0
+                         AND pa.payment_method = p.payment_method
+                         AND CHAR_LENGTH(pa.payment_method) = CHAR_LENGTH(p.payment_method)
+                         AND CAST(pa.payment_method AS BINARY(256)) = CAST(p.payment_method AS BINARY(256))
+                    THEN 1 ELSE 0 END AS paymentSubmissionChannelValid
         FROM t_payment_order p
                  LEFT JOIN t_payment_attempt pa ON pa.id = (
                     SELECT latest_pa.id
                     FROM t_payment_attempt latest_pa
                     WHERE latest_pa.payment_order_id = p.payment_order_id
+                      AND CHAR_LENGTH(latest_pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                      AND CAST(latest_pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
                     ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
                     LIMIT 1
                 )
         WHERE p.payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(p.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
     </select>
 
     <select id="findOrderAmount" resultType="java.math.BigDecimal">
         SELECT order_amount FROM t_order WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
     <insert id="initPrepayCreationLock">
@@ -325,18 +568,26 @@
 
     <select id="findPaidAmount" resultType="java.math.BigDecimal">
         SELECT paid_amount FROM t_order WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
     <select id="findCustomerNameByOrderNo" resultType="string">
         SELECT customer_name FROM t_order WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
     <select id="findWorkerNameByOrderNo" resultType="string">
         SELECT worker_name FROM t_order WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
     <select id="findBillNoByOrderNo" resultType="string">
         SELECT bill_no FROM t_bill WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
     <insert id="insertBill">
@@ -350,25 +601,56 @@
     </insert>
 
     <insert id="insertPrepayOrder">
-        INSERT INTO t_prepay_order(prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at)
-        VALUES (#{prepayOrderNo}, #{billNo}, #{orderNo}, #{customerName}, #{amount}, #{payScene}, #{cashierTitle}, '待支付', 'warn', #{paymentOrderId}, NOW(), TIMESTAMPADD(HOUR, 1, NOW()))
+        INSERT INTO t_prepay_order(prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, source_kind, created_at, expires_at)
+        VALUES (#{prepayOrderNo}, #{billNo}, #{orderNo}, #{customerName}, #{amount}, #{payScene}, #{cashierTitle}, '待支付', 'warn', #{paymentOrderId}, #{sourceKind}, NOW(), TIMESTAMPADD(HOUR, 1, NOW()))
     </insert>
 
     <select id="findPrepay" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
-        SELECT prepay_order_no AS prepayOrderNo,
-               bill_no AS billNo,
-               order_no AS orderNo,
-               customer_name AS customerName,
-               CONCAT('¥', FORMAT(amount, 2)) AS amount,
-               pay_scene AS payScene,
-               cashier_title AS cashierTitle,
-               cashier_status AS cashierStatus,
-               cashier_status_type AS cashierStatusType,
-               payment_order_id AS paymentOrderId,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-               DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
-        FROM t_prepay_order
-        WHERE prepay_order_no = #{prepayOrderNo}
+        SELECT pr.prepay_order_no AS prepayOrderNo,
+               pr.bill_no AS billNo,
+               pr.order_no AS orderNo,
+               pr.customer_name AS customerName,
+               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
+               pr.pay_scene AS payScene,
+               pr.cashier_title AS cashierTitle,
+               pr.cashier_status AS cashierStatus,
+               pr.cashier_status_type AS cashierStatusType,
+               pr.payment_order_id AS paymentOrderId,
+               pr.source_kind AS sourceKind,
+               CASE WHEN p.amount &gt; 0
+                         AND pr.amount &gt; 0
+                         AND pr.amount = p.amount
+                         AND pr.order_no = p.order_no
+                         AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+                         AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                         AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+                              WHERE bound_prepay.payment_order_id = p.payment_order_id
+                                AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                                AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                    THEN 1 ELSE 0 END AS prepayAmountBindingValid,
+               p.status AS paymentStatus,
+               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order pr
+                 INNER JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+                     AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(pr.payment_order_id)
+                     AND CAST(p.payment_order_id AS BINARY(256)) = CAST(pr.payment_order_id AS BINARY(256))
+        WHERE pr.prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(pr.prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(pr.prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
+    </select>
+
+    <select id="isPrepayExpired" resultType="boolean">
+        SELECT CASE WHEN COUNT(1) &gt; 0 THEN TRUE ELSE FALSE END
+        FROM t_prepay_order pr
+                 INNER JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+                     AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(pr.payment_order_id)
+                     AND CAST(p.payment_order_id AS BINARY(256)) = CAST(pr.payment_order_id AS BINARY(256))
+        WHERE pr.prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(pr.prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(pr.prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
+          AND pr.expires_at &lt;= NOW()
+          AND p.status = 'PREPAY_CREATED'
     </select>
 
     <select id="findLatestActivePrepayByOrderNo" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
@@ -382,15 +664,31 @@
                pr.cashier_status AS cashierStatus,
                pr.cashier_status_type AS cashierStatusType,
                pr.payment_order_id AS paymentOrderId,
+               pr.source_kind AS sourceKind,
+               CASE WHEN p.amount &gt; 0
+                         AND pr.amount &gt; 0
+                         AND pr.amount = p.amount
+                         AND pr.order_no = p.order_no
+                         AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(p.order_no)
+                         AND CAST(pr.order_no AS BINARY(256)) = CAST(p.order_no AS BINARY(256))
+                         AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+                              WHERE bound_prepay.payment_order_id = p.payment_order_id
+                                AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                                AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))) = 1
+                    THEN 1 ELSE 0 END AS prepayAmountBindingValid,
                p.status AS paymentStatus,
+               COUNT(*) OVER () AS activePrepayCandidateCount,
                DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
                  INNER JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+                     AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(pr.payment_order_id)
+                     AND CAST(p.payment_order_id AS BINARY(256)) = CAST(pr.payment_order_id AS BINARY(256))
         WHERE pr.order_no = #{orderNo}
-          AND pr.expires_at &gt; NOW()
-          AND pr.cashier_status IN ('待支付', '支付中')
-          AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+          AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(pr.order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
+          AND (p.status &lt;&gt; 'PREPAY_CREATED' OR pr.expires_at &gt; NOW())
+          AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW', 'PAYING')
         ORDER BY pr.created_at DESC, pr.id DESC
         LIMIT 1
     </select>
@@ -406,7 +704,11 @@
                DATE_FORMAT(expire_at, '%Y-%m-%d %H:%i:%s') AS expireAt
         FROM t_payment_submit_concurrency_token
         WHERE prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
           AND source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -414,6 +716,8 @@
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
         FROM t_payment_notify_log
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
         ORDER BY created_at DESC, id DESC
     </select>
 
@@ -421,6 +725,8 @@
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', route_rule, ' | ', route_result) AS item
         FROM t_payment_route_record
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
         ORDER BY created_at DESC, id DESC
     </select>
 
@@ -428,23 +734,59 @@
         SELECT CONCAT(event_type, ' | ', event_topic, ' | ', publish_status, ' | ', DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s')) AS item
         FROM t_payment_event
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
         ORDER BY created_at DESC, id DESC
     </select>
 
     <select id="findPaymentOrderIdByPrepayOrderNo" resultType="string">
         SELECT payment_order_id FROM t_prepay_order WHERE prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
     </select>
 
     <select id="findOrderNoByPrepayOrderNo" resultType="string">
         SELECT order_no FROM t_prepay_order WHERE prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
     </select>
 
-    <update id="updatePaymentStatus">
+    <update id="updatePaymentRiskStatus">
         UPDATE t_payment_order
         SET status = #{status},
-            status_type = #{statusType},
-            channel_transaction_no = #{channelTransactionNo}
+            status_type = #{statusType}
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+          AND success_at IS NULL
+          AND channel_transaction_no IS NULL
+          AND (
+            (#{status} = 'RISK_REVIEW'
+             AND CHAR_LENGTH(#{status}) = CHAR_LENGTH('RISK_REVIEW')
+             AND CAST(#{status} AS BINARY(32)) = CAST('RISK_REVIEW' AS BINARY(32))
+             AND #{statusType} = 'warn'
+             AND CAST(#{statusType} AS BINARY(32)) = CAST('warn' AS BINARY(32)))
+            OR (#{status} = 'RISK_BLOCKED'
+                AND CHAR_LENGTH(#{status}) = CHAR_LENGTH('RISK_BLOCKED')
+                AND CAST(#{status} AS BINARY(32)) = CAST('RISK_BLOCKED' AS BINARY(32))
+                AND #{statusType} = 'danger'
+                AND CAST(#{statusType} AS BINARY(32)) = CAST('danger' AS BINARY(32)))
+            OR (#{status} = 'RISK_REJECTED'
+                AND CHAR_LENGTH(#{status}) = CHAR_LENGTH('RISK_REJECTED')
+                AND CAST(#{status} AS BINARY(32)) = CAST('RISK_REJECTED' AS BINARY(32))
+                AND #{statusType} = 'danger'
+                AND CAST(#{statusType} AS BINARY(32)) = CAST('danger' AS BINARY(32)))
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+          )
     </update>
 
     <update id="markPaymentSuccessFromChannelResult">
@@ -454,30 +796,130 @@
             channel_transaction_no = #{channelTransactionNo},
             success_at = COALESCE(success_at, NOW())
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND success_at IS NULL
+          AND NULLIF(TRIM(#{channelTransactionNo}), '') IS NOT NULL
+          AND (
+            NULLIF(TRIM(channel_transaction_no), '') IS NULL
+            OR (channel_transaction_no = #{channelTransactionNo}
+                AND CHAR_LENGTH(channel_transaction_no) = CHAR_LENGTH(#{channelTransactionNo})
+                AND CAST(channel_transaction_no AS BINARY(256)) = CAST(#{channelTransactionNo} AS BINARY(256)))
+          )
+          AND amount &gt; 0
+          AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+               WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+                 AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                 AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))) = 1
+          AND EXISTS (
+            SELECT 1 FROM t_prepay_order bound_prepay
+            WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND bound_prepay.order_no = t_payment_order.order_no
+              AND CHAR_LENGTH(bound_prepay.order_no) = CHAR_LENGTH(t_payment_order.order_no)
+              AND CAST(bound_prepay.order_no AS BINARY(256)) = CAST(t_payment_order.order_no AS BINARY(256))
+              AND bound_prepay.amount = t_payment_order.amount
+              AND bound_prepay.amount &gt; 0
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM t_payment_attempt binding_attempt
+            WHERE binding_attempt.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(binding_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(binding_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND binding_attempt.id = (
+                SELECT latest_binding_attempt.id
+                FROM t_payment_attempt latest_binding_attempt
+                WHERE latest_binding_attempt.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(latest_binding_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(latest_binding_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                ORDER BY latest_binding_attempt.created_at DESC, latest_binding_attempt.id DESC
+                LIMIT 1
+              )
+              AND binding_attempt.channel_code = t_payment_order.channel_code
+              AND CHAR_LENGTH(binding_attempt.channel_code) = CHAR_LENGTH(t_payment_order.channel_code)
+              AND CAST(binding_attempt.channel_code AS BINARY(256)) = CAST(t_payment_order.channel_code AS BINARY(256))
+              AND CHAR_LENGTH(TRIM(t_payment_order.payment_method)) &gt; 0
+              AND binding_attempt.payment_method = t_payment_order.payment_method
+              AND CHAR_LENGTH(binding_attempt.payment_method) = CHAR_LENGTH(t_payment_order.payment_method)
+              AND CAST(binding_attempt.payment_method AS BINARY(256)) = CAST(t_payment_order.payment_method AS BINARY(256))
+          )
           AND (
             (
               status = 'WAIT_CALLBACK'
+              AND CHAR_LENGTH(status) = CHAR_LENGTH('WAIT_CALLBACK')
+              AND CAST(status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
               AND EXISTS (
                 SELECT 1
                 FROM t_payment_attempt submitted_attempt
                 WHERE submitted_attempt.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(submitted_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(submitted_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                  AND submitted_attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_payment_attempt latest_attempt
+                    WHERE latest_attempt.payment_order_id = t_payment_order.payment_order_id
+                      AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                      AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                  )
+                  AND submitted_attempt.completed_at IS NULL
+                  AND UPPER(TRIM(submitted_attempt.attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
               )
             )
             OR (
               status = 'CLOSED'
+              AND CHAR_LENGTH(status) = CHAR_LENGTH('CLOSED')
+              AND CAST(status AS BINARY(32)) = CAST('CLOSED' AS BINARY(32))
+              AND EXISTS (
+                SELECT 1
+                FROM t_payment_attempt closed_attempt
+                WHERE closed_attempt.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(closed_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(closed_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                  AND closed_attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_payment_attempt latest_attempt
+                    WHERE latest_attempt.payment_order_id = t_payment_order.payment_order_id
+                      AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                      AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                  )
+                  AND closed_attempt.completed_at IS NULL
+                  AND UPPER(TRIM(closed_attempt.attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
+              )
               AND EXISTS (
                 SELECT 1
                 FROM t_payment_event pe
                 WHERE pe.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(pe.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(pe.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                  AND pe.biz_no = t_payment_order.order_no
+                  AND CHAR_LENGTH(pe.biz_no) = CHAR_LENGTH(t_payment_order.order_no)
+                  AND CAST(pe.biz_no AS BINARY(256)) = CAST(t_payment_order.order_no AS BINARY(256))
                   AND (
-                    pe.event_type = 'PAYMENT_EXPIRED_CLOSED'
+                    (pe.event_type = 'PAYMENT_EXPIRED_CLOSED'
+                     AND CHAR_LENGTH(pe.event_type) = CHAR_LENGTH('PAYMENT_EXPIRED_CLOSED')
+                     AND CAST(pe.event_type AS BINARY(64)) = CAST('PAYMENT_EXPIRED_CLOSED' AS BINARY(64))
+                     AND pe.downstream_system = 'payment-core-ops'
+                     AND CHAR_LENGTH(pe.downstream_system) = CHAR_LENGTH('payment-core-ops')
+                     AND CAST(pe.downstream_system AS BINARY(256)) = CAST('payment-core-ops' AS BINARY(256))
+                     AND pe.event_topic = 'payment.trade.expired-closed.v1'
+                     AND CHAR_LENGTH(pe.event_topic) = CHAR_LENGTH('payment.trade.expired-closed.v1')
+                     AND CAST(pe.event_topic AS BINARY(128)) = CAST('payment.trade.expired-closed.v1' AS BINARY(128)))
                     OR (
                       pe.event_type = 'PAYMENT_CLOSED'
-                      AND EXISTS (
-                        SELECT 1
-                        FROM t_payment_attempt closed_attempt
-                        WHERE closed_attempt.payment_order_id = t_payment_order.payment_order_id
-                      )
+                      AND CHAR_LENGTH(pe.event_type) = CHAR_LENGTH('PAYMENT_CLOSED')
+                      AND CAST(pe.event_type AS BINARY(64)) = CAST('PAYMENT_CLOSED' AS BINARY(64))
+                      AND pe.downstream_system = 'accounting-system'
+                      AND CHAR_LENGTH(pe.downstream_system) = CHAR_LENGTH('accounting-system')
+                      AND CAST(pe.downstream_system AS BINARY(256)) = CAST('accounting-system' AS BINARY(256))
+                      AND pe.event_topic = 'payment.trade.closed.v1'
+                      AND CHAR_LENGTH(pe.event_topic) = CHAR_LENGTH('payment.trade.closed.v1')
+                      AND CAST(pe.event_topic AS BINARY(128)) = CAST('payment.trade.closed.v1' AS BINARY(128))
                     )
                   )
               )
@@ -489,17 +931,48 @@
         UPDATE t_payment_attempt
         SET attempt_status = '成功',
             attempt_status_type = 'success',
-            completed_at = COALESCE(completed_at, NOW())
+            completed_at = (
+                SELECT payment_order.success_at
+                FROM t_payment_order payment_order
+                WHERE payment_order.payment_order_id = t_payment_attempt.payment_order_id
+                  AND CHAR_LENGTH(payment_order.payment_order_id) = CHAR_LENGTH(t_payment_attempt.payment_order_id)
+                  AND CAST(payment_order.payment_order_id AS BINARY(256)) = CAST(t_payment_attempt.payment_order_id AS BINARY(256))
+                  AND payment_order.status = 'SUCCESS'
+                  AND CHAR_LENGTH(payment_order.status) = CHAR_LENGTH('SUCCESS')
+                  AND CAST(payment_order.status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
+            )
         WHERE id = (
             SELECT latest_attempt.id
             FROM (
                 SELECT id
                 FROM t_payment_attempt
                 WHERE payment_order_id = #{paymentOrderId}
+                  AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+                  AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
             ) latest_attempt
         )
+          AND completed_at IS NULL
+          AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_order payment_order
+              WHERE payment_order.payment_order_id = t_payment_attempt.payment_order_id
+                AND CHAR_LENGTH(payment_order.payment_order_id) = CHAR_LENGTH(t_payment_attempt.payment_order_id)
+                AND CAST(payment_order.payment_order_id AS BINARY(256)) = CAST(t_payment_attempt.payment_order_id AS BINARY(256))
+                AND payment_order.status = 'SUCCESS'
+                AND CHAR_LENGTH(payment_order.status) = CHAR_LENGTH('SUCCESS')
+                AND CAST(payment_order.status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
+                AND payment_order.success_at IS NOT NULL
+                AND payment_order.channel_code = t_payment_attempt.channel_code
+                AND CHAR_LENGTH(payment_order.channel_code) = CHAR_LENGTH(t_payment_attempt.channel_code)
+                AND CAST(payment_order.channel_code AS BINARY(256)) = CAST(t_payment_attempt.channel_code AS BINARY(256))
+                AND CHAR_LENGTH(TRIM(payment_order.payment_method)) &gt; 0
+                AND payment_order.payment_method = t_payment_attempt.payment_method
+                AND CHAR_LENGTH(payment_order.payment_method) = CHAR_LENGTH(t_payment_attempt.payment_method)
+                AND CAST(payment_order.payment_method AS BINARY(256)) = CAST(t_payment_attempt.payment_method AS BINARY(256))
+          )
     </update>
 
     <update id="markPaymentPendingFromCallback">
@@ -508,15 +981,43 @@
             status_type = 'warn',
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND success_at IS NULL
+          AND NULLIF(TRIM(#{channelTransactionNo}), '') IS NOT NULL
           AND status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
           AND (
             NULLIF(TRIM(channel_transaction_no), '') IS NULL
-            OR channel_transaction_no = #{channelTransactionNo}
+            OR (channel_transaction_no = #{channelTransactionNo}
+                AND CHAR_LENGTH(channel_transaction_no) = CHAR_LENGTH(#{channelTransactionNo})
+                AND CAST(channel_transaction_no AS BINARY(256)) = CAST(#{channelTransactionNo} AS BINARY(256)))
           )
           AND EXISTS (
             SELECT 1
             FROM t_payment_attempt submitted_attempt
             WHERE submitted_attempt.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(submitted_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(submitted_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND submitted_attempt.id = (
+                SELECT latest_attempt.id
+                FROM t_payment_attempt latest_attempt
+                WHERE latest_attempt.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1
+              )
+              AND submitted_attempt.completed_at IS NULL
+              AND submitted_attempt.channel_code = t_payment_order.channel_code
+              AND CHAR_LENGTH(submitted_attempt.channel_code) = CHAR_LENGTH(t_payment_order.channel_code)
+              AND CAST(submitted_attempt.channel_code AS BINARY(256)) = CAST(t_payment_order.channel_code AS BINARY(256))
+              AND CHAR_LENGTH(TRIM(t_payment_order.payment_method)) &gt; 0
+              AND submitted_attempt.payment_method = t_payment_order.payment_method
+              AND CHAR_LENGTH(submitted_attempt.payment_method) = CHAR_LENGTH(t_payment_order.payment_method)
+              AND CAST(submitted_attempt.payment_method AS BINARY(256)) = CAST(t_payment_order.payment_method AS BINARY(256))
+              AND UPPER(TRIM(submitted_attempt.attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
           )
     </update>
 
@@ -525,18 +1026,43 @@
         SET status = 'CLOSED',
             status_type = 'danger'
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND status = 'PREPAY_CREATED'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('PREPAY_CREATED')
+          AND CAST(status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32))
+          AND success_at IS NULL
           AND NULLIF(TRIM(channel_transaction_no), '') IS NULL
           AND EXISTS (
             SELECT 1
             FROM t_prepay_order pr
-            WHERE pr.payment_order_id = t_payment_order.payment_order_id
+            WHERE pr.id = (
+                SELECT latest_pr.id
+                FROM t_prepay_order latest_pr
+                WHERE latest_pr.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(latest_pr.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(latest_pr.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                LIMIT 1
+            )
               AND pr.expires_at &lt; NOW()
+              AND t_payment_order.amount &gt; 0
+              AND pr.amount &gt; 0
+              AND pr.amount = t_payment_order.amount
+              AND pr.order_no = t_payment_order.order_no
+              AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(t_payment_order.order_no)
+              AND CAST(pr.order_no AS BINARY(256)) = CAST(t_payment_order.order_no AS BINARY(256))
           )
+          AND (SELECT COUNT(*) FROM t_prepay_order all_prepay
+               WHERE all_prepay.payment_order_id = t_payment_order.payment_order_id
+                 AND CHAR_LENGTH(all_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                 AND CAST(all_prepay.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))) = 1
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
             WHERE pa.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
           )
     </update>
 
@@ -545,12 +1071,45 @@
         SET status = 'CLOSED',
             status_type = 'danger'
         WHERE payment_order_id = #{paymentOrderId}
-          AND status IN ('PREPAY_CREATED', 'RISK_REVIEW', 'RISK_BLOCKED', 'RISK_REJECTED')
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND (
+            (status = 'PREPAY_CREATED' AND CHAR_LENGTH(status) = CHAR_LENGTH('PREPAY_CREATED')
+              AND CAST(status AS BINARY(32)) = CAST('PREPAY_CREATED' AS BINARY(32)))
+            OR (status = 'RISK_REVIEW' AND CHAR_LENGTH(status) = CHAR_LENGTH('RISK_REVIEW')
+              AND CAST(status AS BINARY(32)) = CAST('RISK_REVIEW' AS BINARY(32)))
+            OR (status = 'RISK_BLOCKED' AND CHAR_LENGTH(status) = CHAR_LENGTH('RISK_BLOCKED')
+              AND CAST(status AS BINARY(32)) = CAST('RISK_BLOCKED' AS BINARY(32)))
+            OR (status = 'RISK_REJECTED' AND CHAR_LENGTH(status) = CHAR_LENGTH('RISK_REJECTED')
+              AND CAST(status AS BINARY(32)) = CAST('RISK_REJECTED' AS BINARY(32)))
+          )
+          AND success_at IS NULL
           AND NULLIF(TRIM(channel_transaction_no), '') IS NULL
+          AND amount &gt; 0
+          AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+               WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+                 AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                 AND CAST(bound_prepay.payment_order_id AS BINARY(256)) =
+                     CAST(t_payment_order.payment_order_id AS BINARY(256))) = 1
+          AND EXISTS (
+            SELECT 1
+            FROM t_prepay_order bound_prepay
+            WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(bound_prepay.payment_order_id AS BINARY(256)) =
+                  CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND bound_prepay.amount &gt; 0
+              AND bound_prepay.amount = t_payment_order.amount
+              AND bound_prepay.order_no = t_payment_order.order_no
+              AND CHAR_LENGTH(bound_prepay.order_no) = CHAR_LENGTH(t_payment_order.order_no)
+              AND CAST(bound_prepay.order_no AS BINARY(256)) = CAST(t_payment_order.order_no AS BINARY(256))
+          )
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
             WHERE pa.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
           )
     </update>
 
@@ -559,6 +1118,8 @@
         SET cashier_status = '支付中',
             cashier_status_type = 'info'
         WHERE prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
           AND cashier_status IN ('待支付', '待风控复核')
     </update>
 
@@ -567,6 +1128,8 @@
         SET cashier_status = #{cashierStatus},
             cashier_status_type = #{cashierStatusType}
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
     </update>
 
     <update id="updatePaymentMethodAndChannel">
@@ -577,7 +1140,63 @@
             status = 'WAIT_CALLBACK',
             status_type = 'warn'
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND status IN ('PREPAY_CREATED', 'CREATED', 'RISK_REVIEW', 'RISK_BLOCKED', 'RISK_REJECTED')
+          AND channel_transaction_no IS NULL
+          AND success_at IS NULL
+          AND #{channelTransactionNo} IS NULL
+          AND amount &gt; 0
+          AND (SELECT COUNT(*) FROM t_prepay_order bound_prepay
+               WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+                 AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                 AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))) = 1
+          AND EXISTS (
+            SELECT 1 FROM t_prepay_order bound_prepay
+            WHERE bound_prepay.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(bound_prepay.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(bound_prepay.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND bound_prepay.prepay_order_no = #{prepayOrderNo}
+              AND CHAR_LENGTH(bound_prepay.prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+              AND CAST(bound_prepay.prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
+              AND bound_prepay.order_no = t_payment_order.order_no
+              AND CHAR_LENGTH(bound_prepay.order_no) = CHAR_LENGTH(t_payment_order.order_no)
+              AND CAST(bound_prepay.order_no AS BINARY(256)) = CAST(t_payment_order.order_no AS BINARY(256))
+              AND bound_prepay.amount = t_payment_order.amount
+              AND bound_prepay.amount &gt; 0
+          )
     </update>
+
+    <sql id="matchingOpenPaymentSubmitAttempt">
+        EXISTS (
+            SELECT 1
+            FROM t_payment_attempt current_attempt
+            WHERE current_attempt.attempt_no = #{attemptNo}
+              AND CHAR_LENGTH(current_attempt.attempt_no) = CHAR_LENGTH(#{attemptNo})
+              AND CAST(current_attempt.attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
+              AND current_attempt.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(current_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(current_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND current_attempt.channel_code = t_payment_order.channel_code
+              AND CHAR_LENGTH(current_attempt.channel_code) = CHAR_LENGTH(t_payment_order.channel_code)
+              AND CAST(current_attempt.channel_code AS BINARY(256)) = CAST(t_payment_order.channel_code AS BINARY(256))
+              AND CHAR_LENGTH(TRIM(t_payment_order.payment_method)) &gt; 0
+              AND current_attempt.payment_method = t_payment_order.payment_method
+              AND CHAR_LENGTH(current_attempt.payment_method) = CHAR_LENGTH(t_payment_order.payment_method)
+              AND CAST(current_attempt.payment_method AS BINARY(256)) = CAST(t_payment_order.payment_method AS BINARY(256))
+              AND current_attempt.completed_at IS NULL
+              AND UPPER(TRIM(current_attempt.attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
+              AND current_attempt.id = (
+                  SELECT latest_attempt.id
+                  FROM t_payment_attempt latest_attempt
+                  WHERE latest_attempt.payment_order_id = t_payment_order.payment_order_id
+                    AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                    AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                  ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                  LIMIT 1
+              )
+        )
+    </sql>
 
     <update id="bindPaymentChannelSubmitResult">
         UPDATE t_payment_order
@@ -585,12 +1204,25 @@
             channel_code = #{channelCode},
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND success_at IS NULL
           AND status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+          AND payment_method = #{paymentMethod}
+          AND CHAR_LENGTH(payment_method) = CHAR_LENGTH(#{paymentMethod})
+          AND CAST(payment_method AS BINARY(256)) = CAST(#{paymentMethod} AS BINARY(256))
           AND channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND (
             NULLIF(TRIM(channel_transaction_no), '') IS NULL
-            OR channel_transaction_no = #{channelTransactionNo}
+            OR (channel_transaction_no = #{channelTransactionNo}
+                AND CHAR_LENGTH(channel_transaction_no) = CHAR_LENGTH(#{channelTransactionNo})
+                AND CAST(channel_transaction_no AS BINARY(256)) = CAST(#{channelTransactionNo} AS BINARY(256)))
           )
+          AND <include refid="matchingOpenPaymentSubmitAttempt"/>
     </update>
 
     <update id="markPaymentSubmitResultUnknown">
@@ -601,13 +1233,44 @@
                 NULLIF(TRIM(channel_transaction_no), ''),
                 #{channelTransactionNo})
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND success_at IS NULL
           AND status = 'WAIT_CALLBACK'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('WAIT_CALLBACK')
+          AND CAST(status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
+          AND payment_method = #{paymentMethod}
+          AND CHAR_LENGTH(payment_method) = CHAR_LENGTH(#{paymentMethod})
+          AND CAST(payment_method AS BINARY(256)) = CAST(#{paymentMethod} AS BINARY(256))
           AND (
             #{channelTransactionNo} IS NULL
             OR NULLIF(TRIM(channel_transaction_no), '') IS NULL
-            OR channel_transaction_no = #{channelTransactionNo}
+            OR (channel_transaction_no = #{channelTransactionNo}
+                AND CHAR_LENGTH(channel_transaction_no) = CHAR_LENGTH(#{channelTransactionNo})
+                AND CAST(channel_transaction_no AS BINARY(256)) = CAST(#{channelTransactionNo} AS BINARY(256)))
           )
+          AND <include refid="matchingOpenPaymentSubmitAttempt"/>
     </update>
+
+    <select id="isLatestPaymentAttemptForOrder" resultType="boolean">
+        SELECT COUNT(1) = 1
+        FROM t_payment_attempt current_attempt
+        WHERE current_attempt.attempt_no = #{attemptNo}
+          AND CHAR_LENGTH(current_attempt.attempt_no) = CHAR_LENGTH(#{attemptNo})
+          AND CAST(current_attempt.attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
+          AND current_attempt.payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(current_attempt.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(current_attempt.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND current_attempt.id = (
+              SELECT latest_attempt.id
+              FROM t_payment_attempt latest_attempt
+              WHERE latest_attempt.payment_order_id = #{paymentOrderId}
+                AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+                AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+              ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+              LIMIT 1
+          )
+    </select>
 
     <update id="updatePaymentReturnCodeSnapshot">
         UPDATE t_payment_order
@@ -620,6 +1283,10 @@
             last_mapping_version = #{mappingVersion},
             last_mapping_matched = #{mappingMatched}
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
+          AND status != 'SUCCESS'
+          AND success_at IS NULL
     </update>
 
     <update id="updateLatestPaymentAttemptStatus">
@@ -632,10 +1299,14 @@
                 SELECT id
                 FROM t_payment_attempt
                 WHERE payment_order_id = #{paymentOrderId}
+                  AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+                  AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
             ) latest_attempt
         )
+          AND completed_at IS NULL
+          AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
     </update>
 
     <insert id="insertSubmitConcurrencyToken">
@@ -683,7 +1354,11 @@
             expire_at = TIMESTAMPADD(SECOND, #{expireAfterSeconds}, NOW()),
             updated_at = NOW()
         WHERE prepay_order_no = #{prepayOrderNo}
+          AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
+          AND CAST(prepay_order_no AS BINARY(256)) = CAST(#{prepayOrderNo} AS BINARY(256))
           AND source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
            AND (token_status &lt;&gt; 'ACTIVE' OR expire_at &lt; NOW())
     </update>
 
@@ -694,6 +1369,8 @@
             released_at = NOW(),
             updated_at = NOW()
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND token_status = 'ACTIVE'
     </update>
 
@@ -703,6 +1380,11 @@
             order_status = #{orderStatus},
             order_status_type = #{orderStatusType}
         WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
+          AND order_amount = #{paidAmount}
+          AND paid_amount = #{expectedPaidAmount}
+          AND customer_name = #{expectedCustomerName}
     </update>
 
     <update id="updateBillAfterPayment">
@@ -711,6 +1393,14 @@
             bill_status = #{billStatus},
             bill_status_type = #{billStatusType}
         WHERE bill_no = #{billNo}
+          AND CHAR_LENGTH(bill_no) = CHAR_LENGTH(#{billNo})
+          AND CAST(bill_no AS BINARY(256)) = CAST(#{billNo} AS BINARY(256))
+          AND order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
+          AND customer_name = #{customerName}
+          AND bill_amount = #{paidAmount}
+          AND paid_amount = #{expectedPaidAmount}
     </update>
 
     <insert id="insertNotifyLog">
@@ -768,8 +1458,8 @@
     </insert>
 
     <insert id="insertPaymentAttempt">
-        INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at)
-        VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
+        INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, request_fingerprint, created_at)
+        VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, #{requestFingerprint}, NOW())
     </insert>
 
     <update id="updatePaymentAttemptSubmitResult">
@@ -784,6 +1474,20 @@
                 ELSE attempt_status_type
             END
         WHERE attempt_no = #{attemptNo}
+          AND CHAR_LENGTH(attempt_no) = CHAR_LENGTH(#{attemptNo})
+          AND CAST(attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
+          AND (completed_at IS NOT NULL
+               OR (NULLIF(TRIM(attempt_status), '') IS NOT NULL
+                   AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')))
+    </update>
+
+    <update id="recordPaymentAttemptGateway">
+        UPDATE t_payment_attempt
+        SET gateway_code = #{gatewayCode}
+        WHERE attempt_no = #{attemptNo}
+          AND CHAR_LENGTH(attempt_no) = CHAR_LENGTH(#{attemptNo})
+          AND CAST(attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
+          AND (gateway_code IS NULL OR CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256)))
     </update>
 
     <insert id="insertPaymentProcessLog">
@@ -822,18 +1526,38 @@
         UPDATE t_payment_route_record
         SET ops_config_snapshot_version = #{snapshotVersion}
         WHERE route_no = #{routeNo}
+          AND CHAR_LENGTH(route_no) = CHAR_LENGTH(#{routeNo})
+          AND CAST(route_no AS BINARY(256)) = CAST(#{routeNo} AS BINARY(256))
     </update>
 
     <update id="updateAttemptOpsConfigSnapshotVersion">
         UPDATE t_payment_attempt
         SET ops_config_snapshot_version = #{snapshotVersion}
         WHERE attempt_no = #{attemptNo}
+          AND CHAR_LENGTH(attempt_no) = CHAR_LENGTH(#{attemptNo})
+          AND CAST(attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
     </update>
 
     <select id="existsPaymentAttemptByIdempotencyKey" resultType="boolean">
         SELECT COUNT(1) &gt; 0
         FROM t_payment_attempt
         WHERE idempotency_key = #{idempotencyKey}
+          AND CHAR_LENGTH(idempotency_key) = CHAR_LENGTH(#{idempotencyKey})
+          AND CAST(idempotency_key AS BINARY(512)) = CAST(#{idempotencyKey} AS BINARY(512))
+    </select>
+
+    <select id="findPaymentAttemptIdempotency"
+            resultType="com.abc123.hsp.dto.PaymentAttemptIdempotencyDTO">
+        SELECT prepay_order_no AS prepayOrderNo,
+               payment_order_id AS paymentOrderId,
+               request_fingerprint AS requestFingerprint
+        FROM t_payment_attempt
+        WHERE idempotency_key = #{idempotencyKey}
+          AND CHAR_LENGTH(idempotency_key) = CHAR_LENGTH(#{idempotencyKey})
+          AND CAST(idempotency_key AS BINARY(512)) = CAST(#{idempotencyKey} AS BINARY(512))
+        ORDER BY id ASC
+        LIMIT 1
+        FOR UPDATE
     </select>
 
     <select id="findActiveControlPolicyBySourceAppId" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
@@ -854,6 +1578,8 @@
                status_type AS statusType
         FROM t_payment_control_policy
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
           AND status = 'ENABLED'
         LIMIT 1
     </select>
@@ -863,6 +1589,7 @@
         FROM t_payment_order
         WHERE channel_code = #{channelCode}
           AND status IN ('WAIT_CALLBACK', 'SUCCESS')
+          AND amount &gt; 0
           AND created_at &gt;= CURDATE()
           AND created_at &lt; TIMESTAMPADD(DAY, 1, CURDATE())
     </select>

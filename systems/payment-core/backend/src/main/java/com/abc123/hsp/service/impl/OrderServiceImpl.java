@@ -56,7 +56,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public PageResultDTO<OrderListItemDTO> list(OrderQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(orderMapper.findAll(query)),
                 orderMapper.count(query),
@@ -67,12 +67,12 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public String exportCsv(OrderQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<OrderListItemDTO> records = maskItems(
                 CsvExportRowLimiter.requireWithinLimit(orderMapper.findForExport(query)));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("订单号,账单号,客户名称,服务品类,服务者,订单金额,已付金额,订单状态,履约状态,最近支付状态,最近收银台状态,创建时间\n");
+        builder.append("订单号,账单号,客户名称,服务品类,服务者,订单金额,已付金额,订单状态,订单状态样式,履约状态,履约状态样式,最近支付状态,最近支付状态样式,最近支付场景,最近收银台状态,最近收银台状态样式,创建时间\n");
         for (OrderListItemDTO item : records) {
             builder.append(csv(item.getOrderNo())).append(',')
                     .append(csv(item.getBillNo())).append(',')
@@ -82,9 +82,14 @@ public class OrderServiceImpl implements OrderService {
                     .append(csv(item.getOrderAmount())).append(',')
                     .append(csv(item.getPaidAmount())).append(',')
                     .append(csv(item.getOrderStatus())).append(',')
+                    .append(csv(item.getOrderStatusType())).append(',')
                     .append(csv(item.getFulfillmentStatus())).append(',')
+                    .append(csv(item.getFulfillmentStatusType())).append(',')
                     .append(csv(item.getLatestPaymentStatus())).append(',')
+                    .append(csv(item.getLatestPaymentStatusType())).append(',')
+                    .append(csv(item.getLatestPayScene())).append(',')
                     .append(csv(item.getLatestCashierStatus())).append(',')
+                    .append(csv(item.getLatestCashierStatusType())).append(',')
                     .append(csv(item.getCreatedAt())).append('\n');
         }
         return builder.toString();
@@ -114,7 +119,10 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 后台运营列表统一在服务层收敛分页边界，避免前端传异常分页导致慢查询。
      */
-    private void normalizeQuery(OrderQueryDTO query) {
+    private OrderQueryDTO normalizeQuery(OrderQueryDTO query) {
+        if (query == null) {
+            query = new OrderQueryDTO();
+        }
         query.setOrderNo(normalizeOptionalQueryField(
                 query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
         query.setServiceType(normalizeOptionalQueryField(
@@ -123,6 +131,7 @@ public class OrderServiceImpl implements OrderService {
                 query.getOrderStatus(), ORDER_STATUS_MAX_LENGTH, "订单状态", "全部"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(
@@ -172,7 +181,8 @@ public class OrderServiceImpl implements OrderService {
             return "";
         }
         String escaped = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
-        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+        if (escaped.contains(",") || escaped.contains("\"")
+                || escaped.contains("\n") || escaped.contains("\r")) {
             return "\"" + escaped + "\"";
         }
         return escaped;

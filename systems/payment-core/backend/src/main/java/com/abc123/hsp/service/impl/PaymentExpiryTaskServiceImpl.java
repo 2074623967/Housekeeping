@@ -101,16 +101,21 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
 
     private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
         int closedRows = paymentMapper.markExpiredUnsubmittedPaymentClosed(payment.getPaymentOrderId());
-        if (closedRows == 0) {
+        if (closedRows != 1) {
             paymentMapper.deleteExpiryCloseRetry(payment.getPaymentOrderId());
             return false;
         }
-        paymentMapper.updatePrepayStatusByPaymentOrderId(payment.getPaymentOrderId(), "已失效", "danger");
+        if (paymentMapper.updatePrepayStatusByPaymentOrderId(
+                payment.getPaymentOrderId(), "已失效", "danger") != 1) {
+            throw new IllegalStateException("expired payment prepay status was not applied atomically");
+        }
         String eventNo = "EVT" + System.currentTimeMillis()
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String eventPayload = "{\"source\":\"scheduler\",\"reason\":\"PREPAY_EXPIRED\"}";
-        paymentMapper.insertEvent(eventNo, "PAYMENT_EXPIRED_CLOSED", payment.getPaymentOrderId(),
-                payment.getOrderNo(), eventPayload);
+        if (paymentMapper.insertEvent(eventNo, "PAYMENT_EXPIRED_CLOSED", payment.getPaymentOrderId(),
+                payment.getOrderNo(), eventPayload) != 1) {
+            throw new IllegalStateException("expired payment event was not created atomically");
+        }
         PaymentProcessLogEntity processLog = new PaymentProcessLogEntity();
         processLog.setLogNo(eventNo);
         processLog.setPaymentOrderId(payment.getPaymentOrderId());
@@ -122,7 +127,9 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         processLog.setLogLevelType("info");
         processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED");
         processLog.setSource("payment-core");
-        paymentMapper.insertPaymentProcessLog(processLog);
+        if (paymentMapper.insertPaymentProcessLog(processLog) != 1) {
+            throw new IllegalStateException("expired payment process log was not created atomically");
+        }
         paymentMapper.deleteExpiryCloseRetry(payment.getPaymentOrderId());
         return true;
     }

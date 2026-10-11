@@ -206,12 +206,34 @@ class PaymentChannelSubmitServiceImplTest {
         result.setNativePaymentParams(nativePaymentParams());
         when(adapter.supports("wx_h5")).thenReturn(true);
         when(adapter.submit(any())).thenReturn(result);
+        PaymentChannelSubmitRequestDTO request = request();
+        request.setTerminal("MINI_PROGRAM");
         when(standardizer.standardizeSubmit("wx_h5", result)).thenReturn(result);
 
         PaymentChannelSubmitResultDTO normalized = new PaymentChannelSubmitServiceImpl(
-                Collections.singletonList(adapter), standardizer).submit(request());
+                Collections.singletonList(adapter), standardizer).submit(request);
 
         assertEquals("prepay_id=wx-prepay", normalized.getNativePaymentParams().get("package"));
+    }
+
+    @Test
+    void shouldRejectNativePaymentParametersForNonMiniProgramTerminal() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setNativePaymentParams(nativePaymentParams());
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(any())).thenReturn(result);
+
+        PaymentChannelSubmitRequestDTO request = request();
+        request.setTerminal("APP");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelSubmitServiceImpl(
+                        Collections.singletonList(adapter), standardizer).submit(request));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
     }
 
     @Test

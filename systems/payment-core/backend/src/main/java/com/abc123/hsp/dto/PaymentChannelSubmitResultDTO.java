@@ -16,6 +16,7 @@ public class PaymentChannelSubmitResultDTO {
 
     /** 渠道交易流水号。 */
     private String channelTransactionNo;
+    private String gatewayCode;
     /** 支付尝试状态。 */
     private String attemptStatus;
     /** 支付尝试状态类型。 */

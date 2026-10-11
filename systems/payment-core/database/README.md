@@ -10,6 +10,9 @@
 - 默认启动不会执行 `schema.sql` 或 `data.sql`，避免支付订单、outbox 和对账事实被应用重启覆盖。
 - 首次本地演示可显式使用 `SPRING_PROFILES_ACTIVE=demo`，或一次性设置 `HSP_SQL_INIT_MODE=always` 重建样例库。
 - 已有演练库、测试库和任何持久环境应保持 `HSP_SQL_INIT_MODE=never`，结构变更通过受控 DDL migration 执行。
+- `migrations/2026-10-02-add-payment-order-updated-time.sql`：补齐支付记录查询依赖的支付单 `updated_at`；旧记录以 `created_at` 作为未知历史更新时间的下界，之后由数据库自动维护。仅在缺列的旧库停写、备份并审查后执行一次；对大表预估 DDL/回填耗时与锁影响，执行后确认无空值及 `updated_at >= created_at`，不可把回填值解释为历史真实更新时间。
+- `migrations/2026-10-02-add-payment-prepay-latest-index.sql`：为按支付单号和创建时间读取唯一最新预付事实建立复合索引；旧库确认索引不存在后在受控窗口执行一次，并用执行计划评估线上查询与写入影响。
+- `migrations/2026-10-02-add-payment-attempt-gateway-code.sql`：为支付尝试增加可空网关编码；仅真实 gateway-access 明确受理的逐次提交留存受治理编码，历史与模拟记录保持 `NULL`，不可从当前渠道配置反推。旧库确认缺列后受控执行一次，再部署依赖该列的服务。
 - `migrations/2026-07-31-add-payment-task-lease.sql`：给原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 的最小增量 DDL，用于让最新任务中心租约锁能力安全落库
 - `migrations/2026-08-09-add-ops-config-snapshot-version.sql`：给支付尝试和路由记录补齐运营配置快照版本字段，支持支付事实按配置版本追溯
 - `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`：把历史递归升级 outbox 告警收口为 `已确认`，保留审计记录但移出待确认/待升级范围
@@ -70,7 +73,9 @@
 24. 执行 `migrations/2026-09-10-add-payment-submit-rate-limit-bucket.sql`，建立支付提交共享限流桶；脚本可重复执行
 25. 执行 `migrations/2026-09-10-add-payment-prepay-creation-lock.sql`，建立预付单创建并发协调表；脚本可重复执行
 26. 执行一次 `migrations/2026-09-14-add-payment-route-attempt-reference.sql`，为路由记录补齐支付尝试关联；迁移前应评估更新存量路由的锁影响，无法按历史时间可靠判定的记录允许保持为空并由兼容查询读取
-27. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+27. 执行一次 `migrations/2026-10-02-add-payment-attempt-gateway-code.sql`，新增可空逐单网关编码，勿推测回填历史值；部署新版 payment-core 前必须完成此迁移
+28. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+   - `SHOW COLUMNS FROM t_payment_attempt LIKE 'gateway_code'` 返回一行，历史记录保持 `NULL`
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`

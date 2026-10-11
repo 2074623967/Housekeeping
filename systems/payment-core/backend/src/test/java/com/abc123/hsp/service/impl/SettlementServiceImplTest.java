@@ -114,6 +114,10 @@ class SettlementServiceImplTest {
         item.setSettlementOrderId("SETTLE-001");
         item.setWorkerName("李师傅");
         item.setAmountNetSettle("¥888.00");
+        item.setStatus("待审核");
+        item.setStatusType("warn");
+        item.setPayoutStatus("待出款");
+        item.setPayoutStatusType("warn");
         when(settlementMapper.findWorkerSettlementsForExport(query)).thenReturn(Collections.singletonList(item));
 
         String csv = new SettlementServiceImpl(settlementMapper).exportCsv(query);
@@ -121,6 +125,8 @@ class SettlementServiceImplTest {
         assertEquals("SETTLE-001", query.getSettlementOrderId());
         assertEquals("李师傅", query.getWorkerKeyword());
         assertTrue(csv.contains("SETTLE-001"));
+        assertTrue(csv.contains("结算状态,结算状态样式,出款状态,出款状态样式"));
+        assertTrue(csv.contains("\"待审核\",\"warn\",\"待出款\",\"warn\""));
         assertTrue(csv.contains("李*"));
         assertFalse(csv.contains("李师傅"));
         assertTrue(csv.contains("¥888.00"));
@@ -150,6 +156,23 @@ class SettlementServiceImplTest {
         assertEquals(1, result.getNegativeNetSettleCount());
         assertEquals("¥0.00", result.getTotalNetSettleAmount());
         verify(settlementMapper).findWorkerOverview(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingWorkerSettlementsWithNullQuery() {
+        when(settlementMapper.findWorkerSettlements(org.mockito.ArgumentMatchers.any(WorkerSettlementQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(settlementMapper.count(org.mockito.ArgumentMatchers.any(WorkerSettlementQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<WorkerSettlementListItemDTO> result =
+                new SettlementServiceImpl(settlementMapper).workerList(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<WorkerSettlementQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(WorkerSettlementQueryDTO.class);
+        verify(settlementMapper).findWorkerSettlements(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int times) {

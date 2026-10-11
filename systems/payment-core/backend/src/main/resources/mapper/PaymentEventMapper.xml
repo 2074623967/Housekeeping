@@ -11,14 +11,18 @@
             </if>
             <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
                 AND event_type = #{query.eventType}
+                AND CHAR_LENGTH(event_type) = CHAR_LENGTH(#{query.eventType})
+                AND CAST(event_type AS BINARY(64)) = CAST(#{query.eventType} AS BINARY(64))
             </if>
             <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
                 <choose>
                     <when test="query.publishStatus == 'FAILED_OR_DEAD_LETTER'">
-                        AND publish_status IN ('FAILED', 'DEAD_LETTER')
+                        AND <include refid="exactFailedOrDeadLetterEventStatus"/>
                     </when>
                     <otherwise>
                         AND publish_status = #{query.publishStatus}
+                        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH(#{query.publishStatus})
+                        AND CAST(publish_status AS BINARY(32)) = CAST(#{query.publishStatus} AS BINARY(32))
                     </otherwise>
                 </choose>
             </if>
@@ -31,10 +35,66 @@
         </where>
     </sql>
 
+    <sql id="exactFailedEventStatus">
+        publish_status = 'FAILED'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('FAILED')
+        AND CAST(publish_status AS BINARY(32)) = CAST('FAILED' AS BINARY(32))
+    </sql>
+
+    <sql id="exactDeadLetterEventStatus">
+        publish_status = 'DEAD_LETTER'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('DEAD_LETTER')
+        AND CAST(publish_status AS BINARY(32)) = CAST('DEAD_LETTER' AS BINARY(32))
+    </sql>
+
+    <sql id="exactFailedOrDeadLetterEventStatus">
+        ((<include refid="exactFailedEventStatus"/>)
+         OR (<include refid="exactDeadLetterEventStatus"/>))
+    </sql>
+
+    <sql id="exactPendingEventStatus">
+        publish_status = 'PENDING'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('PENDING')
+        AND CAST(publish_status AS BINARY(32)) = CAST('PENDING' AS BINARY(32))
+    </sql>
+
+    <sql id="exactSuccessEventStatus">
+        publish_status = 'SUCCESS'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('SUCCESS')
+        AND CAST(publish_status AS BINARY(32)) = CAST('SUCCESS' AS BINARY(32))
+    </sql>
+
+    <sql id="exactUnknownEventStatus">
+        publish_status = 'UNKNOWN'
+        AND CHAR_LENGTH(publish_status) = CHAR_LENGTH('UNKNOWN')
+        AND CAST(publish_status AS BINARY(32)) = CAST('UNKNOWN' AS BINARY(32))
+    </sql>
+
+    <sql id="exactPendingOrFailedEventStatus">
+        ((<include refid="exactPendingEventStatus"/>)
+         OR (<include refid="exactFailedEventStatus"/>))
+    </sql>
+
+    <sql id="exactDispatchableEventStatus">
+        (<include refid="exactPendingOrFailedEventStatus"/>
+         OR (<include refid="exactDeadLetterEventStatus"/>))
+    </sql>
+
+    <sql id="exactResolvableEventStatus">
+        (<include refid="exactDispatchableEventStatus"/>
+         OR (<include refid="exactUnknownEventStatus"/>))
+    </sql>
+
     <sql id="automaticRetryCandidateCondition">
-        (publish_status = 'FAILED'
-         OR (publish_status = 'PENDING'
-             AND event_type IN ('PAYMENT_SUCCESS', 'REFUND_SUBMIT')))
+        ((<include refid="exactFailedEventStatus"/>)
+         OR ((<include refid="exactPendingEventStatus"/>)
+             AND ((event_type = 'PAYMENT_SUCCESS'
+                   AND CHAR_LENGTH(event_type) = CHAR_LENGTH('PAYMENT_SUCCESS')
+                   AND CAST(event_type AS BINARY(64)) = CAST('PAYMENT_SUCCESS' AS BINARY(64)))
+                  OR (event_type = 'REFUND_SUBMIT'
+                      AND CHAR_LENGTH(event_type) = CHAR_LENGTH('REFUND_SUBMIT')
+                      AND CAST(event_type AS BINARY(64)) = CAST('REFUND_SUBMIT' AS BINARY(64)))))
+        )
         AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
     </sql>
 
@@ -61,6 +121,15 @@
         </choose>
     </sql>
 
+    <sql id="paymentEventSuccessFactIssue">
+        (SELECT <include refid="com.abc123.hsp.mapper.PaymentMapper.paymentSuccessFactIssueProjection"/>
+         FROM t_payment_order p
+         WHERE p.payment_order_id = pe.payment_order_id
+           AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(pe.payment_order_id)
+           AND CAST(p.payment_order_id AS BINARY(256)) = CAST(pe.payment_order_id AS BINARY(256))
+         LIMIT 1) AS successFactIssue
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
         SELECT event_no AS eventNo,
                event_type AS eventType,
@@ -77,8 +146,9 @@
                last_republish_operator AS lastRepublishOperator,
                DATE_FORMAT(last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                event_payload AS eventPayload,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-        FROM t_payment_event
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentEventSuccessFactIssue"/>
+        FROM t_payment_event pe
         <include refid="paymentEventWhere"/>
         <include refid="paymentEventOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
@@ -101,25 +171,51 @@
                pe.last_republish_operator AS lastRepublishOperator,
                DATE_FORMAT(pe.last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                pe.event_payload AS eventPayload,
-               DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentEventSuccessFactIssue"/>
         FROM t_payment_event pe
                  LEFT JOIN t_order standard_order ON standard_order.order_no = pe.biz_no
+                     AND CHAR_LENGTH(standard_order.order_no) = CHAR_LENGTH(pe.biz_no)
+                     AND CAST(standard_order.order_no AS BINARY(256)) = CAST(pe.biz_no AS BINARY(256))
+                     AND CHAR_LENGTH(pe.event_type) &gt; CHAR_LENGTH('PAYMENT_')
+                     AND CAST(LEFT(pe.event_type, 8) AS BINARY(8)) = CAST('PAYMENT_' AS BINARY(8))
+                     AND EXISTS (SELECT 1 FROM t_prepay_order pr
+                                 WHERE pr.payment_order_id = pe.payment_order_id
+                                   AND CHAR_LENGTH(pr.payment_order_id) = CHAR_LENGTH(pe.payment_order_id)
+                                   AND CAST(pr.payment_order_id AS BINARY(256)) = CAST(pe.payment_order_id AS BINARY(256))
+                                   AND pr.order_no = pe.biz_no
+                                   AND CHAR_LENGTH(pr.order_no) = CHAR_LENGTH(pe.biz_no)
+                                   AND CAST(pr.order_no AS BINARY(256)) = CAST(pe.biz_no AS BINARY(256))
+                                   AND pr.source_kind = 'STANDARD_ORDER'
+                                   AND CHAR_LENGTH(pr.source_kind) = CHAR_LENGTH('STANDARD_ORDER')
+                                   AND CAST(pr.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16)))
         WHERE pe.event_no = #{eventNo}
+          AND CHAR_LENGTH(pe.event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(pe.event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
         LIMIT 1
     </select>
 
     <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentEventOverviewDTO">
         SELECT COUNT(1) AS totalEventCount,
-               SUM(CASE WHEN publish_status = 'SUCCESS' THEN 1 ELSE 0 END) AS successEventCount,
-               SUM(CASE WHEN publish_status = 'PENDING' THEN 1 ELSE 0 END) AS pendingEventCount,
-               SUM(CASE WHEN publish_status = 'FAILED' THEN 1 ELSE 0 END) AS failedEventCount,
-               SUM(CASE WHEN publish_status = 'DEAD_LETTER' THEN 1 ELSE 0 END) AS deadLetterEventCount,
-               SUM(CASE WHEN publish_status = 'UNKNOWN' THEN 1 ELSE 0 END) AS unknownEventCount,
-               SUM(CASE WHEN publish_status IN ('FAILED', 'DEAD_LETTER') THEN 1 ELSE 0 END) AS failedOrDeadLetterCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactSuccessEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS successEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactPendingEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS pendingEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactFailedEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS failedEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactDeadLetterEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS deadLetterEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactUnknownEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS unknownEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="exactFailedOrDeadLetterEventStatus"/>
+                            THEN 1 ELSE 0 END), 0) AS failedOrDeadLetterCount,
                COUNT(DISTINCT downstream_system) AS distinctDownstreamCount,
-               SUM(CASE WHEN <include refid="automaticRetryCandidateCondition"/>
-                        THEN 1 ELSE 0 END) AS dueRetryEventCount,
-               SUM(CASE WHEN event_type = 'PAYMENT_SUCCESS' THEN 1 ELSE 0 END) AS paymentSuccessEventCount,
+               COALESCE(SUM(CASE WHEN <include refid="automaticRetryCandidateCondition"/>
+                        THEN 1 ELSE 0 END), 0) AS dueRetryEventCount,
+               COALESCE(SUM(CASE WHEN event_type = 'PAYMENT_SUCCESS'
+                            AND CHAR_LENGTH(event_type) = CHAR_LENGTH('PAYMENT_SUCCESS')
+                            AND CAST(event_type AS BINARY(64)) = CAST('PAYMENT_SUCCESS' AS BINARY(64))
+                            THEN 1 ELSE 0 END), 0) AS paymentSuccessEventCount,
                DATE_FORMAT(MAX(last_published_at), '%Y-%m-%d %H:%i:%s') AS latestPublishedAt
         FROM t_payment_event
         <include refid="paymentEventWhere"/>
@@ -147,8 +243,9 @@
                last_republish_operator AS lastRepublishOperator,
                DATE_FORMAT(last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                event_payload AS eventPayload,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-        FROM t_payment_event
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentEventSuccessFactIssue"/>
+        FROM t_payment_event pe
         <include refid="paymentEventWhere"/>
         <include refid="paymentEventOrder"/>
         LIMIT 1001
@@ -157,7 +254,7 @@
     <select id="findAllFailedEventNos" resultType="string">
         SELECT event_no
         FROM t_payment_event
-        WHERE publish_status = 'FAILED'
+        WHERE <include refid="exactFailedEventStatus"/>
         ORDER BY created_at ASC, id ASC
         LIMIT #{batchSize}
     </select>
@@ -189,6 +286,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -197,11 +296,15 @@
                event_type AS eventType,
                payment_order_id AS paymentOrderId,
                biz_no AS bizNo,
+               downstream_system AS downstreamSystem,
+               event_topic AS eventTopic,
                publish_status AS publishStatus,
                payment_success_http_stage AS paymentSuccessHttpStage,
                retry_count AS retryCount
         FROM t_payment_event
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
         FOR UPDATE
     </select>
 
@@ -213,25 +316,42 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER', 'UNKNOWN')
+          AND <include refid="exactResolvableEventStatus"/>
     </update>
 
     <update id="markPaymentSuccessClearingAccepted">
         UPDATE t_payment_event
         SET payment_success_http_stage = 'CLEARING_ACCEPTED'
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND event_type = 'PAYMENT_SUCCESS'
+          AND CHAR_LENGTH(event_type) = CHAR_LENGTH('PAYMENT_SUCCESS')
+          AND CAST(event_type AS BINARY(64)) = CAST('PAYMENT_SUCCESS' AS BINARY(64))
           AND payment_success_http_stage = 'PENDING'
+          AND CHAR_LENGTH(payment_success_http_stage) = CHAR_LENGTH('PENDING')
+          AND CAST(payment_success_http_stage AS BINARY(32)) = CAST('PENDING' AS BINARY(32))
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
+          AND <include refid="exactDispatchableEventStatus"/>
     </update>
 
     <update id="markPaymentSuccessHttpCompleted">
         UPDATE t_payment_event
         SET payment_success_http_stage = 'COMPLETED'
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND event_type = 'PAYMENT_SUCCESS'
+          AND CHAR_LENGTH(event_type) = CHAR_LENGTH('PAYMENT_SUCCESS')
+          AND CAST(event_type AS BINARY(64)) = CAST('PAYMENT_SUCCESS' AS BINARY(64))
           AND payment_success_http_stage = 'CLEARING_ACCEPTED'
+          AND CHAR_LENGTH(payment_success_http_stage) = CHAR_LENGTH('CLEARING_ACCEPTED')
+          AND CAST(payment_success_http_stage AS BINARY(32)) = CAST('CLEARING_ACCEPTED' AS BINARY(32))
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
+          AND <include refid="exactDispatchableEventStatus"/>
     </update>
 
     <update id="markPublishFailed">
@@ -242,7 +362,10 @@
             last_published_at = NOW(),
             next_retry_at = TIMESTAMPADD(MINUTE, 5, NOW())
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND publish_status IN ('PENDING', 'FAILED')
+          AND <include refid="exactPendingOrFailedEventStatus"/>
     </update>
 
     <update id="markPublishDeadLetter">
@@ -253,7 +376,10 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
+          AND <include refid="exactDispatchableEventStatus"/>
     </update>
 
     <update id="markPublishUnknown">
@@ -264,7 +390,10 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
+          AND <include refid="exactDispatchableEventStatus"/>
     </update>
 
     <update id="updateLastRepublishAudit">
@@ -272,6 +401,8 @@
         SET last_republish_operator = #{operator},
             last_republished_at = NOW()
         WHERE event_no = #{eventNo}
-          AND publish_status = 'SUCCESS'
+          AND CHAR_LENGTH(event_no) = CHAR_LENGTH(#{eventNo})
+          AND CAST(event_no AS BINARY(256)) = CAST(#{eventNo} AS BINARY(256))
+          AND <include refid="exactSuccessEventStatus"/>
     </update>
 </mapper>

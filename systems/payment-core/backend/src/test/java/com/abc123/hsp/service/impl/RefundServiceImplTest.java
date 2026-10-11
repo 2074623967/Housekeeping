@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -50,6 +51,34 @@ import org.mockito.junit.jupiter.MockitoExtension;
  */
 @ExtendWith(MockitoExtension.class)
 class RefundServiceImplTest {
+
+    @BeforeEach
+    void defaultRefundAttemptWrite() {
+        org.mockito.Mockito.lenient()
+                .when(refundMapper.insertRefundAttempt(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(refundMapper.upsertRefundSubmitEvent(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(refundMapper.isMatchingPendingRefundSubmitEvent(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(refundMapper.insertOperationLog(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(refundMapper.insertRefund(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+    }
 
     @Mock
     private RefundMapper refundMapper;
@@ -111,8 +140,13 @@ class RefundServiceImplTest {
         query.setRefundMethod(" 原路退款 ");
         RefundListItemDTO item = new RefundListItemDTO();
         item.setRefundOrderId("REF-001");
+        item.setPayScene("HOME_SERVICE");
         item.setCustomerName("张\"女士");
         item.setStatusType("success");
+        item.setTerminalAt("2026-09-27 10:02:00");
+        item.setChannelCode("wx_h5");
+        item.setChannelRefundNo("CH-REF-001");
+        item.setChannelSubmittedAt("2026-09-27 10:00:30");
         when(refundMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
 
         String csv = createService().exportCsv(query);
@@ -121,7 +155,11 @@ class RefundServiceImplTest {
         assertEquals("PAY-001", query.getPaymentOrderId());
         assertEquals("SUCCESS", query.getRefundStatus());
         assertEquals("原路退款", query.getRefundMethod());
-        assertTrue(csv.startsWith("\uFEFF退款单号,支付单号,订单号,客户名称"));
+        assertTrue(csv.startsWith("\uFEFF退款单号,支付单号,支付场景,业务链路,订单号,客户名称"));
+        assertTrue(csv.contains("支付单号,支付场景,业务链路"));
+        assertTrue(csv.contains("HOME_SERVICE"));
+        assertTrue(csv.contains("终态时间,渠道编码,渠道退款单号,渠道受理时间"));
+        assertTrue(csv.contains("\"2026-09-27 10:02:00\",\"wx_h5\",\"CH-REF-001\",\"2026-09-27 10:00:30\""));
         assertTrue(csv.contains("\"success\""));
         assertTrue(csv.contains("\"张*\""));
         assertFalse(csv.contains("张\"女士"));
@@ -174,6 +212,7 @@ class RefundServiceImplTest {
         source.setCustomerName("张女士");
         source.setPaidAmount(new BigDecimal("100.00"));
         source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
         when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(new BigDecimal("30.00"));
 
@@ -188,7 +227,32 @@ class RefundServiceImplTest {
         );
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPLY".equals(log.getActionCode())
-                        && "refund-applicant".equals(log.getOperatorName())));
+                && "refund-applicant".equals(log.getOperatorName())));
+    }
+
+    @Test
+    void shouldStopRefundApplicationWhenRefundInsertDoesNotCreateExactlyOneRow() {
+        RefundApplyRequestDTO request = refundApplyRequest(new BigDecimal("20.00"));
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        source.setOrderNo("ORD-001");
+        source.setCustomerName("张女士");
+        source.setPaidAmount(new BigDecimal("100.00"));
+        source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(BigDecimal.ZERO);
+        when(refundMapper.insertRefund(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(source),
+                org.mockito.ArgumentMatchers.eq(request),
+                org.mockito.ArgumentMatchers.eq("REVIEWING"),
+                org.mockito.ArgumentMatchers.eq("warn"))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().apply(request));
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .insertOperationLog(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -200,6 +264,7 @@ class RefundServiceImplTest {
         RefundApplicationIdempotencyDTO existing = new RefundApplicationIdempotencyDTO();
         existing.setRefundOrderId("REF-EXISTING");
         existing.setPaymentOrderId("PAY-001");
+        existing.setIdempotencyKey("REFUND-APPLY-001");
         existing.setRefundAmount(new BigDecimal("20.0"));
         existing.setRefundMethod("原路退款");
         existing.setRefundReason("客户取消服务");
@@ -231,6 +296,7 @@ class RefundServiceImplTest {
         RefundApplicationIdempotencyDTO existing = new RefundApplicationIdempotencyDTO();
         existing.setRefundOrderId("REF-EXISTING");
         existing.setPaymentOrderId("PAY-001");
+        existing.setIdempotencyKey("REFUND-APPLY-001");
         existing.setRefundAmount(new BigDecimal("20.00"));
         existing.setRefundMethod("原路退款");
         existing.setRefundReason("");
@@ -298,6 +364,7 @@ class RefundServiceImplTest {
         source.setPaymentOrderId("PAY-001");
         source.setPaidAmount(new BigDecimal("100.00"));
         source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
         when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(new BigDecimal("30.00"));
 
@@ -333,6 +400,7 @@ class RefundServiceImplTest {
         source.setOrderNo("ORD-001");
         source.setPaidAmount(new BigDecimal("9999999999999999.99"));
         source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
         when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(BigDecimal.ZERO);
 
@@ -357,6 +425,7 @@ class RefundServiceImplTest {
         source.setPaymentOrderId("PAY-001");
         source.setPaidAmount(new BigDecimal("20.00"));
         source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
         when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(BigDecimal.ZERO);
 
@@ -406,11 +475,29 @@ class RefundServiceImplTest {
         oversized.setIdempotencyKey(String.join("", Collections.nCopies(128, "I")) + " ");
         RefundApplyRequestDTO control = refundApplyRequest(new BigDecimal("20.00"));
         control.setIdempotencyKey("REFUND-APPLY\n001");
+        RefundApplyRequestDTO invalidUnicode = refundApplyRequest(new BigDecimal("20.00"));
+        invalidUnicode.setIdempotencyKey("REFUND-APPLY-" + (char) 0xD800);
 
         assertInvalidApplicationIdempotencyKey(missing, "退款申请幂等键不能为空");
         assertInvalidApplicationIdempotencyKey(oversized, "退款申请幂等键长度不能超过 128 个字符");
         assertInvalidApplicationIdempotencyKey(control, "退款申请幂等键不能包含控制字符");
+        assertInvalidApplicationIdempotencyKey(invalidUnicode, "退款申请幂等键包含无效字符");
         org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
+    void shouldRejectRefundStatusUpdateAffectingMultipleRows() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-MULTI-ROW");
+        request.setOperator("refund-operator");
+        when(refundMapper.updateRefundStatus(
+                "REF-MULTI-ROW", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(2);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().approve(request));
+        verify(refundMapper).updateRefundStatus(
+                "REF-MULTI-ROW", "REVIEWING", "PROCESSING", "warn", false);
     }
 
     @Test
@@ -430,6 +517,7 @@ class RefundServiceImplTest {
         submitRequest.setRefundReason("客户取消服务");
         submitRequest.setChannelCode("wx_h5");
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(submitRequest);
+        stubApprovalPaymentFacts("PAY-001");
         org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
         try {
             createService().approve(request);
@@ -465,6 +553,141 @@ class RefundServiceImplTest {
                         && "refund-approver".equals(log.getOperatorName())
                         && "确认退款".equals(log.getOperationRemark())));
         verify(refundMapper).findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldRejectApprovalWhenPersistedPaymentChannelHasTrailingWhitespace() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-PADDED-APPROVAL");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-PADDED-APPROVAL", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setPaymentOrderId("PAY-PADDED-APPROVAL");
+        submitRequest.setChannelCode("wx_h5 ");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-PADDED-APPROVAL"))
+                .thenReturn(submitRequest);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefundAttempt(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).upsertRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectApprovalWhenOriginalPaymentSuccessFactsBecomeInvalid() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-INVALID-PAYMENT");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-INVALID-PAYMENT", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-INVALID-PAYMENT");
+        submitRequest.setPaymentOrderId("PAY-INVALID-PAYMENT");
+        submitRequest.setChannelCode("wx_h5");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-INVALID-PAYMENT"))
+                .thenReturn(submitRequest);
+        RefundPaymentSourceDTO paymentSource = new RefundPaymentSourceDTO();
+        paymentSource.setPaymentSuccessFactsValid(false);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-INVALID-PAYMENT"))
+                .thenReturn(paymentSource);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+
+        assertEquals("payment success facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefundAttempt(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).upsertRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldStopRefundSubmitWhenAttemptInsertDoesNotCreateExactlyOneRow() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-ATTEMPT-FAIL");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-ATTEMPT-FAIL", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-ATTEMPT-FAIL");
+        submitRequest.setPaymentOrderId("PAY-ATTEMPT-FAIL");
+        submitRequest.setOrderNo("ORD-ATTEMPT-FAIL");
+        submitRequest.setChannelCode("wx_h5");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-ATTEMPT-FAIL"))
+                .thenReturn(submitRequest);
+        stubApprovalPaymentFacts("PAY-ATTEMPT-FAIL");
+        when(refundMapper.insertRefundAttempt(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("REF-ATTEMPT-FAIL"),
+                org.mockito.ArgumentMatchers.eq("wx_h5"))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).upsertRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldStopRefundSubmitWhenOutboxInsertDoesNotCreateExactlyOneRow() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-OUTBOX-FAIL");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-OUTBOX-FAIL", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-OUTBOX-FAIL");
+        submitRequest.setPaymentOrderId("PAY-OUTBOX-FAIL");
+        submitRequest.setOrderNo("ORD-OUTBOX-FAIL");
+        submitRequest.setChannelCode("wx_h5");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-OUTBOX-FAIL"))
+                .thenReturn(submitRequest);
+        stubApprovalPaymentFacts("PAY-OUTBOX-FAIL");
+        when(refundMapper.upsertRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("PAY-OUTBOX-FAIL"))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+        org.mockito.Mockito.verify(paymentEventDispatchService, org.mockito.Mockito.never())
+                .publishRefundSubmit(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldStopRefundSubmitWhenOutboxIdentityDoesNotMatch() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-OUTBOX-IDENTITY");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-OUTBOX-IDENTITY", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-OUTBOX-IDENTITY");
+        submitRequest.setPaymentOrderId("PAY-OUTBOX-IDENTITY");
+        submitRequest.setOrderNo("ORD-OUTBOX-IDENTITY");
+        submitRequest.setChannelCode("wx_h5");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-OUTBOX-IDENTITY"))
+                .thenReturn(submitRequest);
+        stubApprovalPaymentFacts("PAY-OUTBOX-IDENTITY");
+        when(refundMapper.isMatchingPendingRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("PAY-OUTBOX-IDENTITY"))).thenReturn(false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+        org.mockito.Mockito.verify(paymentEventDispatchService, org.mockito.Mockito.never())
+                .publishRefundSubmit(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -545,6 +768,7 @@ class RefundServiceImplTest {
         submitRequest.setRefundAmount(new BigDecimal("20.00"));
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-DISPATCH-FAIL"))
                 .thenReturn(submitRequest);
+        stubApprovalPaymentFacts("PAY-DISPATCH-FAIL");
         org.mockito.Mockito.doThrow(new IllegalStateException(sensitiveMessage))
                 .when(paymentEventDispatchService).publishRefundSubmit(
                         org.mockito.ArgumentMatchers.anyString(),
@@ -621,6 +845,31 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRetryWhenPersistedPaymentChannelHasTrailingWhitespace() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-PADDED-RETRY");
+        request.setOperator("refund-retry-operator");
+        stubRetryCapacity("REF-PADDED-RETRY", "PAY-PADDED-RETRY", new BigDecimal("20.00"),
+                BigDecimal.ZERO, new BigDecimal("100.00"));
+        when(refundMapper.restartFailedRefund("REF-PADDED-RETRY")).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setPaymentOrderId("PAY-PADDED-RETRY");
+        submitRequest.setChannelCode("alipay_h5 ");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-PADDED-RETRY"))
+                .thenReturn(submitRequest);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().retry(request));
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefundAttempt(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).upsertRefundSubmitEvent(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
     void shouldResubmitChannelForTaskRetryAndKeepTriggerIdentity() {
         when(refundMapper.restartFailedRefund("REF-TASK")).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
@@ -652,6 +901,110 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectTaskRetryWhenTerminalFactsDriftAfterCandidateSelection() {
+        stubRetryCapacity("REF-TASK-FACT-MISMATCH", "PAY-TASK-FACT-MISMATCH",
+                new BigDecimal("20.00"), BigDecimal.ZERO, new BigDecimal("100.00"));
+        RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
+        retrySource.setRefundOrderId("REF-TASK-FACT-MISMATCH");
+        retrySource.setPaymentOrderId("PAY-TASK-FACT-MISMATCH");
+        retrySource.setRefundAmount(new BigDecimal("20.00"));
+        retrySource.setStatus("FAIL");
+        retrySource.setStatusType("danger");
+        retrySource.setChannelCode("wx_h5");
+        retrySource.setChannelRefundNo("CH-FACT-MISMATCH");
+        retrySource.setChannelSubmittedAt("2026-09-12 10:00:04");
+        retrySource.setAppliedAt("2026-09-12 10:00:00");
+        retrySource.setTerminalAt("2026-09-12 10:00:03");
+        retrySource.setLatestAttemptStatus("FAIL");
+        retrySource.setLatestAttemptStatusType("danger");
+        retrySource.setLatestAttemptChannelCode("wx_h5");
+        retrySource.setLatestAttemptChannelRefundNo("CH-FACT-MISMATCH");
+        retrySource.setLatestAttemptCompletedAt("2026-09-12 10:00:02");
+        when(refundMapper.findRetrySourceForUpdate("REF-TASK-FACT-MISMATCH")).thenReturn(retrySource);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().retryForTask("REF-TASK-FACT-MISMATCH", "refund-retry-scheduler"));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).restartFailedRefund(
+                "REF-TASK-FACT-MISMATCH");
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectTaskRetryWhenLatestAttemptBelongsToDifferentChannelReference() {
+        RefundRetrySourceDTO source = stubRetryCapacity(
+                "REF-TASK-CHANNEL-MISMATCH", "PAY-TASK-CHANNEL-MISMATCH",
+                new BigDecimal("20.00"), BigDecimal.ZERO, new BigDecimal("100.00"));
+        source.setLatestAttemptChannelRefundNo("CH-OTHER");
+
+        IllegalArgumentException wrongReference = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().retryForTask("REF-TASK-CHANNEL-MISMATCH", "refund-retry-scheduler"));
+        assertEquals("refund terminal facts are inconsistent", wrongReference.getMessage());
+
+        source.setLatestAttemptChannelRefundNo(source.getChannelRefundNo());
+        source.setLatestAttemptChannelCode("other-channel");
+        IllegalArgumentException wrongChannel = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().retryForTask("REF-TASK-CHANNEL-MISMATCH", "refund-retry-scheduler"));
+        assertEquals("refund terminal facts are inconsistent", wrongChannel.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund("REF-TASK-CHANNEL-MISMATCH");
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectTaskRetryWhenLatestAttemptStatusTypeDrifts() {
+        RefundRetrySourceDTO source = stubRetryCapacity(
+                "REF-TASK-STYLE-MISMATCH", "PAY-TASK-STYLE-MISMATCH",
+                new BigDecimal("20.00"), BigDecimal.ZERO, new BigDecimal("100.00"));
+        source.setLatestAttemptStatusType("warn");
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().retryForTask("REF-TASK-STYLE-MISMATCH", "refund-retry-scheduler"));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund("REF-TASK-STYLE-MISMATCH");
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectTaskRetryWhenAttemptCompletesAfterTerminalWithinSameSecond() {
+        stubRetryCapacity("REF-TASK-FRACTIONAL", "PAY-TASK-FRACTIONAL",
+                new BigDecimal("20.00"), BigDecimal.ZERO, new BigDecimal("100.00"));
+        RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
+        retrySource.setRefundOrderId("REF-TASK-FRACTIONAL");
+        retrySource.setPaymentOrderId("PAY-TASK-FRACTIONAL");
+        retrySource.setRefundAmount(new BigDecimal("20.00"));
+        retrySource.setStatus("FAIL");
+        retrySource.setStatusType("danger");
+        retrySource.setChannelCode("wx_h5");
+        retrySource.setChannelRefundNo("CH-FRACTIONAL");
+        retrySource.setAppliedAt("2026-10-02 09:59:59.900");
+        retrySource.setChannelSubmittedAt("2026-10-02 10:00:00.100");
+        retrySource.setTerminalAt("2026-10-02 10:00:00.123");
+        retrySource.setLatestAttemptStatus("FAIL");
+        retrySource.setLatestAttemptStatusType("danger");
+        retrySource.setLatestAttemptChannelCode("wx_h5");
+        retrySource.setLatestAttemptChannelRefundNo("CH-FRACTIONAL");
+        retrySource.setLatestAttemptCompletedAt("2026-10-02 10:00:00.124");
+        when(refundMapper.findRetrySourceForUpdate("REF-TASK-FRACTIONAL")).thenReturn(retrySource);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().retryForTask("REF-TASK-FRACTIONAL", "refund-retry-scheduler"));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund("REF-TASK-FRACTIONAL");
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
     void shouldRejectFailedRefundRetryWhenReplacementConsumesCapacity() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-FAILED");
@@ -672,6 +1025,76 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.anyBoolean());
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
                 .restartFailedRefund(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectNewRefundWhenHistoricalActiveAmountCouldOffsetCapacity() {
+        RefundApplyRequestDTO request = refundApplyRequest(new BigDecimal("20.00"));
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        source.setPaidAmount(new BigDecimal("100.00"));
+        source.setStatus("SUCCESS");
+        source.setPaymentSuccessFactsValid(true);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.countInvalidActiveRefundAmounts("PAY-001")).thenReturn(1L);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().apply(request));
+        assertEquals("active refund amounts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefund(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldRejectManualAndTaskRetryWhenHistoricalActiveAmountCouldOffsetCapacity() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-FAILED");
+        request.setOperator("refund-retry-operator");
+        RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
+        retrySource.setRefundOrderId("REF-FAILED");
+        retrySource.setPaymentOrderId("PAY-001");
+        retrySource.setRefundAmount(new BigDecimal("20.00"));
+        retrySource.setStatus("FAIL");
+        RefundPaymentSourceDTO paymentSource = new RefundPaymentSourceDTO();
+        paymentSource.setPaidAmount(new BigDecimal("100.00"));
+        paymentSource.setPaymentSuccessFactsValid(true);
+        when(refundMapper.findRetrySourceForUpdate("REF-FAILED")).thenReturn(retrySource);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(paymentSource);
+        when(refundMapper.countInvalidActiveRefundAmounts("PAY-001")).thenReturn(1L);
+
+        for (Runnable action : new Runnable[] {
+                () -> createService().retry(request),
+                () -> createService().retryForTask("REF-FAILED", "refund-retry-scheduler")}) {
+            IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                    IllegalStateException.class, action::run);
+            assertEquals("active refund amounts are inconsistent", exception.getMessage());
+        }
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund("REF-FAILED");
+        org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectManualAndTaskRetryWhenOriginalPaymentSuccessFactsAreInvalid() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-SUCCESS-DRIFT");
+        request.setOperator("refund-retry-operator");
+        stubRetryCapacity("REF-SUCCESS-DRIFT", "PAY-001", new BigDecimal("20.00"),
+                BigDecimal.ZERO, new BigDecimal("100.00"), false);
+
+        IllegalStateException manual = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().retry(request));
+        IllegalStateException task = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().retryForTask("REF-SUCCESS-DRIFT", "refund-retry-scheduler"));
+
+        assertEquals("payment success facts are inconsistent", manual.getMessage());
+        assertEquals("payment success facts are inconsistent", task.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund("REF-SUCCESS-DRIFT");
         org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
     }
 
@@ -727,6 +1150,81 @@ class RefundServiceImplTest {
         verify(refundMapper).findDetailByRefundOrderId("REF-001");
         verify(refundMapper).findOperationLogs("REF-001");
         verify(refundMapper).findAttempts("REF-001");
+    }
+
+    @Test
+    void shouldValidateTerminalFactsBeforeReturningRefundDetail() {
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-TERMINAL");
+        detail.setStatus("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CH-REF-TERMINAL");
+        source.setRefundOrderId("REF-TERMINAL");
+        when(refundMapper.findDetailByRefundOrderId("REF-TERMINAL")).thenReturn(detail);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-TERMINAL")).thenReturn(source);
+        when(refundMapper.findOperationLogs("REF-TERMINAL")).thenReturn(Collections.emptyList());
+        when(refundMapper.findAttempts("REF-TERMINAL")).thenReturn(Collections.emptyList());
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "REF-TERMINAL", createService().detail("REF-TERMINAL").getRefundOrderId());
+        verify(refundMapper).findCallbackSourceByRefundOrderId("REF-TERMINAL");
+
+        source.setSuccessAt(null);
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().detail("REF-TERMINAL"));
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectCumulativeMismatchInTerminalDetailQueryAndRepeatedCallback() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setTerminalFactMismatch(true);
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-001");
+        detail.setStatus("SUCCESS");
+        when(refundMapper.findDetailByRefundOrderId("REF-001")).thenReturn(detail);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+
+        for (Runnable action : new Runnable[] {
+                () -> createService().detail("REF-001"),
+                () -> createService().query(queryRequest()),
+                () -> createService().callback("wx_h5", buildCallbackRequest("SUCCESS"))}) {
+            IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                    IllegalStateException.class, action::run);
+            assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        }
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        source.setTerminalFactMismatch(null);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> createService().detail("REF-001"));
+    }
+
+    @Test
+    void shouldAcceptFractionalDatabaseTimestampsForConsistentTerminalRefund() {
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-FRACTIONAL");
+        detail.setStatus("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CH-REF-FRACTIONAL");
+        source.setAppliedAt("2026-09-12 09:59:00.123");
+        source.setChannelSubmittedAt("2026-09-12 09:59:30.456");
+        source.setAttemptCompletedAt("2026-09-12 10:00:00.123456");
+        source.setSuccessAt("2026-09-12 10:00:00.123456");
+        source.setTerminalAt("2026-09-12 10:00:00.123456");
+        when(refundMapper.findDetailByRefundOrderId("REF-FRACTIONAL")).thenReturn(detail);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-FRACTIONAL")).thenReturn(source);
+
+        assertEquals("REF-FRACTIONAL", createService().detail("REF-FRACTIONAL").getRefundOrderId());
+
+        source.setAttemptCompletedAt("2026-09-12 10:00:00.123457");
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().detail("REF-FRACTIONAL"));
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
     }
 
     @Test
@@ -865,6 +1363,53 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRepeatedTerminalCallbackWhenOrderChannelReferenceDiffersFromAttempt() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setOrderChannelRefundNo("CHANNEL-OTHER");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().callback("wx_h5", request));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldRejectRepeatedTerminalCallbackWhenRefundStatusTypeDrifts() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setStatusType("warn");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().callback("wx_h5", buildCallbackRequest("SUCCESS")));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldRejectProcessingCallbackWhenAcceptedOrderChannelDiffersFromAttempt() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
+        source.setOrderChannelCode("other-channel");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().callback("wx_h5", request));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     void shouldRejectRepeatedSuccessWhenTerminalFactsAreIncomplete() {
         RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
         RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
@@ -883,6 +1428,90 @@ class RefundServiceImplTest {
     void shouldRejectTerminalRefundQueryWhenSuccessTimeIsMissing() {
         RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
         source.setSuccessAt(null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenChannelBindingIsMissing() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelCode(null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenChannelRefundNumberIsMissing() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelRefundNo(null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenChannelSubmissionTimeIsMissing() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelSubmittedAt(null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenChannelSubmissionTimeIsMalformed() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelSubmittedAt("not-a-time");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenAmountFactsAreMissing() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setRefundAmount(null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenRefundExceedsPaidAmount() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setRefundAmount(new java.math.BigDecimal("68.01"));
         when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
 
         IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
@@ -937,6 +1566,93 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectTerminalRefundWhenSuccessTimeFollowsTerminalTime() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setSuccessAt("2026-09-12 10:01:00");
+        source.setTerminalAt("2026-09-12 10:00:00");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundWhenAttemptCompletionFollowsTerminalTime() {
+        RefundCallbackSourceDTO source = buildCallbackSource("FAIL", "wx_h5", "CHANNEL-REF-001");
+        source.setAttemptCompletedAt("2026-09-12 10:01:00");
+        source.setTerminalAt("2026-09-12 10:00:00");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalQueryWhenAttemptCompletesAfterSuccessWithinSameSecond() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setSuccessAt("2026-09-12 10:00:00.123");
+        source.setAttemptCompletedAt("2026-09-12 10:00:00.124");
+        source.setTerminalAt("2026-09-12 10:00:00.125");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundWhenTerminalFactsPrecedeApplicationTime() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setAppliedAt("2026-09-12 10:01:00");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundWhenChannelSubmissionTimePrecedesApplicationTime() {
+        RefundCallbackSourceDTO source = buildCallbackSource("FAIL", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelSubmittedAt("2026-09-12 09:58:59");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundWhenChannelSubmissionTimeFollowsAttemptCompletion() {
+        RefundCallbackSourceDTO source = buildCallbackSource("FAIL", "wx_h5", "CHANNEL-REF-001");
+        source.setChannelSubmittedAt("2026-09-12 10:00:01");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
     void shouldRejectRefundCallbackChannelAndTransactionMismatch() {
         RefundCallbackRequestDTO request = buildCallbackRequest("FAIL");
         when(refundMapper.findCallbackSourceForUpdate("REF-001"))
@@ -954,6 +1670,22 @@ class RefundServiceImplTest {
         BusinessException transactionException = org.junit.jupiter.api.Assertions.assertThrows(
                 BusinessException.class, () -> service.callback("wx_h5", request));
         assertEquals(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH, transactionException.getCode());
+    }
+
+    @Test
+    void shouldRejectRefundCallbackWhenPersistedChannelHasTrailingWhitespace() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001"))
+                .thenReturn(buildCallbackSource("PROCESSING", "wx_h5 ", "CHANNEL-REF-001"));
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().callback("wx_h5", request));
+
+        assertEquals(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH, exception.getCode());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -977,6 +1709,21 @@ class RefundServiceImplTest {
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).finalizeRefundAttempt(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldStopRefundFlowWhenOperationLogInsertDoesNotCreateExactlyOneRow() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-LOG-FAIL");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-LOG-FAIL", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        when(refundMapper.insertOperationLog(org.mockito.ArgumentMatchers.any())).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().approve(request));
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .findChannelSubmitRequestByRefundOrderId("REF-LOG-FAIL");
     }
 
     @Test
@@ -1158,6 +1905,31 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRefundChannelQueryWhenPersistedChannelHasTrailingWhitespace() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5 ", "CHANNEL-REF-001");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().query(queryRequest()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryRateLimitService);
+    }
+
+    @Test
+    void shouldRejectTerminalRefundQueryWhenPersistedChannelHasTrailingWhitespace() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5 ", "CHANNEL-REF-001");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
     void shouldFinalizeFailedRefundFromTrustedChannelQuery() {
         RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
         when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
@@ -1265,6 +2037,46 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectTerminalChannelQueryWhenOrderChannelReferenceDiffersFromAttempt() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setOrderChannelRefundNo("CHANNEL-OTHER");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectTerminalQueryWhenAttemptStatusTypeDrifts() {
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
+        source.setAttemptStatusType("warn");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectProcessingChannelQueryBeforeExternalCallWhenOrderChannelDiffersFromAttempt() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
+        source.setOrderChannelCode("other-channel");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund terminal facts are inconsistent", exception.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryRateLimitService);
+    }
+
+    @Test
     void shouldNotRegressFinalStatusWhenCallbackWinsDuringRefundQuery() {
         RefundCallbackSourceDTO snapshot = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
         RefundCallbackSourceDTO finalized = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
@@ -1367,12 +2179,21 @@ class RefundServiceImplTest {
     private RefundCallbackSourceDTO buildCallbackSource(String status, String channel, String channelRefundNo) {
         RefundCallbackSourceDTO source = new RefundCallbackSourceDTO();
         source.setRefundOrderId("REF-001");
+        source.setRefundAmount(new java.math.BigDecimal("18.00"));
+        source.setPaidAmount(new java.math.BigDecimal("68.00"));
+        source.setTerminalFactMismatch(false);
         source.setRefundAttemptNo("RFA-001");
         source.setStatus(status);
-        source.setChannelCode(channel);
-        source.setChannelRefundNo(channelRefundNo);
+        source.setStatusType("SUCCESS".equals(status) ? "success" : "FAIL".equals(status) ? "danger" : "warn");
+        source.setAppliedAt("2026-09-12 09:59:00");
         boolean terminal = "SUCCESS".equals(status) || "FAIL".equals(status);
+        source.setChannelSubmittedAt(terminal ? "2026-09-12 09:59:30" : null);
+        source.setChannelCode(channel);
+        source.setOrderChannelCode(channel);
+        source.setChannelRefundNo(channelRefundNo);
+        source.setOrderChannelRefundNo(channelRefundNo);
         source.setAttemptStatus(terminal ? status : channelRefundNo == null ? "UNKNOWN" : "ACCEPTED");
+        source.setAttemptStatusType(terminal ? source.getStatusType() : "warn");
         source.setAttemptCompletedAt(terminal ? "2026-09-12 10:00:00" : null);
         source.setSuccessAt("SUCCESS".equals(status) ? "2026-09-12 10:00:00" : null);
         source.setTerminalAt(terminal ? "2026-09-12 10:00:00" : null);
@@ -1400,23 +2221,53 @@ class RefundServiceImplTest {
                 refundChannelQueryService, refundChannelQueryRateLimitService);
     }
 
-    private void stubRetryCapacity(String refundOrderId,
+    private RefundRetrySourceDTO stubRetryCapacity(String refundOrderId,
                                    String paymentOrderId,
                                    BigDecimal refundAmount,
                                    BigDecimal activeRefundAmount,
                                    BigDecimal paidAmount) {
+        return stubRetryCapacity(refundOrderId, paymentOrderId, refundAmount, activeRefundAmount, paidAmount, true);
+    }
+
+    private void stubApprovalPaymentFacts(String paymentOrderId) {
+        RefundPaymentSourceDTO paymentSource = new RefundPaymentSourceDTO();
+        paymentSource.setPaymentSuccessFactsValid(true);
+        when(refundMapper.findPaymentSourceForUpdate(paymentOrderId)).thenReturn(paymentSource);
+    }
+
+    private RefundRetrySourceDTO stubRetryCapacity(String refundOrderId,
+                                   String paymentOrderId,
+                                   BigDecimal refundAmount,
+                                   BigDecimal activeRefundAmount,
+                                   BigDecimal paidAmount,
+                                   boolean paymentSuccessFactsValid) {
         RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
         retrySource.setRefundOrderId(refundOrderId);
         retrySource.setPaymentOrderId(paymentOrderId);
         retrySource.setRefundAmount(refundAmount);
         retrySource.setStatus("FAIL");
+        retrySource.setStatusType("danger");
+        retrySource.setChannelCode("wx_h5");
+        retrySource.setChannelRefundNo("CH-" + refundOrderId);
+        retrySource.setChannelSubmittedAt("2026-09-12 10:00:01");
+        retrySource.setAppliedAt("2026-09-12 10:00:00");
+        retrySource.setTerminalAt("2026-09-12 10:00:03");
+        retrySource.setLatestAttemptStatus("FAIL");
+        retrySource.setLatestAttemptStatusType("danger");
+        retrySource.setLatestAttemptChannelCode("wx_h5");
+        retrySource.setLatestAttemptChannelRefundNo("CH-" + refundOrderId);
+        retrySource.setLatestAttemptCompletedAt("2026-09-12 10:00:02");
         RefundPaymentSourceDTO paymentSource = new RefundPaymentSourceDTO();
         paymentSource.setPaymentOrderId(paymentOrderId);
         paymentSource.setPaidAmount(paidAmount);
         paymentSource.setStatus("SUCCESS");
+        paymentSource.setPaymentSuccessFactsValid(paymentSuccessFactsValid);
         when(refundMapper.findRetrySourceForUpdate(refundOrderId)).thenReturn(retrySource);
         when(refundMapper.findPaymentSourceForUpdate(paymentOrderId)).thenReturn(paymentSource);
-        when(refundMapper.sumActiveRefundAmount(paymentOrderId)).thenReturn(activeRefundAmount);
+        if (paymentSuccessFactsValid) {
+            when(refundMapper.sumActiveRefundAmount(paymentOrderId)).thenReturn(activeRefundAmount);
+        }
+        return retrySource;
     }
 
     private RefundApplyRequestDTO refundApplyRequest(BigDecimal refundAmount) {
@@ -1448,6 +2299,22 @@ class RefundServiceImplTest {
         query.setRefundStatus(refundStatus);
         query.setRefundMethod(refundMethod);
         return query;
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingRefundsWithNullQuery() {
+        when(refundMapper.findAll(org.mockito.ArgumentMatchers.any(RefundQueryDTO.class)))
+                .thenReturn(java.util.Collections.emptyList());
+        when(refundMapper.count(org.mockito.ArgumentMatchers.any(RefundQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<RefundListItemDTO> result = createService().list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<RefundQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(RefundQueryDTO.class);
+        verify(refundMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private IllegalArgumentException queryFailure(RefundServiceImpl service, RefundQueryDTO query) {

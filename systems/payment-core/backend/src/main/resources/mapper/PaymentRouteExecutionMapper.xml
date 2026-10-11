@@ -7,10 +7,14 @@
     <sql id="routeExecutionFromClause">
         FROM t_payment_route_record prr
                  LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                     AND CHAR_LENGTH(po.payment_order_id) = CHAR_LENGTH(prr.payment_order_id)
+                     AND CAST(po.payment_order_id AS BINARY(256)) = CAST(prr.payment_order_id AS BINARY(256))
                  LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
                     SELECT pr.id
                     FROM t_prepay_order pr
                     WHERE pr.payment_order_id = prr.payment_order_id
+                      AND CHAR_LENGTH(pr.payment_order_id) = CHAR_LENGTH(prr.payment_order_id)
+                      AND CAST(pr.payment_order_id AS BINARY(256)) = CAST(prr.payment_order_id AS BINARY(256))
                     ORDER BY pr.created_at DESC, pr.id DESC
                     LIMIT 1
                 )
@@ -18,8 +22,12 @@
                     SELECT pa.id
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = prr.payment_order_id
+                      AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(prr.payment_order_id)
+                      AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(prr.payment_order_id AS BINARY(256))
                       AND (
-                          pa.attempt_no = prr.attempt_no
+                          (pa.attempt_no = prr.attempt_no
+                           AND CHAR_LENGTH(pa.attempt_no) = CHAR_LENGTH(prr.attempt_no)
+                           AND CAST(pa.attempt_no AS BINARY(256)) = CAST(prr.attempt_no AS BINARY(256)))
                           OR (prr.attempt_no IS NULL AND pa.created_at &lt;= prr.created_at)
                       )
                     ORDER BY pa.created_at DESC, pa.id DESC
@@ -53,6 +61,15 @@
         </where>
     </sql>
 
+    <sql id="routeExecutionSuccessFactIssue">
+        (SELECT <include refid="com.abc123.hsp.mapper.PaymentMapper.paymentSuccessFactIssueProjection"/>
+         FROM t_payment_order p
+         WHERE p.payment_order_id = po.payment_order_id
+           AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(po.payment_order_id)
+           AND CAST(p.payment_order_id AS BINARY(256)) = CAST(po.payment_order_id AS BINARY(256))
+         LIMIT 1) AS successFactIssue
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO">
         SELECT prr.route_no AS routeNo,
                prr.payment_order_id AS paymentOrderId,
@@ -75,7 +92,8 @@
                latest_pa.idempotency_key AS idempotencyKey,
                latest_pa.request_payload AS requestPayload,
                latest_pa.response_payload AS responsePayload,
-               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="routeExecutionSuccessFactIssue"/>
         <include refid="routeExecutionFromClause" />
         <include refid="routeExecutionWhereClause" />
         <choose>
@@ -125,12 +143,27 @@
                exact_pa.idempotency_key AS idempotencyKey,
                exact_pa.request_payload AS requestPayload,
                exact_pa.response_payload AS responsePayload,
-               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="routeExecutionSuccessFactIssue"/>
         FROM t_payment_route_record prr
                  LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                     AND CHAR_LENGTH(po.payment_order_id) = CHAR_LENGTH(prr.payment_order_id)
+                     AND CAST(po.payment_order_id AS BINARY(256)) = CAST(prr.payment_order_id AS BINARY(256))
                  LEFT JOIN t_payment_attempt exact_pa ON exact_pa.attempt_no = prr.attempt_no
+                     AND CHAR_LENGTH(exact_pa.attempt_no) = CHAR_LENGTH(prr.attempt_no)
+                     AND CAST(exact_pa.attempt_no AS BINARY(256)) = CAST(prr.attempt_no AS BINARY(256))
+                     AND exact_pa.payment_order_id = prr.payment_order_id
+                     AND CHAR_LENGTH(exact_pa.payment_order_id) = CHAR_LENGTH(prr.payment_order_id)
+                     AND CAST(exact_pa.payment_order_id AS BINARY(256)) = CAST(prr.payment_order_id AS BINARY(256))
                  LEFT JOIN t_prepay_order exact_pr ON exact_pr.prepay_order_no = exact_pa.prepay_order_no
+                     AND CHAR_LENGTH(exact_pr.prepay_order_no) = CHAR_LENGTH(exact_pa.prepay_order_no)
+                     AND CAST(exact_pr.prepay_order_no AS BINARY(256)) = CAST(exact_pa.prepay_order_no AS BINARY(256))
+                     AND exact_pr.payment_order_id = exact_pa.payment_order_id
+                     AND CHAR_LENGTH(exact_pr.payment_order_id) = CHAR_LENGTH(exact_pa.payment_order_id)
+                     AND CAST(exact_pr.payment_order_id AS BINARY(256)) = CAST(exact_pa.payment_order_id AS BINARY(256))
         WHERE prr.route_no = #{routeNo}
+          AND CHAR_LENGTH(prr.route_no) = CHAR_LENGTH(#{routeNo})
+          AND CAST(prr.route_no AS BINARY(256)) = CAST(#{routeNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -162,7 +195,8 @@
                latest_pa.idempotency_key AS idempotencyKey,
                latest_pa.request_payload AS requestPayload,
                latest_pa.response_payload AS responsePayload,
-               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="routeExecutionSuccessFactIssue"/>
         <include refid="routeExecutionFromClause" />
         <include refid="routeExecutionWhereClause" />
         <choose>
@@ -191,20 +225,20 @@
 
     <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO">
         SELECT COUNT(1) AS totalRouteCount,
-               SUM(CASE
-                       WHEN prr.route_result LIKE '%兜底%' THEN 0
-                       WHEN prr.route_result LIKE '%线下%' THEN 0
-                       ELSE 1
-                   END) AS successRouteCount,
-               SUM(CASE
-                       WHEN prr.route_result LIKE '%兜底%' THEN 1
-                       WHEN prr.route_result LIKE '%线下%' THEN 1
-                       ELSE 0
-                   END) AS warnRouteCount,
+               COALESCE(SUM(CASE
+                                 WHEN prr.route_result LIKE '%兜底%' THEN 0
+                                 WHEN prr.route_result LIKE '%线下%' THEN 0
+                                 ELSE 1
+                             END), 0) AS successRouteCount,
+               COALESCE(SUM(CASE
+                                 WHEN prr.route_result LIKE '%兜底%' THEN 1
+                                 WHEN prr.route_result LIKE '%线下%' THEN 1
+                                 ELSE 0
+                             END), 0) AS warnRouteCount,
                COUNT(DISTINCT prr.channel_code) AS distinctChannelCount,
-               SUM(CASE WHEN prr.route_result LIKE '%线下%' THEN 1 ELSE 0 END) AS offlineRouteCount,
-               SUM(CASE WHEN latest_pa.payment_method = '微信' THEN 1 ELSE 0 END) AS wechatRouteCount,
-               SUM(CASE WHEN latest_pa.payment_method = '支付宝' THEN 1 ELSE 0 END) AS alipayRouteCount,
+               COALESCE(SUM(CASE WHEN prr.route_result LIKE '%线下%' THEN 1 ELSE 0 END), 0) AS offlineRouteCount,
+               COALESCE(SUM(CASE WHEN latest_pa.payment_method = '微信' THEN 1 ELSE 0 END), 0) AS wechatRouteCount,
+               COALESCE(SUM(CASE WHEN latest_pa.payment_method = '支付宝' THEN 1 ELSE 0 END), 0) AS alipayRouteCount,
                DATE_FORMAT(MAX(prr.created_at), '%Y-%m-%d %H:%i:%s') AS latestRouteAt
         <include refid="routeExecutionFromClause" />
         <include refid="routeExecutionWhereClause" />

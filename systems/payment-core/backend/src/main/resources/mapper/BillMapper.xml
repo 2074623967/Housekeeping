@@ -32,10 +32,36 @@
                DATE_FORMAT(latest_payment.success_at, '%Y-%m-%d %H:%i:%s') AS latestPaymentSuccessAt
         FROM t_bill b
                  LEFT JOIN t_order standard_order ON standard_order.order_no = b.order_no
+                     AND CHAR_LENGTH(standard_order.order_no) = CHAR_LENGTH(b.order_no)
+                     AND CAST(standard_order.order_no AS BINARY(256)) = CAST(b.order_no AS BINARY(256))
+                     AND EXISTS (SELECT 1 FROM t_prepay_order owned_pr
+                                 WHERE owned_pr.bill_no = b.bill_no
+                                   AND CHAR_LENGTH(owned_pr.bill_no) = CHAR_LENGTH(b.bill_no)
+                                   AND CAST(owned_pr.bill_no AS BINARY(256)) = CAST(b.bill_no AS BINARY(256))
+                                   AND owned_pr.order_no = b.order_no
+                                   AND CHAR_LENGTH(owned_pr.order_no) = CHAR_LENGTH(b.order_no)
+                                   AND CAST(owned_pr.order_no AS BINARY(256)) = CAST(b.order_no AS BINARY(256))
+                                   AND owned_pr.source_kind = 'STANDARD_ORDER'
+                                   AND CHAR_LENGTH(owned_pr.source_kind) = CHAR_LENGTH('STANDARD_ORDER')
+                                   AND CAST(owned_pr.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16)))
+                     AND NOT EXISTS (SELECT 1 FROM t_prepay_order conflicting_pr
+                                     WHERE conflicting_pr.bill_no = b.bill_no
+                                       AND CHAR_LENGTH(conflicting_pr.bill_no) = CHAR_LENGTH(b.bill_no)
+                                       AND CAST(conflicting_pr.bill_no AS BINARY(256)) = CAST(b.bill_no AS BINARY(256))
+                                       AND (conflicting_pr.order_no IS NULL
+                                            OR conflicting_pr.source_kind IS NULL
+                                            OR NOT (conflicting_pr.order_no = b.order_no
+                                                AND CHAR_LENGTH(conflicting_pr.order_no) = CHAR_LENGTH(b.order_no)
+                                                AND CAST(conflicting_pr.order_no AS BINARY(256)) = CAST(b.order_no AS BINARY(256))
+                                                AND conflicting_pr.source_kind = 'STANDARD_ORDER'
+                                                AND CHAR_LENGTH(conflicting_pr.source_kind) = CHAR_LENGTH('STANDARD_ORDER')
+                                                AND CAST(conflicting_pr.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16)))))
                  LEFT JOIN t_prepay_order latest_prepay ON latest_prepay.id = (
                     SELECT latest_pr.id
                     FROM t_prepay_order latest_pr
                     WHERE latest_pr.bill_no = b.bill_no
+                      AND CHAR_LENGTH(latest_pr.bill_no) = CHAR_LENGTH(b.bill_no)
+                      AND CAST(latest_pr.bill_no AS BINARY(256)) = CAST(b.bill_no AS BINARY(256))
                     ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
                     LIMIT 1
                 )
@@ -44,7 +70,11 @@
                     FROM t_prepay_order payment_pr
                              INNER JOIN t_payment_order latest_po
                                         ON latest_po.payment_order_id = payment_pr.payment_order_id
+                                       AND CHAR_LENGTH(latest_po.payment_order_id) = CHAR_LENGTH(payment_pr.payment_order_id)
+                                       AND CAST(latest_po.payment_order_id AS BINARY(256)) = CAST(payment_pr.payment_order_id AS BINARY(256))
                     WHERE payment_pr.bill_no = b.bill_no
+                      AND CHAR_LENGTH(payment_pr.bill_no) = CHAR_LENGTH(b.bill_no)
+                      AND CAST(payment_pr.bill_no AS BINARY(256)) = CAST(b.bill_no AS BINARY(256))
                     ORDER BY latest_po.created_at DESC, latest_po.id DESC
                     LIMIT 1
                 )
@@ -52,27 +82,33 @@
                     SELECT payment_link_pr.id
                     FROM t_prepay_order payment_link_pr
                     WHERE payment_link_pr.payment_order_id = latest_payment.payment_order_id
+                      AND CHAR_LENGTH(payment_link_pr.payment_order_id) = CHAR_LENGTH(latest_payment.payment_order_id)
+                      AND CAST(payment_link_pr.payment_order_id AS BINARY(256)) = CAST(latest_payment.payment_order_id AS BINARY(256))
                       AND payment_link_pr.bill_no = b.bill_no
+                      AND CHAR_LENGTH(payment_link_pr.bill_no) = CHAR_LENGTH(b.bill_no)
+                      AND CAST(payment_link_pr.bill_no AS BINARY(256)) = CAST(b.bill_no AS BINARY(256))
                     ORDER BY payment_link_pr.created_at DESC, payment_link_pr.id DESC
                     LIMIT 1
                 )
         WHERE b.bill_no = #{billNo}
+          AND CHAR_LENGTH(b.bill_no) = CHAR_LENGTH(#{billNo})
+          AND CAST(b.bill_no AS BINARY(256)) = CAST(#{billNo} AS BINARY(256))
         LIMIT 1
     </select>
 
     <sql id="billWhere">
         <where>
             <if test="query.billNo != null and query.billNo != ''">
-                bill_no LIKE CONCAT('%', #{query.billNo}, '%')
+                t_bill.bill_no LIKE CONCAT('%', #{query.billNo}, '%')
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND t_bill.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
             </if>
             <if test="query.customerName != null and query.customerName != ''">
-                AND customer_name LIKE CONCAT('%', #{query.customerName}, '%')
+                AND t_bill.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
             </if>
             <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
-                AND bill_status = #{query.billStatus}
+                AND t_bill.bill_status = #{query.billStatus}
             </if>
         </where>
     </sql>
@@ -80,40 +116,50 @@
     <sql id="billOrder">
         <choose>
             <when test="query.sortField == 'dueAt'">
-                ORDER BY due_at
+                ORDER BY t_bill.due_at
             </when>
             <when test="query.sortField == 'billAmount'">
-                ORDER BY bill_amount
+                ORDER BY t_bill.bill_amount
             </when>
             <when test="query.sortField == 'unpaidAmount'">
-                ORDER BY (bill_amount - paid_amount)
+                ORDER BY (t_bill.bill_amount - t_bill.paid_amount)
             </when>
             <otherwise>
-                ORDER BY created_at
+                ORDER BY t_bill.created_at
             </otherwise>
         </choose>
         <choose>
             <when test="query.sortOrder == 'asc'">
-                ASC, id ASC
+                ASC, t_bill.id ASC
             </when>
             <otherwise>
-                DESC, id DESC
+                DESC, t_bill.id DESC
             </otherwise>
         </choose>
     </sql>
 
     <select id="findAll" resultType="com.abc123.hsp.dto.BillListItemDTO">
-        SELECT bill_no AS billNo,
-               order_no AS orderNo,
-               customer_name AS customerName,
-               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
-               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
-               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
-               bill_status AS billStatus,
-               bill_status_type AS billStatusType,
-               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        SELECT t_bill.bill_no AS billNo,
+               t_bill.order_no AS orderNo,
+               t_bill.customer_name AS customerName,
+               CONCAT('¥', FORMAT(t_bill.bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(t_bill.paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(t_bill.bill_amount - t_bill.paid_amount, 2)) AS unpaidAmount,
+               t_bill.bill_status AS billStatus,
+               t_bill.bill_status_type AS billStatusType,
+               DATE_FORMAT(t_bill.due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
+               DATE_FORMAT(t_bill.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               latest_prepay.pay_scene AS latestPayScene
         FROM t_bill
+                 LEFT JOIN t_prepay_order latest_prepay ON latest_prepay.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.bill_no = t_bill.bill_no
+                      AND CHAR_LENGTH(latest_pr.bill_no) = CHAR_LENGTH(t_bill.bill_no)
+                      AND CAST(latest_pr.bill_no AS BINARY(256)) = CAST(t_bill.bill_no AS BINARY(256))
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
         <include refid="billWhere"/>
         <include refid="billOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
@@ -121,10 +167,10 @@
 
     <select id="findOverview" resultType="com.abc123.hsp.dto.BillOverviewDTO">
         SELECT COUNT(1) AS totalBillCount,
-               SUM(CASE WHEN bill_status IN ('已支付', '已结清') THEN 1 ELSE 0 END) AS paidBillCount,
-               SUM(CASE WHEN bill_status = '待支付' THEN 1 ELSE 0 END) AS unpaidBillCount,
-               SUM(CASE WHEN bill_status = '部分支付' THEN 1 ELSE 0 END) AS partialPaidBillCount,
-               SUM(CASE WHEN due_at &lt; NOW() AND bill_status NOT IN ('已支付', '已结清') THEN 1 ELSE 0 END) AS overdueBillCount,
+               COALESCE(SUM(CASE WHEN bill_status IN ('已支付', '已结清') THEN 1 ELSE 0 END), 0) AS paidBillCount,
+               COALESCE(SUM(CASE WHEN bill_status = '待支付' THEN 1 ELSE 0 END), 0) AS unpaidBillCount,
+               COALESCE(SUM(CASE WHEN bill_status = '部分支付' THEN 1 ELSE 0 END), 0) AS partialPaidBillCount,
+               COALESCE(SUM(CASE WHEN due_at &lt; NOW() AND bill_status NOT IN ('已支付', '已结清') THEN 1 ELSE 0 END), 0) AS overdueBillCount,
                CONCAT('¥', FORMAT(COALESCE(SUM(bill_amount), 0), 2)) AS totalBillAmount,
                CONCAT('¥', FORMAT(COALESCE(SUM(paid_amount), 0), 2)) AS totalPaidAmount,
                CONCAT('¥', FORMAT(COALESCE(SUM(bill_amount - paid_amount), 0), 2)) AS totalUnpaidAmount
@@ -139,17 +185,27 @@
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.BillListItemDTO">
-        SELECT bill_no AS billNo,
-               order_no AS orderNo,
-               customer_name AS customerName,
-               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
-               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
-               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
-               bill_status AS billStatus,
-               bill_status_type AS billStatusType,
-               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        SELECT t_bill.bill_no AS billNo,
+               t_bill.order_no AS orderNo,
+               t_bill.customer_name AS customerName,
+               CONCAT('¥', FORMAT(t_bill.bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(t_bill.paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(t_bill.bill_amount - t_bill.paid_amount, 2)) AS unpaidAmount,
+               t_bill.bill_status AS billStatus,
+               t_bill.bill_status_type AS billStatusType,
+               DATE_FORMAT(t_bill.due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
+               DATE_FORMAT(t_bill.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               latest_prepay.pay_scene AS latestPayScene
         FROM t_bill
+                 LEFT JOIN t_prepay_order latest_prepay ON latest_prepay.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.bill_no = t_bill.bill_no
+                      AND CHAR_LENGTH(latest_pr.bill_no) = CHAR_LENGTH(t_bill.bill_no)
+                      AND CAST(latest_pr.bill_no AS BINARY(256)) = CAST(t_bill.bill_no AS BINARY(256))
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
         <include refid="billWhere"/>
         <include refid="billOrder"/>
         LIMIT 1001

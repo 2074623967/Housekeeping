@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
+import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.RefundMapper;
@@ -16,13 +17,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -38,9 +45,12 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaymentEventDispatchServiceImpl.class);
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
     private static final String PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION = "1";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
+    private static final String REFUND_SUBMIT_DOWNSTREAM_SYSTEM = "gateway-access";
+    private static final String REFUND_SUBMIT_EVENT_TOPIC = "payment.refund.submitted.v1";
     private static final String HTTP_STAGE_PENDING = "PENDING";
     private static final String HTTP_STAGE_CLEARING_ACCEPTED = "CLEARING_ACCEPTED";
     private static final String HTTP_STAGE_COMPLETED = "COMPLETED";
@@ -64,6 +74,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final long DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS = 5000L;
     private static final long MAX_PUBLISHER_CONFIRM_TIMEOUT_MS = 60000L;
     private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter PAYMENT_FACT_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final PaymentMapper paymentMapper;
     private final PaymentEventMapper paymentEventMapper;
@@ -88,9 +100,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     public PaymentEventDispatchServiceImpl(
             PaymentMapper paymentMapper,
             PaymentEventMapper paymentEventMapper,
-            @Value("${payment.downstream.clearing.payment-success-url:http://127.0.0.1:18120/api/clearing/events/payments/success}")
+            @Value("${payment.downstream.clearing.payment-success-url:http://localhost:18120/api/clearing/events/payments/success}")
             String clearingUrl,
-            @Value("${payment.downstream.accounting.payment-success-url:http://127.0.0.1:18110/api/accounting/events/payments/success}")
+            @Value("${payment.downstream.accounting.payment-success-url:http://localhost:18110/api/accounting/events/payments/success}")
             String accountingUrl,
             @Value("${payment.downstream.accounting.payment-success-account-no:ACT10003}")
             String accountingPaymentSuccessAccountNo,
@@ -363,13 +375,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
         if (event == null
                 || !REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())
-                || !Objects.equals(event.getBizNo(), refundAttemptNo)) {
+                || !Objects.equals(event.getBizNo(), refundAttemptNo)
+                || !REFUND_SUBMIT_DOWNSTREAM_SYSTEM.equals(event.getDownstreamSystem())
+                || !REFUND_SUBMIT_EVENT_TOPIC.equals(event.getEventTopic())) {
             return false;
         }
         if ("SUCCESS".equals(event.getPublishStatus())) {
-            return true;
+            return refundMapper.isMatchingSuccessfulRefundSubmitEvent(eventNo, refundAttemptNo);
         }
         boolean resultUnknown = "UNKNOWN".equals(event.getPublishStatus());
+        if (!resultUnknown && !isRepublishableStatus(event.getPublishStatus())) {
+            return false;
+        }
         RefundChannelSubmitRequestDTO request =
                 refundMapper.findChannelSubmitRequestByAttemptNo(refundAttemptNo);
         if (request == null) {
@@ -381,7 +398,11 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         String refundOrderId = request.getRefundOrderId();
         if (!"PROCESSING".equals(request.getRefundStatus())) {
-            return paymentEventMapper.markPublishSuccess(eventNo) == 1;
+            if (resultUnknown) {
+                throw refundSubmitReviewRequired();
+            }
+            markFailedOrDeadLetter(eventNo);
+            return false;
         }
         try {
             validateRefundSubmitRequest(event, request);
@@ -389,24 +410,40 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             if (resultUnknown) {
                 throw refundSubmitReviewRequired();
             }
+            if (request.getChannelRefundNo() != null
+                    || (!"PENDING".equals(request.getAttemptStatus())
+                    && !"FAILED".equals(request.getAttemptStatus()))) {
+                markFailedOrDeadLetter(eventNo);
+                return false;
+            }
             recordRefundSubmitFailure(refundOrderId, refundAttemptNo, operator,
-                    "退款渠道下发快照校验失败，修复数据后再重试");
-            refundMapper.markRefundAttemptFailed(refundAttemptNo);
+                        "退款渠道下发快照校验失败，修复数据后再重试");
+            if (refundMapper.markRefundAttemptFailed(refundAttemptNo) != 1) {
+                throw new IllegalStateException("退款尝试失败状态更新未实际生效");
+            }
             markFailedOrDeadLetter(eventNo);
             return false;
         }
-        if (StringUtils.hasText(request.getChannelRefundNo())) {
+        if (request.getChannelRefundNo() != null) {
             try {
                 validateAcceptedRefundTrace(request);
-                return paymentEventMapper.markPublishSuccess(eventNo) == 1;
             } catch (RuntimeException exception) {
                 if (resultUnknown) {
                     throw refundSubmitReviewRequired();
                 }
-                markRefundSubmitUnknown(
-                        eventNo, refundOrderId, refundAttemptNo, request.getChannelCode(), operator);
+                markFailedOrDeadLetter(eventNo);
                 return false;
             }
+            return paymentEventMapper.markPublishSuccess(eventNo) == 1;
+        }
+        if (request.getSubmittedChannelCode() != null
+                || request.getOrderChannelRefundNo() != null
+                || Boolean.TRUE.equals(request.getChannelSubmitRecorded())) {
+            if (resultUnknown) {
+                throw refundSubmitReviewRequired();
+            }
+            markFailedOrDeadLetter(eventNo);
+            return false;
         }
         if (resultUnknown) {
             throw refundSubmitReviewRequired();
@@ -415,15 +452,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         String channelRefundNo;
         try {
             result = refundChannelSubmitService.submit(request);
-            if (result == null || !StringUtils.hasText(result.getChannelRefundNo())) {
-                throw new IllegalStateException("退款渠道未返回受理单号");
-            }
+            validateRefundSubmitResult(result);
             channelRefundNo = normalizeChannelRefundNo(result.getChannelRefundNo());
         } catch (RefundChannelSubmitException exception) {
             if (!exception.isResultUnknown()) {
                 recordRefundSubmitFailure(refundOrderId, refundAttemptNo, operator,
                         "退款提交在调用渠道前被配置或治理门禁拒绝，等待修复后重试");
-                refundMapper.markRefundAttemptFailed(refundAttemptNo);
+                if (refundMapper.markRefundAttemptFailed(refundAttemptNo) != 1) {
+                    throw new IllegalStateException("退款尝试失败状态更新未实际生效");
+                }
                 markFailedOrDeadLetter(eventNo);
                 return false;
             }
@@ -437,10 +474,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         if (refundMapper.bindRefundAttemptAccepted(refundAttemptNo, channelRefundNo) != 1
                 || refundMapper.bindRefundChannelAccepted(
-                refundOrderId, refundAttemptNo, request.getChannelCode().trim(), channelRefundNo) != 1) {
+                refundOrderId, refundAttemptNo, request.getChannelCode(), channelRefundNo) != 1) {
             throw new IllegalStateException("退款渠道受理事实绑定失败");
         }
-        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+        insertRefundOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 refundAttemptNo,
                 "CHANNEL_SUBMIT",
@@ -455,6 +492,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return true;
     }
 
+    private void validateRefundSubmitResult(RefundChannelSubmitResultDTO result) {
+        if (result == null
+                || !StringUtils.hasText(result.getChannelRefundNo())
+                || !"PROCESSING".equalsIgnoreCase(result.getStatus())
+                || !"warn".equalsIgnoreCase(result.getStatusType())) {
+            throw new IllegalArgumentException("退款渠道提交结果不是可确认的处理中受理事实");
+        }
+    }
+
     private BusinessException refundSubmitReviewRequired() {
         return new BusinessException(
                 ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED,
@@ -465,7 +511,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                            String refundAttemptNo,
                                            String operator,
                                            String remark) {
-        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+        insertRefundOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 refundAttemptNo,
                 "CHANNEL_SUBMIT_FAILED",
@@ -481,10 +527,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                          String refundAttemptNo,
                                          String channelCode,
                                          String operator) {
-        refundMapper.markRefundAttemptUnknown(refundAttemptNo);
-        refundMapper.recordUnknownRefundSubmitChannel(
-                refundOrderId, refundAttemptNo, channelCode.trim());
-        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+        if (refundMapper.markRefundAttemptUnknown(refundAttemptNo) != 1) {
+            throw new IllegalStateException("退款尝试未知状态更新未实际生效");
+        }
+        if (refundMapper.recordUnknownRefundSubmitChannel(
+                eventNo, refundOrderId, refundAttemptNo, channelCode) != 1) {
+            throw new IllegalStateException("退款未知渠道事实写入未实际生效");
+        }
+        insertRefundOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 refundAttemptNo,
                 "CHANNEL_SUBMIT_UNKNOWN",
@@ -493,7 +543,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "PROCESSING",
                 operator,
                 "退款渠道可能已经受理，已停止直接重试；须按退款单号向渠道查单或人工核查"));
-        paymentEventMapper.markPublishUnknown(eventNo);
+        if (paymentEventMapper.markPublishUnknown(eventNo) != 1) {
+            throw new IllegalStateException("退款渠道事件未知状态更新失败");
+        }
+    }
+
+    private void insertRefundOperationLog(RefundOperationLogEntity operationLog) {
+        if (refundMapper.insertOperationLog(operationLog) != 1) {
+            throw new IllegalStateException("退款渠道操作日志新增未实际生效");
+        }
     }
 
     private String normalizeOperator(String operator) {
@@ -543,17 +601,19 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || request.getRefundAmount() == null
                 || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0
                 || !StringUtils.hasText(request.getChannelCode())
+                || !request.getChannelCode().equals(request.getChannelCode().trim())
                 || !attemptStatusMatchesTrace) {
             throw new IllegalArgumentException("退款渠道下发快照不完整或不一致");
         }
     }
 
     private void validateAcceptedRefundTrace(RefundChannelSubmitRequestDTO request) {
-        normalizeChannelRefundNo(request.getChannelRefundNo());
-        if (!StringUtils.hasText(request.getSubmittedChannelCode())
-                || !request.getChannelCode().trim().equalsIgnoreCase(
-                        request.getSubmittedChannelCode().trim())) {
-            throw new IllegalArgumentException("退款渠道受理事实与原支付渠道不一致");
+        String channelRefundNo = normalizeChannelRefundNo(request.getChannelRefundNo());
+        if (!channelRefundNo.equals(request.getChannelRefundNo())
+                || !Objects.equals(request.getChannelCode(), request.getSubmittedChannelCode())
+                || !Objects.equals(request.getChannelRefundNo(), request.getOrderChannelRefundNo())
+                || !Boolean.TRUE.equals(request.getChannelSubmitRecorded())) {
+            throw new IllegalArgumentException("退款渠道受理事实不一致");
         }
     }
 
@@ -608,15 +668,16 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 if (detail == null) {
                     throw new IllegalArgumentException("支付成功事件对应支付详情不存在");
                 }
-                validatePaymentSuccessDetail(paymentOrderId, detail);
+                validatePaymentSuccessDetail(paymentOrderId, event.getBizNo(), detail);
                 BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
                 String orderNo = detail.getOrderNo().trim();
                 String customerName = detail.getCustomerName().trim();
                 String workerName = normalizeWorkerName(paymentMapper.findWorkerNameByOrderNo(orderNo));
                 if (amqp) {
-                    publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
+                    publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName,
+                            workerName, detail.getPayScene(), amount);
                     postReconciliationFact(buildReconciliationFactPayload(
-                            detail.getPaymentOrderId(), orderNo, amount));
+                            detail.getPaymentOrderId(), orderNo, detail.getPayScene(), amount));
                 } else {
                     validateHttpDispatchConfiguration();
                     dispatchPaymentSuccessViaHttp(
@@ -628,6 +689,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             }
             return true;
         } catch (RuntimeException exception) {
+            String stage = event.getPaymentSuccessHttpStage();
+            if (!HTTP_STAGE_PENDING.equals(stage) && !HTTP_STAGE_CLEARING_ACCEPTED.equals(stage)
+                    && !HTTP_STAGE_COMPLETED.equals(stage)) {
+                stage = "INVALID";
+            }
+            LOGGER.warn("支付成功事件派发失败 eventNo={}, stage={}, exceptionType={}",
+                    eventNo, stage, exception.getClass().getSimpleName());
             markFailedOrDeadLetter(eventNo);
             return false;
         }
@@ -641,19 +709,20 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                String workerName,
                                                BigDecimal amount) {
         if (HTTP_STAGE_PENDING.equals(stage)) {
-            postForSuccess(clearingUrl, buildClearingPayload(
+            postPaymentEventForSuccess(clearingUrl, buildClearingPayload(
                     event.getEventNo(), detail.getPaymentOrderId(), orderNo,
-                    customerName, workerName, amount));
+                    customerName, workerName, detail.getPayScene(), amount), detail.getPaymentOrderId());
             if (paymentEventMapper.markPaymentSuccessClearingAccepted(event.getEventNo()) != 1) {
                 throw new IllegalStateException("支付成功事件清分受理阶段更新失败");
             }
         } else if (!HTTP_STAGE_CLEARING_ACCEPTED.equals(stage)) {
             throw new IllegalArgumentException("支付成功事件 HTTP 投递阶段非法");
         }
-        postForSuccess(accountingUrl, buildAccountingPayload(
-                event.getEventNo(), detail.getPaymentOrderId(), orderNo, customerName, amount));
+        postPaymentEventForSuccess(accountingUrl, buildAccountingPayload(
+                event.getEventNo(), detail.getPaymentOrderId(), orderNo, customerName,
+                detail.getPayScene(), amount), detail.getPaymentOrderId());
         postReconciliationFact(buildReconciliationFactPayload(
-                detail.getPaymentOrderId(), orderNo, amount));
+                detail.getPaymentOrderId(), orderNo, detail.getPayScene(), amount));
         if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
             throw new IllegalStateException("支付成功事件 HTTP 完成阶段更新失败");
         }
@@ -671,15 +740,45 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return stage;
     }
 
-    private void validatePaymentSuccessDetail(String paymentOrderId, PaymentDetailDTO detail) {
+    private void validatePaymentSuccessDetail(String paymentOrderId,
+                                              String eventBizNo,
+                                              PaymentDetailDTO detail) {
         if (!Objects.equals(paymentOrderId, detail.getPaymentOrderId())
+                || !isSamePaymentOrderNo(eventBizNo, detail.getOrderNo())
                 || !"SUCCESS".equals(detail.getStatus())
+                || !"success".equalsIgnoreCase(detail.getStatusType())
                 || !isValidConfiguredText(detail.getOrderNo(), ORDER_NO_MAX_LENGTH)
                 || !isValidConfiguredText(detail.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH)
                 || !isValidConfiguredText(detail.getChannel(), CHANNEL_CODE_MAX_LENGTH)
                 || !isValidConfiguredText(
-                        detail.getChannelTransactionNo(), CHANNEL_TRANSACTION_NO_MAX_LENGTH)) {
+                        detail.getChannelTransactionNo(), CHANNEL_TRANSACTION_NO_MAX_LENGTH)
+                || !"成功".equals(detail.getLatestAttemptStatus())
+                || !"success".equalsIgnoreCase(detail.getLatestAttemptStatusType())
+                || !StringUtils.hasText(detail.getLatestAttemptCompletedAt())
+                || !StringUtils.hasText(detail.getSuccessAt())
+                || !Boolean.TRUE.equals(detail.getPaymentFactTimelineValid())
+                || !isPaymentFactTimelineValid(
+                        detail.getLatestAttemptCompletedAt(), detail.getSuccessAt())) {
             throw new IllegalArgumentException("支付成功事件与支付事实不一致");
+        }
+    }
+
+    private boolean isSamePaymentOrderNo(String eventBizNo, String detailOrderNo) {
+        return StringUtils.hasText(eventBizNo)
+                && StringUtils.hasText(detailOrderNo)
+                && eventBizNo.equals(detailOrderNo)
+                && eventBizNo.equals(eventBizNo.trim());
+    }
+
+    private boolean isPaymentFactTimelineValid(String attemptCompletedAt, String successAt) {
+        try {
+            LocalDateTime completedAt = LocalDateTime.parse(
+                    attemptCompletedAt.trim(), PAYMENT_FACT_TIME_FORMATTER);
+            LocalDateTime succeededAt = LocalDateTime.parse(
+                    successAt.trim(), PAYMENT_FACT_TIME_FORMATTER);
+            return !completedAt.isAfter(succeededAt);
+        } catch (DateTimeParseException | NullPointerException exception) {
+            return false;
         }
     }
 
@@ -701,11 +800,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 .replace("¥", "")
                 .replace(",", "")
                 .trim());
-        BigDecimal normalizedAmount = amount.stripTrailingZeros();
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("支付成功事件金额必须大于 0");
         }
-        if (normalizedAmount.scale() > MONEY_MAX_SCALE
+        if (amount.scale() > MONEY_MAX_SCALE
                 || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
             throw new IllegalArgumentException("支付成功事件金额最多支持 16 位整数和 2 位小数");
         }
@@ -728,6 +826,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                String orderNo,
                                String customerName,
                                String workerName,
+                               String payScene,
                                BigDecimal amount) {
         if (rabbitTemplate == null || objectMapper == null
                 || !isValidConfiguredText(paymentSuccessExchange, AMQP_DESTINATION_MAX_LENGTH)
@@ -737,7 +836,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         try {
             final String payload = objectMapper.writeValueAsString(
-                    buildAmqpPayload(eventNo, paymentOrderId, orderNo, customerName, workerName, amount));
+                    buildAmqpPayload(eventNo, paymentOrderId, orderNo, customerName, workerName,
+                            payScene, amount));
             rabbitTemplate.invoke(operations -> {
                 operations.convertAndSend(
                         paymentSuccessExchange.trim(),
@@ -757,6 +857,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                  String orderNo,
                                                  String customerName,
                                                  String workerName,
+                                                 String payScene,
                                                  BigDecimal amount) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("eventNo", eventNo);
@@ -770,6 +871,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         payload.put("customerName", customerName);
         payload.put("merchantName", "家政平台");
         payload.put("workerName", workerName);
+        payload.put("payScene", payScene);
         payload.put("amount", amount);
         return payload;
     }
@@ -792,12 +894,22 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
      */
     private void markFailedOrDeadLetter(String eventNo) {
         PaymentEventListItemDTO event = paymentEventMapper.findByEventNo(eventNo);
-        int currentRetryCount = event == null || event.getRetryCount() == null ? 0 : event.getRetryCount();
-        if (currentRetryCount + 1 >= maxRetryCount) {
-            paymentEventMapper.markPublishDeadLetter(eventNo);
+        if (event != null && "DEAD_LETTER".equals(event.getPublishStatus())) {
+            if (paymentEventMapper.markPublishDeadLetter(eventNo) != 1) {
+                throw new IllegalStateException("支付事件死信状态更新失败");
+            }
             return;
         }
-        paymentEventMapper.markPublishFailed(eventNo);
+        int currentRetryCount = event == null || event.getRetryCount() == null ? 0 : event.getRetryCount();
+        if (currentRetryCount + 1 >= maxRetryCount) {
+            if (paymentEventMapper.markPublishDeadLetter(eventNo) != 1) {
+                throw new IllegalStateException("支付事件死信状态更新失败");
+            }
+            return;
+        }
+        if (paymentEventMapper.markPublishFailed(eventNo) != 1) {
+            throw new IllegalStateException("支付事件失败状态更新失败");
+        }
     }
 
     private void validateHttpDispatchConfiguration() {
@@ -821,25 +933,79 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return true;
     }
 
-    private void postForSuccess(String url, Object payload) {
+    private void postPaymentEventForSuccess(String url, Object payload, String paymentOrderId) {
+        Object data = postForSuccess(url, payload).getData();
+        if (!(data instanceof Map)) {
+            LOGGER.warn("支付成功事件回执拒绝 paymentOrderId={}, target={}, reason=STRUCTURE",
+                    paymentOrderId, url.equals(clearingUrl) ? "CLEARING" : "ACCOUNTING");
+            throw new IllegalStateException("下游支付事件回执缺少归属事实");
+        }
+        Map<?, ?> event = (Map<?, ?>) data;
+        if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.get("eventType"))
+                || !paymentOrderId.equals(event.get("bizNo"))
+                || !businessChainId(paymentOrderId).equals(event.get("businessChainId"))
+                || !(event.get("eventNo") instanceof String)
+                || !StringUtils.hasText((String) event.get("eventNo"))
+                || !"已消费".equals(event.get("eventStatus"))) {
+            LOGGER.warn("支付成功事件回执拒绝 paymentOrderId={}, target={}, reason=IDENTITY",
+                    paymentOrderId, url.equals(clearingUrl) ? "CLEARING" : "ACCOUNTING");
+            throw new IllegalStateException("下游支付事件回执与原支付单不匹配");
+        }
+    }
+
+    private DownstreamApiResponse postForSuccess(String url, Object payload) {
         ResponseEntity<DownstreamApiResponse> response = restTemplate.postForEntity(
                 url.trim(), payload, DownstreamApiResponse.class);
         if (response == null || !response.getStatusCode().is2xxSuccessful()
                 || response.getBody() == null || response.getBody().getData() == null
                 || !isSuccessfulResponseCode(response.getBody().getCode())) {
+            LOGGER.warn("支付成功事件下游响应拒绝 target={}, reason=HTTP_CODE_OR_DATA",
+                    url.equals(clearingUrl) ? "CLEARING" : url.equals(accountingUrl) ? "ACCOUNTING" : "RECONCILIATION");
             throw new IllegalStateException("下游系统未明确返回业务成功");
         }
+        return response.getBody();
     }
 
     private void postReconciliationFact(Map<String, Object> payload) {
         if (!StringUtils.hasText(reconciliationFactUrl)) {
             return;
         }
-        postForSuccess(reconciliationFactUrl, payload);
+        Object data = postForSuccess(reconciliationFactUrl, payload).getData();
+        if (!(data instanceof Map)) {
+            LOGGER.warn("支付对账事实回执拒绝 paymentOrderId={}, reason=STRUCTURE", payload.get("factNo"));
+            throw new IllegalStateException("对账事实回执缺少业务链快照");
+        }
+        Map<?, ?> snapshot = (Map<?, ?>) data;
+        if (!Objects.equals(payload.get("businessChainId"), snapshot.get("businessChainId"))
+                || !(snapshot.get("facts") instanceof List)) {
+            LOGGER.warn("支付对账事实回执拒绝 paymentOrderId={}, reason=CHAIN_OR_FACTS", payload.get("factNo"));
+            throw new IllegalStateException("对账事实回执与原业务链不匹配");
+        }
+        for (Object item : (List<?>) snapshot.get("facts")) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> fact = (Map<?, ?>) item;
+            if (Objects.equals(payload.get("businessChainId"), fact.get("businessChainId"))
+                    && Objects.equals(payload.get("systemCode"), fact.get("systemCode"))
+                    && Objects.equals(payload.get("factType"), fact.get("factType"))
+                    && Objects.equals(payload.get("factNo"), fact.get("factNo"))
+                    && Objects.equals(payload.get("businessNo"), fact.get("businessNo"))
+                    && Objects.equals(payload.get("payScene"), fact.get("payScene"))
+                    && Objects.equals(payload.get("factStatus"), fact.get("factStatus"))
+                    && fact.get("amount") instanceof Number
+                    && new BigDecimal(fact.get("amount").toString())
+                            .compareTo((BigDecimal) payload.get("amount")) == 0) {
+                return;
+            }
+        }
+        LOGGER.warn("支付对账事实回执拒绝 paymentOrderId={}, reason=FACT_MISSING", payload.get("factNo"));
+        throw new IllegalStateException("对账事实回执缺少本次支付成功事实");
     }
 
     private Map<String, Object> buildReconciliationFactPayload(String paymentOrderId,
                                                                String orderNo,
+                                                               String payScene,
                                                                BigDecimal amount) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("businessChainId", businessChainId(paymentOrderId));
@@ -847,9 +1013,11 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         payload.put("factType", PAYMENT_SUCCESS_EVENT_TYPE);
         payload.put("factNo", paymentOrderId);
         payload.put("businessNo", orderNo);
+        payload.put("payScene", payScene);
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", amount);
-        payload.put("payload", "{\"paymentOrderId\":\"" + paymentOrderId + "\"}");
+        payload.put("payload", "{\"paymentOrderId\":\"" + paymentOrderId
+                + "\",\"payScene\":\"" + (payScene == null ? "" : payScene) + "\"}");
         return payload;
     }
 
@@ -865,6 +1033,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                                String orderNo,
                                                                String customerName,
                                                                String workerName,
+                                                               String payScene,
                                                                BigDecimal amount) {
         return new PaymentSuccessClearingPayload(
                 eventNo,
@@ -877,6 +1046,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 customerName,
                 "家政平台",
                 workerName,
+                payScene,
                 amount);
     }
 
@@ -888,6 +1058,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                                    String paymentOrderId,
                                                                    String orderNo,
                                                                    String customerName,
+                                                                   String payScene,
                                                                    BigDecimal amount) {
         return new PaymentSuccessAccountingPayload(
                 eventNo,
@@ -898,6 +1069,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 paymentOrderId,
                 orderNo,
                 customerName,
+                payScene,
                 amount);
     }
 
@@ -953,7 +1125,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
      * 一期以支付单号作为稳定根键，后续可替换为订单域下发的全局链路号。
      */
     private String businessChainId(String paymentOrderId) {
-        return "CHAIN-" + paymentOrderId;
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
     }
 
     /**
@@ -971,6 +1144,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         private final String customerName;
         private final String merchantName;
         private final String workerName;
+        private final String payScene;
         private final BigDecimal amount;
 
         PaymentSuccessClearingPayload(String eventNo,
@@ -983,6 +1157,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                       String customerName,
                                       String merchantName,
                                       String workerName,
+                                      String payScene,
                                       BigDecimal amount) {
             this.eventNo = eventNo;
             this.eventType = eventType;
@@ -994,6 +1169,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             this.customerName = customerName;
             this.merchantName = merchantName;
             this.workerName = workerName;
+            this.payScene = payScene;
             this.amount = amount;
         }
 
@@ -1037,6 +1213,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             return workerName;
         }
 
+        public String getPayScene() {
+            return payScene;
+        }
+
         public BigDecimal getAmount() {
             return amount;
         }
@@ -1055,6 +1235,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         private final String paymentOrderId;
         private final String orderNo;
         private final String customerName;
+        private final String payScene;
         private final BigDecimal amount;
 
         PaymentSuccessAccountingPayload(String eventNo,
@@ -1065,6 +1246,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                         String paymentOrderId,
                                         String orderNo,
                                         String customerName,
+                                        String payScene,
                                         BigDecimal amount) {
             this.eventNo = eventNo;
             this.eventType = eventType;
@@ -1074,6 +1256,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             this.paymentOrderId = paymentOrderId;
             this.orderNo = orderNo;
             this.customerName = customerName;
+            this.payScene = payScene;
             this.amount = amount;
         }
 
@@ -1099,6 +1282,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
         public String getPaymentOrderId() {
             return paymentOrderId;
+        }
+
+        public String getPayScene() {
+            return payScene;
         }
 
         public String getOrderNo() {

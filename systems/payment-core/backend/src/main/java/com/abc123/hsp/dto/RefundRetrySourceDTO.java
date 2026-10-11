@@ -17,4 +17,25 @@ public class RefundRetrySourceDTO {
     private BigDecimal refundAmount;
     /** 当前退款状态。 */
     private String status;
+    /** 当前退款状态样式。 */
+    private String statusType;
+    /** 已受理退款渠道。 */
+    private String channelCode;
+    /** 渠道侧退款单号。 */
+    private String channelRefundNo;
+    /** 渠道受理时间。 */
+    private String channelSubmittedAt;
+    /** 退款申请时间。 */
+    private String appliedAt;
+    /** 退款成功时间。 */
+    private String successAt;
+    /** 退款终态时间。 */
+    private String terminalAt;
+    /** 最新退款尝试状态。 */
+    private String latestAttemptStatus;
+    private String latestAttemptStatusType;
+    private String latestAttemptChannelCode;
+    private String latestAttemptChannelRefundNo;
+    /** 最新退款尝试完成时间。 */
+    private String latestAttemptCompletedAt;
 }

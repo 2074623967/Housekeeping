@@ -63,9 +63,10 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
             }
             try {
                 PaymentChannelSubmitResultDTO result = PaymentChannelSubmitResultValidator.validateAndNormalize(
-                        adapter.submit(request));
+                        adapter.submit(request), request.getTerminal());
                 return PaymentChannelSubmitResultValidator.validateAndNormalize(
-                        returnCodeStandardizer.standardizeSubmit(request.getResolvedChannelCode(), result));
+                        returnCodeStandardizer.standardizeSubmit(request.getResolvedChannelCode(), result),
+                        request.getTerminal());
             } catch (BusinessException exception) {
                 throw exception;
             } catch (RuntimeException exception) {

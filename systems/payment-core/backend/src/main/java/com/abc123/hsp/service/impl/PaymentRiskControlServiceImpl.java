@@ -23,6 +23,7 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
 
     private static final int BUSINESS_NO_MAX_LENGTH = 64;
     private static final int SOURCE_SYSTEM_MAX_LENGTH = 64;
+    private static final int SOURCE_APP_ID_MAX_LENGTH = 64;
     private static final int SCENE_CODE_MAX_LENGTH = 64;
     private static final int PAY_SCENE_MAX_LENGTH = 32;
     private static final int PAYMENT_METHOD_MAX_LENGTH = 32;
@@ -94,6 +95,7 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         PaymentRiskDecisionRequestDTO normalized = new PaymentRiskDecisionRequestDTO();
         normalized.setBusinessNo(normalizeRequiredRequestField(request.getBusinessNo(), BUSINESS_NO_MAX_LENGTH));
         normalized.setSourceSystem(normalizeRequiredRequestField(request.getSourceSystem(), SOURCE_SYSTEM_MAX_LENGTH));
+        normalized.setSourceAppId(normalizeRequiredRequestField(request.getSourceAppId(), SOURCE_APP_ID_MAX_LENGTH));
         normalized.setSceneCode(normalizeRequiredRequestField(request.getSceneCode(), SCENE_CODE_MAX_LENGTH));
         normalized.setPayScene(normalizeRequiredRequestField(request.getPayScene(), PAY_SCENE_MAX_LENGTH));
         normalized.setPaymentMethod(normalizeRequiredRequestField(

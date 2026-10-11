@@ -78,4 +78,17 @@ class PaymentSubmitRateLimitServiceImplTest {
 
         assertEquals(ErrorCode.PAYMENT_SUBMIT_RATE_LIMITED, exception.getCode());
     }
+
+    @Test
+    void shouldFailClosedWhenRateLimitAcquisitionAffectsMultipleRows() {
+        when(mapper.acquire(eq("INTERFACE"), anyString(), eq(60), eq(2))).thenReturn(2);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentSubmitRateLimitServiceImpl(mapper)
+                        .acquire("app-a", "微信支付", "H5", "10.0.0.1", 2, 3));
+
+        assertEquals("payment submit rate limit acquisition must affect exactly one row",
+                exception.getMessage());
+        verify(mapper, never()).initBucket(eq("SOURCE_METHOD"), anyString());
+    }
 }

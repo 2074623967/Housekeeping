@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -30,6 +31,19 @@ import org.springframework.transaction.TransactionStatus;
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentExpiryTaskServiceImplTest {
+
+    @BeforeEach
+    void defaultExpiryFactWrites() {
+        org.mockito.Mockito.lenient()
+                .when(paymentMapper.insertEvent(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(paymentMapper.insertPaymentProcessLog(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+    }
 
     @Mock
     private PaymentMapper paymentMapper;
@@ -46,6 +60,8 @@ class PaymentExpiryTaskServiceImplTest {
         payment.setChannelTransactionNo("CHANNEL-EXPIRED");
         when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
         when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED")).thenReturn(1);
+        when(paymentMapper.updatePrepayStatusByPaymentOrderId("PAY-EXPIRED", "已失效", "danger"))
+                .thenReturn(1);
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
@@ -76,6 +92,36 @@ class PaymentExpiryTaskServiceImplTest {
                         && "PAY-EXPIRED".equals(log.getPaymentOrderId())
                         && "ORD-EXPIRED".equals(log.getOrderNo())
                         && log.getMessage().contains("PAYMENT_EXPIRED_CLOSED")));
+    }
+
+    @Test
+    void shouldRecordFailureWhenExpiredPaymentEventInsertDoesNotCreateExactlyOneRow() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-EXPIRED-EVENT-FAIL", "ORD-EXPIRED-EVENT-FAIL");
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED-EVENT-FAIL")).thenReturn(1);
+        when(paymentMapper.updatePrepayStatusByPaymentOrderId(
+                "PAY-EXPIRED-EVENT-FAIL", "已失效", "danger")).thenReturn(1);
+        when(paymentMapper.insertEvent(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("PAYMENT_EXPIRED_CLOSED"),
+                org.mockito.ArgumentMatchers.eq("PAY-EXPIRED-EVENT-FAIL"),
+                org.mockito.ArgumentMatchers.eq("ORD-EXPIRED-EVENT-FAIL"),
+                org.mockito.ArgumentMatchers.any())).thenReturn(0);
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        PaymentExpiryCloseResultDTO result = service(100, 60, 2, 3600).closeExpiredPayments();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getFailCount());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                Collections.singletonList("PAY-EXPIRED-EVENT-FAIL"), result.getFailedPaymentOrderIds());
+        verify(paymentMapper, never()).insertPaymentProcessLog(org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper).recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.eq("PAY-EXPIRED-EVENT-FAIL"),
+                org.mockito.ArgumentMatchers.eq("EXPIRY_CLOSE_FAILED:IllegalStateException"),
+                org.mockito.ArgumentMatchers.eq(60),
+                org.mockito.ArgumentMatchers.eq(2),
+                org.mockito.ArgumentMatchers.eq(3600));
     }
 
     @Test
@@ -122,6 +168,10 @@ class PaymentExpiryTaskServiceImplTest {
             return 1;
         }).when(paymentMapper).markExpiredUnsubmittedPaymentClosed(
                 org.mockito.ArgumentMatchers.anyString());
+        when(paymentMapper.updatePrepayStatusByPaymentOrderId(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("已失效"),
+                org.mockito.ArgumentMatchers.eq("danger"))).thenReturn(1);
 
         PaymentExpiryCloseResultDTO result =
                 service(100, 60, 2, 3600).closeExpiredPayments();
@@ -158,7 +208,7 @@ class PaymentExpiryTaskServiceImplTest {
     void shouldSkipSideEffectsWhenPaymentBecameIneligibleAfterCandidateQuery() {
         ExpiredPaymentDTO payment = buildPayment("PAY-RACING", "ORD-RACING");
         when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
-        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-RACING")).thenReturn(0);
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-RACING")).thenReturn(2);
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
@@ -203,6 +253,8 @@ class PaymentExpiryTaskServiceImplTest {
                 .thenThrow(new IllegalStateException("cleanup failed"));
         when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
         when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-CLOSE")).thenReturn(1);
+        when(paymentMapper.updatePrepayStatusByPaymentOrderId("PAY-CLOSE", "已失效", "danger"))
+                .thenReturn(1);
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 

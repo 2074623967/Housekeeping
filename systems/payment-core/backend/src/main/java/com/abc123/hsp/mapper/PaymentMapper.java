@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
+import com.abc123.hsp.dto.PaymentAttemptIdempotencyDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import java.math.BigDecimal;
@@ -106,7 +107,7 @@ public interface PaymentMapper {
     /**
      * 新增账单。
      */
-    void insertBill(@Param("billNo") String billNo,
+    int insertBill(@Param("billNo") String billNo,
             @Param("orderNo") String orderNo,
             @Param("customerName") String customerName,
             @Param("orderAmount") BigDecimal orderAmount,
@@ -117,7 +118,7 @@ public interface PaymentMapper {
     /**
      * 新增支付单。
      */
-    void insertPaymentOrder(@Param("paymentOrderId") String paymentOrderId,
+    int insertPaymentOrder(@Param("paymentOrderId") String paymentOrderId,
             @Param("orderNo") String orderNo,
             @Param("customerName") String customerName,
             @Param("amount") BigDecimal amount,
@@ -126,19 +127,25 @@ public interface PaymentMapper {
     /**
      * 新增预付单。
      */
-    void insertPrepayOrder(@Param("prepayOrderNo") String prepayOrderNo,
+    int insertPrepayOrder(@Param("prepayOrderNo") String prepayOrderNo,
             @Param("billNo") String billNo,
             @Param("orderNo") String orderNo,
             @Param("customerName") String customerName,
             @Param("amount") BigDecimal amount,
             @Param("payScene") String payScene,
             @Param("cashierTitle") String cashierTitle,
-            @Param("paymentOrderId") String paymentOrderId);
+            @Param("paymentOrderId") String paymentOrderId,
+            @Param("sourceKind") String sourceKind);
 
     /**
      * 查询预付单。
      */
     PrepayOrderDTO findPrepay(@Param("prepayOrderNo") String prepayOrderNo);
+
+    /**
+     * 查询预付单是否已过期且仍处于未提交支付状态。
+     */
+    boolean isPrepayExpired(@Param("prepayOrderNo") String prepayOrderNo);
 
     /**
      * 查询订单当前可复用的有效预付单。
@@ -171,12 +178,11 @@ public interface PaymentMapper {
     String findOrderNoByPrepayOrderNo(@Param("prepayOrderNo") String prepayOrderNo);
 
     /**
-     * 更新支付单状态。
+     * 渠道下发前写入风控状态，不改变渠道交易号。
      */
-    void updatePaymentStatus(@Param("paymentOrderId") String paymentOrderId,
+    int updatePaymentRiskStatus(@Param("paymentOrderId") String paymentOrderId,
             @Param("status") String status,
-            @Param("statusType") String statusType,
-            @Param("channelTransactionNo") String channelTransactionNo);
+            @Param("statusType") String statusType);
 
     /**
      * 可信渠道结果确认成功后原子抢占状态收口权，避免并发回调或查单重复记账和重复发事件。
@@ -213,14 +219,15 @@ public interface PaymentMapper {
     /**
      * 按支付单更新收银台状态。
      */
-    void updatePrepayStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,
+    int updatePrepayStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,
             @Param("cashierStatus") String cashierStatus,
             @Param("cashierStatusType") String cashierStatusType);
 
     /**
      * 回写支付方式和渠道编码。
      */
-    void updatePaymentMethodAndChannel(@Param("paymentOrderId") String paymentOrderId,
+    int updatePaymentMethodAndChannel(@Param("paymentOrderId") String paymentOrderId,
+            @Param("prepayOrderNo") String prepayOrderNo,
             @Param("paymentMethod") String paymentMethod,
             @Param("channelCode") String channelCode,
             @Param("channelTransactionNo") String channelTransactionNo);
@@ -229,6 +236,7 @@ public interface PaymentMapper {
      * 渠道提交返回后补充支付单渠道事实，只允许待回调状态且不得覆盖已绑定流水。
      */
     int bindPaymentChannelSubmitResult(@Param("paymentOrderId") String paymentOrderId,
+            @Param("attemptNo") String attemptNo,
             @Param("paymentMethod") String paymentMethod,
             @Param("channelCode") String channelCode,
             @Param("channelTransactionNo") String channelTransactionNo);
@@ -237,12 +245,20 @@ public interface PaymentMapper {
      * 渠道提交结果不确定时原子标记待查单，禁止覆盖成功、关闭或冲突流水。
      */
     int markPaymentSubmitResultUnknown(@Param("paymentOrderId") String paymentOrderId,
+            @Param("attemptNo") String attemptNo,
+            @Param("paymentMethod") String paymentMethod,
             @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
+     * 校验终态快回调属于当前支付单的末次尝试。
+     */
+    boolean isLatestPaymentAttemptForOrder(@Param("paymentOrderId") String paymentOrderId,
+                                           @Param("attemptNo") String attemptNo);
 
     /**
      * 保存最近一次渠道返回码标准化快照，供详情与排障稳定读取。
      */
-    void updatePaymentReturnCodeSnapshot(
+    int updatePaymentReturnCodeSnapshot(
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelReturnCode") String channelReturnCode,
             @Param("standardizedCode") String standardizedCode,
@@ -266,7 +282,9 @@ public interface PaymentMapper {
     int updateOrderAfterPayment(@Param("orderNo") String orderNo,
             @Param("paidAmount") BigDecimal paidAmount,
             @Param("orderStatus") String orderStatus,
-            @Param("orderStatusType") String orderStatusType);
+            @Param("orderStatusType") String orderStatusType,
+            @Param("expectedPaidAmount") BigDecimal expectedPaidAmount,
+            @Param("expectedCustomerName") String expectedCustomerName);
 
     /**
      * 支付成功后更新账单已支付金额和账单状态。
@@ -274,12 +292,15 @@ public interface PaymentMapper {
     int updateBillAfterPayment(@Param("billNo") String billNo,
             @Param("paidAmount") BigDecimal paidAmount,
             @Param("billStatus") String billStatus,
-            @Param("billStatusType") String billStatusType);
+            @Param("billStatusType") String billStatusType,
+            @Param("orderNo") String orderNo,
+            @Param("customerName") String customerName,
+            @Param("expectedPaidAmount") BigDecimal expectedPaidAmount);
 
     /**
      * 写入支付回调日志。
      */
-    void insertNotifyLog(@Param("notifyNo") String notifyNo,
+    int insertNotifyLog(@Param("notifyNo") String notifyNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
             @Param("notifyType") String notifyType,
@@ -291,7 +312,7 @@ public interface PaymentMapper {
     /**
      * 写入支付路由日志。
      */
-    void insertRouteRecord(@Param("routeNo") String routeNo,
+    int insertRouteRecord(@Param("routeNo") String routeNo,
             @Param("attemptNo") String attemptNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
@@ -301,7 +322,7 @@ public interface PaymentMapper {
     /**
      * 写入支付事件。
      */
-    void insertEvent(@Param("eventNo") String eventNo,
+    int insertEvent(@Param("eventNo") String eventNo,
             @Param("eventType") String eventType,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("bizNo") String bizNo,
@@ -310,7 +331,7 @@ public interface PaymentMapper {
     /**
      * 写入支付尝试记录。
      */
-    void insertPaymentAttempt(@Param("attemptNo") String attemptNo,
+    int insertPaymentAttempt(@Param("attemptNo") String attemptNo,
             @Param("prepayOrderNo") String prepayOrderNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
@@ -322,7 +343,8 @@ public interface PaymentMapper {
             @Param("requestPayload") String requestPayload,
             @Param("responsePayload") String responsePayload,
             @Param("attemptStatus") String attemptStatus,
-            @Param("attemptStatusType") String attemptStatusType);
+            @Param("attemptStatusType") String attemptStatusType,
+            @Param("requestFingerprint") String requestFingerprint);
 
     /**
      * 按支付尝试号回写渠道提交结果，避免覆盖同一支付单的历史尝试。
@@ -332,6 +354,9 @@ public interface PaymentMapper {
                                          @Param("attemptStatus") String attemptStatus,
                                          @Param("attemptStatusType") String attemptStatusType);
 
+    int recordPaymentAttemptGateway(@Param("attemptNo") String attemptNo,
+                                    @Param("gatewayCode") String gatewayCode);
+
     /**
      * 写入独立支付处理日志；相同来源事实重复写入时保持幂等。
      */
@@ -340,19 +365,25 @@ public interface PaymentMapper {
     /**
      * 回写路由记录实际消费的运营配置快照版本。
      */
-    void updateRouteOpsConfigSnapshotVersion(@Param("routeNo") String routeNo,
+    int updateRouteOpsConfigSnapshotVersion(@Param("routeNo") String routeNo,
                                              @Param("snapshotVersion") Long snapshotVersion);
 
     /**
      * 回写支付尝试实际消费的运营配置快照版本。
      */
-    void updateAttemptOpsConfigSnapshotVersion(@Param("attemptNo") String attemptNo,
+    int updateAttemptOpsConfigSnapshotVersion(@Param("attemptNo") String attemptNo,
                                                @Param("snapshotVersion") Long snapshotVersion);
 
     /**
      * 判断幂等键对应的支付尝试是否已经存在。
      */
     boolean existsPaymentAttemptByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+    /**
+     * 查询幂等键已归属的预付单和支付单，防止跨支付单复用客户端幂等键。
+     */
+    PaymentAttemptIdempotencyDTO findPaymentAttemptIdempotency(
+            @Param("idempotencyKey") String idempotencyKey);
 
     /**
      * 查询来源应用对应的生效控制策略。

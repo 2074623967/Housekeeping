@@ -16,8 +16,11 @@ public class LocalRefundChannelSubmitServiceImpl implements RefundChannelSubmitS
 
     @Override
     public RefundChannelSubmitResultDTO submit(RefundChannelSubmitRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getRefundAttemptNo())) {
+            throw new IllegalArgumentException("退款尝试号不能为空");
+        }
         RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
-        result.setChannelRefundNo("RCH-" + safe(request == null ? null : request.getRefundOrderId()));
+        result.setChannelRefundNo("RCH-" + request.getRefundAttemptNo().trim());
         result.setStatus("PROCESSING");
         result.setStatusType("warn");
         result.setResponsePayload(buildResponsePayload(request, result.getChannelRefundNo()));
@@ -25,11 +28,12 @@ public class LocalRefundChannelSubmitServiceImpl implements RefundChannelSubmitS
     }
 
     private String buildResponsePayload(RefundChannelSubmitRequestDTO request, String channelRefundNo) {
-        String refundOrderId = request == null ? "" : safe(request.getRefundOrderId());
-        String paymentOrderId = request == null ? "" : safe(request.getPaymentOrderId());
-        String channelCode = request == null ? "" : safe(request.getChannelCode());
+        String refundOrderId = safe(request.getRefundOrderId());
+        String paymentOrderId = safe(request.getPaymentOrderId());
+        String channelCode = safe(request.getChannelCode());
         return "{\"code\":\"SUCCESS\",\"refundOrderId\":\""
                 + refundOrderId
+                + "\",\"refundAttemptNo\":\"" + request.getRefundAttemptNo().trim()
                 + "\",\"paymentOrderId\":\""
                 + paymentOrderId
                 + "\",\"channelCode\":\""

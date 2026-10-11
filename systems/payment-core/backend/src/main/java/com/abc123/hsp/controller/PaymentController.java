@@ -125,8 +125,10 @@ public class PaymentController {
      * 获取收银台页面所需的订单摘要、金额和支付方式。
      */
     @GetMapping("/cashier/{prepayOrderNo}")
-    public ApiResponse<CashierPageDTO> cashier(@PathVariable String prepayOrderNo) {
-        return ApiResponse.success(paymentService.cashier(prepayOrderNo));
+    public ApiResponse<CashierPageDTO> cashier(
+            @PathVariable String prepayOrderNo,
+            @RequestParam(required = false) String terminal) {
+        return ApiResponse.success(paymentService.cashier(prepayOrderNo, terminal));
     }
 
     /**

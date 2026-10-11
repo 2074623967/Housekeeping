@@ -147,11 +147,11 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
         if (containsIsoControl(value)) {
             throw invalidRequest();
         }
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
         if (value.length() > maxLength) {
             throw invalidRequest();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
         String normalized = value.trim();
         return normalized;
@@ -161,6 +161,7 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
             PaymentChannelSubmitResultDTO result, PaymentChannelSubmitRequestDTO request) {
         result.setChannelTransactionNo(required(
                 result.getChannelTransactionNo(), "channel transaction number", 128));
+        result.setGatewayCode(required(result.getGatewayCode(), "gateway code", 64));
         result.setAttemptStatus(required(result.getAttemptStatus(), "attempt status", 32));
         result.setAttemptStatusType(required(result.getAttemptStatusType(), "attempt status type", 32)
                 .toLowerCase(Locale.ROOT));
@@ -213,7 +214,8 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
 
     private String buildResponsePayload(String channelCode, PaymentChannelSubmitResultDTO result) {
         return "{\"source\":\"gateway-access\",\"channelCode\":\""
-                + escapeJson(channelCode) + "\",\"channelTransactionNo\":\""
+                + escapeJson(channelCode) + "\",\"gatewayCode\":\""
+                + escapeJson(result.getGatewayCode()) + "\",\"channelTransactionNo\":\""
                 + escapeJson(result.getChannelTransactionNo()) + "\",\"channelReturnCode\":\""
                 + escapeJson(result.getChannelReturnCode()) + "\"}";
     }

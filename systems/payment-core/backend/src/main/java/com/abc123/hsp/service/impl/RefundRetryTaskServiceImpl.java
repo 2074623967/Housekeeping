@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 /**
  * 失败退款批次重试默认实现。
@@ -23,6 +24,7 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
     private static final int DEFAULT_BATCH_SIZE = 100;
     private static final int MAX_BATCH_SIZE = 1000;
     private static final String TRANSACTION_FAILURE_CODE = "REFUND_RETRY_TRANSACTION_FAILED";
+    private static final int OPERATOR_MAX_LENGTH = 64;
 
     private final RefundMapper refundMapper;
     private final RefundService refundService;
@@ -49,12 +51,13 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
 
     @Override
     public RefundRetryResultDTO retryFailedRefunds(String triggeredBy) {
+        String normalizedTriggeredBy = normalizeOperator(triggeredBy);
         List<String> refundOrderIds = safeList(refundMapper.findFailedRefundOrderIds(batchSize));
         RefundRetryResultDTO result = new RefundRetryResultDTO();
         result.setProcessedCount(refundOrderIds.size());
         for (String refundOrderId : refundOrderIds) {
             try {
-                executeRetryTransaction(refundOrderId, triggeredBy);
+                executeRetryTransaction(refundOrderId, normalizedTriggeredBy);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (RuntimeException exception) {
                 result.setFailCount(result.getFailCount() + 1);
@@ -64,6 +67,22 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
             }
         }
         return result;
+    }
+
+    private String normalizeOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("退款重试操作人不能为空");
+        }
+        for (int index = 0; index < operator.length(); index++) {
+            if (Character.isISOControl(operator.charAt(index))) {
+                throw new IllegalArgumentException("退款重试操作人不能包含控制字符");
+            }
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("退款重试操作人不能超过64个字符");
+        }
+        return normalized;
     }
 
     private void executeRetryTransaction(String refundOrderId, String triggeredBy) {

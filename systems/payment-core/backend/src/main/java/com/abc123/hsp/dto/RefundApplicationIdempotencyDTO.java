@@ -11,6 +11,7 @@ public class RefundApplicationIdempotencyDTO {
 
     private String refundOrderId;
     private String paymentOrderId;
+    private String idempotencyKey;
     private BigDecimal refundAmount;
     private String refundMethod;
     private String refundReason;

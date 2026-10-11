@@ -6,16 +6,36 @@
 
     <sql id="cashierSessionStatusExpr">
         CASE
+            WHEN p.status = 'RISK_REVIEW' THEN '待风控复核'
+            WHEN p.status = 'RISK_BLOCKED' THEN '风控拦截'
+            WHEN p.status = 'RISK_REJECTED' THEN '风控拒绝'
+            WHEN p.status = 'PAYING' THEN '支付中'
+            WHEN p.status = 'FAIL' THEN '结果待确认'
+            WHEN p.status = 'CLOSED' THEN '已关闭'
+            WHEN p.status = 'SUCCESS' AND NOT (<include refid="com.abc123.hsp.mapper.PaymentMapper.trustedPaymentSuccessCondition"/>) THEN '成功事实异常'
+            WHEN p.status = 'SUCCESS' AND pr.cashier_status = '已完成' THEN '已完成'
+            WHEN p.status = 'SUCCESS' THEN '支付成功'
+            WHEN p.status = 'WAIT_CALLBACK' AND pr.cashier_status IN ('待支付', '支付中', '已完成', '支付成功') THEN '支付中'
+            WHEN p.status = 'PREPAY_CREATED' AND pr.cashier_status IN ('支付中', '已完成', '支付成功') AND pr.expires_at &lt; NOW() THEN '已失效'
+            WHEN p.status = 'PREPAY_CREATED' AND pr.cashier_status IN ('支付中', '已完成', '支付成功') THEN '待支付'
             WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-            WHEN pr.expires_at &lt; NOW() THEN '已失效'
+            WHEN pr.expires_at &lt; NOW() AND (p.status IS NULL OR p.status = 'PREPAY_CREATED') THEN '已失效'
             ELSE pr.cashier_status
         END
     </sql>
 
     <sql id="cashierSessionStatusTypeExpr">
         CASE
+            WHEN p.status = 'RISK_REVIEW' THEN 'warn'
+            WHEN p.status IN ('RISK_BLOCKED', 'RISK_REJECTED', 'FAIL', 'CLOSED') THEN 'danger'
+            WHEN p.status = 'PAYING' THEN 'info'
+            WHEN p.status = 'SUCCESS' AND NOT (<include refid="com.abc123.hsp.mapper.PaymentMapper.trustedPaymentSuccessCondition"/>) THEN 'danger'
+            WHEN p.status = 'SUCCESS' THEN 'success'
+            WHEN p.status = 'WAIT_CALLBACK' AND pr.cashier_status IN ('待支付', '支付中', '已完成', '支付成功') THEN 'info'
+            WHEN p.status = 'PREPAY_CREATED' AND pr.cashier_status IN ('支付中', '已完成', '支付成功') AND pr.expires_at &lt; NOW() THEN 'danger'
+            WHEN p.status = 'PREPAY_CREATED' AND pr.cashier_status IN ('支付中', '已完成', '支付成功') THEN 'warn'
             WHEN pr.cashier_status IN ('已完成', '支付成功') THEN 'success'
-            WHEN pr.expires_at &lt; NOW() THEN 'danger'
+            WHEN pr.expires_at &lt; NOW() AND (p.status IS NULL OR p.status = 'PREPAY_CREATED') THEN 'danger'
             ELSE pr.cashier_status_type
         END
     </sql>
@@ -67,6 +87,24 @@
         </choose>
     </sql>
 
+    <sql id="cashierSessionPaymentJoin">
+        LEFT JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+            AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(pr.payment_order_id)
+            AND CAST(p.payment_order_id AS BINARY(256)) = CAST(pr.payment_order_id AS BINARY(256))
+    </sql>
+
+    <sql id="cashierSessionAttemptJoin">
+        LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
+            SELECT pa.id
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = p.payment_order_id
+              AND CHAR_LENGTH(pa.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+              AND CAST(pa.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+            ORDER BY pa.created_at DESC, pa.id DESC
+            LIMIT 1
+        )
+    </sql>
+
     <select id="findDetail" resultType="com.abc123.hsp.dto.CashierSessionDetailDTO">
         SELECT pr.prepay_order_no AS sessionNo,
                pr.prepay_order_no AS prepayOrderNo,
@@ -84,15 +122,17 @@
                DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
+                 <include refid="cashierSessionPaymentJoin"/>
                  LEFT JOIN t_order standard_order ON standard_order.order_no = pr.order_no
-                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
-                    SELECT pa.id
-                    FROM t_payment_attempt pa
-                    WHERE pa.payment_order_id = pr.payment_order_id
-                    ORDER BY pa.created_at DESC, pa.id DESC
-                    LIMIT 1
-                )
+                     AND CHAR_LENGTH(standard_order.order_no) = CHAR_LENGTH(pr.order_no)
+                     AND CAST(standard_order.order_no AS BINARY(256)) = CAST(pr.order_no AS BINARY(256))
+                     AND pr.source_kind = 'STANDARD_ORDER'
+                     AND CHAR_LENGTH(pr.source_kind) = CHAR_LENGTH('STANDARD_ORDER')
+                     AND CAST(pr.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16))
+                 <include refid="cashierSessionAttemptJoin"/>
         WHERE pr.prepay_order_no = #{sessionNo}
+          AND CHAR_LENGTH(pr.prepay_order_no) = CHAR_LENGTH(#{sessionNo})
+          AND CAST(pr.prepay_order_no AS BINARY(256)) = CAST(#{sessionNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -112,13 +152,8 @@
                DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
-                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
-                    SELECT pa.id
-                    FROM t_payment_attempt pa
-                    WHERE pa.payment_order_id = pr.payment_order_id
-                    ORDER BY pa.created_at DESC, pa.id DESC
-                    LIMIT 1
-                )
+                 <include refid="cashierSessionPaymentJoin"/>
+                 <include refid="cashierSessionAttemptJoin"/>
         <include refid="cashierSessionWhere"/>
         <include refid="cashierSessionOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
@@ -126,34 +161,25 @@
 
     <select id="findOverview" resultType="com.abc123.hsp.dto.CashierSessionOverviewDTO">
         SELECT COUNT(1) AS totalSessionCount,
-               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '已失效' THEN 1 ELSE 0 END) AS expiredSessionCount,
-               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) IN ('支付成功', '已完成') THEN 1 ELSE 0 END) AS successSessionCount,
-               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '支付中' THEN 1 ELSE 0 END) AS payingSessionCount,
-               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '待支付' THEN 1 ELSE 0 END) AS pendingSessionCount,
+               COALESCE(SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '已失效' THEN 1 ELSE 0 END), 0) AS expiredSessionCount,
+               COALESCE(SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) IN ('支付成功', '已完成') THEN 1 ELSE 0 END), 0) AS successSessionCount,
+               COALESCE(SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '支付中' THEN 1 ELSE 0 END), 0) AS payingSessionCount,
+               COALESCE(SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '待支付' THEN 1 ELSE 0 END), 0) AS pendingSessionCount,
+               COALESCE(SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) NOT IN ('已失效', '支付成功', '已完成', '支付中', '待支付') THEN 1 ELSE 0 END), 0) AS otherSessionCount,
                COUNT(DISTINCT COALESCE(latest_pa.terminal, pr.pay_scene)) AS distinctTerminalCount,
-               SUM(CASE WHEN pr.expires_at &gt; NOW() AND pr.expires_at &lt;= TIMESTAMPADD(MINUTE, 15, NOW()) AND (<include refid="cashierSessionStatusExpr"/>) NOT IN ('支付成功', '已完成', '已失效') THEN 1 ELSE 0 END) AS expiringSoonCount,
+               COALESCE(SUM(CASE WHEN pr.expires_at &gt; NOW() AND pr.expires_at &lt;= TIMESTAMPADD(MINUTE, 15, NOW()) AND (p.status IS NULL OR p.status = 'PREPAY_CREATED') AND (<include refid="cashierSessionStatusExpr"/>) NOT IN ('支付成功', '已完成', '已失效') THEN 1 ELSE 0 END), 0) AS expiringSoonCount,
                CONCAT('¥', FORMAT(COALESCE(SUM(pr.amount), 0), 2)) AS totalAmount
         FROM t_prepay_order pr
-                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
-                    SELECT pa.id
-                    FROM t_payment_attempt pa
-                    WHERE pa.payment_order_id = pr.payment_order_id
-                    ORDER BY pa.created_at DESC, pa.id DESC
-                    LIMIT 1
-                )
+                 <include refid="cashierSessionPaymentJoin"/>
+                 <include refid="cashierSessionAttemptJoin"/>
         <include refid="cashierSessionWhere"/>
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM t_prepay_order pr
-                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
-                    SELECT pa.id
-                    FROM t_payment_attempt pa
-                    WHERE pa.payment_order_id = pr.payment_order_id
-                    ORDER BY pa.created_at DESC, pa.id DESC
-                    LIMIT 1
-                )
+                 <include refid="cashierSessionPaymentJoin"/>
+                 <include refid="cashierSessionAttemptJoin"/>
         <include refid="cashierSessionWhere"/>
     </select>
 
@@ -173,13 +199,8 @@
                DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
-                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
-                    SELECT pa.id
-                    FROM t_payment_attempt pa
-                    WHERE pa.payment_order_id = pr.payment_order_id
-                    ORDER BY pa.created_at DESC, pa.id DESC
-                    LIMIT 1
-                )
+                 <include refid="cashierSessionPaymentJoin"/>
+                 <include refid="cashierSessionAttemptJoin"/>
         <include refid="cashierSessionWhere"/>
         <include refid="cashierSessionOrder"/>
         LIMIT 1001

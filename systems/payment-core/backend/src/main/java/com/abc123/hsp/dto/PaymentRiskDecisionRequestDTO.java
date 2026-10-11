@@ -13,6 +13,8 @@ public class PaymentRiskDecisionRequestDTO {
     private String businessNo;
     /** 来源系统。 */
     private String sourceSystem;
+    /** 来源应用标识。 */
+    private String sourceAppId;
     /** 风控场景编码。 */
     private String sceneCode;
     /** 支付场景。 */

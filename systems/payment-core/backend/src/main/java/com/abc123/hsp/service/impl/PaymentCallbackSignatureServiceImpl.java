@@ -52,7 +52,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     public PaymentCallbackSignatureServiceImpl(
             PaymentCallbackSecurityMapper paymentCallbackSecurityMapper,
             @Value("${payment.callback.require-signature:true}") boolean required,
-            @Value("${payment.callback.nonce-ttl-seconds:601}") long nonceTtlSeconds) {
+            @Value("${payment.callback.nonce-ttl-seconds:3601}") long nonceTtlSeconds) {
         if (nonceTtlSeconds <= 0) {
             throw new IllegalArgumentException("payment callback nonce TTL must be positive");
         }
@@ -125,8 +125,10 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         }
         paymentCallbackSecurityMapper.deleteExpiredNonce(normalizedChannel, nonce);
         try {
-            paymentCallbackSecurityMapper.insertCallbackNonce(
-                    normalizedChannel, nonce, bizType, bizNo, nonceTtlSeconds);
+            if (paymentCallbackSecurityMapper.insertCallbackNonce(
+                    normalizedChannel, nonce, bizType, bizNo, nonceTtlSeconds) != 1) {
+                throw new IllegalStateException("payment callback nonce insert must affect exactly one row");
+            }
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, "callback nonce replay detected");
         }

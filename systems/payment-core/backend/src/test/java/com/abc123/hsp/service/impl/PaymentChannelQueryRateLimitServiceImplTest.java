@@ -7,11 +7,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.mapper.PaymentChannelQueryRateLimitMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +27,12 @@ class PaymentChannelQueryRateLimitServiceImplTest {
 
     @Mock
     private PaymentChannelQueryRateLimitMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(mapper.insertRejection(anyString(), anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(1);
+    }
 
     @Test
     void shouldSkipRateLimitWhenDisabled() {
@@ -70,5 +79,32 @@ class PaymentChannelQueryRateLimitServiceImplTest {
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(1));
         verify(mapper, never()).acquire("alipay_h5", 0, 0);
+    }
+
+    @Test
+    void shouldFailRateLimitWhenRejectionFactInsertDoesNotAffectExactlyOneRow() {
+        when(mapper.acquire("alipay_h5", 1, 1)).thenReturn(0);
+        when(mapper.insertRejection(anyString(), anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelQueryRateLimitServiceImpl(mapper, true, 0, 0)
+                        .acquire("alipay_h5", "PAY-LIMITED"));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED, exception.getCode());
+        assertEquals("channel query rate limit rejection fact could not be recorded", exception.getMessage());
+    }
+
+    @Test
+    void shouldFailClosedWhenRateLimitAcquisitionAffectsMultipleRows() {
+        when(mapper.acquire("alipay_h5", 1, 1)).thenReturn(2);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentChannelQueryRateLimitServiceImpl(mapper, true, 1, 1)
+                        .acquire("alipay_h5", "PAY-MULTI"));
+
+        assertEquals("payment channel query rate limit acquisition must affect exactly one row",
+                exception.getMessage());
+        verify(mapper, never()).insertRejection(anyString(), anyString(), anyString(), anyInt(), anyInt());
     }
 }

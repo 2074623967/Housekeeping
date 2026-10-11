@@ -16,6 +16,10 @@ import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import java.util.Collections;
+import java.util.List;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -157,9 +161,14 @@ class OrderServiceImplTest {
         item.setOrderAmount("¥188.00");
         item.setPaidAmount("¥0.00");
         item.setOrderStatus("待支付");
+        item.setOrderStatusType("warn");
         item.setFulfillmentStatus("待履约");
+        item.setFulfillmentStatusType("warn");
         item.setLatestPaymentStatus("未发起");
+        item.setLatestPaymentStatusType("info");
+        item.setLatestPayScene("HOME_CLEAN");
         item.setLatestCashierStatus("未生成");
+        item.setLatestCashierStatusType("info");
         item.setCreatedAt("2026-08-07 10:00:00");
 
         when(orderMapper.findForExport(query)).thenReturn(Collections.singletonList(item));
@@ -167,6 +176,9 @@ class OrderServiceImplTest {
         String csv = new OrderServiceImpl(orderMapper).exportCsv(query);
 
         assertTrue(csv.contains("订单号,账单号,客户名称"));
+        assertTrue(csv.contains("订单状态,订单状态样式,履约状态,履约状态样式"));
+        assertTrue(csv.contains("最近支付状态,最近支付状态样式,最近支付场景,最近收银台状态,最近收银台状态样式"));
+        assertTrue(csv.contains("待支付,warn,待履约,warn,未发起,info,HOME_CLEAN,未生成,info"));
         assertTrue(csv.contains("ORD-001"));
         assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.invalid\"\",\"\"深度保洁\"\")"));
         assertFalse(csv.contains("\"=HYPERLINK"));
@@ -176,6 +188,39 @@ class OrderServiceImplTest {
         assertFalse(csv.contains("李师傅"));
         assertEquals("王阿姨", item.getCustomerName());
         assertEquals("李师傅", item.getWorkerName());
+    }
+
+    @Test
+    void shouldKeepCarriageReturnInsideOrderCsvCell() throws Exception {
+        OrderListItemDTO item = new OrderListItemDTO();
+        item.setOrderNo("ORD-CR");
+        item.setServiceType("保洁\r=1+1");
+        when(orderMapper.findForExport(org.mockito.ArgumentMatchers.any(OrderQueryDTO.class)))
+                .thenReturn(Collections.singletonList(item));
+
+        String csv = new OrderServiceImpl(orderMapper).exportCsv(new OrderQueryDTO());
+
+        try (CSVParser parser = CSVParser.parse(csv, CSVFormat.DEFAULT)) {
+            List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertEquals("保洁\r=1+1", records.get(1).get(3));
+        }
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingOrdersWithNullQuery() {
+        when(orderMapper.findAll(org.mockito.ArgumentMatchers.any(OrderQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(orderMapper.count(org.mockito.ArgumentMatchers.any(OrderQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<OrderListItemDTO> result = new OrderServiceImpl(orderMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<OrderQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(OrderQueryDTO.class);
+        verify(orderMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int count) {

@@ -6,11 +6,11 @@ spring:
     name: home-service-payment-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment_core?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    url: ${HSP_DB_URL:jdbc:mysql://localhost:3306/housekeeping_payment_core?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
     username: ${HSP_DB_USERNAME:root}
     password: ${HSP_DB_PASSWORD:}
   rabbitmq:
-    host: ${HSP_RABBITMQ_HOST:127.0.0.1}
+    host: ${HSP_RABBITMQ_HOST:localhost}
     port: ${HSP_RABBITMQ_PORT:5672}
     username: ${HSP_RABBITMQ_USERNAME:hsp}
     password: ${HSP_RABBITMQ_PASSWORD:}
@@ -39,7 +39,7 @@ payment:
     gateway-access:
       # 只有 gateway-access 已配置真实渠道提交上游和共享访问凭证后才启用。
       enabled: ${HSP_PAYMENT_SUBMIT_GATEWAY_ENABLED:false}
-      submit-url: ${HSP_PAYMENT_SUBMIT_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/payment-orders/submit}
+      submit-url: ${HSP_PAYMENT_SUBMIT_GATEWAY_URL:http://localhost:8090/api/gateway/payment-orders/submit}
       supported-channels: ${HSP_PAYMENT_SUBMIT_GATEWAY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
       app-code: ${HSP_PAYMENT_SUBMIT_GATEWAY_APP_CODE:APP_PAY_CORE}
       access-key: ${HSP_PAYMENT_SUBMIT_GATEWAY_ACCESS_KEY:}
@@ -47,8 +47,8 @@ payment:
   callback:
     # 默认失败闭合；仅 demo profile 显式关闭，真实渠道环境必须注入独立密钥或公钥。
     require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:true}
-    # 启用渠道必须满足 nonce TTL 严格大于两倍回调验签时间窗。
-    nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:601}
+    # 默认覆盖种子渠道最大 1800 秒验签窗；启用渠道仍须满足 TTL > 2 * 时间窗。
+    nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:3601}
     nonce-cleanup:
       fixed-delay-ms: ${HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_DELAY_MS:300000}
       # 历史过期 nonce 单轮清理上限固定为 1000，非正配置拒绝启动。
@@ -76,7 +76,7 @@ payment:
     gateway-access:
       # 默认关闭；启用前必须配置 gateway-access 的真实退款上游和共享访问凭证。
       enabled: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ENABLED:false}
-      submit-url: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/refunds/submit}
+      submit-url: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_URL:http://localhost:8090/api/gateway/refunds/submit}
       supported-channels: ${HSP_PAYMENT_REFUND_SUBMIT_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
       app-code: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_APP_CODE:APP_PAY_CORE}
       access-key: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ACCESS_KEY:}
@@ -85,7 +85,7 @@ payment:
     gateway-access:
       # 仅接入真实 gateway-access 退款查单实现后启用；本地兜底只回显现状。
       enabled: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED:false}
-      query-url: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/refunds/query}
+      query-url: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL:http://localhost:8090/api/gateway/refunds/query}
       supported-channels: ${HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
       app-code: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_APP_CODE:APP_PAY_CORE}
       access-key: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_ACCESS_KEY:}
@@ -107,9 +107,9 @@ payment:
       max-queries-per-channel: ${HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL:100}
   downstream:
     clearing:
-      payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_CLEARING_PAYMENT_SUCCESS_URL:http://127.0.0.1:18120/api/clearing/events/payments/success}
+      payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_CLEARING_PAYMENT_SUCCESS_URL:http://localhost:18120/api/clearing/events/payments/success}
     accounting:
-      payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_URL:http://127.0.0.1:18110/api/accounting/events/payments/success}
+      payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_URL:http://localhost:18110/api/accounting/events/payments/success}
       payment-success-account-no: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_ACCOUNT_NO:ACT10003}
     reconciliation:
       fact-url: ${HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL:}
@@ -119,17 +119,17 @@ payment:
     http-timeout-ms: ${HSP_PAYMENT_EVENT_DISPATCH_HTTP_TIMEOUT_MS:3000}
   risk-control:
     enabled: ${HSP_PAYMENT_RISK_CONTROL_ENABLED:false}
-    evaluate-url: ${HSP_PAYMENT_RISK_CONTROL_EVALUATE_URL:http://127.0.0.1:18160/api/risk-control/decisions/evaluate}
+    evaluate-url: ${HSP_PAYMENT_RISK_CONTROL_EVALUATE_URL:http://localhost:18180/api/risk-control/decisions/evaluate}
     timeout-ms: ${HSP_PAYMENT_RISK_CONTROL_TIMEOUT_MS:2000}
   ops-config:
     enabled: ${HSP_PAYMENT_OPS_CONFIG_ENABLED:false}
-    snapshot-url: ${HSP_PAYMENT_OPS_CONFIG_SNAPSHOT_URL:http://127.0.0.1:18170/api/ops-config/effective-snapshot}
+    snapshot-url: ${HSP_PAYMENT_OPS_CONFIG_SNAPSHOT_URL:http://localhost:18170/api/ops-config/effective-snapshot}
     timeout-ms: ${HSP_PAYMENT_OPS_CONFIG_TIMEOUT_MS:2000}
   channel-query:
     gateway-access:
       # 生产环境启用后由 gateway-access 返回渠道交易事实；本地模拟适配器仅在 demo profile 注册。
       enabled: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED:false}
-      query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/payment-orders/query}
+      query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://localhost:8090/api/gateway/payment-orders/query}
       supported-channels: ${HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
       app-code: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_APP_CODE:APP_PAY_CORE}
       # 与 gateway-access 部署配置一致；默认留空时 gateway-access 会拒绝交易请求。

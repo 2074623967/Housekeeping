@@ -78,4 +78,7 @@ public final class ErrorCode {
     public static final String PAYMENT_ISSUE_ALERT_NOT_FOUND = "PAYMENT-1065";
     public static final String PAYMENT_DAY_END_BATCH_NOT_FOUND = "PAYMENT-1066";
     public static final String PAYMENT_TASK_RUN_NOT_FOUND = "PAYMENT-1067";
+    public static final String PAYMENT_PREPAY_EXPIRED = "PAYMENT-1068";
+    public static final String PAYMENT_SUBMIT_IDEMPOTENCY_KEY_CONFLICT = "PAYMENT-1069";
+    public static final String PAYMENT_ISSUE_ACTION_IDEMPOTENCY_CONFLICT = "PAYMENT-1070";
 }

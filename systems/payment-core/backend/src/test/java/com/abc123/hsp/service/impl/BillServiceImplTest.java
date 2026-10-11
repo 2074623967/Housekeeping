@@ -157,6 +157,7 @@ class BillServiceImplTest {
         item.setBillAmount("¥100.00");
         item.setBillStatus("待支付");
         item.setBillStatusType("warning");
+        item.setLatestPayScene("HOME_CLEAN");
         when(billMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
 
         String csv = new BillServiceImpl(billMapper).exportCsv(query);
@@ -165,6 +166,8 @@ class BillServiceImplTest {
         assertEquals("张\"女士", query.getCustomerName());
         assertEquals("asc", query.getSortOrder());
         assertTrue(csv.startsWith("\uFEFF账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型"));
+        assertTrue(csv.contains("到期时间,创建时间,最近支付场景"));
+        assertTrue(csv.contains("HOME_CLEAN"));
         assertTrue(csv.contains("\"warning\""));
         assertTrue(csv.contains("\"张*\""));
         assertFalse(csv.contains("张\"女士"));
@@ -194,6 +197,22 @@ class BillServiceImplTest {
         assertEquals(2L, result.getOverdueBillCount());
         assertEquals("¥0.00", result.getTotalUnpaidAmount());
         verify(billMapper).findOverview(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingBillsWithNullQuery() {
+        when(billMapper.findAll(org.mockito.ArgumentMatchers.any(BillQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(billMapper.count(org.mockito.ArgumentMatchers.any(BillQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<BillListItemDTO> result = new BillServiceImpl(billMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<BillQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(BillQueryDTO.class);
+        verify(billMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int times) {

@@ -132,6 +132,24 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedWhitespaceOnlyChannelTransactionNoBeforeStandardization() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        result.setChannelTransactionNo(repeat(' ', 129));
+        when(adapter.query(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verifyNoInteractions(standardizer);
+    }
+
+    @Test
     void shouldRejectRawControlCharacterBeforeStandardizationLookup() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
@@ -265,6 +283,26 @@ class PaymentChannelQueryServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectOversizedWhitespaceOnlyMessageAddedByStandardization() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        when(adapter.query(any())).thenReturn(result);
+        when(standardizer.standardizeQuery(eq("wx_h5"), eq(result))).thenAnswer(invocation -> {
+            result.setStandardizedMessage(repeat(' ', 257));
+            return result;
+        });
+
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
                         .query(paymentDetail()));
 

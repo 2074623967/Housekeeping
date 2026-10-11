@@ -13,6 +13,15 @@ public class RefundDetailDTO {
     private String refundOrderId;
     /** 原支付单号。 */
     private String paymentOrderId;
+    /** 原支付所属业务场景。 */
+    private String payScene;
+
+    /** 统一业务链路标识。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
+
     /** 原订单号。 */
     private String orderNo;
     /** 客户名称。 */

@@ -2,19 +2,47 @@ package com.abc123.hsp.common;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler implements ResponseBodyAdvice<ApiResponse<?>> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @Override
+    public boolean supports(MethodParameter returnType,
+            Class<? extends HttpMessageConverter<?>> converterType) {
+        return ApiResponse.class.isAssignableFrom(returnType.getParameterType());
+    }
+
+    @Override
+    public ApiResponse<?> beforeBodyWrite(ApiResponse<?> body, MethodParameter returnType,
+            MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> selectedConverterType,
+            ServerHttpRequest request, ServerHttpResponse response) {
+        if (body != null && !"0".equals(body.getCode()) && request instanceof ServletServerHttpRequest
+                && "/api/payments/callback/{channel}".equals(
+                        ((ServletServerHttpRequest) request).getServletRequest()
+                                .getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE))) {
+            response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        return body;
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ApiResponse<Void> handleBusinessException(BusinessException exception) {

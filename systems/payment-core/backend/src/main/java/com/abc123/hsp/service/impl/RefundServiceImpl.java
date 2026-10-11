@@ -32,6 +32,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoField;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -58,6 +61,14 @@ public class RefundServiceImpl implements RefundService {
     private static final String STATUS_FAIL = "FAIL";
     private static final String PAYMENT_STATUS_SUCCESS = "SUCCESS";
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final DateTimeFormatter REFUND_FACT_TIME_FORMATTER =
+            new DateTimeFormatterBuilder()
+                    .appendPattern("uuuu-MM-dd HH:mm:ss")
+                    .optionalStart()
+                    .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                    .optionalEnd()
+                    .toFormatter()
+                    .withResolverStyle(ResolverStyle.STRICT);
     private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final String CALLBACK_OPERATOR = "channel-callback";
     private static final int OPERATOR_MAX_LENGTH = 64;
@@ -120,7 +131,7 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     public PageResultDTO<RefundListItemDTO> list(RefundQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(refundMapper.findAll(query)),
                 refundMapper.count(query),
@@ -131,14 +142,16 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     public String exportCsv(RefundQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<RefundListItemDTO> items = maskItems(
                 CsvExportRowLimiter.requireWithinLimit(refundMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("退款单号,支付单号,订单号,客户名称,退款金额,退款方式,退款状态,状态类型,申请时间,成功时间\n");
+        builder.append("退款单号,支付单号,支付场景,业务链路,订单号,客户名称,退款金额,退款方式,退款状态,状态类型,申请时间,成功时间,终态时间,渠道编码,渠道退款单号,渠道受理时间\n");
         for (RefundListItemDTO item : items) {
             builder.append(csvCell(item.getRefundOrderId())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getPayScene())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')
                     .append(csvCell(item.getRefundAmount())).append(',')
@@ -146,7 +159,11 @@ public class RefundServiceImpl implements RefundService {
                     .append(csvCell(item.getStatus())).append(',')
                     .append(csvCell(item.getStatusType())).append(',')
                     .append(csvCell(item.getAppliedAt())).append(',')
-                    .append(csvCell(item.getSuccessAt())).append('\n');
+                    .append(csvCell(item.getSuccessAt())).append(',')
+                    .append(csvCell(item.getTerminalAt())).append(',')
+                    .append(csvCell(item.getChannelCode())).append(',')
+                    .append(csvCell(item.getChannelRefundNo())).append(',')
+                    .append(csvCell(item.getChannelSubmittedAt())).append('\n');
         }
         return builder.toString();
     }
@@ -157,6 +174,13 @@ public class RefundServiceImpl implements RefundService {
         RefundDetailDTO detail = refundMapper.findDetailByRefundOrderId(requiredRefundOrderId);
         if (detail == null) {
             throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
+        }
+        if (STATUS_SUCCESS.equals(detail.getStatus()) || STATUS_FAIL.equals(detail.getStatus())) {
+            RefundCallbackSourceDTO terminalSource = refundMapper.findCallbackSourceByRefundOrderId(requiredRefundOrderId);
+            if (terminalSource == null) {
+                throw new IllegalStateException("refund terminal facts are inconsistent");
+            }
+            validateTerminalFacts(terminalSource);
         }
         RefundDetailDTO outwardDetail = new RefundDetailDTO();
         BeanUtils.copyProperties(detail, outwardDetail);
@@ -222,14 +246,22 @@ public class RefundServiceImpl implements RefundService {
         if (!PAYMENT_STATUS_SUCCESS.equals(source.getStatus())) {
             throw new IllegalArgumentException("只有支付成功的支付单允许发起退款");
         }
+        if (!Boolean.TRUE.equals(source.getPaymentSuccessFactsValid())) {
+            throw new IllegalStateException("payment success facts are inconsistent");
+        }
+        if (refundMapper.countInvalidActiveRefundAmounts(source.getPaymentOrderId()) > 0) {
+            throw new IllegalStateException("active refund amounts are inconsistent");
+        }
         BigDecimal activeRefundAmount = refundMapper.sumActiveRefundAmount(source.getPaymentOrderId());
         BigDecimal refundedAmount = activeRefundAmount == null ? BigDecimal.ZERO : activeRefundAmount;
         if (refundedAmount.add(request.getRefundAmount()).compareTo(source.getPaidAmount()) > 0) {
             throw new IllegalArgumentException("累计退款金额不能超过原支付金额");
         }
         String refundOrderId = buildBusinessNo("REF");
-        refundMapper.insertRefund(refundOrderId, source, request, STATUS_REVIEWING, "warn");
-        refundMapper.insertOperationLog(buildOperationLog(
+        if (refundMapper.insertRefund(refundOrderId, source, request, STATUS_REVIEWING, "warn") != 1) {
+            throw new IllegalStateException("refund application was not created atomically");
+        }
+        insertOperationLog(buildOperationLog(
                 refundOrderId,
                 "APPLY",
                 "发起退款申请",
@@ -309,7 +341,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void recordChannelQueryFailure(RefundCallbackSourceDTO snapshot, String operator) {
-        refundMapper.insertOperationLog(buildOperationLog(
+        insertOperationLog(buildOperationLog(
                 snapshot.getRefundOrderId(),
                 snapshot.getRefundAttemptNo(),
                 "CHANNEL_QUERY_FAILED",
@@ -331,8 +363,8 @@ public class RefundServiceImpl implements RefundService {
         if (source == null) {
             throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
         }
-        if (!StringUtils.hasText(source.getChannelCode())
-                || !channel.equalsIgnoreCase(source.getChannelCode().trim())) {
+        if (!hasUnpaddedChannelCode(source.getChannelCode())
+                || !channel.equalsIgnoreCase(source.getChannelCode())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match refund channel");
         }
@@ -344,6 +376,9 @@ public class RefundServiceImpl implements RefundService {
                 && !Objects.equals(expectedRefundAttemptNo, source.getRefundAttemptNo())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
                     "channel result belongs to an earlier refund attempt");
+        }
+        if (StringUtils.hasText(source.getChannelRefundNo())) {
+            validateAcceptedChannelFacts(source);
         }
         String matchedAttemptNo = refundMapper.findAttemptNoByChannelRefundNo(
                 channel, channelRefundNo);
@@ -364,7 +399,7 @@ public class RefundServiceImpl implements RefundService {
                 validateTerminalFacts(source);
             }
             if (recordSameStatus) {
-                refundMapper.insertOperationLog(buildOperationLog(
+                insertOperationLog(buildOperationLog(
                         refundOrderId,
                         source.getRefundAttemptNo(),
                         "CHANNEL_QUERY",
@@ -392,7 +427,7 @@ public class RefundServiceImpl implements RefundService {
         String statusType = success ? "success" : "danger";
         int affectedRows = refundMapper.updateRefundStatus(
                 refundOrderId, STATUS_PROCESSING, targetStatus, statusType, success);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             if (acceptanceRecovered) {
                 throw new IllegalStateException(
                         "refund status update failed after unknown acceptance recovery");
@@ -404,7 +439,7 @@ public class RefundServiceImpl implements RefundService {
                 source.getRefundAttemptNo(), targetStatus, statusType) != 1) {
             throw new IllegalStateException("refund attempt finalization was not applied atomically");
         }
-        refundMapper.insertOperationLog(buildOperationLog(
+        insertOperationLog(buildOperationLog(
                 refundOrderId,
                 source.getRefundAttemptNo(),
                 recordSameStatus ? "CHANNEL_QUERY_" + targetStatus : targetStatus,
@@ -418,26 +453,84 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void validateTerminalFacts(RefundCallbackSourceDTO source) {
+        if (source == null) {
+            throw new IllegalStateException("refund terminal facts are inconsistent");
+        }
         boolean success = STATUS_SUCCESS.equals(source.getStatus());
         boolean failed = STATUS_FAIL.equals(source.getStatus());
+        String expectedStatusType = success ? "success" : "danger";
         if ((!success && !failed)
                 || !source.getStatus().equals(source.getAttemptStatus())
+                || !expectedStatusType.equalsIgnoreCase(source.getStatusType())
+                || !expectedStatusType.equalsIgnoreCase(source.getAttemptStatusType())
                 || !StringUtils.hasText(source.getAttemptCompletedAt())
                 || !StringUtils.hasText(source.getTerminalAt())
+                || !StringUtils.hasText(source.getAppliedAt())
+                || !StringUtils.hasText(source.getChannelCode())
+                || !StringUtils.hasText(source.getChannelRefundNo())
+                || !StringUtils.hasText(source.getChannelSubmittedAt())
+                || source.getRefundAmount() == null
+                || source.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0
+                || source.getPaidAmount() == null
+                || source.getPaidAmount().compareTo(BigDecimal.ZERO) <= 0
+                || source.getRefundAmount().compareTo(source.getPaidAmount()) > 0
+                || !Boolean.FALSE.equals(source.getTerminalFactMismatch())
                 || (success && !StringUtils.hasText(source.getSuccessAt()))
                 || (failed && StringUtils.hasText(source.getSuccessAt()))) {
             throw new IllegalStateException("refund terminal facts are inconsistent");
+        }
+        validateAcceptedChannelFacts(source);
+        LocalDateTime attemptCompletedAt = parseRefundFactTime(source.getAttemptCompletedAt());
+        LocalDateTime terminalAt = parseRefundFactTime(source.getTerminalAt());
+        LocalDateTime appliedAt = parseRefundFactTime(source.getAppliedAt());
+        LocalDateTime channelSubmittedAt = parseRefundFactTime(source.getChannelSubmittedAt());
+        if (appliedAt.isAfter(channelSubmittedAt)
+                || channelSubmittedAt.isAfter(attemptCompletedAt)
+                || attemptCompletedAt.isAfter(terminalAt)) {
+            throw new IllegalStateException("refund terminal facts are inconsistent");
+        }
+        if (success) {
+            LocalDateTime successAt = parseRefundFactTime(source.getSuccessAt());
+            if (appliedAt.isAfter(successAt)
+                    || attemptCompletedAt.isAfter(successAt)
+                    || successAt.isAfter(terminalAt)) {
+                throw new IllegalStateException("refund terminal facts are inconsistent");
+            }
+        }
+    }
+
+    private void validateAcceptedChannelFacts(RefundCallbackSourceDTO source) {
+        if (!hasUnpaddedChannelCode(source.getChannelCode())
+                || !StringUtils.hasText(source.getChannelRefundNo())
+                || !Objects.equals(source.getChannelCode(), source.getOrderChannelCode())
+                || !Objects.equals(source.getChannelRefundNo(), source.getOrderChannelRefundNo())) {
+            throw new IllegalStateException("refund terminal facts are inconsistent");
+        }
+    }
+
+    private LocalDateTime parseRefundFactTime(String value) {
+        try {
+            return LocalDateTime.parse(value.trim(), REFUND_FACT_TIME_FORMATTER);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("refund terminal facts are inconsistent", exception);
         }
     }
 
     private void validateQueryableRefund(RefundCallbackSourceDTO source) {
         if (!STATUS_PROCESSING.equals(source.getStatus())
-                || !StringUtils.hasText(source.getChannelCode())
+                || !hasUnpaddedChannelCode(source.getChannelCode())
                 || (!StringUtils.hasText(source.getChannelRefundNo())
                 && !"UNKNOWN".equals(source.getSubmitEventStatus()))) {
             throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
                     "refund is not ready for channel query");
         }
+        if (StringUtils.hasText(source.getChannelRefundNo())) {
+            validateAcceptedChannelFacts(source);
+        }
+    }
+
+    private boolean hasUnpaddedChannelCode(String channelCode) {
+        return StringUtils.hasText(channelCode) && channelCode.equals(channelCode.trim());
     }
 
     private boolean recoverUnknownRefundAcceptance(RefundCallbackSourceDTO source,
@@ -455,7 +548,7 @@ public class RefundServiceImpl implements RefundService {
                 || refundMapper.markUnknownRefundSubmitEventConfirmed(source.getRefundAttemptNo()) != 1) {
             throw new IllegalStateException("unknown refund acceptance recovery was not applied atomically");
         }
-        refundMapper.insertOperationLog(buildOperationLog(
+        insertOperationLog(buildOperationLog(
                 source.getRefundOrderId(),
                 source.getRefundAttemptNo(),
                 "CHANNEL_ACCEPTANCE_RECOVERED",
@@ -483,7 +576,7 @@ public class RefundServiceImpl implements RefundService {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId(refundOrderId);
         request.setRemark("任务中心批量重试失败退款");
-        validateRetryCapacity(requireRefundOrderId(refundOrderId));
+        validateRetryCapacity(requireRefundOrderId(refundOrderId), true);
         changeStatus(request,
                 STATUS_FAIL,
                 STATUS_PROCESSING,
@@ -495,6 +588,10 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void validateRetryCapacity(String refundOrderId) {
+        validateRetryCapacity(refundOrderId, false);
+    }
+
+    private void validateRetryCapacity(String refundOrderId, boolean requireTerminalFacts) {
         RefundRetrySourceDTO retrySource = refundMapper.findRetrySourceForUpdate(refundOrderId);
         if (retrySource == null || !STATUS_FAIL.equals(retrySource.getStatus())) {
             throw new IllegalArgumentException("退款单状态不允许执行当前操作");
@@ -509,21 +606,60 @@ public class RefundServiceImpl implements RefundService {
         if (paymentSource == null) {
             throw new IllegalArgumentException("原支付单不存在");
         }
+        if (!Boolean.TRUE.equals(paymentSource.getPaymentSuccessFactsValid())) {
+            throw new IllegalStateException("payment success facts are inconsistent");
+        }
         if (paymentSource.getPaidAmount() == null
                 || paymentSource.getPaidAmount().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("退款额度数据异常");
+        }
+        if (refundMapper.countInvalidActiveRefundAmounts(retrySource.getPaymentOrderId()) > 0) {
+            throw new IllegalStateException("active refund amounts are inconsistent");
         }
         BigDecimal activeRefundAmount = refundMapper.sumActiveRefundAmount(retrySource.getPaymentOrderId());
         BigDecimal reservedAmount = activeRefundAmount == null ? BigDecimal.ZERO : activeRefundAmount;
         if (reservedAmount.add(retrySource.getRefundAmount()).compareTo(paymentSource.getPaidAmount()) > 0) {
             throw new IllegalArgumentException("累计退款金额不能超过原支付金额");
         }
+        if (requireTerminalFacts) {
+            validateTaskRetryTerminalFacts(retrySource);
+        }
+    }
+
+    private void validateTaskRetryTerminalFacts(RefundRetrySourceDTO source) {
+        if (!STATUS_FAIL.equals(source.getStatus())
+                || !"danger".equalsIgnoreCase(source.getStatusType())
+                || !StringUtils.hasText(source.getChannelCode())
+                || !StringUtils.hasText(source.getChannelRefundNo())
+                || !StringUtils.hasText(source.getChannelSubmittedAt())
+                || !StringUtils.hasText(source.getAppliedAt())
+                || StringUtils.hasText(source.getSuccessAt())
+                || !StringUtils.hasText(source.getTerminalAt())
+                || !STATUS_FAIL.equals(source.getLatestAttemptStatus())
+                || !"danger".equalsIgnoreCase(source.getLatestAttemptStatusType())
+                || !Objects.equals(source.getChannelCode(), source.getLatestAttemptChannelCode())
+                || !Objects.equals(source.getChannelRefundNo(), source.getLatestAttemptChannelRefundNo())
+                || !StringUtils.hasText(source.getLatestAttemptCompletedAt())) {
+            throw new IllegalArgumentException("refund terminal facts are inconsistent");
+        }
+        LocalDateTime appliedAt = parseRefundFactTime(source.getAppliedAt());
+        LocalDateTime channelSubmittedAt = parseRefundFactTime(source.getChannelSubmittedAt());
+        LocalDateTime attemptCompletedAt = parseRefundFactTime(source.getLatestAttemptCompletedAt());
+        LocalDateTime terminalAt = parseRefundFactTime(source.getTerminalAt());
+        if (appliedAt.isAfter(channelSubmittedAt)
+                || channelSubmittedAt.isAfter(attemptCompletedAt)
+                || attemptCompletedAt.isAfter(terminalAt)) {
+            throw new IllegalArgumentException("refund terminal facts are inconsistent");
+        }
     }
 
     /**
      * 列表查询统一收敛分页边界，避免后台误传 pageSize 造成大查询。
      */
-    private void normalizeQuery(RefundQueryDTO query) {
+    private RefundQueryDTO normalizeQuery(RefundQueryDTO query) {
+        if (query == null) {
+            query = new RefundQueryDTO();
+        }
         query.setRefundOrderId(normalizeOptionalRequestField(
                 query.getRefundOrderId(), "退款单号", REFUND_ORDER_ID_MAX_LENGTH));
         query.setPaymentOrderId(normalizeOptionalRequestField(
@@ -536,6 +672,7 @@ public class RefundServiceImpl implements RefundService {
         query.setRefundMethod(refundMethod == null ? "全部" : refundMethod);
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     /**
@@ -575,6 +712,11 @@ public class RefundServiceImpl implements RefundService {
                     ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
                     "退款申请幂等键不能包含控制字符");
         }
+        if (!StandardCharsets.UTF_8.newEncoder().canEncode(idempotencyKey)) {
+            throw new BusinessException(
+                    ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
+                    "退款申请幂等键包含无效字符");
+        }
         if (idempotencyKey.length() > APPLICATION_IDEMPOTENCY_KEY_MAX_LENGTH) {
             throw new BusinessException(
                     ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
@@ -587,6 +729,7 @@ public class RefundServiceImpl implements RefundService {
             RefundApplicationIdempotencyDTO existingApplication,
             RefundApplyRequestDTO request) {
         return Objects.equals(existingApplication.getPaymentOrderId(), request.getPaymentOrderId())
+                && Objects.equals(existingApplication.getIdempotencyKey(), request.getIdempotencyKey())
                 && existingApplication.getRefundAmount() != null
                 && existingApplication.getRefundAmount().compareTo(request.getRefundAmount()) == 0
                 && Objects.equals(existingApplication.getRefundMethod(), request.getRefundMethod())
@@ -699,10 +842,10 @@ public class RefundServiceImpl implements RefundService {
         int affectedRows = STATUS_FAIL.equals(fromStatus) && STATUS_PROCESSING.equals(status)
                 ? refundMapper.restartFailedRefund(refundOrderId)
                 : refundMapper.updateRefundStatus(refundOrderId, fromStatus, status, statusType, success);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("退款单状态不允许执行当前操作");
         }
-        refundMapper.insertOperationLog(buildOperationLog(
+        insertOperationLog(buildOperationLog(
                 refundOrderId,
                 actionCode,
                 actionName,
@@ -712,22 +855,38 @@ public class RefundServiceImpl implements RefundService {
                 remark
         ));
         if (STATUS_PROCESSING.equals(status)) {
-            enqueueChannelSubmit(refundOrderId, operator);
+            enqueueChannelSubmit(refundOrderId, operator, "APPROVE".equals(actionCode));
         }
         return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
     }
 
-    private void enqueueChannelSubmit(String refundOrderId, String operator) {
+    private void enqueueChannelSubmit(String refundOrderId, String operator, boolean verifyPaymentFacts) {
         RefundChannelSubmitRequestDTO channelSubmitRequest = refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
         if (channelSubmitRequest == null) {
             throw new IllegalArgumentException("退款单不存在或缺少渠道下发信息");
         }
+        if (!hasUnpaddedChannelCode(channelSubmitRequest.getChannelCode())) {
+            throw new IllegalStateException("refund payment channel is inconsistent");
+        }
+        if (verifyPaymentFacts) {
+            RefundPaymentSourceDTO paymentSource = refundMapper.findPaymentSourceForUpdate(
+                    channelSubmitRequest.getPaymentOrderId());
+            if (paymentSource == null || !Boolean.TRUE.equals(paymentSource.getPaymentSuccessFactsValid())) {
+                throw new IllegalStateException("payment success facts are inconsistent");
+            }
+        }
         String refundAttemptNo = buildRefundAttemptNo();
-        refundMapper.insertRefundAttempt(
-                refundAttemptNo, refundOrderId, channelSubmitRequest.getChannelCode().trim());
+        if (refundMapper.insertRefundAttempt(
+                refundAttemptNo, refundOrderId, channelSubmitRequest.getChannelCode()) != 1) {
+            throw new IllegalStateException("refund attempt was not created atomically");
+        }
         String eventNo = buildRefundSubmitEventNo(refundAttemptNo);
-        refundMapper.upsertRefundSubmitEvent(
-                eventNo, refundAttemptNo, channelSubmitRequest.getPaymentOrderId());
+        if (refundMapper.upsertRefundSubmitEvent(
+                eventNo, refundAttemptNo, channelSubmitRequest.getPaymentOrderId()) != 1
+                || !refundMapper.isMatchingPendingRefundSubmitEvent(
+                        eventNo, refundAttemptNo, channelSubmitRequest.getPaymentOrderId())) {
+            throw new IllegalStateException("refund submit event was not created atomically");
+        }
         dispatchAfterCommit(eventNo, refundAttemptNo, operator);
     }
 
@@ -762,6 +921,12 @@ public class RefundServiceImpl implements RefundService {
 
     private String buildRefundAttemptNo() {
         return "RFA" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private void insertOperationLog(RefundOperationLogEntity operationLog) {
+        if (refundMapper.insertOperationLog(operationLog) != 1) {
+            throw new IllegalStateException("refund operation log was not created atomically");
+        }
     }
 
     private String requireRefundOrderId(RefundActionRequestDTO request) {

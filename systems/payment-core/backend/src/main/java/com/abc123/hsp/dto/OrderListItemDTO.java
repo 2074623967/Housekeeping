@@ -38,6 +38,8 @@ public class OrderListItemDTO {
     private String latestPaymentStatusType;
     /** 最新预付单号。 */
     private String latestPrepayOrderNo;
+    /** 最新预付单支付场景。 */
+    private String latestPayScene;
     /** 最新收银台状态。 */
     private String latestCashierStatus;
     /** 最新收银台状态样式。 */

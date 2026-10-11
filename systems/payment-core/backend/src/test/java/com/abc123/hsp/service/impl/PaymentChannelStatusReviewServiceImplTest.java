@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -38,6 +40,13 @@ class PaymentChannelStatusReviewServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void defaultChannelReviewInsertSucceeds() {
+        lenient().when(paymentConfigMapper.insertChannelReview(any())).thenReturn(1);
+        lenient().when(paymentConfigMapper.insertChannelVersion(
+                any(com.abc123.hsp.entity.PaymentChannelVersionEntity.class))).thenReturn(1);
+    }
 
     @Test
     void shouldSubmitCandidateWithoutChangingRuntimeChannel() {
@@ -90,7 +99,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     @Test
     void shouldRejectEnablingChannelWithUncoveredCallbackWindow() {
         PaymentChannelConfigEntity current = channel("DISABLED", "MCH-001");
-        current.setNotifySignWindowSec(Integer.valueOf(301));
+        current.setNotifySignWindowSec(Integer.valueOf(1801));
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -118,6 +127,20 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldStopStatusReviewWhenDatabaseAffectsNoRow() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.insertChannelReview(any())).thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelStatusReview(statusRequest(false)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
+        verify(paymentConfigMapper, never()).updateChannelStatus(any(), any(), any());
+    }
+
+    @Test
     void shouldApproveWithDistinctReviewerAndApplyCandidate() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
         PaymentChannelReviewEntity review = review("PENDING_REVIEW", "DISABLED", fingerprint(current));
@@ -138,6 +161,23 @@ class PaymentChannelStatusReviewServiceImplTest {
                         && "MCH-001".equals(candidate.getMerchantNo())));
         verify(paymentConfigMapper).completeChannelReview(
                 "CSR-001", "APPROVED", "success", "checker-b", "确认停用");
+    }
+
+    @Test
+    void shouldStopChannelReviewWhenVersionInsertDoesNotTakeEffect() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "DISABLED", fingerprint(current));
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
+        when(paymentConfigMapper.updateChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.insertChannelVersion(
+                any(com.abc123.hsp.entity.PaymentChannelVersionEntity.class))).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveChannelReview("CSR-001", action("checker-b", "确认停用")));
+        verify(paymentConfigMapper, never()).completeChannelReview(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -246,6 +286,21 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldRejectChangingExistingChannelPaymentMethodBeforeReviewInsert() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        PaymentChannelUpsertRequestDTO candidate = channelRequest("WX_H5", " ");
+        candidate.setPaymentMethod("支付宝");
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(candidate)));
+
+        assertEquals("支付渠道支付方式不可变，请新建渠道", error.getMessage());
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
+    @Test
     void shouldApproveCreateCandidateAfterRevalidatingFields() {
         PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
         review.setOperationType("CREATE");
@@ -287,10 +342,49 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldRejectPendingChannelPaymentMethodChangeAtApproval() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", fingerprint(current));
+        review.setOperationType("UPDATE");
+        review.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveChannelReview("CSR-001", action("checker-b", "复核支付方式")));
+
+        assertEquals("支付渠道支付方式不可变，请新建渠道", error.getMessage());
+        verify(paymentConfigMapper, never()).updateChannel(any());
+    }
+
+    @Test
+    void shouldRejectRollbackToDifferentChannelPaymentMethod() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        PaymentChannelVersionEntity target = version(channel("DISABLED", "MCH-OLD"), 1);
+        target.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
+        PaymentChannelRollbackRequestDTO request = new PaymentChannelRollbackRequestDTO();
+        request.setVersionNo(Integer.valueOf(1));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复历史渠道");
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelRollbackReview("wx_h5", request));
+
+        assertEquals("支付渠道支付方式不可变，请新建渠道", error.getMessage());
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
+    @Test
     void shouldSubmitAndApproveRollbackAsNewVersion() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-NEW");
         PaymentChannelVersionEntity target = version(channel("DISABLED", "MCH-OLD"), 1);
-        target.setNotifySignWindowSec(Integer.valueOf(301));
+        target.setNotifySignWindowSec(Integer.valueOf(1801));
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
         when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
         when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
@@ -329,7 +423,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     void shouldRejectEnabledRollbackTargetWithUncoveredCallbackWindow() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-NEW");
         PaymentChannelVersionEntity target = version(channel("ENABLED", "MCH-OLD"), 1);
-        target.setNotifySignWindowSec(Integer.valueOf(301));
+        target.setNotifySignWindowSec(Integer.valueOf(1801));
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
         when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
         when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
@@ -395,12 +489,26 @@ class PaymentChannelStatusReviewServiceImplTest {
         assertTrue(weight.getMessage().contains("不能大于100"));
 
         PaymentChannelUpsertRequestDTO uncoveredWindow = channelRequest("NEW_H5", "secret-new");
-        uncoveredWindow.setNotifySignWindowSec(Integer.valueOf(301));
+        uncoveredWindow.setNotifySignWindowSec(Integer.valueOf(1801));
         IllegalArgumentException nonceTtl = assertThrows(IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
                         .submitChannelReview(reviewRequest(uncoveredWindow)));
         assertTrue(nonceTtl.getMessage().contains("nonce TTL"));
         verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
+    @Test
+    void shouldAllowChannelAtDefaultCallbackWindowBoundary() {
+        PaymentChannelUpsertRequestDTO coveredWindow = channelRequest("NEW_H5", "secret-new");
+        coveredWindow.setNotifySignWindowSec(Integer.valueOf(1800));
+
+        new PaymentConfigServiceImpl(paymentConfigMapper)
+                .submitChannelReview(reviewRequest(coveredWindow));
+
+        ArgumentCaptor<PaymentChannelReviewEntity> captor =
+                ArgumentCaptor.forClass(PaymentChannelReviewEntity.class);
+        verify(paymentConfigMapper).insertChannelReview(captor.capture());
+        assertEquals(Integer.valueOf(1800), captor.getValue().getNotifySignWindowSec());
     }
 
     @Test
@@ -486,7 +594,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     void shouldAllowDisabledCandidateWithLegacyCallbackWindow() {
         PaymentChannelUpsertRequestDTO candidate = channelRequest("NEW_H5", "secret-new");
         candidate.setEnabled(Boolean.FALSE);
-        candidate.setNotifySignWindowSec(Integer.valueOf(301));
+        candidate.setNotifySignWindowSec(Integer.valueOf(1801));
         when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper)
@@ -494,7 +602,7 @@ class PaymentChannelStatusReviewServiceImplTest {
 
         verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
                 review -> "DISABLED".equals(review.getCandidateStatus())
-                        && Integer.valueOf(301).equals(review.getNotifySignWindowSec())));
+                        && Integer.valueOf(1801).equals(review.getNotifySignWindowSec())));
     }
 
     private PaymentChannelStatusReviewRequestDTO statusRequest(boolean enabled) {

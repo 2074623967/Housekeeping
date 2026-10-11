@@ -43,6 +43,13 @@ public interface PaymentService {
     CashierPageDTO cashier(String prepayOrderNo);
 
     /**
+     * 获取带终端可用支付方式过滤的收银台页面数据。
+     */
+    default CashierPageDTO cashier(String prepayOrderNo, String terminal) {
+        return cashier(prepayOrderNo);
+    }
+
+    /**
      * 提交支付。
      */
     PrepayOrderDTO submit(PaymentSubmitRequestDTO request);

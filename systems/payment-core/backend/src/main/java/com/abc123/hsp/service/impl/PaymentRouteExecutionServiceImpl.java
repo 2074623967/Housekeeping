@@ -12,6 +12,7 @@ import com.abc123.hsp.service.PaymentRouteExecutionService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
@@ -83,7 +84,7 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
 
     @Override
     public PageResultDTO<PaymentRouteExecutionListItemDTO> list(PaymentRouteExecutionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(paymentRouteExecutionMapper.findAll(query)),
                 paymentRouteExecutionMapper.count(query),
@@ -94,15 +95,16 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
 
     @Override
     public String exportCsv(PaymentRouteExecutionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentRouteExecutionListItemDTO> items = maskItems(
                 CsvExportRowLimiter.requireWithinLimit(
                         paymentRouteExecutionMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("路由记录号,支付单号,订单号,预付单号,客户名称,支付金额,支付方式,命中渠道,路由规则,路由结果,配置快照版本,终端,客户端IP,幂等键,请求报文,响应报文,创建时间\n");
+        builder.append("路由记录号,支付单号,业务链路,订单号,预付单号,客户名称,支付金额,支付方式,命中渠道,路由规则,路由结果,路由结果样式,配置快照版本,终端,客户端IP,幂等键,请求报文,响应报文,创建时间,支付单成功事实异常类型\n");
         for (PaymentRouteExecutionListItemDTO item : items) {
             builder.append(csvCell(item.getRouteNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')
@@ -111,6 +113,7 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
                     .append(csvCell(item.getChannelCode())).append(',')
                     .append(csvCell(item.getRouteRule())).append(',')
                     .append(csvCell(item.getRouteResult())).append(',')
+                    .append(csvCell(item.getRouteResultType())).append(',')
                     .append(csvCell(item.getOpsConfigSnapshotVersion() == null
                             ? null : String.valueOf(item.getOpsConfigSnapshotVersion()))).append(',')
                     .append(csvCell(item.getTerminal())).append(',')
@@ -118,7 +121,8 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
                     .append(csvCell(item.getIdempotencyKey())).append(',')
                     .append(csvCell(item.getRequestPayload())).append(',')
                     .append(csvCell(item.getResponsePayload())).append(',')
-                    .append(csvCell(item.getCreatedAt())).append('\n');
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getSuccessFactIssue())).append('\n');
         }
         return builder.toString();
     }
@@ -160,7 +164,7 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
 
     @Override
     public PaymentRouteExecutionOverviewDTO overview(PaymentRouteExecutionQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         PaymentRouteExecutionOverviewDTO overview = paymentRouteExecutionMapper.findOverview(query);
         if (overview == null) {
             overview = new PaymentRouteExecutionOverviewDTO();
@@ -194,7 +198,10 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         return overview;
     }
 
-    private void normalizeQuery(PaymentRouteExecutionQueryDTO query) {
+    private PaymentRouteExecutionQueryDTO normalizeQuery(PaymentRouteExecutionQueryDTO query) {
+        if (query == null) {
+            query = new PaymentRouteExecutionQueryDTO();
+        }
         query.setPaymentOrderId(normalizeOptionalQueryField(
                 query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
         query.setOrderNo(normalizeOptionalQueryField(
@@ -209,10 +216,11 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
                 query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", "全部"));
         query.setRouteResult(normalizeOptionalQueryField(
                 query.getRouteResult(), ROUTE_RESULT_MAX_LENGTH, "路由结果", "全部"));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

@@ -14,6 +14,13 @@ public class PaymentRouteExecutionDetailDTO {
     private String requestNo;
     /** 支付单号。 */
     private String paymentOrderId;
+    private String successFactIssue;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 订单号。 */
     private String orderNo;
     /** 预付单号。 */

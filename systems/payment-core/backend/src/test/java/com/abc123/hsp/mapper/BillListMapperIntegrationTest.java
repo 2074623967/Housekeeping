@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
@@ -100,6 +101,152 @@ class BillListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldNotReadBillDetailThroughNumberAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            assertNull(mapper.findDetail("bill-stable-001"));
+            assertNull(mapper.findDetail("BILL-STABLE-001 "));
+            assertEquals("BILL-STABLE-001", mapper.findDetail("BILL-STABLE-001").getBillNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkPrepayThroughBillNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_prepay_order SET bill_no = 'bill-stable-001' "
+                    + "WHERE prepay_order_no = 'PRE-BILL-NEW'");
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            BillDetailDTO detail = mapper.findDetail("BILL-STABLE-001");
+            assertEquals("PRE-BILL-OLD", detail.getLatestPrepayOrderNo());
+            assertEquals("PAY-BILL-OLD", detail.getLatestPaymentOrderId());
+            BillQueryDTO query = new BillQueryDTO();
+            query.setBillNo("BILL-STABLE-001");
+            assertEquals("APP", mapper.findAll(query).get(0).getLatestPayScene());
+            assertEquals("APP", mapper.findAllForExport(query).get(0).getLatestPayScene());
+        }
+    }
+
+    @Test
+    void shouldNotLinkPaymentThroughPaymentNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET payment_order_id = 'pay-bill-new' "
+                    + "WHERE payment_order_id = 'PAY-BILL-NEW'");
+            BillDetailDTO detail = session.getMapper(BillMapper.class).findDetail("BILL-STABLE-001");
+            assertEquals("PRE-BILL-NEW", detail.getLatestPrepayOrderNo());
+            assertEquals("PAY-BILL-OLD", detail.getLatestPaymentOrderId());
+            assertEquals("PRE-BILL-OLD", detail.getLatestPaymentPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkPaymentToAnotherPrepayThroughNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, order_no, payment_order_id, created_at) VALUES "
+                    + "('PRE-BILL-ALIAS', 'BILL-STABLE-001', 'ORD-001', 'pay-bill-new', "
+                    + "'2026-09-12 18:00:00')");
+            BillDetailDTO detail = session.getMapper(BillMapper.class).findDetail("BILL-STABLE-001");
+            assertEquals("PAY-BILL-NEW", detail.getLatestPaymentOrderId());
+            assertEquals("PRE-BILL-NEW", detail.getLatestPaymentPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkPaymentToPrepayFromBillNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, order_no, payment_order_id, created_at) VALUES "
+                    + "('PRE-BILL-OTHER', 'bill-stable-001', 'ORD-001', 'PAY-BILL-NEW', "
+                    + "'2026-09-12 18:00:00')");
+            BillDetailDTO detail = session.getMapper(BillMapper.class).findDetail("BILL-STABLE-001");
+            assertEquals("PAY-BILL-NEW", detail.getLatestPaymentOrderId());
+            assertEquals("PRE-BILL-NEW", detail.getLatestPaymentPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkVirtualBillToCollidingStandardOrder() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-002')");
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'VIRTUAL' "
+                    + "WHERE bill_no = 'BILL-STABLE-002'");
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            assertEquals("ORD-002", mapper.findDetail("BILL-STABLE-002").getOrderNo());
+            assertNull(mapper.findDetail("BILL-STABLE-002").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'standard_order' "
+                    + "WHERE bill_no = 'BILL-STABLE-002'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BILL-STABLE-002").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'STANDARD_ORDER' "
+                    + "WHERE bill_no = 'BILL-STABLE-002'");
+            session.clearCache();
+            assertEquals("ORD-002", mapper.findDetail("BILL-STABLE-002").getStandardOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkBillWithMixedPrepaySourcesToStandardOrder() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            assertEquals("ORD-001", mapper.findDetail("BILL-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'VIRTUAL' "
+                    + "WHERE prepay_order_no = 'PRE-BILL-OLD'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BILL-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'STANDARD_ORDER', "
+                    + "order_no = 'OTHER-ORDER' WHERE prepay_order_no = 'PRE-BILL-OLD'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BILL-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-001' "
+                    + "WHERE prepay_order_no = 'PRE-BILL-OLD'");
+            session.clearCache();
+            assertEquals("ORD-001", mapper.findDetail("BILL-STABLE-001").getStandardOrderNo());
+        }
+    }
+
+    @Test
+    void shouldProjectLatestPaySceneInBillListAndExport() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            BillQueryDTO query = new BillQueryDTO();
+            query.setBillNo("BILL-STABLE-001");
+
+            assertEquals("H5", mapper.findAll(query).get(0).getLatestPayScene());
+            assertEquals("H5", mapper.findAllForExport(query).get(0).getLatestPayScene());
+        }
+    }
+
+    @Test
+    void shouldReturnZeroBillCountersWhenBillTableIsEmpty() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("DELETE FROM t_bill");
+            com.abc123.hsp.dto.BillOverviewDTO overview = session.getMapper(BillMapper.class)
+                    .findOverview(new BillQueryDTO());
+
+            assertEquals(0L, overview.getTotalBillCount());
+            assertEquals(0L, overview.getPaidBillCount());
+            assertEquals(0L, overview.getUnpaidBillCount());
+            assertEquals(0L, overview.getPartialPaidBillCount());
+            assertEquals(0L, overview.getOverdueBillCount());
+            assertEquals("¥0.00", overview.getTotalBillAmount());
+            assertEquals("¥0.00", overview.getTotalPaidAmount());
+            assertEquals("¥0.00", overview.getTotalUnpaidAmount());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -116,18 +263,19 @@ class BillListMapperIntegrationTest {
             statement.execute("CREATE TABLE t_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE)");
             statement.execute("CREATE TABLE t_bill ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "order_no VARCHAR(64) NOT NULL, customer_name VARCHAR(128) NOT NULL, "
                     + "bill_amount DECIMAL(18, 2) NOT NULL, paid_amount DECIMAL(18, 2) NOT NULL, "
                     + "bill_status VARCHAR(32) NOT NULL, bill_status_type VARCHAR(32) NOT NULL, "
                     + "due_at DATETIME NOT NULL, created_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64) NOT NULL, "
-                    + "bill_no VARCHAR(64) NOT NULL, order_no VARCHAR(64) NOT NULL, amount DECIMAL(18,2), "
+                    + "bill_no VARCHAR_IGNORECASE(64) NOT NULL, order_no VARCHAR(64) NOT NULL, amount DECIMAL(18,2), "
                     + "pay_scene VARCHAR(32), cashier_status VARCHAR(32), cashier_status_type VARCHAR(32), "
-                    + "payment_order_id VARCHAR(64), expires_at DATETIME, created_at DATETIME)");
+                    + "payment_order_id VARCHAR_IGNORECASE(64), source_kind VARCHAR(16) DEFAULT 'STANDARD_ORDER', "
+                    + "expires_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_order ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "amount DECIMAL(18,2), payment_method VARCHAR(32), channel_code VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");

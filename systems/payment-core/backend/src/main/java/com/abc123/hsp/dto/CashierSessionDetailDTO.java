@@ -14,6 +14,12 @@ public class CashierSessionDetailDTO {
     private String prepayOrderNo;
     /** 关联支付单号。 */
     private String paymentOrderId;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 预付单记录的业务订单号。 */
     private String orderNo;
     /** 真实存在于标准订单表中的订单号。 */

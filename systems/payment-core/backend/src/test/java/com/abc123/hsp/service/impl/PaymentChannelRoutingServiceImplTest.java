@@ -136,20 +136,125 @@ class PaymentChannelRoutingServiceImplTest {
     }
 
     @Test
-    void shouldUseFallbackChannelWhenRuleTargetDisabled() {
+    void shouldNotFallbackAcrossPaymentMethodsWhenRuleTargetDisabled() {
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
                 buildChannel("alipay_h5", "支付宝")
         ));
         when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
                 buildRule("RULE_ENTERPRISE_BANK", "企业大额订单走线下银行", "ENTERPRISE/PC", "amount>5000 OR customerType=ENTERPRISE", "offline_bank", "alipay_h5")
         ));
-        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                        .resolve(buildContext("银行转账", "", "ENTERPRISE", "PC", "企业客户-晨星科技",
+                                new BigDecimal("12000.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_ROUTE_UNSUPPORTED, exception.getCode());
+    }
+
+    @Test
+    void shouldNotReplaceExplicitRequestedChannelWithHealthyRuleFallback() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
+                buildRule("RULE_HOME_WX", "家政 H5 微信优先", "HOME_CLEAN/H5",
+                        "paymentMethod=微信支付", "wx_h5", "alipay_h5")
+        ));
+        when(paymentMapper.findRecentChannelQueryHealth(24)).thenReturn(Collections.singletonList(
+                buildHealth("wx_h5", 10, 5)
+        ));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> buildHealthEnabledService().resolve(buildContext(
+                        "微信支付", "WX_H5", "HOME_CLEAN", "APP_H5", "张女士", new BigDecimal("168.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectExplicitChannelFromAnotherPaymentMethod() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("alipay_h5", "支付宝")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                        .resolve(buildContext("微信支付", "ALIPAY_H5", "HOME_CLEAN", "APP_H5", "张女士",
+                                new BigDecimal("168.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_REQUESTED_CHANNEL_INVALID, exception.getCode());
+    }
+
+    @Test
+    void shouldHonorExplicitChannelWhenRuleTargetsAnotherChannelOfSameMethod() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("fastpay_alt", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
+                buildRule("RULE_ALT_WX", "微信备选", "HOME_CLEAN/H5", "paymentMethod=微信支付",
+                        "fastpay_alt", "")
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
 
         PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
-                .resolve(buildContext("银行转账", "BANK_CARD", "ENTERPRISE", "PC", "企业客户-晨星科技", new BigDecimal("12000.00")));
+                .resolve(buildContext("微信支付", "WX_H5", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
 
-        assertEquals("alipay_h5", decision.getChannelCode());
-        assertEquals("RULE_ENTERPRISE_BANK_FALLBACK", decision.getRouteRule());
+        assertEquals("wx_h5", decision.getChannelCode());
+        assertEquals("REQUESTED_CHANNEL", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldNotTreatAnotherWechatAdapterAsTheExplicitRequestedChannel() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                        .resolve(buildContext("微信支付", "wx_jsapi", "HOME_CLEAN", "APP_H5", "张女士",
+                                new BigDecimal("168.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_REQUESTED_CHANNEL_INVALID, exception.getCode());
+    }
+
+    @Test
+    void shouldNotResolveMissingRuleTargetToAnotherWechatAdapter() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
+                buildRule("RULE_JSAPI", "微信 JSAPI", "HOME_CLEAN/H5", "paymentMethod=微信支付",
+                        "wx_jsapi", "")
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("wx_h5", decision.getChannelCode());
+        assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldPreserveBankCardCashierAliasForOfflineBankChannel() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("offline_bank", "银行转账")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("offline_bank")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("银行卡", "BANK_CARD", "ENTERPRISE", "PC", "企业客户-晨星科技",
+                        new BigDecimal("12000.00")));
+
+        assertEquals("offline_bank", decision.getChannelCode());
+        assertEquals("REQUESTED_CHANNEL", decision.getRouteRule());
     }
 
     @Test
