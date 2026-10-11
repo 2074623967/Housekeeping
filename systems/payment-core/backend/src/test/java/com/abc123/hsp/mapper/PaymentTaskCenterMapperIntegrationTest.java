@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
@@ -790,6 +791,36 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, mapper.countBlockedExpiredPayments());
             assertEquals("PAY-EXPIRY-BACKOFF",
                     mapper.findBlockedExpiredPayments(1, 0).get(0).getPaymentOrderId());
+        }
+    }
+
+    @Test
+    void shouldInventoryExpiredActiveTokensEvenWithoutMatchingPaymentOrPrepay() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, expire_at) VALUES "
+                    + "('PRE-ORPHAN', 'PAY-ORPHAN', 'APP-A', 'ACTIVE', TIMESTAMPADD(DAY, -2, NOW())), "
+                    + "('PRE-OLD', 'PAY-EXPIRY-DUE', 'APP-B', ' active ', TIMESTAMPADD(DAY, -1, NOW())), "
+                    + "('PRE-LIVE', 'PAY-EXPIRY-BACKOFF', 'APP-C', 'ACTIVE', TIMESTAMPADD(DAY, 1, NOW())), "
+                    + "('PRE-RELEASED', 'PAY-EXPIRY-DUE', 'APP-D', 'RELEASED', TIMESTAMPADD(DAY, -3, NOW()))");
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(2, mapper.countExpiredActiveSubmitTokens());
+            List<ExpiredActiveSubmitTokenDTO> firstPage = mapper.findExpiredActiveSubmitTokens(1, 0);
+            assertEquals(1, firstPage.size());
+            assertEquals("PAY-ORPHAN", firstPage.get(0).getPaymentOrderId());
+            assertEquals("PRE-ORPHAN", firstPage.get(0).getPrepayOrderNo());
+            assertEquals("APP-A", firstPage.get(0).getSourceAppId());
+            assertNotNull(firstPage.get(0).getExpireAt());
+            assertEquals("PRE-OLD", mapper.findExpiredActiveSubmitTokens(1, 1).get(0).getPrepayOrderNo());
+            assertEquals(0, mapper.findExpiredActiveSubmitTokens(1, 2).size());
+
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status = 'RELEASED' "
+                    + "WHERE prepay_order_no = 'PRE-ORPHAN'");
+            session.clearCache();
+            assertEquals(1, mapper.countExpiredActiveSubmitTokens());
+            assertEquals("PRE-OLD", mapper.findExpiredActiveSubmitTokens(1, 0).get(0).getPrepayOrderNo());
         }
     }
 
@@ -2451,6 +2482,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_submit_concurrency_token ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
+                    + "source_app_id VARCHAR(64), "
                     + "payment_order_id VARCHAR_IGNORECASE(64), token_status VARCHAR_IGNORECASE(32), "
                     + "expire_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_expiry_close_retry ("

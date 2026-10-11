@@ -12,6 +12,7 @@ import {
   normalizePaymentMonitorOverviewResult,
   normalizePaymentTaskCenterOverviewResult,
   normalizeBlockedExpiredPaymentsPage,
+  normalizeExpiredActiveSubmitTokensPage,
   normalizePaymentDayEndOverviewResult,
   normalizePaymentDayEndRecentBatchResult,
   normalizePaymentMetricsResult,
@@ -146,6 +147,25 @@ test("rejects unverified blocked expired payment pages and accepts bounded facts
   ]) {
     assert.throws(() => normalizeBlockedExpiredPaymentsPage(invalid, 1, 10),
       /PAYMENT-CLIENT-INVALID-BLOCKED-EXPIRED-PAYMENTS/);
+  }
+});
+
+test("accepts historical expired tokens but rejects secret fields and invalid pages", () => {
+  const item = {
+    paymentOrderId: "PAY-ORPHAN", prepayOrderNo: "PRE-ORPHAN", sourceAppId: "APP-A",
+    expireAt: "2026-09-26 10:00:00"
+  };
+  const page = { items: [item], total: 1, pageNo: 1, pageSize: 10 };
+  assert.deepEqual(normalizeExpiredActiveSubmitTokensPage(page, 1, 10), page);
+  for (const invalid of [
+    { ...page, total: 0 },
+    { ...page, pageSize: 20 },
+    { ...page, items: [{ ...item, holderIdempotencyKey: "secret" }] },
+    { ...page, items: [{ ...item, expireAt: "invalid" }] },
+    { ...page, items: [null] }
+  ]) {
+    assert.throws(() => normalizeExpiredActiveSubmitTokensPage(invalid, 1, 10),
+      /PAYMENT-CLIENT-INVALID-EXPIRED-ACTIVE-TOKENS/);
   }
 });
 

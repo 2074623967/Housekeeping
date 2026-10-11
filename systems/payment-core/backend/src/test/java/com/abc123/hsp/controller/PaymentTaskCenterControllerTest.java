@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskOperatorRequestDTO;
@@ -40,6 +41,17 @@ class PaymentTaskCenterControllerTest {
         PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
         assertEquals(page, controller.listBlockedExpiredPayments(2, 20).getData());
         verify(paymentTaskCenterService).listBlockedExpiredPayments(2, 20);
+    }
+
+    @Test
+    void shouldListExpiredActiveSubmitTokensWithoutAction() {
+        PageResultDTO<ExpiredActiveSubmitTokenDTO> page =
+                new PageResultDTO<>(Collections.emptyList(), 0, 2, 20);
+        when(paymentTaskCenterService.listExpiredActiveSubmitTokens(2, 20)).thenReturn(page);
+
+        PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
+        assertEquals(page, controller.listExpiredActiveSubmitTokens(2, 20).getData());
+        verify(paymentTaskCenterService).listExpiredActiveSubmitTokens(2, 20);
     }
 
     @Test

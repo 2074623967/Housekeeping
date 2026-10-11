@@ -14,6 +14,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
@@ -75,6 +76,33 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1L, page.getTotal());
         Assertions.assertEquals("PAY-001", page.getItems().get(0).getPaymentOrderId());
         verify(paymentTaskCenterMapper).findBlockedExpiredPayments(100, 99900);
+    }
+
+    @Test
+    void shouldBoundExpiredActiveTokenInventory() {
+        when(paymentTaskCenterMapper.countExpiredActiveSubmitTokens()).thenReturn(1);
+        ExpiredActiveSubmitTokenDTO token = new ExpiredActiveSubmitTokenDTO();
+        token.setPrepayOrderNo("PRE-001");
+        when(paymentTaskCenterMapper.findExpiredActiveSubmitTokens(100, 99900))
+                .thenReturn(Collections.singletonList(token));
+
+        PageResultDTO<ExpiredActiveSubmitTokenDTO> page = buildQueryTaskCenterService()
+                .listExpiredActiveSubmitTokens(1001, 101);
+        Assertions.assertEquals(1000, page.getPageNo());
+        Assertions.assertEquals(100, page.getPageSize());
+        Assertions.assertEquals("PRE-001", page.getItems().get(0).getPrepayOrderNo());
+        verify(paymentTaskCenterMapper).findExpiredActiveSubmitTokens(100, 99900);
+    }
+
+    @Test
+    void shouldNotReadExpiredActiveTokenRowsWhenCountIsZero() {
+        PageResultDTO<ExpiredActiveSubmitTokenDTO> page = buildQueryTaskCenterService()
+                .listExpiredActiveSubmitTokens(0, 0);
+        Assertions.assertEquals(0L, page.getTotal());
+        Assertions.assertTrue(page.getItems().isEmpty());
+        Assertions.assertEquals(1, page.getPageNo());
+        Assertions.assertEquals(1, page.getPageSize());
+        verify(paymentTaskCenterMapper, never()).findExpiredActiveSubmitTokens(anyInt(), anyInt());
     }
 
     @Mock

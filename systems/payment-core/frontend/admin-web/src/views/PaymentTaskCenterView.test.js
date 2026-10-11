@@ -38,3 +38,12 @@ test("opens only a freshly loaded blocked payment fact through the read-only det
   assert.match(source, /blockedPayments\.value\.some\(\(item\) => item\.paymentOrderId === paymentOrderId\)/);
   assert.match(source, /router\.push\(paymentDetailRoute\(paymentOrderId\)\)/);
 });
+
+test("invalidates historical token inventory on overview refresh and task execution", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /async function refreshSnapshots\([^)]*\) \{\s*invalidateBlockedPayments\(\);\s*invalidateExpiredTokens\(\);/);
+  assert.match(source, /activeTaskCode\.value = taskCode;\s*invalidateBlockedPayments\(\);\s*invalidateExpiredTokens\(\);/);
+  assert.match(source, /const canUseExpiredTokens = computed\(\(\) => canUseOverview\.value/);
+  assert.match(source, /router\.push\(paymentDetailRoute\(paymentOrderId\)\)/);
+  assert.match(source, /过期不代表渠道未受理/);
+});

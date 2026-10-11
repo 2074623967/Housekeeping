@@ -78,6 +78,13 @@ const blockedLoaded = ref(false);
 const blockedLoading = ref(false);
 const blockedErrorMessage = ref("");
 const blockedSnapshotCount = ref(0);
+const expiredTokens = ref([]);
+const expiredTokenTotal = ref(0);
+const expiredTokenPageNo = ref(1);
+const expiredTokenPageSize = 10;
+const expiredTokenLoaded = ref(false);
+const expiredTokenLoading = ref(false);
+const expiredTokenErrorMessage = ref("");
 const actionErrorMessage = ref("");
 const actionResultMessage = ref("");
 const activeTaskCode = ref("");
@@ -92,6 +99,7 @@ const filters = ref({
 let latestOverviewRequestId = 0;
 let latestTaskRunsRequestId = 0;
 let latestBlockedRequestId = 0;
+let latestExpiredTokenRequestId = 0;
 
 const isInteractionLocked = computed(() => Boolean(
   isLoading.value || isTaskRunsLoading.value || activeTaskCode.value
@@ -106,6 +114,53 @@ const canExportTaskRuns = computed(() => canUseTaskRuns.value && total.value > 0
 const canUseBlockedPayments = computed(() => canUseOverview.value && blockedLoaded.value
   && !blockedLoading.value && !blockedErrorMessage.value
   && blockedSnapshotCount.value === overview.value.blockedExpiredPaymentCount);
+const canUseExpiredTokens = computed(() => canUseOverview.value && expiredTokenLoaded.value
+  && !expiredTokenLoading.value && !expiredTokenErrorMessage.value);
+
+function invalidateExpiredTokens() {
+  latestExpiredTokenRequestId += 1;
+  expiredTokenLoaded.value = false;
+  expiredTokens.value = [];
+  expiredTokenLoading.value = false;
+  expiredTokenErrorMessage.value = "";
+}
+
+async function loadExpiredTokens(nextPageNo = 1) {
+  if (!canUseOverview.value || expiredTokenLoading.value || nextPageNo < 1 || nextPageNo > 1000) {
+    return;
+  }
+  const requestId = ++latestExpiredTokenRequestId;
+  expiredTokenLoading.value = true;
+  expiredTokenLoaded.value = false;
+  expiredTokenErrorMessage.value = "";
+  try {
+    const result = await paymentTaskCenterApi.getExpiredActiveSubmitTokens({
+      pageNo: nextPageNo, pageSize: expiredTokenPageSize
+    });
+    if (requestId !== latestExpiredTokenRequestId || !canUseOverview.value) {
+      return;
+    }
+    expiredTokens.value = result.items;
+    expiredTokenTotal.value = result.total;
+    expiredTokenPageNo.value = result.pageNo;
+    expiredTokenLoaded.value = true;
+  } catch (error) {
+    if (requestId === latestExpiredTokenRequestId) {
+      expiredTokenErrorMessage.value = error.message || "令牌盘点加载失败";
+    }
+  } finally {
+    if (requestId === latestExpiredTokenRequestId) {
+      expiredTokenLoading.value = false;
+    }
+  }
+}
+
+function openExpiredTokenPayment(paymentOrderId) {
+  if (canUseExpiredTokens.value && paymentOrderId.trim()
+      && expiredTokens.value.some((item) => item.paymentOrderId === paymentOrderId)) {
+    router.push(paymentDetailRoute(paymentOrderId));
+  }
+}
 
 function invalidateBlockedPayments() {
   latestBlockedRequestId += 1;
@@ -176,6 +231,7 @@ async function loadOverview() {
 
 async function refreshSnapshots(query, afterAction = false) {
   invalidateBlockedPayments();
+  invalidateExpiredTokens();
   const overviewRequestId = ++latestOverviewRequestId;
   const taskRunsRequestId = ++latestTaskRunsRequestId;
   isLoading.value = true;
@@ -329,6 +385,7 @@ async function runTask(taskCode, taskName, candidateCount, actionRunner) {
   }
   activeTaskCode.value = taskCode;
   invalidateBlockedPayments();
+  invalidateExpiredTokens();
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   const query = { ...loadedTaskRunsQuery.value };
@@ -926,6 +983,43 @@ onMounted(loadOverview);
                 <button class="button secondary" :disabled="blockedPageNo === 1" @click="loadBlockedPayments(blockedPageNo - 1)">上一页</button>
                 <span>第 {{ blockedPageNo }} / {{ Math.ceil(blockedTotal / blockedPageSize) }} 页</span>
                 <button class="button secondary" :disabled="blockedPageNo >= Math.min(1000, Math.ceil(blockedTotal / blockedPageSize))" @click="loadBlockedPayments(blockedPageNo + 1)">下一页</button>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>过期活跃提交令牌盘点</h3>
+              <p class="meta">覆盖未进入超时关单积压的历史令牌，包括可能无法关联支付单的记录；过期不代表渠道未受理，禁止仅凭 TTL 释放令牌或关单。</p>
+            </div>
+            <button class="button secondary" :disabled="!canUseOverview || expiredTokenLoading" @click="loadExpiredTokens()">读取盘点</button>
+          </div>
+          <div v-if="expiredTokenLoading" class="state-box">令牌盘点加载中...</div>
+          <div v-if="expiredTokenErrorMessage" class="error-banner">{{ expiredTokenErrorMessage }}，请重新读取盘点。</div>
+          <template v-if="canUseExpiredTokens">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>支付单号</th><th>预付单号</th><th>来源应用</th><th>令牌过期时间</th><th>核对</th></tr></thead>
+                <tbody>
+                  <tr v-for="(item, index) in expiredTokens" :key="`${item.prepayOrderNo}-${item.sourceAppId}-${index}`">
+                    <td>{{ item.paymentOrderId || "—" }}</td>
+                    <td>{{ item.prepayOrderNo || "—" }}</td>
+                    <td>{{ item.sourceAppId || "—" }}</td>
+                    <td>{{ item.expireAt }}</td>
+                    <td><button class="link-button" :disabled="!canUseExpiredTokens || !item.paymentOrderId.trim()" @click="openExpiredTokenPayment(item.paymentOrderId)">核对支付单</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-if="expiredTokenTotal === 0" class="meta">当前无过期的活跃令牌。</p>
+            <div class="pager">
+              <span>共 {{ expiredTokenTotal }} 条（读取时点）</span>
+              <template v-if="expiredTokenTotal > expiredTokenPageSize">
+                <button class="button secondary" :disabled="expiredTokenPageNo === 1" @click="loadExpiredTokens(expiredTokenPageNo - 1)">上一页</button>
+                <span>第 {{ expiredTokenPageNo }} / {{ Math.ceil(expiredTokenTotal / expiredTokenPageSize) }} 页</span>
+                <button class="button secondary" :disabled="expiredTokenPageNo >= Math.min(1000, Math.ceil(expiredTokenTotal / expiredTokenPageSize))" @click="loadExpiredTokens(expiredTokenPageNo + 1)">下一页</button>
               </template>
             </div>
           </template>

@@ -5771,6 +5771,10 @@ App/H5/PC 支付提交响应与当前支付单核对成功后，先保留当前�
 
 `GET /api/payment-task-center/blocked-expired-payments?pageNo=1&pageSize=10` 返回 `{ items, total, pageNo, pageSize }`，每条仅包含 `paymentOrderId / prepayOrderNo / orderNo / expiresAt`；页码规范化至 `1..1000`、每页 `1..100`。列表与 `blockedExpiredPaymentCount` 使用同一过期、唯一预付绑定、无尝试、精确支付单号活跃令牌资格，按过期时间、支付单号和主键稳定排序；不暴露令牌原文、幂等键或 IP，也不提供释放或关单动作。计数和分页分两次读取，若期间令牌状态变化，页内总数可能与当次列表不一致；运营页刷新总览后必须重新加载明细，单行仅跳转支付详情核对，不以列表结果推断原渠道支付事实。
 
+### 14.552 过期活跃提交令牌历史盘点
+
+`GET /api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=10` 只读返回 `{ items, total, pageNo, pageSize }`，每条仅含 `paymentOrderId / prepayOrderNo / sourceAppId / expireAt`，不返回占用幂等键、终端、客户端 IP 或令牌原文。页码/页大小分别规范化至 `1..1000`、`1..100`。查询筛选当前状态按系统活跃语义归一为 `ACTIVE`、但令牌 TTL 已过的行，不关联支付单或预付单，因此也能盘点孤儿、终态及不在超时关单候选中的历史令牌；按过期时间和令牌主键排序。管理端手动读取，刷新总览或执行任务后旧盘点失效；行仅可跳转支付详情尝试核对。过期不等于渠道未受理，不能仅据此释放令牌、关闭支付或重发渠道提交；计数和列表不是事务快照，正式处置仍需可信身份、渠道与资金事实复核及审批。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

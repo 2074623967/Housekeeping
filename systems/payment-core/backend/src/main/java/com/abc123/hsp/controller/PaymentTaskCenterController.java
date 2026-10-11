@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
@@ -47,6 +48,13 @@ public class PaymentTaskCenterController {
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "10") int pageSize) {
         return ApiResponse.success(paymentTaskCenterService.listBlockedExpiredPayments(pageNo, pageSize));
+    }
+
+    @GetMapping("/expired-active-submit-tokens")
+    public ApiResponse<PageResultDTO<ExpiredActiveSubmitTokenDTO>> listExpiredActiveSubmitTokens(
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ApiResponse.success(paymentTaskCenterService.listExpiredActiveSubmitTokens(pageNo, pageSize));
     }
 
     /**

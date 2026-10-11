@@ -4,6 +4,7 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PageQueryBounds;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
@@ -402,6 +403,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         long total = paymentTaskCenterMapper.countBlockedExpiredPayments();
         List<BlockedExpiredPaymentDTO> items = total == 0 ? Collections.emptyList() :
                 safeList(paymentTaskCenterMapper.findBlockedExpiredPayments(
+                        normalizedPageSize, PageQueryBounds.offset(normalizedPageNo, normalizedPageSize)));
+        return new PageResultDTO<>(items, total, normalizedPageNo, normalizedPageSize);
+    }
+
+    @Override
+    public PageResultDTO<ExpiredActiveSubmitTokenDTO> listExpiredActiveSubmitTokens(int pageNo, int pageSize) {
+        int normalizedPageNo = PageQueryBounds.normalizePageNo(pageNo);
+        int normalizedPageSize = PageQueryBounds.normalizePageSize(pageSize);
+        long total = paymentTaskCenterMapper.countExpiredActiveSubmitTokens();
+        List<ExpiredActiveSubmitTokenDTO> items = total == 0 ? Collections.emptyList() :
+                safeList(paymentTaskCenterMapper.findExpiredActiveSubmitTokens(
                         normalizedPageSize, PageQueryBounds.offset(normalizedPageNo, normalizedPageSize)));
         return new PageResultDTO<>(items, total, normalizedPageNo, normalizedPageSize);
     }

@@ -1011,6 +1011,50 @@ class PaymentDiagnosticHttpIntegrationTest {
     }
 
     @Test
+    void shouldInventoryExpiredActiveTokensOverHttpWithoutDisclosingHolders() throws Exception {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        String databaseUrl = "jdbc:h2:mem:payment_token_inventory_http_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--server.address=127.0.0.1",
+                "--server.port=0",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
+            assertEquals(1, jdbcTemplate.update(
+                    "INSERT INTO t_payment_submit_concurrency_token (prepay_order_no, payment_order_id, "
+                            + "source_app_id, token_status, holder_idempotency_key, holder_terminal, holder_client_ip, "
+                            + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                            + "('PRE-ORPHAN-HTTP', 'PAY-ORPHAN-HTTP', 'app', 'ACTIVE', 'secret-key', 'APP', "
+                            + "'secret-ip', NOW(), TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())"));
+            JsonNode page = get(objectMapper, port,
+                    "/api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=1");
+            assertEquals("0", page.path("code").asText());
+            assertEquals(1, page.path("data").path("total").asInt());
+            JsonNode item = page.path("data").path("items").get(0);
+            assertEquals("PAY-ORPHAN-HTTP", item.path("paymentOrderId").asText());
+            assertEquals("PRE-ORPHAN-HTTP", item.path("prepayOrderNo").asText());
+            assertEquals("app", item.path("sourceAppId").asText());
+            assertTrue(item.hasNonNull("expireAt"));
+            assertTrue(!page.toString().contains("secret-key"));
+            assertTrue(!page.toString().contains("secret-ip"));
+            assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+                    "SELECT token_status FROM t_payment_submit_concurrency_token WHERE prepay_order_no = ?",
+                    String.class, "PRE-ORPHAN-HTTP"));
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_submit_concurrency_token "
+                    + "SET token_status = 'RELEASED' WHERE prepay_order_no = 'PRE-ORPHAN-HTTP'"));
+            assertEquals(0, get(objectMapper, port,
+                    "/api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=1")
+                    .path("data").path("total").asInt());
+        }
+    }
+
+    @Test
     void shouldKeepAmbiguousPaymentListReadableButRejectDetailOverHttp() throws Exception {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
         String databaseUrl = "jdbc:h2:mem:payment_binding_http_" + System.nanoTime()

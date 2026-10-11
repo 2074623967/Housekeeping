@@ -2,6 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.BlockedExpiredPaymentDTO;
+import com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -18,6 +19,8 @@ public interface PaymentTaskCenterService {
     PaymentTaskCenterOverviewDTO overview();
 
     PageResultDTO<BlockedExpiredPaymentDTO> listBlockedExpiredPayments(int pageNo, int pageSize);
+
+    PageResultDTO<ExpiredActiveSubmitTokenDTO> listExpiredActiveSubmitTokens(int pageNo, int pageSize);
 
     /**
      * 查询任务执行日志。

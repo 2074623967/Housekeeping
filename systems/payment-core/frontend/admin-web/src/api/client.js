@@ -2916,6 +2916,26 @@ export function normalizeBlockedExpiredPaymentsPage(data, expectedPageNo, expect
   return data;
 }
 
+export function normalizeExpiredActiveSubmitTokensPage(data, expectedPageNo, expectedPageSize) {
+  const allowedFields = ["paymentOrderId", "prepayOrderNo", "sourceAppId", "expireAt"];
+  if (!data || typeof data !== "object" || Array.isArray(data)
+      || !Array.isArray(data.items)
+      || !Number.isInteger(data.total) || data.total < 0
+      || data.pageNo !== expectedPageNo || data.pageSize !== expectedPageSize
+      || data.items.length > expectedPageSize || data.items.length > data.total
+      || data.items.some((item) => !item || typeof item !== "object" || Array.isArray(item)
+        || Object.keys(item).some((field) => !allowedFields.includes(field))
+        || ![item.paymentOrderId, item.prepayOrderNo, item.sourceAppId].every(
+          (value) => typeof value === "string")
+        || !isValidDateTime(item.expireAt))) {
+    throw createBusinessError(
+      { code: "PAYMENT-CLIENT-INVALID-EXPIRED-ACTIVE-TOKENS" },
+      "过期活跃令牌盘点返回了无法确认的事实"
+    );
+  }
+  return data;
+}
+
 export function matchesPaymentTaskRunDetailSnapshot(snapshot, result) {
   return Boolean(snapshot
     && result
@@ -4654,6 +4674,17 @@ export const paymentTaskCenterApi = {
     const params = new URLSearchParams({ pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/payment-task-center/blocked-expired-payments?${params.toString()}`)
       .then((data) => normalizeBlockedExpiredPaymentsPage(data, pageNo, pageSize));
+  },
+  getExpiredActiveSubmitTokens: ({ pageNo = 1, pageSize = 10 } = {}) => {
+    if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 1000
+        || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw createBusinessError(
+        { code: "PAYMENT-CLIENT-INVALID-EXPIRED-ACTIVE-QUERY" }, "令牌盘点分页参数非法"
+      );
+    }
+    const params = new URLSearchParams({ pageNo: String(pageNo), pageSize: String(pageSize) });
+    return request(`/api/payment-task-center/expired-active-submit-tokens?${params.toString()}`)
+      .then((data) => normalizeExpiredActiveSubmitTokensPage(data, pageNo, pageSize));
   },
   getTaskRunDetail: (taskLogNo) => {
     const normalizedTaskLogNo = normalizeBusinessIdentifier(taskLogNo);

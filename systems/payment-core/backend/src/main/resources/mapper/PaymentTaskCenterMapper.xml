@@ -317,6 +317,28 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <sql id="expiredActiveSubmitToken">
+        UPPER(TRIM(token.token_status)) = 'ACTIVE'
+        AND token.expire_at &lt; NOW()
+    </sql>
+
+    <select id="countExpiredActiveSubmitTokens" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_submit_concurrency_token token
+        WHERE <include refid="expiredActiveSubmitToken"/>
+    </select>
+
+    <select id="findExpiredActiveSubmitTokens" resultType="com.abc123.hsp.dto.ExpiredActiveSubmitTokenDTO">
+        SELECT token.payment_order_id AS paymentOrderId,
+               token.prepay_order_no AS prepayOrderNo,
+               token.source_app_id AS sourceAppId,
+               DATE_FORMAT(token.expire_at, '%Y-%m-%d %H:%i:%s') AS expireAt
+        FROM t_payment_submit_concurrency_token token
+        WHERE <include refid="expiredActiveSubmitToken"/>
+        ORDER BY token.expire_at ASC, token.id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
     <select id="countUnknownRefundSubmitEvents" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_event
