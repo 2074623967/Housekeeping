@@ -340,6 +340,9 @@ const canQueryPayment = computed(() => {
     paymentSnapshot?.channel
   );
 });
+const queryUnavailableGuidance = computed(() => cashier.value?.paymentStatus === "PAYING"
+  ? PAYING_SUBMIT_HINT
+  : "当前不满足主动查单条件，请刷新收银台核对支付状态，未确认资金前勿重复付款。");
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
@@ -393,7 +396,9 @@ const submitBlockedHint = computed(() => {
     return PAYING_SUBMIT_HINT;
   }
   if (submissionPending.value) {
-    return "当前支付结果尚未确认，请先主动查单。";
+    return canQueryPayment.value
+      ? "当前支付结果尚未确认，请先主动查单。"
+      : queryUnavailableGuidance.value;
   }
   if (status === "已关闭") {
     return "当前支付单已关闭，请重新发起支付。";
@@ -434,6 +439,9 @@ const countdownRiskLevel = computed(() => {
   return "info";
 });
 const countdownRiskHint = computed(() => {
+  if (submissionPending.value && !canQueryPayment.value) {
+    return queryUnavailableGuidance.value;
+  }
   if (isCashierExpired(cashier.value?.status)) {
     return submissionPending.value
       ? "当前会话已失效，但渠道结果尚未确认，请继续主动查单。"
@@ -481,7 +489,9 @@ const paymentMethodComparisonRows = computed(() => {
       channelCode: resolvePaymentChannelCode(item),
       description: meta.description || "系统已接入该支付方式。",
       recommendedScenes: meta.recommendedScenes || "通用支付场景",
-      fallbackAction: meta.fallbackAction || "支付异常时先主动查单；仅未提交渠道的支付单可本地关闭。"
+      fallbackAction: canQueryPayment.value
+        ? meta.fallbackAction || "支付异常时先主动查单；仅未提交渠道的支付单可本地关闭。"
+        : queryUnavailableGuidance.value
     };
   });
 });
@@ -557,7 +567,7 @@ async function queryCurrentPayment() {
   if (!canQueryPayment.value) {
     message.value = cashierSnapshotStale.value
       ? "收银台状态未经确认，请先刷新收银台。"
-      : "当前支付单尚未提交渠道，不能执行主动查单。";
+      : queryUnavailableGuidance.value;
     return;
   }
   const snapshot = buildCurrentPaymentSnapshot();
@@ -686,7 +696,9 @@ async function pay() {
       message.value = PAYING_SUBMIT_HINT;
     } else {
       message.value = submissionPending.value
-        ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
+        ? canQueryPayment.value
+          ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
+          : queryUnavailableGuidance.value
         : error.message;
     }
   } finally {
@@ -910,7 +922,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
         <div v-if="selectedChannelMeta" class="channel-tips">
           <div>
             <strong>业务说明</strong>
-            <p>{{ bizSceneMeta.supportHint }}</p>
+            <p>{{ canQueryPayment ? bizSceneMeta.supportHint : queryUnavailableGuidance }}</p>
           </div>
           <div>
             <strong>渠道说明</strong>
@@ -918,11 +930,11 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
           </div>
           <div>
             <strong>结算提示</strong>
-            <p>{{ selectedChannelMeta.settlementHint }}</p>
+            <p>{{ canQueryPayment ? selectedChannelMeta.settlementHint : queryUnavailableGuidance }}</p>
           </div>
           <div>
             <strong>失败补救</strong>
-            <p>{{ selectedChannelMeta.fallbackAction }}</p>
+            <p>{{ canQueryPayment ? selectedChannelMeta.fallbackAction : queryUnavailableGuidance }}</p>
           </div>
         </div>
 
@@ -985,7 +997,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
                 <span>不可扫码支付</span>
               </div>
             </div>
-            <div v-else class="desktop-qr-unavailable">当前状态暂不生成渠道二维码，请以支付状态和主动查单结果为准。</div>
+            <div v-else class="desktop-qr-unavailable">{{ queryUnavailableGuidance }}</div>
             <div class="desktop-qr-meta">
               <div><span>扫码方式</span><strong>{{ selectedPaymentMethod }}</strong></div>
               <div><span>渠道编码</span><strong>{{ resolvePaymentChannelCode(selectedPaymentMethod) }}</strong></div>
@@ -996,11 +1008,11 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
           <div class="desktop-hint-grid">
             <div class="desktop-hint-card">
               <strong>桌面端支付建议</strong>
-              <p>若用户使用微信或支付宝，建议保留当前页面等待回调；如迟迟未返回，可在结果页或后台执行主动查单。</p>
+              <p>{{ canQueryPayment ? "渠道受理后若结果迟迟未收口，可在当前页面主动查单。" : queryUnavailableGuidance }}</p>
             </div>
             <div class="desktop-hint-card">
               <strong>失败补救动作</strong>
-              <p>如浏览器关闭、扫码超时或渠道报错，应先主动查单；只有未提交渠道的支付单可关闭后重新拉起。</p>
+              <p>{{ canQueryPayment ? "如浏览器关闭、扫码超时或渠道报错，先主动查单核实；仅未提交渠道的支付单可本地关闭。" : queryUnavailableGuidance }}</p>
             </div>
             <div class="desktop-hint-card">
               <strong>联查建议</strong>
@@ -1083,7 +1095,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
           <div class="ops-row"><span>最近尝试状态</span><span>{{ latestQueriedDetail?.latestAttemptStatus || "-" }}</span></div>
           <div class="ops-row"><span>最近尝试完成时间</span><span>{{ latestQueriedDetail?.latestAttemptCompletedAt || cashier?.latestAttemptCompletedAt || "-" }}</span></div>
           <p class="ops-description">
-            扫码后若前端仍停留在支付中，可先在当前收银台执行主动查单；若已成功或已关闭，会自动跳转结果页继续收口。
+            {{ canQueryPayment ? "扫码后若前端仍停留在支付中，可先在当前收银台执行主动查单；若已成功或已关闭，会自动跳转结果页继续收口。" : queryUnavailableGuidance }}
           </p>
         </div>
 

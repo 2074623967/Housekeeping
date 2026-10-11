@@ -6,6 +6,21 @@ import test from "node:test";
 
 const viewPath = join(dirname(fileURLToPath(import.meta.url)), "CashierView.vue");
 
+test("does not recommend channel queries before the cashier permits them", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /const queryUnavailableGuidance = computed\([\s\S]*cashier\.value\?\.paymentStatus === "PAYING"[\s\S]*PAYING_SUBMIT_HINT/);
+  assert.match(source, /submissionPending\.value\) \{\s*return canQueryPayment\.value\s*\? "当前支付结果尚未确认，请先主动查单。"\s*: queryUnavailableGuidance\.value;/);
+  assert.match(source, /submissionPending\.value\s*\? canQueryPayment\.value\s*\? "支付结果尚未确认，当前请求已锁定，请先主动查单。"\s*: queryUnavailableGuidance\.value/);
+  assert.match(source, /<p>\{\{ canQueryPayment \? bizSceneMeta\.supportHint : queryUnavailableGuidance \}\}<\/p>/);
+  assert.match(source, /<p>\{\{ canQueryPayment \? selectedChannelMeta\.settlementHint : queryUnavailableGuidance \}\}<\/p>/);
+  assert.match(source, /<p>\{\{ canQueryPayment \? selectedChannelMeta\.fallbackAction : queryUnavailableGuidance \}\}<\/p>/);
+  assert.match(source, /fallbackAction: canQueryPayment\.value\s*\? meta\.fallbackAction/);
+  assert.match(source, /const countdownRiskHint = computed\(\(\) => \{\s*if \(submissionPending\.value && !canQueryPayment\.value\) \{\s*return queryUnavailableGuidance\.value;/);
+  assert.match(source, /v-else class="desktop-qr-unavailable">\{\{ queryUnavailableGuidance \}\}<\/div>/);
+  assert.match(source, /<p>\{\{ canQueryPayment \? "如浏览器关闭、扫码超时或渠道报错/);
+  assert.match(source, /class="ops-description">\s*\{\{ canQueryPayment \? "扫码后若前端仍停留在支付中/);
+});
+
 test("queries using the attempt and channel facts from one cashier snapshot", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /const paymentSnapshot = latestQueriedDetail\.value \|\| cashier\.value;[\s\S]*canQueryPaymentChannel\([\s\S]*paymentSnapshot\?\.latestAttemptStatus,[\s\S]*paymentSnapshot\?\.latestAttemptCompletedAt,[\s\S]*paymentSnapshot\?\.channelTransactionNo,[\s\S]*paymentSnapshot\?\.channel/);

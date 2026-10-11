@@ -225,6 +225,20 @@ async function main() {
     assert.equal(await evaluate("document.body.innerText.includes('支付请求已提交到渠道')"), true);
     assert.equal(await evaluate(`${actionButton('查询最新状态')}.disabled`), false);
     assert.equal(requests.slice(payingStart).filter((item) => item.method === "POST").length, 0);
+    status = "PAYING";
+    const cashierPayingStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN` });
+    await waitFor(() => evaluate("document.querySelector('.channel-tips')?.textContent.includes('支付提交仍在处理中')"),
+      "unaccepted cashier guidance");
+    assert.equal(await evaluate(`${actionButton('主动查单')}.disabled`), true);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.channel-tips p, .comparison-meta span, .ops-description'))
+      .some((element) => element.textContent.includes('主动查单'))`), false);
+    status = "WAIT_CALLBACK";
+    await evaluate(`${actionButton('刷新收银台')}.click()`);
+    await waitFor(() => evaluate(`${actionButton('主动查单')}.disabled === false`),
+      "accepted cashier guidance");
+    assert.equal(await evaluate("document.querySelector('.channel-tips')?.textContent.includes('继续查单')"), true);
+    assert.equal(requests.slice(cashierPayingStart).filter((item) => item.method === "POST").length, 0);
     for (const scenario of ["query", "close"]) {
       for (const readbackFails of [false, true]) {
         kind = scenario;
