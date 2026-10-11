@@ -164,6 +164,34 @@ test("verify all refuses a preexisting frontend PID before any backend startup",
   }
 });
 
+test("verify all refuses an occupied frontend port before any backend startup", () => {
+  const runtimeDir = mkdtempSync(join(tmpdir(), "hsp-verify-all-port-"));
+  try {
+    const binDir = join(runtimeDir, "bin");
+    mkdirSync(binDir);
+    writeFileSync(join(binDir, "lsof"), '#!/bin/sh\n[ "$2" = "-iTCP:5174" ]\n', { mode: 0o755 });
+    writeFileSync(join(binDir, "nc"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    const result = spawnSync("bash", [new URL("tools/dev/local-stack.sh", root).pathname, "verify", "all"], {
+      encoding: "utf8",
+      env: { PATH: `${binDir}:${process.env.PATH}`, HOME: process.env.HOME, HSP_LOCAL_RUNTIME_DIR: runtimeDir }
+    });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /verify all 前端端口 5174 已有服务，拒绝复用/);
+    assert.doesNotMatch(result.stdout, /\[START\]/);
+  } finally {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+});
+
+test("verify all requires owned frontend PIDs after startup", async () => {
+  const localStack = await readFile(new URL("tools/dev/local-stack.sh", root), "utf8");
+  const guard = localStack.slice(localStack.indexOf("guard_started_local_payment_chain() {"),
+    localStack.indexOf("run_verify() {"));
+  assert.match(guard, /if \[\[ "\$scope" == "all" \]\]; then/);
+  assert.match(guard, /frontend\.\$name\.pid/);
+  assert.match(guard, /done < <\(frontend_manifest\)/);
+});
+
 test("prefers a real macOS JDK before deriving JAVA_HOME from PATH java", async () => {
   const localStack = await readFile(new URL("tools/dev/local-stack.sh", root), "utf8");
   const candidateIndex = localStack.indexOf('for candidate in \\\n    "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home"');

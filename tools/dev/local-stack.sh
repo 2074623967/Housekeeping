@@ -658,7 +658,7 @@ guard_local_payment_chain_verify() {
 
 guard_started_local_payment_chain() {
   local scope="$1"
-  local name relative_dir port health_path pid_file
+  local name system_name relative_dir port health_path api_env_name api_target proxy_path pid_file
 
   while IFS='|' read -r name relative_dir port health_path; do
     if is_selected "$scope" "backends" "$name"; then
@@ -669,6 +669,15 @@ guard_started_local_payment_chain() {
       fi
     fi
   done < <(backend_manifest)
+  if [[ "$scope" == "all" ]]; then
+    while IFS='|' read -r name system_name relative_dir port api_env_name api_target proxy_path; do
+      pid_file="$PID_DIR/frontend.$name.pid"
+      if [[ ! -f "$pid_file" ]] || ! pid_is_running "$(cat "$pid_file")"; then
+        echo "[FAIL] verify all 未确认本轮启动的 frontend/$name，拒绝复用" >&2
+        return 2
+      fi
+    done < <(frontend_manifest)
+  fi
   if [[ "$scope" == "payment-query-chain" ]] \
     && { [[ ! -f "$PID_DIR/payment-query-upstream.pid" ]] \
       || ! pid_is_running "$(cat "$PID_DIR/payment-query-upstream.pid")"; }; then
