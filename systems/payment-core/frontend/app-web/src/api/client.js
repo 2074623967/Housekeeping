@@ -608,6 +608,7 @@ export function normalizePaymentSubmitResult(
       || typeof data.orderNo !== "string" || !data.orderNo.trim()
       || !isValidAmount(data.amount)
       || !isKnownStatus(data.paymentStatus, PAYMENT_STATUSES)
+      || data.paymentStatus.trim().toUpperCase() === "PREPAY_CREATED"
       || !isConsistentPaymentSuccessTime(data.paymentStatus, data.successAt)
       || !isConsistentPaymentChannel(data.paymentStatus, data.channel)
       || !isConsistentPaymentChannelTransaction(data.paymentStatus, data.channelTransactionNo)
@@ -637,7 +638,7 @@ export function normalizePaymentSubmitResult(
       || !matchesExpectedIdentifier(data.channel, expectedChannelCode)) {
     throw createBusinessError(
       { code: "PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT" },
-      "支付提交响应为空或缺少订单金额事实"
+      "支付提交响应为空、状态未推进或缺少可信订单事实"
     );
   }
   return data;

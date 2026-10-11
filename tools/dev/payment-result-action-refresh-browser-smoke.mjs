@@ -14,7 +14,8 @@ const chromeBinary = process.env.HSP_CHROME_BIN
   || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
-  submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002"
+  submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
+  submitStale: "PAY-RESULT-SUBMIT-STALE-001"
 };
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -91,11 +92,11 @@ async function main() {
           }
           response.end(JSON.stringify({ code: "0", data }));
         }
-      } else if (request.method === "POST" && pathname === `/api/payments/${kind === "submitOther" ? "submit" : kind}`) {
+      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitStale"].includes(kind) ? "submit" : kind}`) {
         let input = "";
         for await (const chunk of request) input += chunk;
         const body = JSON.parse(input);
-        if (kind === "submit" || kind === "submitOther") {
+        if (["submit", "submitOther", "submitStale"].includes(kind)) {
           assert.equal(body.prepayOrderNo, `PRE-${paymentIds[kind]}`);
           assert.equal(body.paymentMethod, "支付宝");
           assert.equal(body.accessToken, "local-test-token");
@@ -108,7 +109,11 @@ async function main() {
             attempts.push(body);
             retrySubmitBodies.set(body.prepayOrderNo, attempts);
             assert.ok(attempts.length <= 2);
-            if (attempts.length === 2) {
+            if (kind === "submitStale" && attempts.length === 1) {
+              response.end(JSON.stringify({ code: "0", data: {
+                ...cashierPage(kind, status), paymentMethod: body.paymentMethod, channel: body.channelCode
+              } }));
+            } else if (attempts.length === 2) {
               status = "WAIT_CALLBACK";
               response.end(JSON.stringify({ code: "0", data: {
                 ...cashierPage(kind, status), channel: body.channelCode,
@@ -292,6 +297,29 @@ async function main() {
     assert.equal(await evaluate("Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.')).length"),
       pendingKeysBeforeSubmit);
     await send("Page.removeScriptToEvaluateOnNewDocument", { identifier: ignoredWrite.identifier });
+    kind = "submitStale";
+    status = "PREPAY_CREATED";
+    retrySubmit = true;
+    const staleStart = requests.length;
+    const staleUrl = `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token`;
+    await send("Page.navigate", { url: staleUrl });
+    await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
+      "cashier before stale submit response");
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT')
+      && !${actionButton('确认支付')}.disabled`), "stale submit response remains unresolved");
+    const staleSubmitKey = retrySubmitBodies.get(`PRE-${paymentIds[kind]}`)[0].idempotencyKey;
+    assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('${staleSubmitKey}'))`), true);
+    assert.equal(await evaluate(`${actionButton('重置幂等键')}.disabled`), true);
+    await send("Page.navigate", { url: staleUrl });
+    await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
+      "cashier after stale submit response");
+    assert.equal(await evaluate(`document.body.innerText.includes('${staleSubmitKey}')`), true);
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`location.pathname === '/payment-result/${paymentIds[kind]}'`),
+      "replayed stale submit response");
+    assert.equal(retrySubmitBodies.get(`PRE-${paymentIds[kind]}`).length, 2);
+    assert.equal(requests.slice(staleStart).filter((item) => item.method === "POST").length, 2);
     kind = "submit";
     status = "PREPAY_CREATED";
     failReadback = false;
