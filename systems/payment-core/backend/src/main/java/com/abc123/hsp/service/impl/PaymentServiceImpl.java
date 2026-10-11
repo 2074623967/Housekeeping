@@ -2256,6 +2256,9 @@ public class PaymentServiceImpl implements PaymentService {
             }
             return outwardDetail(detail);
         }
+        if (isUnacceptedChannelSubmit(detail)) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
+        }
         if (paymentMapper.markUnsubmittedPaymentClosed(request.getPaymentOrderId()) != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
             requireNonSuccessfulPaymentPrepayBinding(latestDetail);

@@ -380,6 +380,9 @@ class PaymentSubmitReplayIntegrationTest {
                 assertEquals("PAYING", reusedPrepay.path("data").path("paymentStatus").asText());
                 assertEquals("支付中", reusedPrepay.path("data").path("cashierStatus").asText());
                 assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, post(objectMapper, port,
+                        "/api/payments/close", "{\"paymentOrderId\":\"" + prepay.getPaymentOrderId()
+                                + "\"}").path("code").asText());
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, post(objectMapper, port,
                         "/api/payments/query", "{\"paymentOrderId\":\"" + prepay.getPaymentOrderId()
                                 + "\"}").path("code").asText());
                 assertNull(jdbcTemplate.queryForObject(
