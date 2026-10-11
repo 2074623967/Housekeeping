@@ -8,6 +8,7 @@ import {
   isCashierExpired,
   isPaymentSubmissionPending,
   PAYMENT_RESULT_STATE_META,
+  resolvePaymentResultState,
   resolvePaymentMerchantNo,
   resolvePaymentDetailRefreshDelay,
   shouldAutoRefreshPaymentDetail
@@ -103,6 +104,13 @@ test("only allows local close before channel submission", () => {
 test("pending result directs users to trusted payment facts", () => {
   assert.match(PAYMENT_RESULT_STATE_META.pending.hint, /主动查单/);
   assert.doesNotMatch(PAYMENT_RESULT_STATE_META.pending.hint, /模拟回调/);
+});
+
+test("keeps channel submission in progress distinct from accepted callback waiting", () => {
+  assert.equal(resolvePaymentResultState("PAYING"), "paying");
+  assert.equal(resolvePaymentResultState("WAIT_CALLBACK"), "wait_callback");
+  assert.match(PAYMENT_RESULT_STATE_META.paying.hint, /刷新/);
+  assert.doesNotMatch(PAYMENT_RESULT_STATE_META.paying.hint, /已提交到渠道|主动查单/);
 });
 
 test("only auto refreshes payment states that can advance asynchronously", () => {

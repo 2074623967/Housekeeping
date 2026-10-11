@@ -12,6 +12,12 @@ test("checks completion time and channel transaction before offering a query", (
   assert.match(source, /canQueryPaymentChannel\([\s\S]*paymentDetail\.value\?\.latestAttemptStatus,[\s\S]*paymentDetail\.value\?\.latestAttemptCompletedAt,[\s\S]*paymentDetail\.value\?\.channelTransactionNo/);
 });
 
+test("guides PAYING results to refresh rather than channel query", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /resultState\.value === "paying"[\s\S]*刷新支付详情[\s\S]*不要重复付款/);
+  assert.match(source, /resultState\.value === "paying"[\s\S]*不可主动查单或关单/);
+});
+
 test("offers a route-bound retry when the payment result first fails to load", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /v-else-if="feedbackMessage && !paymentDetail"[\s\S]*v-if="currentPaymentOrderId"[^>]*@click="loadDetail\(\)"[^>]*>重试加载支付结果/);

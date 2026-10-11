@@ -217,6 +217,13 @@ const nextStepChecklist = computed(() => {
       "若多次停留在待发起状态，建议联查支付请求管理页和收银台会话页。"
     ];
   }
+  if (resultState.value === "paying") {
+    return [
+      bizSceneMeta.value.pendingHint,
+      "渠道受理尚未确认，请刷新支付详情并等待状态推进，不要重复付款或更换幂等键。",
+      "此时不可主动查单或关单；长时间未推进请保留支付单号联系运营核查。"
+    ];
+  }
   if (resultState.value === "wait_callback") {
     return [
       bizSceneMeta.value.pendingHint,
@@ -267,6 +274,12 @@ const recoveryActions = computed(() => {
     return [
       "返回收银台完成正式支付提交。",
       "如页面长期未推进，刷新会话并核对当前预付单状态。"
+    ];
+  }
+  if (resultState.value === "paying") {
+    return [
+      "等待页面自动刷新或手动刷新支付详情，不要重复付款。",
+      "不可主动查单或关单，请在状态推进后按页面可用操作继续。"
     ];
   }
   return [

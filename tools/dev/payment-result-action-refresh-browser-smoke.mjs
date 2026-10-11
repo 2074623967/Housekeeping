@@ -208,6 +208,23 @@ async function main() {
       .find((button) => button.textContent.trim() === '${label}')`;
     await send("Page.enable");
     await send("Runtime.enable");
+    kind = "query";
+    status = "PAYING";
+    const payingStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/payment-result/${paymentIds[kind]}?payScene=HOME_CLEAN` });
+    await waitFor(() => evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim() === '支付提交处理中'"),
+      "unaccepted channel result");
+    assert.equal(await evaluate("document.body.innerText.includes('渠道受理尚未确认')"), true);
+    assert.equal(await evaluate("document.body.innerText.includes('不可主动查单或关单')"), true);
+    assert.equal(await evaluate(`${actionButton('查询最新状态')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('关闭支付单')}.disabled`), true);
+    status = "WAIT_CALLBACK";
+    await evaluate(`${actionButton('刷新支付详情')}.click()`);
+    await waitFor(() => evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim() === '支付处理中'"),
+      "accepted channel result");
+    assert.equal(await evaluate("document.body.innerText.includes('支付请求已提交到渠道')"), true);
+    assert.equal(await evaluate(`${actionButton('查询最新状态')}.disabled`), false);
+    assert.equal(requests.slice(payingStart).filter((item) => item.method === "POST").length, 0);
     for (const scenario of ["query", "close"]) {
       for (const readbackFails of [false, true]) {
         kind = scenario;

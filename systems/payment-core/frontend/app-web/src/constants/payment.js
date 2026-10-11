@@ -26,6 +26,10 @@ export const PAYMENT_RESULT_STATE_META = {
     title: "支付处理中",
     hint: "支付请求已提交到渠道，当前正在等待回调或主动查单结果。"
   },
+  paying: {
+    title: "支付提交处理中",
+    hint: "渠道受理尚未确认，请刷新支付详情并等待状态推进，勿重复付款。"
+  },
   risk_review: {
     title: "待风控复核",
     hint: "本次支付命中风控复核，请等待运营或风控审核后再继续支付。"
@@ -73,7 +77,10 @@ export function resolvePaymentResultState(paymentStatus) {
   if (paymentStatus === "CLOSED") {
     return "closed";
   }
-  if (paymentStatus === "WAIT_CALLBACK" || paymentStatus === "PAYING") {
+  if (paymentStatus === "PAYING") {
+    return "paying";
+  }
+  if (paymentStatus === "WAIT_CALLBACK") {
     return "wait_callback";
   }
   if (paymentStatus === "RISK_REVIEW") {
