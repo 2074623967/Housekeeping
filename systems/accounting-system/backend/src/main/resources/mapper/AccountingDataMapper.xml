@@ -112,6 +112,17 @@
         WHERE account_no = #{accountNo}
     </select>
 
+    <select id="findBalanceForUpdate" resultType="com.abc123.accounting.entity.AccountBalanceEntity">
+        SELECT account_no,
+               available_amount,
+               frozen_amount,
+               in_transit_amount,
+               updated_at
+        FROM t_account_balance
+        WHERE account_no = #{accountNo}
+        FOR UPDATE
+    </select>
+
     <insert id="insertBalance">
         INSERT INTO t_account_balance (
             account_no,
@@ -147,6 +158,7 @@
                account_no,
                biz_type,
                biz_no,
+               pay_scene,
                direction,
                amount,
                before_balance,
@@ -163,6 +175,7 @@
                account_no,
                biz_type,
                biz_no,
+               pay_scene,
                direction,
                amount,
                before_balance,
@@ -178,12 +191,21 @@
         LIMIT 1
     </select>
 
+    <select id="countLedgersForOtherAccount" resultType="long">
+        SELECT COUNT(*)
+        FROM t_account_ledger
+        WHERE biz_type = #{bizType}
+          AND biz_no = #{bizNo}
+          AND account_no &lt;&gt; #{accountNo}
+    </select>
+
     <insert id="insertLedger">
         INSERT INTO t_account_ledger (
             ledger_no,
             account_no,
             biz_type,
             biz_no,
+            pay_scene,
             direction,
             amount,
             before_balance,
@@ -196,6 +218,7 @@
             #{accountNo},
             #{bizType},
             #{bizNo},
+            #{payScene},
             #{direction},
             #{amount},
             #{beforeBalance},

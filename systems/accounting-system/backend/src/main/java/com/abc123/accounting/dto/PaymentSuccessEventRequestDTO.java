@@ -19,6 +19,8 @@ public class PaymentSuccessEventRequestDTO {
     private String businessChainId;
     private String accountNo;
     private String paymentOrderId;
+    /** 支付业务场景。 */
+    private String payScene;
     private String orderNo;
     private String customerName;
     private BigDecimal amount;

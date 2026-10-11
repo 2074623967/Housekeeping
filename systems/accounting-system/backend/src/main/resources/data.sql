@@ -13,11 +13,11 @@ INSERT INTO t_account_balance (account_no, available_amount, frozen_amount, in_t
 ('ACT10002', 120.00, 0.00, 0.00, '2026-07-20 10:06:00'),
 ('ACT10003', 12.00, 0.00, 0.00, '2026-07-20 10:07:00');
 
-INSERT INTO t_account_ledger (ledger_no, account_no, biz_type, biz_no, direction, amount, before_balance, after_balance, ledger_status, operator_name, created_at) VALUES
-('LDG20001', 'ACT10001', 'PAYMENT_SUCCESS', 'PAY202607200001', '贷方', 168.00, 0.00, 168.00, '已记账', '系统入账', '2026-07-20 10:03:00'),
-('LDG20002', 'ACT10001', 'BALANCE_FREEZE', 'ORD202607200001', '借方', 68.00, 168.00, 100.00, '已记账', '运营冻结', '2026-07-20 10:08:00'),
-('LDG20003', 'ACT10002', 'CLEARING_RESULT', 'CLR202607200001', '贷方', 120.00, 0.00, 120.00, '已记账', '清分入账', '2026-07-20 10:06:00'),
-('LDG20004', 'ACT10003', 'SERVICE_FEE', 'FEE202607200001', '贷方', 12.00, 0.00, 12.00, '已记账', '平台服务费入账', '2026-07-20 10:07:00');
+INSERT INTO t_account_ledger (ledger_no, account_no, biz_type, biz_no, pay_scene, direction, amount, before_balance, after_balance, ledger_status, operator_name, created_at) VALUES
+('LDG20001', 'ACT10001', 'PAYMENT_SUCCESS', 'PAY202607200001', 'HOME_CLEAN', '贷方', 168.00, 0.00, 168.00, '已记账', '系统入账', '2026-07-20 10:03:00'),
+('LDG20002', 'ACT10001', 'BALANCE_FREEZE', 'ORD202607200001', NULL, '借方', 68.00, 168.00, 100.00, '已记账', '运营冻结', '2026-07-20 10:08:00'),
+('LDG20003', 'ACT10002', 'CLEARING_RESULT', 'CLR202607200001', 'HOME_CLEAN', '贷方', 120.00, 0.00, 120.00, '已记账', '清分入账', '2026-07-20 10:06:00'),
+('LDG20004', 'ACT10003', 'SERVICE_FEE', 'FEE202607200001', NULL, '贷方', 12.00, 0.00, 12.00, '已记账', '平台服务费入账', '2026-07-20 10:07:00');
 
 INSERT INTO t_account_freeze (freeze_no, account_no, biz_no, freeze_type, freeze_reason, freeze_amount, freeze_status, operator_name, created_at, unfrozen_at) VALUES
 ('FRZ30001', 'ACT10001', 'ORD202607200001', '履约担保', '服务履约担保', 68.00, '冻结中', '运营冻结', '2026-07-20 10:08:00', NULL);

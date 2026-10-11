@@ -21,7 +21,9 @@ class LedgerServiceImplTest {
         String csv = new String(ledgerService.exportSnapshot("ACT10001", "", ""), StandardCharsets.UTF_8);
 
         assertTrue(csv.contains("流水号,账户号,业务类型"));
+        assertTrue(csv.contains("流水状态,状态样式,操作人"));
         assertTrue(csv.contains("ACT10001"));
         assertTrue(csv.contains("PAYMENT_SUCCESS"));
+        assertTrue(csv.contains("已记账,success"));
     }
 }

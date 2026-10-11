@@ -113,14 +113,14 @@ onMounted(() => {
       <div v-else class="split-panels">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>流水号</th><th>账户号</th><th>业务类型</th><th>业务单号</th><th>方向</th><th>金额</th><th>前余额</th><th>后余额</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+            <thead><tr><th>流水号</th><th>账户号</th><th>业务类型</th><th>业务单号</th><th>支付场景</th><th>方向</th><th>金额</th><th>前余额</th><th>后余额</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
             <tbody>
               <tr v-for="row in rows" :key="row.ledgerNo">
-                <td>{{ row.ledgerNo }}</td><td>{{ row.accountNo }}</td><td>{{ row.bizType }}</td><td>{{ row.bizNo }}</td><td>{{ row.direction }}</td><td>{{ row.amount }}</td><td>{{ row.beforeBalance }}</td><td>{{ row.afterBalance }}</td><td><span class="badge" :class="row.statusType">{{ row.ledgerStatus }}</span></td><td>{{ row.createdAt }}</td>
+                <td>{{ row.ledgerNo }}</td><td>{{ row.accountNo }}</td><td>{{ row.bizType }}</td><td>{{ row.bizNo }}</td><td>{{ row.payScene || "-" }}</td><td>{{ row.direction }}</td><td>{{ row.amount }}</td><td>{{ row.beforeBalance }}</td><td>{{ row.afterBalance }}</td><td><span class="badge" :class="row.statusType">{{ row.ledgerStatus }}</span></td><td>{{ row.createdAt }}</td>
                 <td><button class="button secondary" @click="pickRow(row)">查看</button></td>
               </tr>
               <tr v-if="rows.length === 0">
-                <td colspan="11" class="empty-cell">暂无流水数据。</td>
+                <td colspan="12" class="empty-cell">暂无流水数据。</td>
               </tr>
             </tbody>
           </table>
@@ -143,6 +143,7 @@ onMounted(() => {
               <div class="detail-card"><div class="detail-label">账户号</div><div class="detail-value">{{ selectedRow.accountNo }}</div></div>
               <div class="detail-card"><div class="detail-label">状态</div><div class="detail-value"><span class="badge" :class="selectedRow.statusType">{{ selectedRow.ledgerStatus }}</span></div></div>
               <div class="detail-card"><div class="detail-label">业务类型</div><div class="detail-value">{{ selectedRow.bizType }}</div></div>
+              <div class="detail-card"><div class="detail-label">支付场景</div><div class="detail-value">{{ selectedRow.payScene || "-" }}</div></div>
               <div class="detail-card"><div class="detail-label">方向</div><div class="detail-value">{{ selectedRow.direction }}</div></div>
               <div class="detail-card"><div class="detail-label">金额</div><div class="detail-value">{{ selectedRow.amount }}</div></div>
               <div class="detail-card"><div class="detail-label">前余额</div><div class="detail-value">{{ selectedRow.beforeBalance }}</div></div>

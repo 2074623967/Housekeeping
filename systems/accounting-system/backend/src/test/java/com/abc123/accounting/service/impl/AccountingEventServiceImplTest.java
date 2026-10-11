@@ -1,9 +1,11 @@
 package com.abc123.accounting.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
+import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
@@ -37,13 +39,18 @@ class AccountingEventServiceImplTest {
         request.setPaymentOrderId("PAY202607200099");
         request.setOrderNo("ORD202607200099");
         request.setCustomerName("张女士");
+        request.setPayScene("HOME_CLEAN");
         request.setAmount(new BigDecimal("20.00"));
 
         AccountEventDTO result = eventService.consumePaymentSuccess(request);
         BalanceSnapshotDTO balance = balanceService.detail("ACT10001");
 
         assertEquals("PAYMENT_SUCCESS", result.getEventType());
+        assertEquals("{\"orderNo\":\"ORD202607200099\",\"payScene\":\"HOME_CLEAN\",\"amount\":20.00}", result.getPayload());
         assertEquals("¥120.00", balance.getAvailableAmount());
+        assertEquals("HOME_CLEAN", accountingMemoryStore.ledgers().stream()
+                .filter(item -> "PAY202607200099".equals(item.getBizNo()))
+                .findFirst().map(item -> item.getPayScene()).orElse(null));
     }
 
     @Test
@@ -66,12 +73,70 @@ class AccountingEventServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentSuccessReplayForDifferentAccount() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY-ACCOUNT-DRIFT");
+        request.setOrderNo("ORD-ACCOUNT-DRIFT");
+        request.setAmount(new BigDecimal("20.00"));
+
+        eventService.consumePaymentSuccess(request);
+        request.setAccountNo("ACT10002");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+        assertEquals("¥120.00", balanceService.detail("ACT10001").getAvailableAmount());
+        assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
+    }
+
+    @Test
+    void shouldRejectRepeatedPaymentSuccessWithChangedAmount() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY202607200199");
+        request.setOrderNo("ORD202607200199");
+        request.setAmount(new BigDecimal("20.00"));
+
+        eventService.consumePaymentSuccess(request);
+        request.setAmount(new BigDecimal("21.00"));
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+    }
+
+    @Test
+    void shouldRejectRepeatedPaymentSuccessWithChangedPayScene() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY202607200201");
+        request.setOrderNo("ORD202607200201");
+        request.setPayScene("HOME_CLEAN");
+        request.setAmount(new BigDecimal("20.00"));
+
+        eventService.consumePaymentSuccess(request);
+        request.setPayScene("HOME_REPAIR");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+    }
+
+    @Test
+    void shouldRejectPaymentSuccessWithMismatchedBusinessChain() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY202607200299");
+        request.setBusinessChainId("CHAIN-OTHER");
+        request.setOrderNo("ORD202607200299");
+        request.setAmount(new BigDecimal("20.00"));
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+    }
+
+    @Test
     void shouldDebitBalanceForRefundSuccessAndKeepConsumptionIdempotent() {
         RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
         request.setBusinessChainId("CHAIN-PAY202607200099");
         request.setAccountNo("ACT10003");
         request.setRefundOrderId("REF202607200099");
         request.setPaymentOrderId("PAY202607200099");
+        request.setPayScene("HOME_CLEAN");
         request.setAmount(new BigDecimal("5.00"));
 
         AccountEventDTO first = eventService.consumeRefundSuccess(request);
@@ -83,8 +148,103 @@ class AccountingEventServiceImplTest {
         assertEquals(first.getEventNo(), second.getEventNo());
         assertEquals("REFUND_SUCCESS", first.getEventType());
         assertEquals("CHAIN-PAY202607200099", first.getBusinessChainId());
+        assertEquals("{\"paymentOrderId\":\"PAY202607200099\",\"payScene\":\"HOME_CLEAN\",\"amount\":5.00}", first.getPayload());
+        assertEquals("HOME_CLEAN", accountingMemoryStore.ledgers().stream()
+                .filter(item -> "REF202607200099".equals(item.getBizNo()))
+                .findFirst().map(item -> item.getPayScene()).orElse(null));
         assertEquals("¥7.00", balance.getAvailableAmount());
         assertEquals(1, events.getTotal());
+        assertEquals(true, accountingMemoryStore.ledgers().stream()
+                .filter(item -> "REF202607200099".equals(item.getBizNo()))
+                .allMatch(item -> item.getCreatedAt().compareTo(first.getCreatedAt()) >= 0));
+    }
+
+    @Test
+    void shouldRejectRefundSuccessReplayForDifferentAccount() {
+        RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
+        request.setAccountNo("ACT10003");
+        request.setRefundOrderId("REF-ACCOUNT-DRIFT");
+        request.setPaymentOrderId("PAY-ACCOUNT-DRIFT");
+        request.setAmount(new BigDecimal("5.00"));
+
+        eventService.consumeRefundSuccess(request);
+        request.setAccountNo("ACT10002");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeRefundSuccess(request));
+        assertEquals("¥7.00", balanceService.detail("ACT10003").getAvailableAmount());
+        assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
+    }
+
+    @Test
+    void shouldRejectRefundSuccessWithMismatchedBusinessChain() {
+        RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
+        request.setBusinessChainId("CHAIN-OTHER");
+        request.setAccountNo("ACT10003");
+        request.setRefundOrderId("REF202607200299");
+        request.setPaymentOrderId("PAY202607200299");
+        request.setAmount(new BigDecimal("5.00"));
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeRefundSuccess(request));
+    }
+
+    @Test
+    void shouldRejectClearingGeneratedWithMismatchedPaymentBusinessChain() {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setBusinessChainId("CHAIN-OTHER");
+        request.setAccountNo("ACT10002");
+        request.setClearingOrderNo("CLR202607200299");
+        request.setBizNo("PAY202607200299");
+        request.setAmount(new BigDecimal("20.00"));
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeClearingGenerated(request));
+    }
+
+    @Test
+    void shouldPreservePaySceneWhenClearingGeneratedEventConsumed() {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setClearingOrderNo("CLR202607200301");
+        request.setBizNo("PAY202607200301");
+        request.setPayScene("HOME_CLEAN");
+        request.setAmount(new BigDecimal("20.00"));
+
+        AccountEventDTO result = eventService.consumeClearingGenerated(request);
+
+        assertEquals("{\"bizNo\":\"PAY202607200301\",\"payScene\":\"HOME_CLEAN\",\"amount\":20.00}",
+                result.getPayload());
+        assertEquals("HOME_CLEAN", accountingMemoryStore.ledgers().stream()
+                .filter(item -> "CLR202607200301".equals(item.getBizNo()))
+                .findFirst().map(item -> item.getPayScene()).orElse(null));
+    }
+
+    @Test
+    void shouldRejectClearingGeneratedReplayForDifferentAccount() {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setClearingOrderNo("CLR-ACCOUNT-DRIFT");
+        request.setBizNo("PAY-ACCOUNT-DRIFT");
+        request.setAmount(new BigDecimal("20.00"));
+
+        eventService.consumeClearingGenerated(request);
+        request.setAccountNo("ACT10001");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeClearingGenerated(request));
+        assertEquals("¥140.00", balanceService.detail("ACT10002").getAvailableAmount());
+        assertEquals("¥100.00", balanceService.detail("ACT10001").getAvailableAmount());
+    }
+
+    @Test
+    void shouldDeriveClearingBusinessChainFromPaymentOrder() {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setClearingOrderNo("CLR202607200300");
+        request.setBizNo("PAY202607200300");
+        request.setAmount(new BigDecimal("20.00"));
+
+        AccountEventDTO result = eventService.consumeClearingGenerated(request);
+
+        assertEquals("CHAIN-PAY202607200300", result.getBusinessChainId());
+        assertEquals("消费清分生成事件", result.getSummary());
     }
 
     @Test
@@ -131,6 +291,76 @@ class AccountingEventServiceImplTest {
         assertEquals(first.getEventNo(), second.getEventNo());
         assertEquals("¥135.00", balance.getAvailableAmount());
         assertEquals(1, events.getTotal());
+    }
+
+    @Test
+    void shouldRejectSettlementCompensationReplayForDifferentAccount() {
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setSettlementOrderNo("SETTLE-ACCOUNT-DRIFT");
+        request.setBizNo("SETTLE-DIFF-ACCOUNT-DRIFT");
+        request.setAmount(new BigDecimal("5.00"));
+        request.setCompensationDirection("贷方");
+
+        eventService.consumeSettlementCompensation(request);
+        request.setAccountNo("ACT10003");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+        assertEquals("¥125.00", balanceService.detail("ACT10002").getAvailableAmount());
+        assertEquals("¥12.00", balanceService.detail("ACT10003").getAvailableAmount());
+    }
+
+    @Test
+    void shouldRejectSettlementCompensationReplayWithChangedBusinessFacts() {
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setSettlementOrderNo("SETTLE-FACT-DRIFT");
+        request.setBizNo("SETTLE-DIFF-FACT-DRIFT");
+        request.setAmount(new BigDecimal("5.00"));
+        request.setCompensationDirection("贷方");
+
+        AccountEventDTO original = eventService.consumeSettlementCompensation(request);
+        request.setAmount(new BigDecimal("5.0"));
+        assertEquals(original.getEventNo(), eventService.consumeSettlementCompensation(request).getEventNo());
+
+        request.setAmount(new BigDecimal("6.00"));
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+        request.setAmount(new BigDecimal("5.00"));
+        request.setCompensationDirection("借方");
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+        request.setCompensationDirection("贷方");
+        request.setBizNo("SETTLE-DIFF-OTHER");
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+
+        assertEquals("¥125.00", balanceService.detail("ACT10002").getAvailableAmount());
+        assertEquals(1, eventService.list("SETTLEMENT_COMPENSATION", "SETTLE-FACT-DRIFT", 1, 20).getTotal());
+    }
+
+    @Test
+    void shouldRejectInvalidSettlementCompensationBeforeRecording() {
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setSettlementOrderNo("SETTLE-INVALID");
+        request.setBizNo("SETTLE-DIFF-INVALID");
+        request.setAmount(new BigDecimal("5.00"));
+        request.setCompensationDirection("未知方向");
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+
+        request.setCompensationDirection("贷方");
+        request.setAmount(BigDecimal.ZERO);
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+        request.setAmount(new BigDecimal("-5.00"));
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+
+        request.setAmount(new BigDecimal("5.00"));
+        request.setBizNo(" ");
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+        request.setBizNo("SETTLE-DIFF-INVALID");
+        request.setSettlementOrderNo(" ");
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumeSettlementCompensation(request));
+
+        assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
+        assertEquals(0, eventService.list("SETTLEMENT_COMPENSATION", null, 1, 20).getTotal());
     }
 
     @Test

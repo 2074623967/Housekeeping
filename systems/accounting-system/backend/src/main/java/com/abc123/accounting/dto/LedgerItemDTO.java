@@ -12,6 +12,7 @@ public class LedgerItemDTO {
     private String accountNo;
     private String bizType;
     private String bizNo;
+    private String payScene;
     private String direction;
     private String amount;
     private String beforeBalance;

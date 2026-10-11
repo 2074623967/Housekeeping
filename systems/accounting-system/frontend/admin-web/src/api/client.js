@@ -8,6 +8,8 @@ function createBusinessError(payload, fallbackMessage) {
   return error;
 }
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 async function parseResponsePayload(response) {
   try {
     return await response.json();
@@ -21,17 +23,22 @@ async function parseResponsePayload(response) {
 }
 
 async function request(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "ACCOUNTING-CLIENT-TIMEOUT"
       : "ACCOUNTING-CLIENT-NETWORK";
     throw createBusinessError({ code }, error?.name === "AbortError" ? "账务服务请求超时" : "无法连接账务服务");
+  } finally {
+    clearTimeout(timeoutId);
   }
   let payload;
   try {
@@ -75,6 +82,78 @@ function requestPage(url, options = {}) {
   return request(url, options).then(normalizePagePayload);
 }
 
+function normalizeAccountingEventPage(page) {
+  const normalized = normalizePagePayload(page);
+  if (normalized.items.some((item) => !isValidAccountingEvent(item))) {
+    throw invalidAccountingResult("账务事件列表响应未确认消费事实");
+  }
+  return normalized;
+}
+
+function normalizeLedgerPage(page) {
+  const normalized = normalizePagePayload(page);
+  if (normalized.items.some((item) => !isValidLedgerItem(item))) {
+    throw invalidAccountingResult("账务流水响应缺少可核对的金额方向事实");
+  }
+  return normalized;
+}
+
+function isValidAccountingEvent(item) {
+  if (!item || typeof item !== "object"
+      || typeof item.businessChainId !== "string" || !/^CHAIN-[^\s]+$/.test(item.businessChainId.trim())
+      || typeof item.eventNo !== "string" || !item.eventNo.trim()
+      || typeof item.eventType !== "string" || !item.eventType.trim()
+      || typeof item.bizNo !== "string" || !item.bizNo.trim()
+      || typeof item.eventStatus !== "string" || !item.eventStatus.trim()
+      || typeof item.statusType !== "string"
+      || !["success", "info"].includes(item.statusType)
+      || (item.eventStatus === "已消费" ? item.statusType !== "success" : item.statusType !== "info")
+      || typeof item.createdAt !== "string" || !item.createdAt.trim()
+      || Number.isNaN(Date.parse(item.createdAt))) {
+    return false;
+  }
+  return true;
+}
+
+function isValidLedgerItem(item) {
+  if (!item || typeof item !== "object"
+      || typeof item.ledgerNo !== "string" || !item.ledgerNo.trim()
+      || typeof item.accountNo !== "string" || !item.accountNo.trim()
+      || typeof item.bizType !== "string" || !item.bizType.trim()
+      || typeof item.bizNo !== "string" || !item.bizNo.trim()
+      || (item.payScene != null && typeof item.payScene !== "string")
+      || !["借方", "贷方"].includes(item.direction)
+      || !isValidLedgerAmount(item.amount, false)
+      || !isValidLedgerAmount(item.beforeBalance, true)
+      || !isValidLedgerAmount(item.afterBalance, true)
+      || typeof item.ledgerStatus !== "string" || !item.ledgerStatus.trim()
+      || typeof item.statusType !== "string" || !item.statusType.trim()) {
+    return false;
+  }
+  const amount = toLedgerMinorUnits(item.amount);
+  const before = toLedgerMinorUnits(item.beforeBalance);
+  const after = toLedgerMinorUnits(item.afterBalance);
+  return item.direction === "贷方" ? after === before + amount : after === before - amount;
+}
+
+function isValidLedgerAmount(value, allowZero) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    return false;
+  }
+  const normalized = String(value).trim().replace(/^¥\s*/, "");
+  if (!/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/.test(normalized)) {
+    return false;
+  }
+  return allowZero || Number(normalized) > 0;
+}
+
+function toLedgerMinorUnits(value) {
+  const [integerPart, fractionPart = ""] = String(value).trim()
+    .replace(/^¥\s*/, "")
+    .split(".");
+  return BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0"));
+}
+
 function normalizeAccountDetail(data) {
   if (!data || typeof data !== "object") {
     return data;
@@ -83,6 +162,38 @@ function normalizeAccountDetail(data) {
     ...data,
     recentLedgers: Array.isArray(data.recentLedgers) ? data.recentLedgers : []
   };
+}
+
+function invalidAccountingResult(message) {
+  return createBusinessError(
+    { code: "ACCOUNTING-CLIENT-INVALID-BUSINESS-RESULT" },
+    message
+  );
+}
+
+export function normalizeAccountingResult(data, field, expectedValue = "", message = "账务响应未确认当前业务实体") {
+  if (!data || typeof data !== "object" || typeof data[field] !== "string"
+      || !data[field].trim() || (expectedValue && data[field] !== expectedValue)) {
+    throw invalidAccountingResult(message);
+  }
+  return data;
+}
+
+export function normalizeAccountingAccountDetailResult(data, expectedAccountNo) {
+  if (!data || typeof data !== "object" || !data.account || typeof data.account !== "object") {
+    throw invalidAccountingResult("账户详情响应未确认当前账户");
+  }
+  normalizeAccountingResult(data.account, "accountNo", expectedAccountNo, "账户详情响应未确认当前账户");
+  return normalizeAccountDetail(data);
+}
+
+export function normalizeAccountingEventResult(data, expectedEventType = "", expectedBizNo = "") {
+  if (!isValidAccountingEvent(data)
+      || (expectedEventType && data.eventType !== expectedEventType)
+      || (expectedBizNo && data.bizNo !== expectedBizNo)) {
+    throw invalidAccountingResult("账务事件响应未确认消费事实");
+  }
+  return data;
 }
 
 function postJson(url, payload) {
@@ -103,8 +214,10 @@ export const subjectApi = {
     });
     return requestPage(`/api/accounting/subjects?${params.toString()}`);
   },
-  create: (payload) => postJson("/api/accounting/subjects", payload),
+  create: (payload) => postJson("/api/accounting/subjects", payload)
+    .then((data) => normalizeAccountingResult(data, "subjectId", "", "账户主体响应未确认主体")),
   getDetail: (subjectId) => request(`/api/accounting/subjects/${subjectId}`)
+    .then((data) => normalizeAccountingResult(data, "subjectId", subjectId, "账户主体详情未确认主体"))
 };
 
 export const accountApi = {
@@ -118,22 +231,44 @@ export const accountApi = {
     });
     return requestPage(`/api/accounting/accounts?${params.toString()}`);
   },
-  open: (payload) => postJson("/api/accounting/accounts/open", payload),
-  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`).then(normalizeAccountDetail),
-  downloadDetail: (accountNo) =>
-    fetch(`/api/accounting/accounts/${encodeURIComponent(accountNo)}/export`).then(async (response) => {
+  open: (payload) => postJson("/api/accounting/accounts/open", payload)
+    .then((data) => normalizeAccountingResult(data, "accountNo", "", "开户响应未确认当前账户")),
+  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`)
+    .then((data) => normalizeAccountingAccountDetailResult(data, accountNo)),
+  downloadDetail: async (accountNo) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+    try {
+      let response;
+      try {
+        response = await fetch(`/api/accounting/accounts/${encodeURIComponent(accountNo)}/export`, {
+          signal: controller.signal
+        });
+      } catch (error) {
+        const code = error?.name === "AbortError"
+          ? "ACCOUNTING-CLIENT-TIMEOUT"
+          : "ACCOUNTING-CLIENT-NETWORK";
+        throw createBusinessError({ code }, error?.name === "AbortError" ? "账务服务导出请求超时" : "无法连接账务服务");
+      }
       if (!response.ok) {
-        throw new Error("账户详情导出失败");
+        throw createBusinessError({ code: `ACCOUNTING-CLIENT-HTTP-${response.status}` }, "账户详情导出失败");
       }
       return response.blob();
-    })
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 };
 
 export const balanceApi = {
-  getDetail: (accountNo) => request(`/api/accounting/balances/${accountNo}`),
-  credit: (payload) => postJson("/api/accounting/balances/credit", payload),
-  freeze: (payload) => postJson("/api/accounting/balances/freeze", payload),
+  getDetail: (accountNo) => request(`/api/accounting/balances/${accountNo}`)
+    .then((data) => normalizeAccountingResult(data, "accountNo", accountNo, "余额详情未确认当前账户")),
+  credit: (payload) => postJson("/api/accounting/balances/credit", payload)
+    .then((data) => normalizeAccountingResult(data, "accountNo", payload?.accountNo, "余额入账响应未确认当前账户")),
+  freeze: (payload) => postJson("/api/accounting/balances/freeze", payload)
+    .then((data) => normalizeAccountingResult(data, "accountNo", payload?.accountNo, "余额冻结响应未确认当前账户")),
   unfreeze: (payload) => postJson("/api/accounting/balances/unfreeze", payload)
+    .then((data) => normalizeAccountingResult(data, "accountNo", payload?.accountNo, "余额解冻响应未确认当前账户"))
 };
 
 export const ledgerApi = {
@@ -145,7 +280,7 @@ export const ledgerApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return requestPage(`/api/accounting/ledgers?${params.toString()}`);
+    return request(`/api/accounting/ledgers?${params.toString()}`).then(normalizeLedgerPage);
   },
   buildExportUrl: ({ accountNo = "", bizNo = "", bizType = "" } = {}) => {
     const params = new URLSearchParams({
@@ -167,8 +302,10 @@ export const freezeApi = {
     });
     return requestPage(`/api/accounting/freezes?${params.toString()}`);
   },
-  create: (payload) => postJson("/api/accounting/freezes", payload),
+  create: (payload) => postJson("/api/accounting/freezes", payload)
+    .then((data) => normalizeAccountingResult(data, "freezeNo", "", "冻结单响应未确认冻结单")),
   unfreeze: (freezeNo, payload) => postJson(`/api/accounting/freezes/${freezeNo}/unfreeze`, payload)
+    .then((data) => normalizeAccountingResult(data, "freezeNo", freezeNo, "解冻响应未确认当前冻结单"))
 };
 
 export const adjustmentApi = {
@@ -181,8 +318,10 @@ export const adjustmentApi = {
     });
     return requestPage(`/api/accounting/adjustments?${params.toString()}`);
   },
-  create: (payload) => postJson("/api/accounting/adjustments", payload),
+  create: (payload) => postJson("/api/accounting/adjustments", payload)
+    .then((data) => normalizeAccountingResult(data, "adjustNo", "", "调账单响应未确认调账单")),
   approve: (adjustNo, payload) => postJson(`/api/accounting/adjustments/${adjustNo}/approve`, payload)
+    .then((data) => normalizeAccountingResult(data, "adjustNo", adjustNo, "调账审核响应未确认当前调账单"))
 };
 
 export const eventApi = {
@@ -194,9 +333,14 @@ export const eventApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return requestPage(`/api/accounting/events?${params.toString()}`);
+    return request(`/api/accounting/events?${params.toString()}`).then(normalizeAccountingEventPage);
   },
-  consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload),
-  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload),
+  consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload)
+    .then((data) => normalizeAccountingEventResult(data, "PAYMENT_SUCCESS", payload?.paymentOrderId)),
+  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload)
+    .then((data) => normalizeAccountingEventResult(data, "CLEARING_GENERATED", payload?.clearingOrderNo)),
+  consumeRefundSuccess: (payload) => postJson("/api/accounting/events/refunds/success", payload)
+    .then((data) => normalizeAccountingEventResult(data, "REFUND_SUCCESS", payload?.refundOrderId)),
   consumeSettlementCompensation: (payload) => postJson("/api/accounting/events/settlements/compensations", payload)
+    .then((data) => normalizeAccountingEventResult(data, "SETTLEMENT_COMPENSATION", payload?.settlementOrderNo))
 };

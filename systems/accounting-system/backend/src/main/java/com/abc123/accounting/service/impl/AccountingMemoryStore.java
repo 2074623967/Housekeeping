@@ -125,6 +125,13 @@ public class AccountingMemoryStore {
         return accountingDataMapper.findBalance(accountNo);
     }
 
+    @Transactional
+    public void lockAccountBalance(String accountNo) {
+        if (accountingDataMapper.findBalanceForUpdate(accountNo) == null) {
+            throw new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND, "账户不存在");
+        }
+    }
+
     public List<AccountLedgerEntity> ledgers() {
         List<AccountLedgerEntity> copied = new ArrayList<>(safeList(accountingDataMapper.findLedgers()));
         copied.sort(Comparator.comparing(AccountLedgerEntity::getCreatedAt,
@@ -134,24 +141,36 @@ public class AccountingMemoryStore {
 
     @Transactional
     public AccountLedgerEntity credit(String accountNo, String bizType, String bizNo, BigDecimal amount, String operatorName) {
-        AccountBalanceEntity balance = findBalance(accountNo);
+        return credit(accountNo, bizType, bizNo, amount, operatorName, null);
+    }
+
+    @Transactional
+    public AccountLedgerEntity credit(String accountNo, String bizType, String bizNo, BigDecimal amount,
+            String operatorName, String payScene) {
+        AccountBalanceEntity balance = accountingDataMapper.findBalanceForUpdate(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
         updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
-        AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "贷方", amount, before, after, operatorName);
+        AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "贷方", amount, before, after, operatorName, payScene);
         accountingDataMapper.insertLedger(entity);
         return entity;
     }
 
     @Transactional
     public AccountLedgerEntity debit(String accountNo, String bizType, String bizNo, BigDecimal amount, String operatorName) {
-        AccountBalanceEntity balance = findBalance(accountNo);
+        return debit(accountNo, bizType, bizNo, amount, operatorName, null);
+    }
+
+    @Transactional
+    public AccountLedgerEntity debit(String accountNo, String bizType, String bizNo, BigDecimal amount,
+            String operatorName, String payScene) {
+        AccountBalanceEntity balance = accountingDataMapper.findBalanceForUpdate(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.subtract(amount);
         updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(accountNo);
-        AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "借方", amount, before, after, operatorName);
+        AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "借方", amount, before, after, operatorName, payScene);
         accountingDataMapper.insertLedger(entity);
         return entity;
     }
@@ -188,7 +207,7 @@ public class AccountingMemoryStore {
 
     private AccountLedgerEntity freezeBalanceOnly(String accountNo, String bizNo, String freezeReason, BigDecimal amount,
             String operatorName) {
-        AccountBalanceEntity balance = findBalance(accountNo);
+        AccountBalanceEntity balance = accountingDataMapper.findBalanceForUpdate(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.subtract(amount);
         updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount().add(amount), balance.getInTransitAmount());
@@ -224,7 +243,7 @@ public class AccountingMemoryStore {
 
     @Transactional
     public AccountLedgerEntity unfreezeBalanceOnly(String accountNo, String bizNo, BigDecimal amount, String operatorName) {
-        AccountBalanceEntity balance = findBalance(accountNo);
+        AccountBalanceEntity balance = accountingDataMapper.findBalanceForUpdate(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
         updateBalanceOrThrow(accountNo, balance, after, balance.getFrozenAmount().subtract(amount), balance.getInTransitAmount());
@@ -265,10 +284,10 @@ public class AccountingMemoryStore {
             return entity;
         }
         accountingDataMapper.updateAdjustmentApproval(adjustNo, "已生效", approvedBy, now());
-        BigDecimal before = findBalance(entity.getAccountNo()).getAvailableAmount();
+        AccountBalanceEntity balance = accountingDataMapper.findBalanceForUpdate(entity.getAccountNo());
+        BigDecimal before = balance.getAvailableAmount();
         BigDecimal amount = entity.getAdjustAmount();
         BigDecimal after = "贷方".equals(entity.getAdjustDirection()) ? before.add(amount) : before.subtract(amount);
-        AccountBalanceEntity balance = findBalance(entity.getAccountNo());
         updateBalanceOrThrow(entity.getAccountNo(), balance, after, balance.getFrozenAmount(), balance.getInTransitAmount());
         updateAccountChangeTime(entity.getAccountNo());
         accountingDataMapper.insertLedger(buildLedger(
@@ -293,6 +312,10 @@ public class AccountingMemoryStore {
     public boolean hasLedger(String accountNo, String bizType, String bizNo) {
         return accountNo != null && bizType != null && bizNo != null
                 && accountingDataMapper.findLedgerByBiz(accountNo, bizType, bizNo) != null;
+    }
+
+    public boolean hasLedgerForOtherAccount(String accountNo, String bizType, String bizNo) {
+        return accountingDataMapper.countLedgersForOtherAccount(accountNo, bizType, bizNo) > 0;
     }
 
     public AccountEventEntity findEvent(String eventType, String bizNo) {
@@ -333,11 +356,17 @@ public class AccountingMemoryStore {
 
     private AccountLedgerEntity buildLedger(String accountNo, String bizType, String bizNo, String direction,
             BigDecimal amount, BigDecimal beforeBalance, BigDecimal afterBalance, String operatorName) {
+        return buildLedger(accountNo, bizType, bizNo, direction, amount, beforeBalance, afterBalance, operatorName, null);
+    }
+
+    private AccountLedgerEntity buildLedger(String accountNo, String bizType, String bizNo, String direction,
+            BigDecimal amount, BigDecimal beforeBalance, BigDecimal afterBalance, String operatorName, String payScene) {
         AccountLedgerEntity entity = new AccountLedgerEntity();
         entity.setLedgerNo(nextNo("LDG", ledgerSeq));
         entity.setAccountNo(accountNo);
         entity.setBizType(bizType);
         entity.setBizNo(bizNo);
+        entity.setPayScene(payScene);
         entity.setDirection(direction);
         entity.setAmount(amount);
         entity.setBeforeBalance(beforeBalance);

@@ -20,6 +20,8 @@ public class ClearingGeneratedEventRequestDTO {
     private String accountNo;
     private String clearingOrderNo;
     private String bizNo;
+    /** 支付业务场景。 */
+    private String payScene;
     private BigDecimal amount;
     private String summary;
 }

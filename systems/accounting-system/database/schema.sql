@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS t_account_ledger (
   account_no VARCHAR(64) NOT NULL COMMENT '账户号',
   biz_type VARCHAR(64) NOT NULL COMMENT '业务类型',
   biz_no VARCHAR(64) NOT NULL COMMENT '业务单号',
+  pay_scene VARCHAR(64) DEFAULT NULL COMMENT '支付业务场景，历史数据可为空',
   direction VARCHAR(16) NOT NULL COMMENT '借贷方向',
   amount DECIMAL(18,2) NOT NULL COMMENT '变动金额',
   before_balance DECIMAL(18,2) NOT NULL COMMENT '变动前余额',
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS t_account_event (
   created_at DATETIME NOT NULL COMMENT '创建时间',
   PRIMARY KEY (id),
   UNIQUE KEY uk_event_no (event_no),
+  UNIQUE KEY uk_event_type_biz_no (event_type, biz_no),
   KEY idx_event_biz_type (biz_no, event_type),
   KEY idx_event_business_chain_id (business_chain_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账户事件表';

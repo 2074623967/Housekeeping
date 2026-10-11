@@ -2,6 +2,7 @@ package com.abc123.accounting.service.impl;
 
 import com.abc123.accounting.dto.AccountDetailDTO;
 import com.abc123.accounting.dto.AccountListItemDTO;
+import com.abc123.accounting.dto.LedgerItemDTO;
 import com.abc123.accounting.dto.OpenAccountRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.entity.AccountEntity;
@@ -81,12 +82,13 @@ public class AccountServiceImpl implements AccountService {
                 ledgers);
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("账户号,主体ID,主体名称,账户类型,账户状态,币种,可用余额,冻结余额,在途余额,最近变更时间\n");
+        builder.append("账户号,主体ID,主体名称,账户类型,账户状态,状态样式,币种,可用余额,冻结余额,在途余额,最近变更时间\n");
         builder.append(csv(detail.getAccount().getAccountNo())).append(',')
                 .append(csv(detail.getAccount().getSubjectId())).append(',')
                 .append(csv(detail.getAccount().getSubjectName())).append(',')
                 .append(csv(detail.getAccount().getAccountType())).append(',')
                 .append(csv(detail.getAccount().getAccountStatus())).append(',')
+                .append(csv(detail.getAccount().getStatusType())).append(',')
                 .append(csv(detail.getAccount().getCurrency())).append(',')
                 .append(csv(detail.getBalance().getAvailableAmount())).append(',')
                 .append(csv(detail.getBalance().getFrozenAmount())).append(',')
@@ -94,8 +96,9 @@ public class AccountServiceImpl implements AccountService {
                 .append(csv(detail.getBalance().getUpdatedAt())).append('\n');
         builder.append('\n');
         builder.append("最近流水\n");
-        builder.append("流水号,业务类型,业务单号,方向,金额,变更前,变更后,状态,操作人,时间\n");
+        builder.append("流水号,业务类型,业务单号,方向,金额,变更前,变更后,状态,状态样式,操作人,时间\n");
         for (AccountLedgerEntity ledger : ledgers) {
+            LedgerItemDTO item = accountingMapper.toLedgerDTO(ledger);
             builder.append(csv(ledger.getLedgerNo())).append(',')
                     .append(csv(ledger.getBizType())).append(',')
                     .append(csv(ledger.getBizNo())).append(',')
@@ -104,6 +107,7 @@ public class AccountServiceImpl implements AccountService {
                     .append(csv(AccountingMemoryStore.formatAmount(ledger.getBeforeBalance()))).append(',')
                     .append(csv(AccountingMemoryStore.formatAmount(ledger.getAfterBalance()))).append(',')
                     .append(csv(ledger.getLedgerStatus())).append(',')
+                    .append(csv(item.getStatusType())).append(',')
                     .append(csv(ledger.getOperatorName())).append(',')
                     .append(csv(ledger.getCreatedAt())).append('\n');
         }

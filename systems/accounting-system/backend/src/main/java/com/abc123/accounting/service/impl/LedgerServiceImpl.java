@@ -50,8 +50,9 @@ public class LedgerServiceImpl implements LedgerService {
                 .collect(Collectors.toList());
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("流水号,账户号,业务类型,业务单号,方向,金额,前余额,后余额,流水状态,操作人,创建时间\n");
+        builder.append("流水号,账户号,业务类型,业务单号,方向,金额,前余额,后余额,流水状态,状态样式,操作人,创建时间\n");
         for (AccountLedgerEntity ledger : records) {
+            LedgerItemDTO item = accountingMapper.toLedgerDTO(ledger);
             builder.append(csv(ledger.getLedgerNo())).append(',')
                     .append(csv(ledger.getAccountNo())).append(',')
                     .append(csv(ledger.getBizType())).append(',')
@@ -61,6 +62,7 @@ public class LedgerServiceImpl implements LedgerService {
                     .append(csv(AccountingMemoryStore.formatAmount(ledger.getBeforeBalance()))).append(',')
                     .append(csv(AccountingMemoryStore.formatAmount(ledger.getAfterBalance()))).append(',')
                     .append(csv(ledger.getLedgerStatus())).append(',')
+                    .append(csv(item.getStatusType())).append(',')
                     .append(csv(ledger.getOperatorName())).append(',')
                     .append(csv(ledger.getCreatedAt())).append('\n');
         }

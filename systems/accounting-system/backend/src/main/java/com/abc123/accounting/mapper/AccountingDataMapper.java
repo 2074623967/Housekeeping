@@ -61,6 +61,8 @@ public interface AccountingDataMapper {
      */
     AccountBalanceEntity findBalance(@Param("accountNo") String accountNo);
 
+    AccountBalanceEntity findBalanceForUpdate(@Param("accountNo") String accountNo);
+
     /**
      * 新增余额快照。
      */
@@ -89,6 +91,10 @@ public interface AccountingDataMapper {
     AccountLedgerEntity findLedgerByBiz(@Param("accountNo") String accountNo,
                                         @Param("bizType") String bizType,
                                         @Param("bizNo") String bizNo);
+
+    long countLedgersForOtherAccount(@Param("accountNo") String accountNo,
+                                     @Param("bizType") String bizType,
+                                     @Param("bizNo") String bizNo);
 
     /**
      * 新增流水。

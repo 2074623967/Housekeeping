@@ -17,6 +17,8 @@ public class AccountLedgerEntity {
     private String bizType;
     /** 业务单号。 */
     private String bizNo;
+    /** 支付业务场景。 */
+    private String payScene;
     /** 借贷方向。 */
     private String direction;
     /** 变更金额。 */

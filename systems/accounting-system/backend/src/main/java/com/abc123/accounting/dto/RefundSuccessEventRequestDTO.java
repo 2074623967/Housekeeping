@@ -17,6 +17,8 @@ public class RefundSuccessEventRequestDTO {
     private String refundOrderId;
     /** 原支付单号。 */
     private String paymentOrderId;
+    /** 原支付业务场景。 */
+    private String payScene;
     /** 退款金额。 */
     private BigDecimal amount;
     /** 事件摘要。 */

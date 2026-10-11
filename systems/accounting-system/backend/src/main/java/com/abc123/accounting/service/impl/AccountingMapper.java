@@ -75,6 +75,7 @@ public class AccountingMapper {
         dto.setAccountNo(entity.getAccountNo());
         dto.setBizType(entity.getBizType());
         dto.setBizNo(entity.getBizNo());
+        dto.setPayScene(entity.getPayScene());
         dto.setDirection(entity.getDirection());
         dto.setAmount(AccountingMemoryStore.formatAmount(entity.getAmount()));
         dto.setBeforeBalance(AccountingMemoryStore.formatAmount(entity.getBeforeBalance()));
