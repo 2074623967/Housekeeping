@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizePaymentTaskCenterOverviewResult } from "../../systems/payment-core/frontend/admin-web/src/api/client.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../systems/payment-core/frontend/admin-web/dist");
 const chromeBinary = process.env.HSP_CHROME_BIN
@@ -79,6 +80,7 @@ const initialPaymentRecord = {
 };
 const taskOverview = {
   expiredPaymentCount: 1, dueExpiredPaymentCount: 1, backingOffExpiredPaymentCount: 0,
+  blockedExpiredPaymentCount: 0, expiredActiveSubmitTokenCount: 0,
   pendingCallbackCount: 0, pendingQueryBacklogCount: 0, duePendingQueryCount: 0,
   pendingRefundQueryBacklogCount: 0, duePendingRefundQueryCount: 0,
   queryMonitorWindowHours: 24, recentQueryCount: 0, recentQueryFailureCount: 0,
@@ -101,6 +103,7 @@ const taskOverview = {
   pendingIssueAlertGenerationCount: 0, pendingIssueAlertEscalationCount: 0,
   actionableIssueSlaCount: 0, focusAlerts: [], recentTaskRuns: []
 };
+normalizePaymentTaskCenterOverviewResult(taskOverview);
 const deadLetterTaskNo = "DEAD-LOCAL-001";
 const initialDeadLetterTask = {
   taskNo: deadLetterTaskNo, messageId: "MESSAGE-LOCAL-001",
