@@ -28235,3 +28235,7 @@ App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 
 ### 10.975 2026-10-11 两组退款服务级回归真正隔离 H2 库
 
 同步终态测试加入后，与原 `RefundDemoRetryIntegrationTest` 同 Maven 进程并跑曾因 H2 `t_payment_protocol_version already exists` 失败：两测试使用 `SpringApplicationBuilder.properties` 注入自定义 URL，但 `application-demo.yml` 的默认 `payment_core` 数据源优先，首个上下文留下 `DB_CLOSE_DELAY=-1` 库，第二个重复执行 schema。现将两测试的 `spring.datasource.url` 改为各自 `.run` 命令行参数，并为新增测试 Bean 增加专用 profile，防止被其他 demo 上下文扫描生效；同进程两组 Surefire `2/2`，零失败/错误/跳过，补丁检查通过。此前单独运行成功只能证明行为分支，不能反证库隔离；这一修正只保证两组本机 H2 测试互不复用数据库，不代表目标 MySQL 8、HTTP、真实资金或后端全量验收。
+
+### 10.976 2026-10-11 退款出站本机 HTTP 定向回归
+
+获准使用本机回环监听后，离线执行 `RefundOutboxHttpIntegrationTest`：8 个用例全部通过，零失败、错误和跳过，Surefire 报告耗时约 27 秒。覆盖退款申请与审核、演示渠道受理/回调、响应丢失后的同键申请、未知受理时的重发阻断与查单确认、预渠道失败恢复，以及渠道配置和签名窗口启动保护。各用例使用 H2/demo 与随机回环端口；测试进程退出，不连接正式渠道。本结果只补充这组真实 Spring HTTP 入口证据，不能代表 gateway-access 双服务、目标 MySQL 8、多实例、正式到账、可信身份、后端全量回归或发布验收。
