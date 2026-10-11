@@ -242,7 +242,7 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("累计退款金额不能超过原支付金额");
         }
         RefundOrderEntity entity = new RefundOrderEntity();
-        entity.setRefundOrderId("REF" + LocalDateTime.now().format(ID_FORMATTER));
+        entity.setRefundOrderId(newRefundOrderId(LocalDateTime.now()));
         entity.setPaymentOrderId(paymentOrderId);
         entity.setOrderNo(source.getOrderNo());
         entity.setCustomerName(source.getCustomerName());
@@ -264,6 +264,10 @@ public class RefundServiceImpl implements RefundService {
         refundDao.insertLog(entity.getRefundOrderId(), "APPLY", "发起退款申请",
                 "INIT", REVIEWING, operator, entity.getRefundReason());
         return refundDao.findByRefundOrderId(entity.getRefundOrderId());
+    }
+
+    static String newRefundOrderId(LocalDateTime timestamp) {
+        return "REF" + timestamp.format(ID_FORMATTER) + UUID.randomUUID().toString().replace("-", "");
     }
 
     private void assertSameRefundRequest(RefundListItemDTO existing, String paymentOrderId,

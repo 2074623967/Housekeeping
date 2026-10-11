@@ -26,8 +26,11 @@ import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -159,6 +162,18 @@ class RefundServiceImplTest {
         assertEquals("REVIEWING", service.apply(request).getStatus());
         verify(refundDao).insertLog(any(), eq("APPLY"), eq("发起退款申请"),
                 eq("INIT"), eq("REVIEWING"), eq("test-operator"), any());
+    }
+
+    @Test
+    void shouldGenerateDistinctRefundOrderIdsWithinSameMillisecond() {
+        LocalDateTime timestamp = LocalDateTime.of(2026, 10, 12, 12, 34, 56, 123_000_000);
+        Set<String> ids = new HashSet<>();
+        for (int attempt = 0; attempt < 128; attempt++) {
+            String refundOrderId = RefundServiceImpl.newRefundOrderId(timestamp);
+            assertTrue(refundOrderId.startsWith("REF20261012123456123"));
+            assertTrue(refundOrderId.length() <= 64);
+            assertTrue(ids.add(refundOrderId));
+        }
     }
 
     @Test

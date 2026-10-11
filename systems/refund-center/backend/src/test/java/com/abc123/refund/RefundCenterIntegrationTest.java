@@ -129,6 +129,7 @@ class RefundCenterIntegrationTest {
         apply.setRefundAmount(new BigDecimal("30.00"));
         apply.setRefundReason("服务取消");
         RefundListItemDTO created = refundService.apply(apply);
+        assertTrue(created.getRefundOrderId().matches("REF\\d{17}[0-9a-f]{32}"));
         assertNotNull(created.getAppliedAt());
         assertEquals("WECHAT", created.getChannelCode());
         assertNull(created.getChannelSubmittedAt());
