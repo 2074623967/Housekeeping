@@ -138,6 +138,32 @@ test("requires payment-chain port and PID isolation before starting or writing",
   assert.match(verify, /run_start "\$scope" "\$verification_mode"/);
 });
 
+test("verify all checks frontend PID and ports before starting backends", async () => {
+  const localStack = await readFile(new URL("tools/dev/local-stack.sh", root), "utf8");
+  const guard = localStack.slice(localStack.indexOf("guard_local_payment_chain_verify() {"),
+    localStack.indexOf("guard_started_local_payment_chain() {"));
+  assert.match(guard, /if \[\[ "\$scope" == "all" \]\]/);
+  assert.match(guard, /frontend\.\$name\.pid/);
+  assert.match(guard, /done < <\(frontend_manifest\)/);
+});
+
+test("verify all refuses a preexisting frontend PID before any backend startup", () => {
+  const runtimeDir = mkdtempSync(join(tmpdir(), "hsp-verify-all-"));
+  try {
+    mkdirSync(join(runtimeDir, "pids"));
+    writeFileSync(join(runtimeDir, "pids", "frontend.payment-admin.pid"), "999999\n");
+    const result = spawnSync("bash", [new URL("tools/dev/local-stack.sh", root).pathname, "verify", "all"], {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, HSP_LOCAL_RUNTIME_DIR: runtimeDir }
+    });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /verify all 发现现存前端 PID 文件: frontend\.payment-admin\.pid/);
+    assert.doesNotMatch(result.stdout, /\[START\]/);
+  } finally {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+});
+
 test("prefers a real macOS JDK before deriving JAVA_HOME from PATH java", async () => {
   const localStack = await readFile(new URL("tools/dev/local-stack.sh", root), "utf8");
   const candidateIndex = localStack.indexOf('for candidate in \\\n    "/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home"');

@@ -538,3 +538,7 @@ payment-core H2/HTTP 定向测试先由主动查单确认成功，再重放查�
 ## 59. 2026-10-11 当前基线风控双服务复核周期
 
 在目标端口与现存 PID 隔离后运行 `local-stack.sh verify risk-review`，支付核心和风控后端均 `READY`，HTTP 冒烟与本地人工复核周期均 `[PASS]`。演示订单待审及批准后变更绑定上下文返回 `PAYMENT-1024`，原请求批准后进入 `WAIT_CALLBACK`；另一个硬拒绝订单维持 `RISK_BLOCKED`。退出码 `0`，两服务停服、端口/PID 无遗留。仅为 H2/demo 的本机 HTTP 状态门禁，不证明可信审核人身份、目标 MySQL 8、正式渠道资金或发布。
+
+## 60. 2026-10-11 全量本地栈写前隔离与闭环复验
+
+`verify all` 新增前端 PID 文件及监听端口写前检查，不再仅隔离后端，避免复用已有管理端或用户端。静态及拒绝现存 PID 的定向测试 `15/15`、开发脚本全量 `105/105` 通过。在独立临时运行目录执行 `local-stack.sh verify all`，12 个后端及 15 个前端均 `READY`，所选 HTTP 冒烟和跨系统 happy-path 均 `[PASS]`；支付、清分、结算、账务和退款事实进入对账，链路 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`。退出码 `0`，本轮 27 个服务均显示 `STOP`，临时 PID 目录无文件。只证明本机 H2/demo 和模拟协议闭环，不代替 MySQL 8、正式渠道真实资金、可信身份及生产发布验收。

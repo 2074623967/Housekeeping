@@ -28267,3 +28267,7 @@ App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 
 ### 10.983 2026-10-11 当前基线支付与风控双服务复核
 
 隔离 `local-stack.sh verify risk-review` 的两后端均 `READY`，本地 HTTP 冒烟和人工复核周期 `[PASS]`：绑定上下文变化 `PAYMENT-1024`，原请求获批准后进入 `WAIT_CALLBACK`，另一个硬拒绝保持 `RISK_BLOCKED`。退出后两服务、端口/PID 清理。此证据不代表可信审核身份、目标 MySQL 8、正式渠道、资金或发布。详见跨系统记录第 59 节。
+
+### 10.984 2026-10-11 全量本地栈隔离与联调
+
+`verify all` 在启动前同时检查前后端现存 PID 和监听端口；定向 `15/15`、开发脚本全量 `105/105` 通过。独立运行目录下 12 后端、15 前端 `READY`，HTTP 冒烟及跨系统 happy-path 均 `[PASS]`，对账 `COMPLETED`、`4/4`、`reconciliationFinancialCloseable=true`；退出码 `0`，本轮 27 服务均 `STOP`，临时 PID 目录无遗留。仅验证本机 H2/demo 和模拟渠道协议，不证明 MySQL 8、正式渠道真实资金、可信身份或发布。详见跨系统记录第 60 节。

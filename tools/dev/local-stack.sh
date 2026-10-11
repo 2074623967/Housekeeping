@@ -597,7 +597,7 @@ run_report() {
 
 guard_local_payment_chain_verify() {
   local scope="$1"
-  local variable_name name relative_dir port health_path
+  local variable_name name system_name relative_dir port health_path api_env_name api_target proxy_path
   local executable
 
   for executable in lsof nc; do
@@ -633,6 +633,19 @@ guard_local_payment_chain_verify() {
       fi
     fi
   done < <(backend_manifest)
+  if [[ "$scope" == "all" ]]; then
+    while IFS='|' read -r name system_name relative_dir port api_env_name api_target proxy_path; do
+      if [[ -f "$PID_DIR/frontend.$name.pid" ]]; then
+        echo "[FAIL] verify all 发现现存前端 PID 文件: frontend.$name.pid" >&2
+        return 2
+      fi
+      if lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 \
+        || nc -z -w 1 127.0.0.1 "$port" >/dev/null 2>&1; then
+        echo "[FAIL] verify all 前端端口 $port 已有服务，拒绝复用" >&2
+        return 2
+      fi
+    done < <(frontend_manifest)
+  fi
   if [[ "$scope" == "payment-query-chain" ]]; then
     if [[ -f "$PID_DIR/payment-query-upstream.pid" ]] \
       || lsof -nP -iTCP:18190 -sTCP:LISTEN -t >/dev/null 2>&1 \
