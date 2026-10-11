@@ -113,6 +113,41 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldNotReadOrWriteAnotherSourceAppPolicyThroughAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            String alias = "HOUSEKEEPING-APP-WEB";
+            PaymentControlPolicyEntity current = mapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web");
+            assertEquals(1, mapper.insertControlPolicyVersion(version(current)));
+            assertEquals(1, mapper.insertControlPolicyReview(review("CPR-ALIAS-001")));
+
+            assertNull(mapper.findControlPolicyBySourceAppIdForUpdate(alias));
+            assertNull(mapper.findControlPolicyBySourceAppId(alias));
+            assertTrue(mapper.findControlPolicyVersions(alias).isEmpty());
+            assertNull(mapper.findControlPolicyVersion(alias, Integer.valueOf(1)));
+            assertNull(mapper.findLatestControlPolicyVersionNo(alias));
+            assertNull(mapper.findPendingControlPolicyReviewForUpdate(alias));
+            assertNull(mapper.findControlPolicyReviewForUpdate("cpr-alias-001"));
+            assertEquals(0, mapper.completeControlPolicyReview(
+                    "cpr-alias-001", "APPROVED", "success", "checker-b", "别名复核"));
+
+            current.setSourceAppId(alias);
+            current.setAccessTokenValue("token-alias");
+            assertEquals(0, mapper.updateControlPolicy(current));
+            assertEquals(0, mapper.updateControlPolicySelfCheck(alias, "FAIL", "danger", "alias"));
+            session.clearCache();
+            PaymentControlPolicyEntity unchanged =
+                    mapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web");
+            assertEquals("token-current", unchanged.getAccessTokenValue());
+            assertEquals("PASS", unchanged.getSelfCheckStatus());
+            assertEquals("CPR-ALIAS-001",
+                    mapper.findPendingControlPolicyReviewForUpdate("housekeeping-app-web").getRequestNo());
+            assertEquals("PENDING_REVIEW",
+                    mapper.findControlPolicyReviewForUpdate("CPR-ALIAS-001").getReviewStatus());
+        }
+    }
+
     private PaymentControlPolicyReviewEntity review(String requestNo) {
         PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
         review.setRequestNo(requestNo);
@@ -189,7 +224,7 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_control_policy_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_control_policy");
             statement.execute("CREATE TABLE t_payment_control_policy ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "source_app_name VARCHAR(128) NOT NULL, allowed_payment_methods VARCHAR(255) NOT NULL, "
                     + "allowed_channel_codes VARCHAR(255) NOT NULL, allowed_merchant_nos VARCHAR(255) NOT NULL, "
                     + "minute_submit_limit INT NOT NULL, interface_minute_submit_limit INT NOT NULL, "
@@ -198,14 +233,14 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     + "self_check_status_type VARCHAR(32) NOT NULL, self_check_message VARCHAR(255) NOT NULL, "
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_control_policy_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "source_app_id VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
                     + "operation_type VARCHAR(32) NOT NULL, "
                     + "source_app_name VARCHAR(128) NOT NULL, allowed_payment_methods VARCHAR(255) NOT NULL, "
                     + "allowed_channel_codes VARCHAR(255) NOT NULL, allowed_merchant_nos VARCHAR(255) NOT NULL, "
                     + "minute_submit_limit INT NOT NULL, interface_minute_submit_limit INT NOT NULL, "
                     + "token_auth_required VARCHAR(32) NOT NULL, access_token_value VARCHAR(128) NOT NULL, "
-                    + "strict_mode VARCHAR(32) NOT NULL, pending_source_app_id VARCHAR(64) UNIQUE, "
+                    + "strict_mode VARCHAR(32) NOT NULL, pending_source_app_id VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "base_fingerprint VARCHAR(64), candidate_status VARCHAR(32) NOT NULL, "
                     + "candidate_status_type VARCHAR(32) NOT NULL, requester VARCHAR(64) NOT NULL, "
                     + "request_reason VARCHAR(255) NOT NULL, review_status VARCHAR(32) NOT NULL, "
@@ -213,7 +248,7 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     + "review_comment VARCHAR(255), created_at DATETIME NOT NULL, reviewed_at DATETIME, "
                     + "updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_control_policy_version ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR(64) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "version_no INT NOT NULL, source_app_name VARCHAR(128) NOT NULL, "
                     + "allowed_payment_methods VARCHAR(255) NOT NULL, allowed_channel_codes VARCHAR(255) NOT NULL, "
                     + "allowed_merchant_nos VARCHAR(255) NOT NULL, minute_submit_limit INT NOT NULL, "

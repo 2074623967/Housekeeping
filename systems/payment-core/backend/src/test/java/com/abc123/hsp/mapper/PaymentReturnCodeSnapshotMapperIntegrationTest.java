@@ -1,9 +1,11 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.sql.Statement;
@@ -78,6 +80,18 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
             assertEquals("v2026.09.1", detail.getReturnCodeMappingVersion());
             assertTrue(detail.getReturnCodeMappingMatched());
             assertEquals("BILL-SNAPSHOT-TARGET", detail.getBillNo());
+            assertEquals("HOME_CLEAN", detail.getPayScene());
+            assertTrue(detail.getPrepayAmountBindingValid());
+        }
+    }
+
+    @Test
+    void shouldNotUpdateReturnCodeSnapshotThroughCaseVariantPaymentIdentifier() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            assertEquals(0, mapper.updatePaymentReturnCodeSnapshot(
+                    "pay-snapshot-001", "ALIAS", "ALIAS", "别名", "核查", "否", "是", "v-alias", false));
+            assertNull(mapper.findDetail("PAY-SNAPSHOT-001").getChannelReturnCode());
         }
     }
 
@@ -87,7 +101,8 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
 
             assertEquals(1, mapper.updateBillAfterPayment(
-                    "BILL-SNAPSHOT-TARGET", new BigDecimal("88.00"), "已结清", "success"));
+                    "BILL-SNAPSHOT-TARGET", new BigDecimal("88.00"), "已结清", "success",
+                    "ORD-SNAPSHOT-001", "测试客户", BigDecimal.ZERO));
 
             try (Statement statement = session.getConnection().createStatement();
                  java.sql.ResultSet resultSet = statement.executeQuery(
@@ -104,6 +119,75 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRejectCaseVariantPrepayOrderNumberInPaymentDetail() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            assertTrue(mapper.findDetail("PAY-SNAPSHOT-001").getPrepayAmountBindingValid());
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no='ord-snapshot-001' "
+                    + "WHERE payment_order_id='PAY-SNAPSHOT-001'");
+            session.clearCache();
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    mapper.findDetail("PAY-SNAPSHOT-001").getPrepayAmountBindingValid());
+        }
+    }
+
+    @Test
+    void shouldNotReadPaymentDetailOrSubmissionThroughCaseVariantIdentifier() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            assertTrue(mapper.findDetail("PAY-SNAPSHOT-001") != null);
+            assertTrue(mapper.findSubmissionFact("PAY-SNAPSHOT-001") != null);
+            assertNull(mapper.findDetail("pay-snapshot-001"));
+            assertNull(mapper.findSubmissionFact("pay-snapshot-001"));
+        }
+    }
+
+    @Test
+    void shouldNotAttachCaseVariantPrepayOrAttemptToPaymentDetail() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(payment_order_id, attempt_status, created_at) VALUES "
+                    + "('PAY-SNAPSHOT-001', '已提交', NOW()), "
+                    + "('pay-snapshot-001', '成功', NOW())");
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, order_no, amount, pay_scene, payment_order_id, created_at) "
+                    + "VALUES ('PRE-SNAPSHOT-ALIAS', 'BILL-SNAPSHOT-OTHER', 'ORD-SNAPSHOT-001', "
+                    + "88.00, 'HOME_CLEAN', 'pay-snapshot-001', NOW())");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            PaymentDetailDTO detail = mapper.findDetail("PAY-SNAPSHOT-001");
+            assertEquals("BILL-SNAPSHOT-TARGET", detail.getBillNo());
+            assertTrue(detail.getPrepayAmountBindingValid());
+            assertEquals("已提交", detail.getLatestAttemptStatus());
+            assertEquals("已提交", mapper.findSubmissionFact("PAY-SNAPSHOT-001").getLatestAttemptStatus());
+        }
+    }
+
+    @Test
+    void shouldNotShowCaseVariantPrepayOrAttemptInPaymentLists() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(payment_order_id, attempt_status, created_at) VALUES "
+                    + "('PAY-SNAPSHOT-001', '已提交', NOW()), "
+                    + "('pay-snapshot-001', '成功', NOW())");
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, order_no, amount, pay_scene, payment_order_id, created_at) "
+                    + "VALUES ('PRE-SNAPSHOT-ALIAS', 'BILL-SNAPSHOT-OTHER', 'ORD-SNAPSHOT-001', "
+                    + "88.00, 'OTHER_SCENE', 'pay-snapshot-001', NOW())");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+
+            assertEquals("HOME_CLEAN", mapper.findAll(query).get(0).getPayScene());
+            assertEquals("已提交", mapper.findAll(query).get(0).getLatestAttemptStatus());
+            assertEquals("HOME_CLEAN", mapper.findAllForExport(query).get(0).getPayScene());
+            assertEquals("已提交", mapper.findAllForExport(query).get(0).getLatestAttemptStatus());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -117,8 +201,10 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_bill");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
+            statement.execute("DROP TABLE IF EXISTS t_order");
+            statement.execute("CREATE TABLE t_order (order_no VARCHAR(64))");
             statement.execute("CREATE TABLE t_payment_order ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), order_no VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), order_no VARCHAR_IGNORECASE(64), "
                     + "customer_name VARCHAR(128), amount DECIMAL(18,2), payment_method VARCHAR(64), "
                     + "channel_code VARCHAR(64), channel_transaction_no VARCHAR(128), "
                     + "last_channel_return_code VARCHAR(64), last_standardized_code VARCHAR(64), "
@@ -128,12 +214,16 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
-                    + "bill_no VARCHAR(64), payment_order_id VARCHAR(64), created_at DATETIME)");
+                    + "bill_no VARCHAR(64), order_no VARCHAR_IGNORECASE(64), amount DECIMAL(18,2), "
+                    + "pay_scene VARCHAR(32), payment_order_id VARCHAR(64), "
+                    + "source_kind VARCHAR(16) DEFAULT 'UNKNOWN', created_at DATETIME)");
             statement.execute("CREATE TABLE t_bill ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64), order_no VARCHAR(64), "
+                    + "customer_name VARCHAR(128), bill_amount DECIMAL(18,2), "
                     + "paid_amount DECIMAL(18,2), bill_status VARCHAR(32), bill_status_type VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_attempt ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), terminal VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
+                    + "channel_code VARCHAR(64), payment_method VARCHAR(64), terminal VARCHAR(64), "
                     + "client_ip VARCHAR(64), idempotency_key VARCHAR(128), attempt_status VARCHAR(32), "
                     + "attempt_status_type VARCHAR(32), ops_config_snapshot_version BIGINT, "
                     + "request_payload CLOB, response_payload CLOB, completed_at DATETIME, created_at DATETIME)");
@@ -142,12 +232,15 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "('PAY-SNAPSHOT-001', 'ORD-SNAPSHOT-001', '测试客户', 88.00, "
                     + "'微信支付', 'wx_h5', 'CH-SNAPSHOT-001', 'WAIT_CALLBACK', 'warn', NOW())");
             statement.executeUpdate("INSERT INTO t_prepay_order "
-                    + "(prepay_order_no, bill_no, payment_order_id, created_at) VALUES "
-                    + "('PRE-SNAPSHOT-001', 'BILL-SNAPSHOT-TARGET', 'PAY-SNAPSHOT-001', NOW())");
+                    + "(prepay_order_no, bill_no, order_no, amount, pay_scene, payment_order_id, created_at) VALUES "
+                    + "('PRE-SNAPSHOT-001', 'BILL-SNAPSHOT-TARGET', 'ORD-SNAPSHOT-001', 88.00, "
+                    + "'HOME_CLEAN', 'PAY-SNAPSHOT-001', NOW())");
             statement.executeUpdate("INSERT INTO t_bill "
-                    + "(bill_no, order_no, paid_amount, bill_status, bill_status_type) VALUES "
-                    + "('BILL-SNAPSHOT-TARGET', 'ORD-SNAPSHOT-001', 0.00, '待支付', 'warn'), "
-                    + "('BILL-SNAPSHOT-OTHER', 'ORD-SNAPSHOT-001', 0.00, '待支付', 'warn')");
+                    + "(bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type) "
+                    + "VALUES ('BILL-SNAPSHOT-TARGET', 'ORD-SNAPSHOT-001', '测试客户', 88.00, "
+                    + "0.00, '待支付', 'warn'), "
+                    + "('BILL-SNAPSHOT-OTHER', 'ORD-SNAPSHOT-001', '测试客户', 88.00, "
+                    + "0.00, '待支付', 'warn')");
             session.commit();
         }
     }

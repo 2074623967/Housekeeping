@@ -40,6 +40,7 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
     void setUpScopeLock() {
         lenient().when(paymentConfigMapper.lockIssueDutyRosterScope(anyString(), anyString()))
                 .thenReturn(Long.valueOf(1L));
+        lenient().when(paymentConfigMapper.insertIssueDutyRosterReview(any())).thenReturn(1);
     }
 
     @Test
@@ -71,6 +72,20 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
         assertEquals("STATUS_CHANGE", captor.getAllValues().get(2).getOperationType());
         assertEquals("DISABLED", captor.getAllValues().get(2).getCandidateStatus());
         verify(paymentConfigMapper, never()).insertIssueDutyRoster(any());
+        verify(paymentConfigMapper, never()).updateIssueDutyRoster(any());
+    }
+
+    @Test
+    void shouldStopStatusReviewWhenDatabaseAffectsNoRow() {
+        when(paymentConfigMapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1"))
+                .thenReturn(roster("ENABLED"));
+        when(paymentConfigMapper.insertIssueDutyRosterReview(any())).thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .toggleIssueDutyRoster(statusRequest("duty_callback_p1", false)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
         verify(paymentConfigMapper, never()).updateIssueDutyRoster(any());
     }
 
@@ -339,6 +354,18 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
         assertTrue(assertThrows(IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
                         .createIssueDutyRoster(invalidTimeout)).getMessage().contains("升级超时"));
+    }
+
+    @Test
+    void shouldRejectControlCharactersInDutyRosterText() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = rosterRequest("DUTY_NEW_CONTROL");
+        request.setIssueType("PAYMENT\nISSUE");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request));
+
+        assertEquals("异常类型不能包含控制字符", exception.getMessage());
+        verify(paymentConfigMapper, never()).insertIssueDutyRosterReview(any());
     }
 
     private PaymentIssueDutyRosterStatusReviewRequestDTO statusRequest(String rosterCode, boolean enabled) {

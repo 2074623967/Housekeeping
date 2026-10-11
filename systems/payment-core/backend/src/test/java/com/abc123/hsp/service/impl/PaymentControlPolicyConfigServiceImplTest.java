@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +25,7 @@ import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -37,6 +39,13 @@ class PaymentControlPolicyConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void setUpControlPolicyReviewInsert() {
+        lenient().when(paymentConfigMapper.insertControlPolicyReview(any())).thenReturn(1);
+        lenient().when(paymentConfigMapper.insertControlPolicyVersion(
+                any(PaymentControlPolicyVersionEntity.class))).thenReturn(1);
+    }
 
     @Test
     void shouldSubmitStatusCandidateWithoutChangingRuntime() {
@@ -54,6 +63,21 @@ class PaymentControlPolicyConfigServiceImplTest {
         assertEquals("housekeeping-app-web", captor.getValue().getPendingSourceAppId());
         assertEquals("ENABLED", captor.getValue().getCandidateStatus());
         assertEquals(64, captor.getValue().getBaseFingerprint().length());
+        verify(paymentConfigMapper, never()).updateControlPolicy(any());
+    }
+
+    @Test
+    void shouldRejectStatusCandidateWhenReviewInsertDoesNotTakeEffect() {
+        when(paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web"))
+                .thenReturn(policy("DISABLED"));
+        when(paymentConfigMapper.insertControlPolicyReview(any(PaymentControlPolicyReviewEntity.class)))
+                .thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitControlPolicyStatusReview(statusRequest("HOUSEKEEPING-APP-WEB", true)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
         verify(paymentConfigMapper, never()).updateControlPolicy(any());
     }
 
@@ -85,6 +109,32 @@ class PaymentControlPolicyConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectControlCharactersInAccessTokenBeforeReviewWrite() {
+        PaymentControlPolicyUpsertRequestDTO request = policyRequest("NEW-APP");
+        request.setAccessTokenValue("token-new\nforged");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitControlPolicyReview(reviewRequest(request)));
+
+        assertEquals("接口访问令牌不能包含控制字符", exception.getMessage());
+        verify(paymentConfigMapper, never()).insertControlPolicyReview(any());
+    }
+
+    @Test
+    void shouldRejectControlCharactersInImportedPolicyText() {
+        PaymentControlPolicyUpsertRequestDTO request = policyRequest("NEW-APP");
+        request.setSourceAppName("家政收银台\n伪造");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitControlPolicyReview(reviewRequest(request)));
+
+        assertEquals("来源应用名称不能包含控制字符", exception.getMessage());
+        verify(paymentConfigMapper, never()).insertControlPolicyReview(any());
+    }
+
+    @Test
     void shouldApproveUpdateAndInvalidatePreviousSelfCheck() {
         PaymentControlPolicyEntity current = policy("ENABLED");
         when(paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web"))
@@ -113,6 +163,30 @@ class PaymentControlPolicyConfigServiceImplTest {
                         && "token-new".equals(applied.getAccessTokenValue())));
         verify(paymentConfigMapper).completeControlPolicyReview(
                 review.getRequestNo(), "APPROVED", "success", "checker-b", "确认变更");
+    }
+
+    @Test
+    void shouldStopControlPolicyReviewWhenVersionInsertDoesNotTakeEffect() {
+        PaymentControlPolicyEntity current = policy("ENABLED");
+        when(paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web"))
+                .thenReturn(current);
+        when(paymentConfigMapper.findLatestControlPolicyVersionNo("housekeeping-app-web"))
+                .thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findControlPolicyReviews()).thenReturn(Collections.emptyList());
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        service.submitControlPolicyReview(reviewRequest(policyRequest("housekeeping-app-web")));
+        ArgumentCaptor<PaymentControlPolicyReviewEntity> captor =
+                ArgumentCaptor.forClass(PaymentControlPolicyReviewEntity.class);
+        verify(paymentConfigMapper).insertControlPolicyReview(captor.capture());
+        PaymentControlPolicyReviewEntity review = captor.getValue();
+        when(paymentConfigMapper.findControlPolicyReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.updateControlPolicy(any(PaymentControlPolicyEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.insertControlPolicyVersion(any(PaymentControlPolicyVersionEntity.class)))
+                .thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.approveControlPolicyReview(review.getRequestNo(), action("checker-b")));
+        verify(paymentConfigMapper, never()).completeControlPolicyReview(any(), any(), any(), any(), any());
     }
 
     @Test

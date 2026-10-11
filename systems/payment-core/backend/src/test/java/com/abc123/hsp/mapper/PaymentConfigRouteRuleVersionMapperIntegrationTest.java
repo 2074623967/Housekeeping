@@ -2,14 +2,18 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
+import com.abc123.hsp.service.impl.PaymentConfigServiceImpl;
 import java.io.InputStream;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -102,6 +106,63 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotRouteThroughAliasedEnabledStatuses() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertEquals(2, mapper.findEnabledChannelsForRouting().size());
+            assertEquals(1, mapper.findEnabledRouteRulesForRouting().size());
+
+            statement.executeUpdate("UPDATE t_payment_channel_config SET status='enabled' "
+                    + "WHERE channel_code='wx_h5'");
+            session.clearCache();
+            assertEquals(1, mapper.findEnabledChannelsForRouting().size());
+            assertEquals("alipay_h5", mapper.findEnabledChannelsForRouting().get(0).getChannelCode());
+            statement.executeUpdate("UPDATE t_payment_channel_config SET status='ENABLED ' "
+                    + "WHERE channel_code='wx_h5'");
+            session.clearCache();
+            assertEquals(1, mapper.findEnabledChannelsForRouting().size());
+            statement.executeUpdate("UPDATE t_payment_channel_config SET status='ENABLED' "
+                    + "WHERE channel_code='wx_h5'");
+            session.clearCache();
+            assertEquals(2, mapper.findEnabledChannelsForRouting().size());
+
+            statement.executeUpdate("UPDATE t_payment_route_rule_config SET status='enabled' "
+                    + "WHERE rule_code='RULE_HOME_APP'");
+            session.clearCache();
+            assertEquals(0, mapper.findEnabledRouteRulesForRouting().size());
+            statement.executeUpdate("UPDATE t_payment_route_rule_config SET status='ENABLED ' "
+                    + "WHERE rule_code='RULE_HOME_APP'");
+            session.clearCache();
+            assertEquals(0, mapper.findEnabledRouteRulesForRouting().size());
+            statement.executeUpdate("UPDATE t_payment_route_rule_config SET status='ENABLED' "
+                    + "WHERE rule_code='RULE_HOME_APP'");
+            session.clearCache();
+            assertEquals(1, mapper.findEnabledRouteRulesForRouting().size());
+        }
+    }
+
+    @Test
+    void shouldKeepRouteRuleConfigurationAndVersionOutOfCaseAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertNull(mapper.findRouteRuleByCode("rule_home_app"));
+            assertNull(mapper.findRouteRuleByCodeForUpdate("rule_home_app"));
+            assertEquals(0, mapper.findRouteRuleVersions("rule_home_app").size());
+            assertNull(mapper.findRouteRuleVersion("rule_home_app", 1));
+            assertEquals(Integer.valueOf(0), mapper.findLatestRouteRuleVersionNo("rule_home_app"));
+
+            PaymentRouteRuleConfigEntity rule = mapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP");
+            rule.setRuleCode("rule_home_app");
+            rule.setTargetChannelCode("alias_channel");
+            assertEquals(0, mapper.updateRouteRule(rule));
+            session.clearCache();
+            assertEquals("wx_h5", mapper.findRouteRuleByCode("RULE_HOME_APP").getTargetChannelCode());
+            assertEquals("BASELINE", mapper.findRouteRuleVersion("RULE_HOME_APP", 1).getChangeType());
+        }
+    }
+
+    @Test
     void shouldPersistLockAndCompleteRouteRuleReview() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
@@ -127,6 +188,11 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             review.setReviewStatusType("warn");
 
             assertEquals(1, mapper.insertRouteRuleReview(review));
+            assertEquals(0, mapper.countPendingRouteRuleReviews("rule_home_app"));
+            assertNull(mapper.findRouteRuleReviewForUpdate("rrv-001"));
+            assertEquals(0, mapper.completeRouteRuleReview(
+                    "rrv-001", "APPROVED", "success", "reviewer-b", "别名复核",
+                    Boolean.TRUE, Boolean.TRUE, "[\"RULE_A_APP\",\"RULE_Z_APP\"]"));
             assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
             PaymentRouteRuleReviewEntity duplicatePending = buildReview("RRV-002");
             assertThrows(PersistenceException.class, () -> mapper.insertRouteRuleReview(duplicatePending));
@@ -156,6 +222,45 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             assertEquals(Boolean.TRUE, completed.getPriorityCollisionAcknowledged());
             assertEquals("[\"RULE_A_APP\",\"RULE_Z_APP\"]", completed.getPriorityCollisionRuleCodesJson());
             session.commit();
+        }
+    }
+
+    @Test
+    void shouldRejectCrossMethodFallbackReadFromChannelConfigurationBeforeReviewInsert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertEquals("微信支付", mapper.findChannelForRouting("wx_h5").getPaymentMethod());
+            assertEquals("支付宝", mapper.findChannelForRouting("alipay_h5").getPaymentMethod());
+
+            PaymentRouteRuleUpsertRequestDTO candidate = new PaymentRouteRuleUpsertRequestDTO();
+            candidate.setRuleCode("RULE_HOME_APP");
+            candidate.setRuleName("家政 App 小额路由");
+            candidate.setMatchScene("HOME_CLEAN/APP");
+            candidate.setMatchExpression("terminal IN (H5, APP)");
+            candidate.setTargetChannelCode("wx_h5");
+            candidate.setFallbackChannelCode("alipay_h5");
+            candidate.setRolloutPercentage(Integer.valueOf(30));
+            candidate.setRolloutSalt("home-app-v1");
+            candidate.setPriority(Integer.valueOf(10));
+            candidate.setEnabled(Boolean.TRUE);
+            candidate.setChangeReason("复核存量兜底");
+            PaymentRouteRuleReviewSubmitRequestDTO request = new PaymentRouteRuleReviewSubmitRequestDTO();
+            request.setRequester("maker-a");
+            request.setCandidate(candidate);
+
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> new PaymentConfigServiceImpl(mapper).submitRouteRuleReview(request));
+            assertEquals("目标渠道与兜底渠道支付方式必须一致", error.getMessage());
+            assertEquals(0, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_channel_config SET payment_method = '微信支付' "
+                        + "WHERE channel_code = 'alipay_h5'");
+            }
+            session.clearCache();
+            new PaymentConfigServiceImpl(mapper).submitRouteRuleReview(request);
+            assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
+            assertEquals("alipay_h5", mapper.findRouteRuleByCode("RULE_HOME_APP").getFallbackChannelCode());
         }
     }
 
@@ -245,17 +350,27 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_config");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_conflict_lock");
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
+            statement.execute("CREATE TABLE t_payment_channel_config ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR_IGNORECASE(64) UNIQUE, "
+                    + "payment_method VARCHAR(64) NOT NULL, scene_scope VARCHAR(128), "
+                    + "daily_limit DECIMAL(18,2), priority INT, route_weight INT, "
+                    + "status VARCHAR_IGNORECASE(32))");
+            statement.executeUpdate("INSERT INTO t_payment_channel_config "
+                    + "(channel_code, payment_method, scene_scope, daily_limit, priority, route_weight, status) VALUES "
+                    + "('wx_h5', '微信支付', 'H5/APP', 500000.00, 1, 100, 'ENABLED'), "
+                    + "('alipay_h5', '支付宝', 'H5/APP', 500000.00, 2, 100, 'ENABLED')");
             statement.execute("CREATE TABLE t_payment_route_rule_config ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64) UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
                     + "rollout_percentage INT, rollout_salt VARCHAR(64), "
-                    + "status VARCHAR(32), status_type VARCHAR(32), priority INT, updated_at DATETIME)");
+                    + "status VARCHAR_IGNORECASE(32), status_type VARCHAR(32), priority INT, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_rule_conflict_lock ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, lock_name VARCHAR(64) UNIQUE, "
                     + "created_at DATETIME, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_rule_version ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64), version_no INT, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR_IGNORECASE(64), version_no INT, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
                     + "rollout_percentage INT, rollout_salt VARCHAR(64), "
@@ -263,8 +378,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + "source_version_no INT, change_reason VARCHAR(255), created_at DATETIME, "
                     + "UNIQUE(rule_code, version_no))");
             statement.execute("CREATE TABLE t_payment_route_rule_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
-                    + "rule_code VARCHAR(64), pending_rule_code VARCHAR(64) UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) UNIQUE, "
+                    + "rule_code VARCHAR_IGNORECASE(64), pending_rule_code VARCHAR(64) UNIQUE, "
                     + "base_version_no INT, source_version_no INT, operation_type VARCHAR(32), "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "

@@ -73,6 +73,10 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     roster.getIssueType(), roster.getSeverity()).size());
 
             assertEquals(1, mapper.insertIssueDutyRosterReview(review("DRR-TEST-001")));
+            assertNull(mapper.findPendingIssueDutyRosterReviewForUpdate("duty_callback_p1"));
+            assertNull(mapper.findIssueDutyRosterReviewForUpdate("drr-test-001"));
+            assertEquals(0, mapper.completeIssueDutyRosterReview(
+                    "drr-test-001", "APPROVED", "success", "checker-b", "别名复核"));
             assertEquals("DRR-TEST-001",
                     mapper.findPendingIssueDutyRosterReviewForUpdate("DUTY_CALLBACK_P1").getRequestNo());
             PaymentIssueDutyRosterReviewEntity locked =
@@ -117,6 +121,24 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
             assertEquals("5,6,7", completed.getWeekdayScope());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
             assertEquals(2, reviews.size());
+        }
+    }
+
+    @Test
+    void shouldNotReadOrUpdateDutyRosterThroughCodeAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            PaymentIssueDutyRosterEntity roster =
+                    mapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1");
+            assertEquals("支付后端值班", roster.getReceiver());
+            assertNull(mapper.findIssueDutyRosterByCodeForUpdate("duty_callback_p1"));
+
+            roster.setRosterCode("duty_callback_p1");
+            roster.setReceiver("别名覆盖");
+            assertEquals(0, mapper.updateIssueDutyRoster(roster));
+            session.clearCache();
+            assertEquals("支付后端值班",
+                    mapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1").getReceiver());
         }
     }
 
@@ -218,7 +240,7 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     + "severity VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL, "
                     + "updated_at DATETIME NOT NULL, UNIQUE(issue_type, severity))");
             statement.execute("CREATE TABLE t_payment_issue_duty_roster ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, roster_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, roster_code VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "issue_type VARCHAR(64) NOT NULL, severity VARCHAR(32) NOT NULL, "
                     + "responsibility_group VARCHAR(64) NOT NULL, receiver VARCHAR(64) NOT NULL, "
                     + "notify_channels VARCHAR(64) NOT NULL, escalation_level VARCHAR(32) NOT NULL, "
@@ -229,7 +251,7 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, "
                     + "updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_issue_duty_roster_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "roster_code VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
                     + "issue_type VARCHAR(64) NOT NULL, severity VARCHAR(32) NOT NULL, "
                     + "responsibility_group VARCHAR(64) NOT NULL, receiver VARCHAR(64) NOT NULL, "
@@ -238,7 +260,7 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     + "escalation_timeout_minutes INT NOT NULL, schedule_tag VARCHAR(64) NOT NULL, "
                     + "effective_start_hour TINYINT NOT NULL, effective_end_hour TINYINT NOT NULL, "
                     + "weekday_scope VARCHAR(32) NOT NULL, holiday_strategy VARCHAR(32) NOT NULL, "
-                    + "pending_roster_code VARCHAR(64) UNIQUE, base_fingerprint VARCHAR(64), "
+                    + "pending_roster_code VARCHAR_IGNORECASE(64) UNIQUE, base_fingerprint VARCHAR(64), "
                     + "candidate_status VARCHAR(32) NOT NULL, candidate_status_type VARCHAR(32) NOT NULL, "
                     + "requester VARCHAR(64) NOT NULL, request_reason VARCHAR(255) NOT NULL, "
                     + "review_status VARCHAR(32) NOT NULL, review_status_type VARCHAR(32) NOT NULL, "

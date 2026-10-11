@@ -73,6 +73,10 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
             assertEquals("MCH-NEW-002", mapper.findChannelByCodeForUpdate("new_h5").getMerchantNo());
 
             assertEquals(1, mapper.insertChannelReview(review("CSR-TEST-001")));
+            assertNull(mapper.findPendingChannelReviewForUpdate("WX_H5"));
+            assertNull(mapper.findChannelReviewForUpdate("csr-test-001"));
+            assertEquals(0, mapper.completeChannelReview(
+                    "csr-test-001", "APPROVED", "success", "checker-b", "别名复核"));
             assertEquals("CSR-TEST-001",
                     mapper.findPendingChannelReviewForUpdate("wx_h5").getRequestNo());
             assertEquals("DISABLED",
@@ -96,6 +100,31 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
             assertEquals("已配置", completed.getCallbackSecretMasked());
             assertEquals(Boolean.TRUE, completed.getCallbackPublicKeyConfigured());
             assertEquals(2, reviews.size());
+        }
+    }
+
+    @Test
+    void shouldKeepChannelConfigurationAndVersionsOutOfCaseAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            PaymentChannelConfigEntity channel = mapper.findChannelByCodeForUpdate("wx_h5");
+            assertEquals(1, mapper.insertChannelVersion(version(channel)));
+
+            assertNull(mapper.findChannelByCode("WX_H5"));
+            assertNull(mapper.findChannelByCodeForUpdate("WX_H5"));
+            assertNull(mapper.findChannelForRouting("WX_H5"));
+            assertEquals(0, mapper.findChannelVersions("WX_H5").size());
+            assertNull(mapper.findChannelVersion("WX_H5", Integer.valueOf(1)));
+            assertNull(mapper.findLatestChannelVersionNo("WX_H5"));
+
+            channel.setChannelCode("WX_H5");
+            channel.setCallbackSecret("alias-secret");
+            assertEquals(0, mapper.updateChannel(channel));
+            assertEquals(0, mapper.updateChannelStatus("WX_H5", "DISABLED", "danger"));
+            session.clearCache();
+            assertEquals("secret", mapper.findChannelByCode("wx_h5").getCallbackSecret());
+            assertEquals("ENABLED", mapper.findChannelByCode("wx_h5").getStatus());
+            assertEquals("secret", mapper.findChannelVersion("wx_h5", Integer.valueOf(1)).getCallbackSecret());
         }
     }
 
@@ -142,7 +171,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("CREATE TABLE t_payment_channel_config ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "channel_name VARCHAR(128) NOT NULL, payment_method VARCHAR(64) NOT NULL, "
                     + "merchant_no VARCHAR(128) NOT NULL, merchant_app_id VARCHAR(128) NOT NULL, "
                     + "callback_secret VARCHAR(256) NOT NULL, callback_sign_algorithm VARCHAR(32) NOT NULL, "
@@ -153,7 +182,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "status_type VARCHAR(32) NOT NULL, daily_limit DECIMAL(18,2) NOT NULL, "
                     + "priority INT NOT NULL, route_weight INT NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_channel_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "channel_code VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
                     + "operation_type VARCHAR(32) NOT NULL, "
                     + "channel_name VARCHAR(128) NOT NULL, payment_method VARCHAR(64) NOT NULL, "
@@ -164,7 +193,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "refund_window_days INT NOT NULL, risk_control_tag VARCHAR(128) NOT NULL, "
                     + "scene_scope VARCHAR(128) NOT NULL, daily_limit DECIMAL(18,2) NOT NULL, "
                     + "priority INT NOT NULL, route_weight INT NOT NULL, "
-                    + "pending_channel_code VARCHAR(64) UNIQUE, base_fingerprint VARCHAR(64), "
+                    + "pending_channel_code VARCHAR_IGNORECASE(64) UNIQUE, base_fingerprint VARCHAR(64), "
                     + "candidate_status VARCHAR(32) NOT NULL, "
                     + "candidate_status_type VARCHAR(32) NOT NULL, requester VARCHAR(64) NOT NULL, "
                     + "request_reason VARCHAR(255) NOT NULL, review_status VARCHAR(32) NOT NULL, "
@@ -172,7 +201,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "review_comment VARCHAR(255), created_at DATETIME NOT NULL, reviewed_at DATETIME, "
                     + "updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_channel_version ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "version_no INT NOT NULL, channel_name VARCHAR(128) NOT NULL, "
                     + "payment_method VARCHAR(64) NOT NULL, merchant_no VARCHAR(128) NOT NULL, "
                     + "merchant_app_id VARCHAR(128) NOT NULL, callback_secret VARCHAR(256) NOT NULL, "

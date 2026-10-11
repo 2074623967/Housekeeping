@@ -67,6 +67,8 @@
                route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -93,6 +95,8 @@
                route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -126,6 +130,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_channel_version
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
         ORDER BY version_no DESC
     </select>
 
@@ -155,6 +161,8 @@
                change_reason AS changeReason
         FROM t_payment_channel_version
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND version_no = #{versionNo}
         LIMIT 1
     </select>
@@ -163,6 +171,8 @@
         SELECT MAX(version_no)
         FROM t_payment_channel_version
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
     </select>
 
     <select id="findChannelReviews" resultType="com.abc123.hsp.dto.PaymentChannelReviewDTO">
@@ -241,6 +251,8 @@
                review_comment AS reviewComment
         FROM t_payment_channel_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -252,6 +264,8 @@
                review_status AS reviewStatus
         FROM t_payment_channel_review
         WHERE pending_channel_code = #{pendingChannelCode}
+          AND CHAR_LENGTH(pending_channel_code) = CHAR_LENGTH(#{pendingChannelCode})
+          AND CAST(pending_channel_code AS BINARY(256)) = CAST(#{pendingChannelCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -296,6 +310,8 @@
                priority
         FROM t_payment_route_rule_config
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -313,6 +329,8 @@
                priority
         FROM t_payment_route_rule_config
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -358,6 +376,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_route_rule_version
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
         ORDER BY version_no DESC
     </select>
 
@@ -379,6 +399,8 @@
                change_reason AS changeReason
         FROM t_payment_route_rule_version
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
           AND version_no = #{versionNo}
         LIMIT 1
     </select>
@@ -387,6 +409,8 @@
         SELECT COALESCE(MAX(version_no), 0)
         FROM t_payment_route_rule_version
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
     </select>
 
     <select id="findRouteRuleReviews" resultType="com.abc123.hsp.dto.PaymentRouteRuleReviewDTO">
@@ -451,6 +475,8 @@
                priority_collision_rule_codes_json AS priorityCollisionRuleCodesJson
         FROM t_payment_route_rule_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -459,6 +485,8 @@
         SELECT COUNT(1)
         FROM t_payment_route_rule_review
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </select>
 
@@ -530,6 +558,8 @@
                priority
         FROM t_payment_protocol_config
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -554,6 +584,8 @@
                priority
         FROM t_payment_protocol_config
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -584,6 +616,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_protocol_version
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
         ORDER BY version_no DESC
     </select>
 
@@ -612,6 +646,8 @@
                change_reason AS changeReason
         FROM t_payment_protocol_version
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
           AND version_no = #{versionNo}
         LIMIT 1
     </select>
@@ -620,6 +656,8 @@
         SELECT MAX(version_no)
         FROM t_payment_protocol_version
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
     </select>
 
     <select id="findProtocolReviews" resultType="com.abc123.hsp.dto.PaymentProtocolReviewDTO">
@@ -692,6 +730,8 @@
                review_comment AS reviewComment
         FROM t_payment_protocol_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -700,6 +740,8 @@
         SELECT COUNT(1)
         FROM t_payment_protocol_review
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </select>
 
@@ -771,7 +813,11 @@
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_channel_return_code_map
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND channel_return_code = #{channelReturnCode}
+          AND CHAR_LENGTH(channel_return_code) = CHAR_LENGTH(#{channelReturnCode})
+          AND CAST(channel_return_code AS BINARY(256)) = CAST(#{channelReturnCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -818,6 +864,8 @@
                review_comment AS reviewComment
         FROM t_payment_return_code_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -829,6 +877,8 @@
                review_status AS reviewStatus
         FROM t_payment_return_code_review
         WHERE pending_mapping_key = #{pendingMappingKey}
+          AND CHAR_LENGTH(pending_mapping_key) = CHAR_LENGTH(#{pendingMappingKey})
+          AND CAST(pending_mapping_key AS BINARY(256)) = CAST(#{pendingMappingKey} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -878,6 +928,8 @@
                applied_batch_no AS appliedBatchNo
         FROM t_payment_return_code_import_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -889,6 +941,8 @@
                review_status AS reviewStatus
         FROM t_payment_return_code_import_review
         WHERE pending_import_key = 'RETURN_CODE_IMPORT'
+          AND CHAR_LENGTH(pending_import_key) = CHAR_LENGTH('RETURN_CODE_IMPORT')
+          AND CAST(pending_import_key AS BINARY(256)) = CAST('RETURN_CODE_IMPORT' AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -911,7 +965,11 @@
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_channel_return_code_map
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND channel_return_code = #{channelReturnCode}
+          AND CHAR_LENGTH(channel_return_code) = CHAR_LENGTH(#{channelReturnCode})
+          AND CAST(channel_return_code AS BINARY(256)) = CAST(#{channelReturnCode} AS BINARY(256))
           AND status = 'ENABLED'
           AND archive_status = 'ACTIVE'
         LIMIT 1
@@ -976,6 +1034,8 @@
                priority
         FROM t_payment_gateway_config
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -1003,6 +1063,8 @@
                priority
         FROM t_payment_gateway_config
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1035,6 +1097,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_gateway_version
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
         ORDER BY version_no DESC
     </select>
 
@@ -1065,6 +1129,8 @@
                change_reason AS changeReason
         FROM t_payment_gateway_version
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
           AND version_no = #{versionNo}
         LIMIT 1
     </select>
@@ -1073,6 +1139,8 @@
         SELECT MAX(version_no)
         FROM t_payment_gateway_version
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
     </select>
 
     <select id="findGatewayReviews" resultType="com.abc123.hsp.dto.PaymentGatewayReviewDTO">
@@ -1151,6 +1219,8 @@
                review_comment AS reviewComment
         FROM t_payment_gateway_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1162,6 +1232,8 @@
                review_status AS reviewStatus
         FROM t_payment_gateway_review
         WHERE pending_gateway_code = #{pendingGatewayCode}
+          AND CHAR_LENGTH(pending_gateway_code) = CHAR_LENGTH(#{pendingGatewayCode})
+          AND CAST(pending_gateway_code AS BINARY(256)) = CAST(#{pendingGatewayCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1216,6 +1288,8 @@
                status_type AS statusType
         FROM t_payment_control_policy
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1242,6 +1316,8 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_control_policy_version
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
         ORDER BY version_no DESC
     </select>
 
@@ -1265,6 +1341,8 @@
                change_reason AS changeReason
         FROM t_payment_control_policy_version
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
           AND version_no = #{versionNo}
         LIMIT 1
     </select>
@@ -1273,6 +1351,8 @@
         SELECT MAX(version_no)
         FROM t_payment_control_policy_version
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
     </select>
 
     <select id="findControlPolicyReviews"
@@ -1337,6 +1417,8 @@
                review_comment AS reviewComment
         FROM t_payment_control_policy_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1348,6 +1430,8 @@
                review_status AS reviewStatus
         FROM t_payment_control_policy_review
         WHERE pending_source_app_id = #{pendingSourceAppId}
+          AND CHAR_LENGTH(pending_source_app_id) = CHAR_LENGTH(#{pendingSourceAppId})
+          AND CAST(pending_source_app_id AS BINARY(256)) = CAST(#{pendingSourceAppId} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1396,6 +1480,8 @@
                status_type AS statusType
         FROM t_payment_alert_provider_config
         WHERE provider_code = #{providerCode}
+          AND CHAR_LENGTH(provider_code) = CHAR_LENGTH(#{providerCode})
+          AND CAST(provider_code AS BINARY(256)) = CAST(#{providerCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1457,6 +1543,8 @@
                review_comment AS reviewComment
         FROM t_payment_alert_provider_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1468,6 +1556,8 @@
                review_status AS reviewStatus
         FROM t_payment_alert_provider_review
         WHERE pending_provider_code = #{pendingProviderCode}
+          AND CHAR_LENGTH(pending_provider_code) = CHAR_LENGTH(#{pendingProviderCode})
+          AND CAST(pending_provider_code AS BINARY(256)) = CAST(#{pendingProviderCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1535,6 +1625,8 @@
                status_type AS statusType
         FROM t_payment_issue_duty_roster
         WHERE roster_code = #{rosterCode}
+          AND CHAR_LENGTH(roster_code) = CHAR_LENGTH(#{rosterCode})
+          AND CAST(roster_code AS BINARY(256)) = CAST(#{rosterCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1649,6 +1741,8 @@
                review_comment AS reviewComment
         FROM t_payment_issue_duty_roster_review
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1660,6 +1754,8 @@
                review_status AS reviewStatus
         FROM t_payment_issue_duty_roster_review
         WHERE pending_roster_code = #{pendingRosterCode}
+          AND CHAR_LENGTH(pending_roster_code) = CHAR_LENGTH(#{pendingRosterCode})
+          AND CAST(pending_roster_code AS BINARY(256)) = CAST(#{pendingRosterCode} AS BINARY(256))
         LIMIT 1
         FOR UPDATE
     </select>
@@ -1683,6 +1779,8 @@
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_control_policy
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -1705,6 +1803,8 @@
                route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE status = 'ENABLED'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('ENABLED')
+          AND CAST(status AS BINARY(32)) = CAST('ENABLED' AS BINARY(32))
         ORDER BY priority ASC, id ASC
     </select>
 
@@ -1717,6 +1817,8 @@
                route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -1732,6 +1834,8 @@
                priority
         FROM t_payment_route_rule_config
         WHERE status = 'ENABLED'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('ENABLED')
+          AND CAST(status AS BINARY(32)) = CAST('ENABLED' AS BINARY(32))
         ORDER BY priority ASC, id ASC
     </select>
 
@@ -1741,6 +1845,8 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
     </update>
 
     <insert id="insertChannel" parameterType="com.abc123.hsp.entity.PaymentChannelConfigEntity">
@@ -1779,6 +1885,8 @@
             route_weight = #{routeWeight},
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
     </update>
 
     <insert id="insertChannelVersion" parameterType="com.abc123.hsp.entity.PaymentChannelVersionEntity">
@@ -1829,6 +1937,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -1876,6 +1986,8 @@
             priority = #{priority},
             updated_at = NOW()
         WHERE rule_code = #{ruleCode}
+          AND CHAR_LENGTH(rule_code) = CHAR_LENGTH(#{ruleCode})
+          AND CAST(rule_code AS BINARY(256)) = CAST(#{ruleCode} AS BINARY(256))
     </update>
 
     <insert id="insertRouteRuleVersion" parameterType="com.abc123.hsp.entity.PaymentRouteRuleVersionEntity">
@@ -1979,6 +2091,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2047,6 +2161,8 @@
             priority = #{priority},
             updated_at = NOW()
         WHERE protocol_code = #{protocolCode}
+          AND CHAR_LENGTH(protocol_code) = CHAR_LENGTH(#{protocolCode})
+          AND CAST(protocol_code AS BINARY(256)) = CAST(#{protocolCode} AS BINARY(256))
     </update>
 
     <insert id="insertProtocolVersion" parameterType="com.abc123.hsp.entity.PaymentProtocolVersionEntity">
@@ -2175,6 +2291,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2240,6 +2358,8 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE roster_code = #{rosterCode}
+          AND CHAR_LENGTH(roster_code) = CHAR_LENGTH(#{rosterCode})
+          AND CAST(roster_code AS BINARY(256)) = CAST(#{rosterCode} AS BINARY(256))
     </update>
 
     <insert id="insertIssueDutyRosterReview">
@@ -2272,6 +2392,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2281,7 +2403,11 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
+          AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+          AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
           AND channel_return_code = #{channelReturnCode}
+          AND CHAR_LENGTH(channel_return_code) = CHAR_LENGTH(#{channelReturnCode})
+          AND CAST(channel_return_code AS BINARY(256)) = CAST(#{channelReturnCode} AS BINARY(256))
     </update>
 
     <insert id="insertReturnCodeReview">
@@ -2308,8 +2434,18 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
+
+    <sql id="exactActiveReturnCodeUpsert">
+        archive_status = 'ACTIVE'
+        AND CHAR_LENGTH(channel_code) = CHAR_LENGTH(#{channelCode})
+        AND CAST(channel_code AS BINARY(256)) = CAST(#{channelCode} AS BINARY(256))
+        AND CHAR_LENGTH(channel_return_code) = CHAR_LENGTH(#{channelReturnCode})
+        AND CAST(channel_return_code AS BINARY(256)) = CAST(#{channelReturnCode} AS BINARY(256))
+    </sql>
 
     <insert id="upsertReturnCodeMapping">
         INSERT INTO t_payment_channel_return_code_map (
@@ -2322,21 +2458,26 @@
             'ACTIVE', 'success', #{status}, #{statusType}, #{priority}, NOW()
         )
         ON DUPLICATE KEY UPDATE
-            standardized_code = CASE WHEN archive_status = 'ACTIVE'
+            standardized_code = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
                 THEN VALUES(standardized_code) ELSE standardized_code END,
-            standardized_message = CASE WHEN archive_status = 'ACTIVE'
+            standardized_message = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
                 THEN VALUES(standardized_message) ELSE standardized_message END,
-            handling_suggestion = CASE WHEN archive_status = 'ACTIVE'
+            handling_suggestion = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
                 THEN VALUES(handling_suggestion) ELSE handling_suggestion END,
-            retryable = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(retryable) ELSE retryable END,
-            manual_intervention_required = CASE WHEN archive_status = 'ACTIVE'
+            retryable = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
+                THEN VALUES(retryable) ELSE retryable END,
+            manual_intervention_required = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
                 THEN VALUES(manual_intervention_required) ELSE manual_intervention_required END,
-            mapping_version = CASE WHEN archive_status = 'ACTIVE'
+            mapping_version = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
                 THEN VALUES(mapping_version) ELSE mapping_version END,
-            status = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(status) ELSE status END,
-            status_type = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(status_type) ELSE status_type END,
-            priority = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(priority) ELSE priority END,
-            updated_at = CASE WHEN archive_status = 'ACTIVE' THEN NOW() ELSE updated_at END
+            status = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
+                THEN VALUES(status) ELSE status END,
+            status_type = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
+                THEN VALUES(status_type) ELSE status_type END,
+            priority = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
+                THEN VALUES(priority) ELSE priority END,
+            updated_at = CASE WHEN <include refid="exactActiveReturnCodeUpsert"/>
+                THEN NOW() ELSE updated_at END
     </insert>
 
     <insert id="insertReturnCodeImportBatch">
@@ -2374,6 +2515,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2436,6 +2579,8 @@
             priority = #{priority},
             updated_at = NOW()
         WHERE gateway_code = #{gatewayCode}
+          AND CHAR_LENGTH(gateway_code) = CHAR_LENGTH(#{gatewayCode})
+          AND CAST(gateway_code AS BINARY(256)) = CAST(#{gatewayCode} AS BINARY(256))
     </update>
 
     <update id="completeGatewayReview">
@@ -2448,6 +2593,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2503,6 +2650,8 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
     </update>
 
     <insert id="insertControlPolicyReview">
@@ -2552,6 +2701,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2582,6 +2733,8 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE provider_code = #{providerCode}
+          AND CHAR_LENGTH(provider_code) = CHAR_LENGTH(#{providerCode})
+          AND CAST(provider_code AS BINARY(256)) = CAST(#{providerCode} AS BINARY(256))
     </update>
 
     <insert id="insertAlertProviderReview">
@@ -2610,6 +2763,8 @@
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}
+          AND CHAR_LENGTH(request_no) = CHAR_LENGTH(#{requestNo})
+          AND CAST(request_no AS BINARY(256)) = CAST(#{requestNo} AS BINARY(256))
           AND review_status = 'PENDING_REVIEW'
     </update>
 
@@ -2620,5 +2775,7 @@
             self_check_message = #{selfCheckMessage},
             updated_at = NOW()
         WHERE source_app_id = #{sourceAppId}
+          AND CHAR_LENGTH(source_app_id) = CHAR_LENGTH(#{sourceAppId})
+          AND CAST(source_app_id AS BINARY(256)) = CAST(#{sourceAppId} AS BINARY(256))
     </update>
 </mapper>

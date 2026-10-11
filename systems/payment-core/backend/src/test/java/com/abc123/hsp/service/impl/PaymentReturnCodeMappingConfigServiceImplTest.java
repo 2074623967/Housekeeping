@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Collections;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +32,11 @@ class PaymentReturnCodeMappingConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void defaultReturnCodeReviewInsertSucceeds() {
+        lenient().when(paymentConfigMapper.insertReturnCodeReview(any())).thenReturn(1);
+    }
 
     @Test
     void shouldSubmitStatusCandidateWithoutChangingRuntimeMapping() {
@@ -63,6 +70,20 @@ class PaymentReturnCodeMappingConfigServiceImplTest {
 
         assertTrue(exception.getMessage().contains("已有待复核"));
         verify(paymentConfigMapper, never()).findReturnCodeMappingForUpdate(any(), any());
+    }
+
+    @Test
+    void shouldStopStatusReviewWhenDatabaseAffectsNoRow() {
+        when(paymentConfigMapper.findReturnCodeMappingForUpdate("offline_bank", "BANK_TIMEOUT"))
+                .thenReturn(mapping("ENABLED", "v1"));
+        when(paymentConfigMapper.insertReturnCodeReview(any())).thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitReturnCodeStatusReview(statusRequest(false)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
+        verify(paymentConfigMapper, never()).updateReturnCodeMappingStatus(any(), any(), any(), any());
     }
 
     @Test

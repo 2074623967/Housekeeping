@@ -70,6 +70,36 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotReadOrChangeReturnCodeMappingThroughCaseAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertNull(mapper.findReturnCodeMappingForUpdate("WX_H5", "USERPAYING"));
+            assertNull(mapper.findReturnCodeMappingForUpdate("wx_h5", "userpaying"));
+            assertNull(mapper.findActiveReturnCodeMapping("WX_H5", "USERPAYING"));
+            assertNull(mapper.findActiveReturnCodeMapping("wx_h5", "userpaying"));
+            assertEquals(0, mapper.updateReturnCodeMappingStatus("WX_H5", "USERPAYING", "DISABLED", "danger"));
+            assertEquals(0, mapper.updateReturnCodeMappingStatus("wx_h5", "userpaying", "DISABLED", "danger"));
+
+            PaymentChannelReturnCodeConfigDTO candidate =
+                    mapper.findReturnCodeMappingForUpdate("wx_h5", "USERPAYING");
+            candidate.setStandardizedCode("PAYMENT-CHANNEL-ALIAS");
+            candidate.setChannelCode("WX_H5");
+            mapper.upsertReturnCodeMapping(candidate);
+            session.clearCache();
+            assertEquals("PAYMENT-CHANNEL-1001",
+                    mapper.findReturnCodeMappingForUpdate("wx_h5", "USERPAYING").getStandardizedCode());
+
+            candidate.setChannelCode("wx_h5");
+            candidate.setChannelReturnCode("userpaying");
+            mapper.upsertReturnCodeMapping(candidate);
+            session.clearCache();
+            assertEquals("PAYMENT-CHANNEL-1001",
+                    mapper.findReturnCodeMappingForUpdate("wx_h5", "USERPAYING").getStandardizedCode());
+            assertEquals("ENABLED", mapper.findReturnCodeMappingForUpdate("wx_h5", "USERPAYING").getStatus());
+        }
+    }
+
+    @Test
     void shouldLockUpsertAndRecordImportBatch() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
@@ -148,12 +178,12 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
     }
 
     @Test
-    void shouldPersistLockCompleteAndReleaseReturnCodeImportReview() {
+    void shouldPersistLockCompleteAndReleaseReturnCodeImportReview() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
             PaymentReturnCodeImportReviewEntity review = new PaymentReturnCodeImportReviewEntity();
             review.setRequestNo("RCR-TEST-001");
-            review.setPendingImportKey("RETURN_CODE_IMPORT");
+            review.setPendingImportKey("return_code_import");
             review.setCsvContent("channelCode,channelReturnCode\nwx_h5,USERPAYING\n");
             review.setSourceSha256(repeat("a", 64));
             review.setBaselineFingerprint(repeat("b", 64));
@@ -167,6 +197,17 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
             review.setReviewStatusType("warn");
 
             assertEquals(1, mapper.insertReturnCodeImportReview(review));
+            assertNull(mapper.findPendingReturnCodeImportReviewForUpdate());
+            try (Statement statement = session.getConnection().createStatement()) {
+                assertEquals(1, statement.executeUpdate("DELETE FROM t_payment_return_code_import_review "
+                        + "WHERE request_no = 'RCR-TEST-001'"));
+            }
+            session.clearCache();
+            review.setPendingImportKey("RETURN_CODE_IMPORT");
+            assertEquals(1, mapper.insertReturnCodeImportReview(review));
+            assertNull(mapper.findReturnCodeImportReviewForUpdate("rcr-test-001"));
+            assertEquals(0, mapper.completeReturnCodeImportReview(
+                    "rcr-test-001", "APPROVED", "success", "checker-b", "别名复核", "RCI-TEST-001"));
             assertEquals("RCR-TEST-001", mapper.findPendingReturnCodeImportReviewForUpdate().getRequestNo());
             assertEquals("maker-a", mapper.findReturnCodeImportReviewForUpdate("RCR-TEST-001").getRequester());
             assertEquals(1, mapper.completeReturnCodeImportReview(
@@ -215,8 +256,12 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
             review.setReviewStatusType("warn");
 
             assertEquals(1, mapper.insertReturnCodeReview(review));
+            assertNull(mapper.findPendingReturnCodeReviewForUpdate(repeat("D", 64)));
             assertEquals("RCS-TEST-001", mapper.findPendingReturnCodeReviewForUpdate(
                     repeat("d", 64)).getRequestNo());
+            assertNull(mapper.findReturnCodeReviewForUpdate("rcs-test-001"));
+            assertEquals(0, mapper.completeReturnCodeReview(
+                    "rcs-test-001", "APPROVED", "success", "checker-b", "别名复核"));
             assertEquals("maker-a", mapper.findReturnCodeReviewForUpdate(
                     "RCS-TEST-001").getRequester());
             assertEquals(1, mapper.completeReturnCodeReview(
@@ -252,8 +297,8 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_return_code_import_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_return_code_review");
             statement.execute("CREATE TABLE t_payment_channel_return_code_map ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64), "
-                    + "channel_return_code VARCHAR(64), standardized_code VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR_IGNORECASE(64), "
+                    + "channel_return_code VARCHAR_IGNORECASE(64), standardized_code VARCHAR(64), "
                     + "standardized_message VARCHAR(256), handling_suggestion VARCHAR(256), "
                     + "retryable VARCHAR(16), manual_intervention_required VARCHAR(16), "
                     + "mapping_version VARCHAR(32), archive_status VARCHAR(32), archive_status_type VARCHAR(32), "
@@ -266,18 +311,18 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
                     + "create_count INT, update_count INT, unchanged_count INT, applied_count INT, "
                     + "batch_status VARCHAR(32), batch_status_type VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_return_code_import_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
-                    + "pending_import_key VARCHAR(64) UNIQUE, csv_content CLOB, source_sha256 VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) UNIQUE, "
+                    + "pending_import_key VARCHAR_IGNORECASE(64) UNIQUE, csv_content CLOB, source_sha256 VARCHAR(64), "
                     + "baseline_fingerprint VARCHAR(64), total_count INT, create_count INT, update_count INT, "
                     + "unchanged_count INT, requester VARCHAR(64), request_reason VARCHAR(256), "
                     + "review_status VARCHAR(32), review_status_type VARCHAR(32), reviewer VARCHAR(64), "
                     + "review_comment VARCHAR(256), applied_batch_no VARCHAR(64), reviewed_at DATETIME, "
                     + "created_at DATETIME, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_return_code_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "channel_code VARCHAR(64), channel_return_code VARCHAR(64), "
                     + "standardized_code VARCHAR(64), standardized_message VARCHAR(256), "
-                    + "mapping_version VARCHAR(32), pending_mapping_key VARCHAR(64) UNIQUE, "
+                    + "mapping_version VARCHAR(32), pending_mapping_key VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "base_fingerprint VARCHAR(64), candidate_status VARCHAR(32), "
                     + "candidate_status_type VARCHAR(32), requester VARCHAR(64), request_reason VARCHAR(255), "
                     + "review_status VARCHAR(32), review_status_type VARCHAR(32), reviewer VARCHAR(64), "

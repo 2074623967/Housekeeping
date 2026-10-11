@@ -58,6 +58,10 @@ class PaymentConfigAlertProviderReviewMapperIntegrationTest {
             assertEquals(Integer.valueOf(10), provider.getRoutePriority());
 
             assertEquals(1, mapper.insertAlertProviderReview(review("APR-TEST-001")));
+            assertNull(mapper.findPendingAlertProviderReviewForUpdate("alert_im_wecom"));
+            assertNull(mapper.findAlertProviderReviewForUpdate("apr-test-001"));
+            assertEquals(0, mapper.completeAlertProviderReview(
+                    "apr-test-001", "APPROVED", "success", "checker-b", "别名复核"));
             assertEquals("APR-TEST-001",
                     mapper.findPendingAlertProviderReviewForUpdate("ALERT_IM_WECOM").getRequestNo());
             PaymentAlertProviderReviewEntity locked =
@@ -100,6 +104,24 @@ class PaymentConfigAlertProviderReviewMapperIntegrationTest {
             assertEquals(Integer.valueOf(5), completed.getRoutePriority());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
             assertEquals(2, reviews.size());
+        }
+    }
+
+    @Test
+    void shouldNotReadOrUpdateAlertProviderThroughCodeAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            PaymentAlertProviderConfigEntity provider =
+                    mapper.findAlertProviderByCodeForUpdate("ALERT_IM_WECOM");
+            assertEquals("企业消息", provider.getProviderName());
+            assertNull(mapper.findAlertProviderByCodeForUpdate("alert_im_wecom"));
+
+            provider.setProviderCode("alert_im_wecom");
+            provider.setProviderName("别名覆盖");
+            assertEquals(0, mapper.updateAlertProvider(provider));
+            session.clearCache();
+            assertEquals("企业消息",
+                    mapper.findAlertProviderByCodeForUpdate("ALERT_IM_WECOM").getProviderName());
         }
     }
 
@@ -154,7 +176,7 @@ class PaymentConfigAlertProviderReviewMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_alert_provider_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_alert_provider_config");
             statement.execute("CREATE TABLE t_payment_alert_provider_config ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, provider_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, provider_code VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "provider_name VARCHAR(64) NOT NULL, channel_code VARCHAR(32) NOT NULL, "
                     + "endpoint_alias VARCHAR(64) NOT NULL, template_code VARCHAR(64) NOT NULL, "
                     + "template_body VARCHAR(1024) NOT NULL, route_rule VARCHAR(255) NOT NULL, "
@@ -162,13 +184,13 @@ class PaymentConfigAlertProviderReviewMapperIntegrationTest {
                     + "rate_limit_policy VARCHAR(128) NOT NULL, status VARCHAR(32) NOT NULL, "
                     + "status_type VARCHAR(32) NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_alert_provider_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "provider_code VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
                     + "provider_name VARCHAR(64) NOT NULL, channel_code VARCHAR(32) NOT NULL, "
                     + "endpoint_alias VARCHAR(64) NOT NULL, template_code VARCHAR(64) NOT NULL, "
                     + "template_body VARCHAR(1024) NOT NULL, route_rule VARCHAR(255) NOT NULL, "
                     + "route_priority INT NOT NULL, retry_policy VARCHAR(128) NOT NULL, "
-                    + "rate_limit_policy VARCHAR(128) NOT NULL, pending_provider_code VARCHAR(64) UNIQUE, "
+                    + "rate_limit_policy VARCHAR(128) NOT NULL, pending_provider_code VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "base_fingerprint VARCHAR(64), candidate_status VARCHAR(32) NOT NULL, "
                     + "candidate_status_type VARCHAR(32) NOT NULL, requester VARCHAR(64) NOT NULL, "
                     + "request_reason VARCHAR(255) NOT NULL, review_status VARCHAR(32) NOT NULL, "

@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -83,6 +84,26 @@ public class PaymentConfigProtocolVersionMapperIntegrationTest {
     }
 
     @Test
+    void shouldKeepProtocolConfigurationAndVersionsOutOfCaseAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertNull(mapper.findProtocolByCode("proto_test_v1"));
+            assertNull(mapper.findProtocolByCodeForUpdate("proto_test_v1"));
+            assertEquals(0, mapper.findProtocolVersions("proto_test_v1").size());
+            assertNull(mapper.findProtocolVersion("proto_test_v1", 1));
+            assertNull(mapper.findLatestProtocolVersionNo("proto_test_v1"));
+
+            PaymentProtocolConfigEntity protocol = mapper.findProtocolByCodeForUpdate("PROTO_TEST_V1");
+            protocol.setProtocolCode("proto_test_v1");
+            protocol.setProtocolBody("别名协议正文");
+            assertEquals(0, mapper.updateProtocol(protocol));
+            session.clearCache();
+            assertEquals("用户授权平台发起收款。", mapper.findProtocolByCode("PROTO_TEST_V1").getProtocolBody());
+            assertEquals("BASELINE", mapper.findProtocolVersion("PROTO_TEST_V1", 1).getChangeType());
+        }
+    }
+
+    @Test
     void shouldPersistLockListAndCompleteProtocolReview() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
@@ -90,6 +111,10 @@ public class PaymentConfigProtocolVersionMapperIntegrationTest {
             PaymentProtocolReviewEntity review = buildReview(current, "PRV-001");
 
             assertEquals(1, mapper.insertProtocolReview(review));
+            assertEquals(0, mapper.countPendingProtocolReviews("proto_test_v1"));
+            assertNull(mapper.findProtocolReviewForUpdate("prv-001"));
+            assertEquals(0, mapper.completeProtocolReview(
+                    "prv-001", "APPROVED", "success", "protocol-checker", "别名复核"));
             assertEquals(1, mapper.countPendingProtocolReviews("PROTO_TEST_V1"));
             PaymentProtocolReviewEntity locked = mapper.findProtocolReviewForUpdate("PRV-001");
             assertEquals("v1.1.0", locked.getTemplateVersion());
@@ -174,7 +199,7 @@ public class PaymentConfigProtocolVersionMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_protocol_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_protocol_config");
             statement.execute("CREATE TABLE t_payment_protocol_config ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, protocol_code VARCHAR(64) UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, protocol_code VARCHAR_IGNORECASE(64) UNIQUE, "
                     + "protocol_name VARCHAR(128), protocol_type VARCHAR(64), protocol_type_name VARCHAR(64), "
                     + "template_code VARCHAR(64), template_name VARCHAR(128), template_version VARCHAR(32), "
                     + "sign_mode VARCHAR(64), sign_element_spec VARCHAR(255), e_signature_provider VARCHAR(64), "
@@ -182,7 +207,7 @@ public class PaymentConfigProtocolVersionMapperIntegrationTest {
                     + "risk_control_tag VARCHAR(128), protocol_body CLOB, status VARCHAR(32), status_type VARCHAR(32), "
                     + "priority INT, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_protocol_version ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, protocol_code VARCHAR(64), version_no INT, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, protocol_code VARCHAR_IGNORECASE(64), version_no INT, "
                     + "protocol_name VARCHAR(128), protocol_type VARCHAR(64), protocol_type_name VARCHAR(64), "
                     + "template_code VARCHAR(64), template_name VARCHAR(128), template_version VARCHAR(32), "
                     + "sign_mode VARCHAR(64), sign_element_spec VARCHAR(255), e_signature_provider VARCHAR(64), "
@@ -191,7 +216,7 @@ public class PaymentConfigProtocolVersionMapperIntegrationTest {
                     + "priority INT, change_type VARCHAR(32), source_version_no INT, change_reason VARCHAR(255), "
                     + "created_at DATETIME, UNIQUE(protocol_code, version_no))");
             statement.execute("CREATE TABLE t_payment_protocol_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, protocol_code VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) UNIQUE, protocol_code VARCHAR_IGNORECASE(64), "
                     + "pending_protocol_code VARCHAR(64) UNIQUE, base_version_no INT, source_version_no INT, "
                     + "operation_type VARCHAR(32), protocol_name VARCHAR(128), protocol_type VARCHAR(64), "
                     + "protocol_type_name VARCHAR(64), template_code VARCHAR(64), template_name VARCHAR(128), "

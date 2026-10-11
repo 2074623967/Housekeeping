@@ -35,6 +35,8 @@ class PaymentProtocolConfigServiceImplTest {
         when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_MEMBER_DEDUCT_V1")).thenReturn(current);
         when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_MEMBER_DEDUCT_V1"))
                 .thenReturn(Integer.valueOf(1), Integer.valueOf(1));
+        when(paymentConfigMapper.insertProtocolReview(
+                org.mockito.ArgumentMatchers.any())).thenReturn(1);
 
         new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolStatusReview(request);
 

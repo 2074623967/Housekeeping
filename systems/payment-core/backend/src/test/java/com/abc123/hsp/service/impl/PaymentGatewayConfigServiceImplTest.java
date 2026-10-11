@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import com.abc123.hsp.entity.PaymentGatewayVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,6 +40,13 @@ class PaymentGatewayConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void defaultGatewayReviewInsertSucceeds() {
+        lenient().when(paymentConfigMapper.insertGatewayReview(any())).thenReturn(1);
+        lenient().when(paymentConfigMapper.insertGatewayVersion(any(PaymentGatewayVersionEntity.class)))
+                .thenReturn(1);
+    }
 
     @Test
     void shouldSubmitGatewayStatusCandidateWithoutChangingRuntime() {
@@ -80,6 +89,28 @@ class PaymentGatewayConfigServiceImplTest {
                         && Integer.valueOf(3000).equals(candidate.getTimeoutMs())));
         verify(paymentConfigMapper).completeGatewayReview(
                 review.getRequestNo(), "APPROVED", "success", "checker-b", "确认启用");
+    }
+
+    @Test
+    void shouldStopGatewayReviewWhenVersionInsertDoesNotTakeEffect() {
+        PaymentGatewayConfigEntity gateway = gateway("DISABLED");
+        when(paymentConfigMapper.findGatewayByCodeForUpdate("GATEWAY_BANK_OFFLINE")).thenReturn(gateway);
+        when(paymentConfigMapper.findLatestGatewayVersionNo("GATEWAY_BANK_OFFLINE"))
+                .thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findGatewayReviews()).thenReturn(Collections.emptyList());
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        service.submitGatewayStatusReview(submitRequest("GATEWAY_BANK_OFFLINE", true));
+        ArgumentCaptor<PaymentGatewayReviewEntity> captor =
+                ArgumentCaptor.forClass(PaymentGatewayReviewEntity.class);
+        verify(paymentConfigMapper).insertGatewayReview(captor.capture());
+        PaymentGatewayReviewEntity review = captor.getValue();
+        when(paymentConfigMapper.findGatewayReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.updateGateway(any(PaymentGatewayConfigEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.insertGatewayVersion(any(PaymentGatewayVersionEntity.class))).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.approveGatewayReview(review.getRequestNo(), action("checker-b", "确认启用")));
+        verify(paymentConfigMapper, never()).completeGatewayReview(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -130,6 +161,20 @@ class PaymentGatewayConfigServiceImplTest {
                         submitRequest("GATEWAY_BANK_OFFLINE", true)));
 
         assertTrue(conflict.getMessage().contains("已有待复核"));
+        verify(paymentConfigMapper, never()).updateGateway(any());
+    }
+
+    @Test
+    void shouldStopGatewayStatusReviewWhenDatabaseAffectsNoRow() {
+        when(paymentConfigMapper.findGatewayByCodeForUpdate("GATEWAY_BANK_OFFLINE"))
+                .thenReturn(gateway("DISABLED"));
+        when(paymentConfigMapper.insertGatewayReview(any())).thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitGatewayStatusReview(
+                        submitRequest("gateway_bank_offline", true)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
         verify(paymentConfigMapper, never()).updateGateway(any());
     }
 

@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
@@ -154,7 +155,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             "priority"));
 
     private final PaymentConfigMapper paymentConfigMapper;
-    private long callbackNonceTtlSeconds = 601L;
+    private long callbackNonceTtlSeconds = 3601L;
 
     public PaymentConfigServiceImpl(PaymentConfigMapper paymentConfigMapper) {
         this.paymentConfigMapper = paymentConfigMapper;
@@ -162,7 +163,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Autowired
     void configureCallbackNonceTtlSeconds(
-            @Value("${payment.callback.nonce-ttl-seconds:601}") long callbackNonceTtlSeconds) {
+            @Value("${payment.callback.nonce-ttl-seconds:3601}") long callbackNonceTtlSeconds) {
         if (callbackNonceTtlSeconds <= 0) {
             throw new IllegalArgumentException("payment callback nonce TTL must be positive");
         }
@@ -202,37 +203,54 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String normalizedSection = normalizeExportSection(section);
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("配置域,主键编码,次级编码,配置名称,状态,治理摘要,适用范围,风控/限制,运维建议,更新时间\n");
+        int exportedRows = 0;
         if (shouldExportSection(normalizedSection, "CHANNELS")) {
-            appendChannelRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findChannelsForExport()));
+            List<PaymentChannelConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findChannelsForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendChannelRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "ROUTE_RULES")) {
-            appendRouteRuleRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findRouteRulesForExport()));
+            List<PaymentRouteRuleConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findRouteRulesForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendRouteRuleRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "PROTOCOLS")) {
-            appendProtocolRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findProtocolsForExport()));
+            List<PaymentProtocolConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findProtocolsForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendProtocolRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "RETURN_CODES")) {
-            appendReturnCodeRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findReturnCodeMappingsForExport()));
+            List<PaymentChannelReturnCodeConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findReturnCodeMappingsForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendReturnCodeRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "GATEWAYS")) {
-            appendGatewayRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findGatewaysForExport()));
+            List<PaymentGatewayConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findGatewaysForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendGatewayRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "CONTROL_POLICIES")) {
-            appendControlPolicyRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findControlPoliciesForExport()));
+            List<PaymentControlPolicyDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findControlPoliciesForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendControlPolicyRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "ALERT_PROVIDERS")) {
-            appendAlertProviderRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findAlertProvidersForExport()));
+            List<PaymentAlertProviderConfigDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findAlertProvidersForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendAlertProviderRows(builder, normalizedSection, rows);
         }
         if (shouldExportSection(normalizedSection, "ISSUE_DUTY_ROSTERS")) {
-            appendIssueDutyRosterRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findIssueDutyRostersForExport()));
+            List<PaymentIssueDutyRosterDTO> rows = CsvExportRowLimiter.requireWithinLimit(
+                    paymentConfigMapper.findIssueDutyRostersForExport());
+            exportedRows = CsvExportRowLimiter.requireWithinLimit(exportedRows + rows.size());
+            appendIssueDutyRosterRows(builder, normalizedSection, rows);
         }
         return builder.toString();
     }
@@ -276,11 +294,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setRequestReason(reason);
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
-        try {
-            paymentConfigMapper.insertChannelReview(review);
-        } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付渠道已有待复核申请");
-        }
+        insertChannelReview(review);
         return safeList(paymentConfigMapper.findChannelReviews());
     }
 
@@ -299,6 +313,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentChannelConfigEntity current = paymentConfigMapper.findChannelByCodeForUpdate(channelCode);
         PaymentChannelConfigEntity candidate = buildChannelEntity(request.getCandidate(), current, channelCode);
+        ensureChannelPaymentMethodUnchanged(current, candidate);
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
         copyChannelToReview(candidate, review);
@@ -360,10 +375,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentChannelConfigEntity candidate = buildChannelEntity(toChannelUpsertRequest(review), null,
                 review.getChannelCode());
+        ensureChannelPaymentMethodUnchanged(current, candidate);
         int affectedRows = createOperation
                 ? paymentConfigMapper.insertChannel(candidate)
                 : paymentConfigMapper.updateChannel(candidate);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException(createOperation ? "支付渠道新增失败" : "支付渠道配置不存在");
         }
         String versionChangeType = "REVIEW_RELEASE";
@@ -426,6 +442,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付渠道历史版本不存在");
         }
         PaymentChannelConfigEntity candidate = copyChannelEntity(target);
+        ensureChannelPaymentMethodUnchanged(current, candidate);
         validateEnabledChannelCallbackWindow(
                 STATUS_ENABLED.equals(candidate.getStatus()), candidate.getNotifySignWindowSec());
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
@@ -480,7 +497,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (paymentConfigMapper.findRouteRuleByCode(entity.getRuleCode()) != null) {
             throw new IllegalArgumentException("支付路由规则编码已存在");
         }
-        paymentConfigMapper.insertRouteRule(entity);
+        if (paymentConfigMapper.insertRouteRule(entity) != 1) {
+            throw new IllegalStateException("支付路由规则新增未实际生效");
+        }
         recordRouteRuleVersion(entity, "CREATE", null, changeReason);
         return overview();
     }
@@ -496,7 +515,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentRouteRuleConfigEntity entity = buildRouteRuleEntity(request, normalizedRuleCode);
         String changeReason = resolveChangeReason(request.getChangeReason(), "编辑路由规则");
         ensureRouteRuleBaseline(current);
-        paymentConfigMapper.updateRouteRule(entity);
+        if (paymentConfigMapper.updateRouteRule(entity) != 1) {
+            throw new IllegalStateException("支付路由规则更新未实际生效");
+        }
         recordRouteRuleVersion(entity, "UPDATE", null, changeReason);
         return overview();
     }
@@ -624,7 +645,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentRouteRuleReviewEntity review = buildRouteRuleReview(
                 candidateEntity, requester, reason, operationType, baseVersionNo, null);
         try {
-            paymentConfigMapper.insertRouteRuleReview(review);
+            if (paymentConfigMapper.insertRouteRuleReview(review) != 1) {
+                throw new IllegalStateException("支付路由规则复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
@@ -678,9 +701,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 candidate, priorityCollisionAcknowledged, acknowledgedPriorityCollisionRuleCodes);
         boolean priorityCollisionDetected = StringUtils.hasText(priorityCollisionRuleCodesJson);
         if (current == null) {
-            paymentConfigMapper.insertRouteRule(candidate);
+            if (paymentConfigMapper.insertRouteRule(candidate) != 1) {
+                throw new IllegalStateException("支付路由规则复核新增未实际生效");
+            }
         } else {
-            paymentConfigMapper.updateRouteRule(candidate);
+            if (paymentConfigMapper.updateRouteRule(candidate) != 1) {
+                throw new IllegalStateException("支付路由规则复核更新未实际生效");
+            }
         }
         String versionChangeType = "REVIEW_RELEASE";
         Integer sourceVersionNo = null;
@@ -799,11 +826,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
         PaymentProtocolUpsertRequestDTO candidate = request.getCandidate();
-        String protocolCode = requireText(candidate.getProtocolCode(), "协议编码不能为空");
+        String reason = requireProtocolChangeReason(candidate.getChangeReason());
+        String protocolCode = requireBusinessKey(candidate.getProtocolCode(), "协议编码");
         PaymentProtocolConfigEntity current = paymentConfigMapper.findProtocolByCodeForUpdate(protocolCode);
         PaymentProtocolConfigEntity candidateEntity = buildProtocolEntity(
                 candidate, current == null ? null : protocolCode);
-        String reason = requireProtocolChangeReason(candidate.getChangeReason());
         if (paymentConfigMapper.countPendingProtocolReviews(protocolCode) > 0) {
             throw new IllegalArgumentException("该支付协议已有待复核申请");
         }
@@ -855,9 +882,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         if (current == null) {
-            paymentConfigMapper.insertProtocol(candidate);
+            if (paymentConfigMapper.insertProtocol(candidate) != 1) {
+                throw new IllegalStateException("支付协议复核新增未实际生效");
+            }
         } else {
-            paymentConfigMapper.updateProtocol(candidate);
+            if (paymentConfigMapper.updateProtocol(candidate) != 1) {
+                throw new IllegalStateException("支付协议更新未实际生效");
+            }
         }
         String versionChangeType = "REVIEW_RELEASE";
         Integer sourceVersionNo = null;
@@ -979,7 +1010,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
             throw exception;
         }
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException(createOperation
                     ? "异常告警值班路由新增失败" : "异常告警值班路由配置不存在");
         }
@@ -1047,7 +1078,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         try {
-            paymentConfigMapper.insertReturnCodeReview(review);
+            if (paymentConfigMapper.insertReturnCodeReview(review) != 1) {
+                throw new IllegalStateException("渠道返回码复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该渠道返回码已有待复核申请");
         }
@@ -1081,7 +1114,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 review.getChannelReturnCode(),
                 review.getCandidateStatus(),
                 review.getCandidateStatusType());
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("渠道返回码映射配置不存在");
         }
         completeReturnCodeReview(
@@ -1156,7 +1189,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         try {
-            paymentConfigMapper.insertReturnCodeImportReview(review);
+            if (paymentConfigMapper.insertReturnCodeImportReview(review) != 1) {
+                throw new IllegalStateException("返回码导入复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("已有待复核的返回码导入申请");
         }
@@ -1191,21 +1226,40 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             for (PaymentReturnCodeImportItemDTO item : result.getItems()) {
                 if ("CREATE".equals(item.getAction()) || "UPDATE".equals(item.getAction())) {
-                    paymentConfigMapper.upsertReturnCodeMapping(item.getCandidate());
+                    int affectedRows = paymentConfigMapper.upsertReturnCodeMapping(item.getCandidate());
+                    if (affectedRows != 1 && affectedRows != 2) {
+                        throw new IllegalStateException("返回码配置写入未实际生效");
+                    }
                     appliedCount++;
                 }
             }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("返回码配置发生并发冲突，请重新预检后再应用");
         }
-        List<PaymentChannelReturnCodeConfigDTO> resultingMappings = paymentConfigMapper.findReturnCodeMappings();
+        List<PaymentChannelReturnCodeConfigDTO> resultingMappings =
+                safeList(paymentConfigMapper.findReturnCodeMappings());
+        for (PaymentReturnCodeImportItemDTO item : result.getItems()) {
+            if ("CREATE".equals(item.getAction()) || "UPDATE".equals(item.getAction())) {
+                PaymentChannelReturnCodeConfigDTO candidate = item.getCandidate();
+                boolean applied = resultingMappings.stream().anyMatch(mapping ->
+                        Objects.equals(candidate.getChannelCode(), mapping.getChannelCode())
+                                && Objects.equals(candidate.getChannelReturnCode(), mapping.getChannelReturnCode())
+                                && "ACTIVE".equals(mapping.getArchiveStatus())
+                                && Objects.equals(candidate.getArchiveStatusType(), mapping.getArchiveStatusType())
+                                && Objects.equals(candidate.getStatusType(), mapping.getStatusType())
+                                && findReturnCodeChangedFields(mapping, candidate).isEmpty());
+                if (!applied) {
+                    throw new IllegalStateException("返回码配置写入未实际生效");
+                }
+            }
+        }
         String resultFingerprint = fingerprintReturnCodeMappings(resultingMappings);
         String batchNo = "RCI" + UUID.randomUUID().toString().replace("-", "");
         result.setApplied(Boolean.TRUE);
         result.setAppliedCount(Integer.valueOf(appliedCount));
         result.setBatchNo(batchNo);
         result.setResultFingerprint(resultFingerprint);
-        paymentConfigMapper.insertReturnCodeImportBatch(
+        if (paymentConfigMapper.insertReturnCodeImportBatch(
                 batchNo,
                 review.getRequester(),
                 review.getRequestReason(),
@@ -1218,7 +1272,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 result.getUnchangedCount(),
                 result.getAppliedCount(),
                 appliedCount == 0 ? "NO_CHANGE" : "APPLIED",
-                appliedCount == 0 ? "info" : "success");
+                appliedCount == 0 ? "info" : "success") != 1) {
+            throw new IllegalStateException("返回码导入批次审计新增未实际生效");
+        }
         completeReturnCodeImportReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment, batchNo);
         return safeList(paymentConfigMapper.findReturnCodeImportReviews());
@@ -1274,11 +1330,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setRequestReason(reason);
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
-        try {
-            paymentConfigMapper.insertGatewayReview(review);
-        } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付网关已有待复核申请");
-        }
+        insertGatewayReview(review);
         return safeList(paymentConfigMapper.findGatewayReviews());
     }
 
@@ -1370,7 +1422,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
             throw exception;
         }
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException(createOperation ? "支付网关新增失败" : "支付网关接入配置不存在");
         }
         String versionChangeType = "REVIEW_RELEASE";
@@ -1584,7 +1636,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
             throw exception;
         }
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException(createOperation
                     ? "支付控制策略新增失败" : "支付控制策略配置不存在");
         }
@@ -1767,7 +1819,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
             throw exception;
         }
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException(createOperation
                     ? "告警通知供应商新增失败" : "告警通知供应商配置不存在");
         }
@@ -1798,7 +1850,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付控制策略配置不存在");
         }
         SelfCheckResult selfCheckResult = evaluateControlPolicy(controlPolicy);
-        paymentConfigMapper.updateControlPolicySelfCheck(
+        updateControlPolicySelfCheck(
                 sourceAppId,
                 selfCheckResult.status,
                 selfCheckResult.statusType,
@@ -1862,7 +1914,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 continue;
             }
             SelfCheckResult selfCheckResult = evaluateControlPolicy(controlPolicy);
-            paymentConfigMapper.updateControlPolicySelfCheck(
+            updateControlPolicySelfCheck(
                     item.getSourceAppId(),
                     selfCheckResult.status,
                     selfCheckResult.statusType,
@@ -1882,6 +1934,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         summary.setWarnCount(warnCount);
         summary.setFailCount(failCount);
         return summary;
+    }
+
+    private void updateControlPolicySelfCheck(
+            String sourceAppId, String status, String statusType, String message) {
+        if (paymentConfigMapper.updateControlPolicySelfCheck(sourceAppId, status, statusType, message) != 1) {
+            throw new IllegalStateException("支付控制策略自检结果更新未实际生效");
+        }
     }
 
     private SelfCheckResult evaluateControlPolicy(PaymentControlPolicyDTO controlPolicy) {
@@ -2019,10 +2078,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireConfigCode(PaymentConfigToggleRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getConfigCode())) {
-            throw new IllegalArgumentException("配置编码不能为空");
-        }
-        return request.getConfigCode().trim();
+        return requireBusinessKey(request == null ? null : request.getConfigCode(), "配置编码");
     }
 
     private String requireSubCode(PaymentConfigToggleRequestDTO request) {
@@ -2049,7 +2105,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                             "支付方式=" + defaultText(channel.getPaymentMethod()),
                             "优先级=" + valueOf(channel.getPriority()),
                             "路由权重=" + valueOf(channel.getRouteWeight()),
-                            "单日限额=" + defaultText(channel.getDailyLimit())),
+                            "单日限额=" + defaultText(channel.getDailyLimit()),
+                            "状态样式=" + defaultText(channel.getStatusType())),
                     safeJoin(" / ",
                             "场景=" + defaultText(channel.getSceneScope()),
                             "商户应用=" + defaultText(channel.getMerchantAppId())),
@@ -2081,7 +2138,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                             "匹配表达式=" + defaultText(routeRule.getMatchExpression()),
                             "优先级=" + valueOf(routeRule.getPriority()),
                             "灰度=" + rolloutPercentageOf(routeRule) + "%",
-                            "分桶盐=" + defaultText(routeRule.getRolloutSalt())),
+                            "分桶盐=" + defaultText(routeRule.getRolloutSalt()),
+                            "状态样式=" + defaultText(routeRule.getStatusType())),
                     safeJoin(" / ",
                             "业务场景=" + defaultText(routeRule.getMatchScene()),
                             "兜底渠道=" + defaultText(routeRule.getFallbackChannelCode())),
@@ -2107,7 +2165,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     safeJoin(" / ",
                             "协议类型=" + defaultText(protocol.getProtocolTypeName()),
                             "模板版本=" + defaultText(protocol.getTemplateVersion()),
-                            "优先级=" + valueOf(protocol.getPriority())),
+                            "优先级=" + valueOf(protocol.getPriority()),
+                            "状态样式=" + defaultText(protocol.getStatusType())),
                     safeJoin(" / ",
                             "适用场景=" + defaultText(protocol.getSceneScope()),
                             "适用渠道=" + defaultText(protocol.getChannelScope())),
@@ -2139,6 +2198,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                             "映射版本=" + defaultText(mapping.getMappingVersion())),
                     safeJoin(" / ",
                             "归档状态=" + defaultText(mapping.getArchiveStatus()),
+                            "归档状态样式=" + defaultText(mapping.getArchiveStatusType()),
+                            "映射状态样式=" + defaultText(mapping.getStatusType()),
                             "可重试=" + defaultText(mapping.getRetryable())),
                     "人工介入=" + defaultText(mapping.getManualInterventionRequired()),
                     defaultText(mapping.getHandlingSuggestion()),
@@ -2168,6 +2229,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                             "环境范围=" + defaultText(gateway.getEnvironmentScope())),
                     safeJoin(" / ",
                             "证书状态=" + defaultText(gateway.getCertificateStatus()),
+                            "证书状态样式=" + defaultText(gateway.getCertificateStatusType()),
+                            "启停状态样式=" + defaultText(gateway.getStatusType()),
                             "灰度策略=" + defaultText(gateway.getGrayStrategy())),
                     safeJoin(" / ",
                             "回调白名单=" + defaultText(gateway.getCallbackWhitelist()),
@@ -2199,7 +2262,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                             "商户号=" + defaultText(controlPolicy.getAllowedMerchantNos())),
                     safeJoin(" / ",
                             "令牌鉴权=" + defaultText(controlPolicy.getTokenAuthRequired()),
-                            "自检状态=" + defaultText(controlPolicy.getSelfCheckStatus())),
+                            "自检状态=" + defaultText(controlPolicy.getSelfCheckStatus()),
+                            "自检状态样式=" + defaultText(controlPolicy.getSelfCheckStatusType()),
+                            "启停状态样式=" + defaultText(controlPolicy.getStatusType())),
                     defaultText(controlPolicy.getSelfCheckMessage()),
                     controlPolicy.getUpdatedAt());
         }
@@ -2220,7 +2285,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     alertProvider.getStatus(),
                     safeJoin(" / ",
                             "模板=" + defaultText(alertProvider.getTemplateCode()),
-                            "优先级=" + valueOf(alertProvider.getRoutePriority())),
+                            "优先级=" + valueOf(alertProvider.getRoutePriority()),
+                            "状态样式=" + defaultText(alertProvider.getStatusType())),
                     safeJoin(" / ",
                             "接入端点=" + defaultText(alertProvider.getEndpointAlias()),
                             "路由规则=" + defaultText(alertProvider.getRouteRule())),
@@ -2251,7 +2317,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     safeJoin(" / ",
                             "通道=" + defaultText(issueDutyRoster.getNotifyChannels()),
                             "班次=" + defaultText(issueDutyRoster.getScheduleTag()),
-                            "日期策略=" + defaultText(issueDutyRoster.getApplicabilityDesc())),
+                            "日期策略=" + defaultText(issueDutyRoster.getApplicabilityDesc()),
+                            "状态样式=" + defaultText(issueDutyRoster.getStatusType())),
                     safeJoin(" / ",
                             "升级等级=" + defaultText(issueDutyRoster.getEscalationLevel()),
                             "升级超时=" + valueOf(issueDutyRoster.getEscalationTimeoutMinutes())),
@@ -2389,7 +2456,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private void insertProtocolReview(PaymentProtocolReviewEntity review) {
         try {
-            paymentConfigMapper.insertProtocolReview(review);
+            if (paymentConfigMapper.insertProtocolReview(review) != 1) {
+                throw new IllegalStateException("支付协议复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付协议已有待复核申请");
         }
@@ -2424,7 +2493,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                         String reviewComment) {
         int affectedRows = paymentConfigMapper.completeProtocolReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("支付协议复核状态已变化，请刷新后重试");
         }
     }
@@ -2435,23 +2504,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付协议请求不能为空");
         }
         PaymentProtocolConfigEntity entity = new PaymentProtocolConfigEntity();
-        entity.setProtocolCode(StringUtils.hasText(overrideProtocolCode)
-                ? overrideProtocolCode.trim()
-                : requireText(request.getProtocolCode(), "协议编码不能为空"));
-        entity.setProtocolName(requireText(request.getProtocolName(), "协议名称不能为空"));
-        entity.setProtocolType(requireText(request.getProtocolType(), "协议类型不能为空"));
+        entity.setProtocolCode(overrideProtocolCode == null
+                ? requireBusinessKey(request.getProtocolCode(), "协议编码")
+                : requireBusinessKey(overrideProtocolCode, "协议编码"));
+        entity.setProtocolName(requireSafeConfigText(request.getProtocolName(), "协议名称不能为空", "协议名称"));
+        entity.setProtocolType(requireSafeConfigText(request.getProtocolType(), "协议类型不能为空", "协议类型"));
         entity.setProtocolTypeName(resolveProtocolTypeName(request.getProtocolType(), request.getProtocolTypeName()));
-        entity.setTemplateCode(requireText(request.getTemplateCode(), "协议模板编码不能为空"));
-        entity.setTemplateName(requireText(request.getTemplateName(), "协议模板名称不能为空"));
-        entity.setTemplateVersion(requireText(request.getTemplateVersion(), "模板版本不能为空"));
-        entity.setSignMode(requireText(request.getSignMode(), "签约模式不能为空"));
-        entity.setSignElementSpec(requireText(request.getSignElementSpec(), "签约要素配置不能为空"));
-        entity.setESignatureProvider(requireText(request.getESignatureProvider(), "电子签章服务商不能为空"));
-        entity.setSceneScope(requireText(request.getSceneScope(), "适用场景不能为空"));
-        entity.setChannelScope(requireText(request.getChannelScope(), "适用渠道不能为空"));
-        entity.setMerchantAckRequired(requireText(request.getMerchantAckRequired(), "商户确认要求不能为空"));
-        entity.setRiskControlTag(requireText(request.getRiskControlTag(), "风控标签不能为空"));
-        entity.setProtocolBody(requireText(request.getProtocolBody(), "协议正文不能为空"));
+        entity.setTemplateCode(requireSafeConfigText(request.getTemplateCode(), "协议模板编码不能为空", "协议模板编码"));
+        entity.setTemplateName(requireSafeConfigText(request.getTemplateName(), "协议模板名称不能为空", "协议模板名称"));
+        entity.setTemplateVersion(requireSafeConfigText(request.getTemplateVersion(), "模板版本不能为空", "模板版本"));
+        entity.setSignMode(requireSafeConfigText(request.getSignMode(), "签约模式不能为空", "签约模式"));
+        entity.setSignElementSpec(requireSafeConfigText(request.getSignElementSpec(), "签约要素配置不能为空", "签约要素配置"));
+        entity.setESignatureProvider(requireSafeConfigText(request.getESignatureProvider(), "电子签章服务商不能为空", "电子签章服务商"));
+        entity.setSceneScope(requireSafeConfigText(request.getSceneScope(), "适用场景不能为空", "适用场景"));
+        entity.setChannelScope(requireSafeConfigText(request.getChannelScope(), "适用渠道不能为空", "适用渠道"));
+        entity.setMerchantAckRequired(requireSafeConfigText(request.getMerchantAckRequired(), "商户确认要求不能为空", "商户确认要求"));
+        entity.setRiskControlTag(requireSafeConfigText(request.getRiskControlTag(), "风控标签不能为空", "风控标签"));
+        entity.setProtocolBody(requireProtocolBody(request.getProtocolBody()));
         entity.setPriority(resolvePriority(request.getPriority()));
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
@@ -2494,7 +2563,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setChangeType(changeType);
         version.setSourceVersionNo(sourceVersionNo);
         version.setChangeReason(changeReason);
-        paymentConfigMapper.insertProtocolVersion(version);
+        if (paymentConfigMapper.insertProtocolVersion(version) != 1) {
+            throw new IllegalStateException("支付协议版本事实新增未实际生效");
+        }
     }
 
     private PaymentProtocolConfigEntity copyProtocolEntity(PaymentProtocolVersionEntity version) {
@@ -2567,11 +2638,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireProtocolChangeReason(String changeReason) {
-        String reason = requireText(changeReason, "协议变更原因不能为空");
-        if (reason.length() > 255) {
-            throw new IllegalArgumentException("协议变更原因不能超过255个字符");
-        }
-        return reason;
+        return requireBoundedText(changeReason, "协议变更原因不能为空", "协议变更原因", 255);
     }
 
     private PaymentRouteRuleConfigEntity buildRouteRuleEntity(PaymentRouteRuleUpsertRequestDTO request,
@@ -2580,29 +2647,39 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付路由规则请求不能为空");
         }
         PaymentRouteRuleConfigEntity entity = new PaymentRouteRuleConfigEntity();
-        entity.setRuleCode(StringUtils.hasText(overrideRuleCode)
-                ? overrideRuleCode.trim()
-                : requireText(request.getRuleCode(), "路由规则编码不能为空"));
-        entity.setRuleName(requireText(request.getRuleName(), "路由规则名称不能为空"));
-        entity.setMatchScene(requireText(request.getMatchScene(), "匹配场景不能为空"));
+        entity.setRuleCode(overrideRuleCode == null
+                ? requireBusinessKey(request.getRuleCode(), "路由规则编码")
+                : requireBusinessKey(overrideRuleCode, "路由规则编码"));
+        entity.setRuleName(requireSafeConfigText(request.getRuleName(), "路由规则名称不能为空", "路由规则名称"));
+        entity.setMatchScene(requireSafeConfigText(request.getMatchScene(), "匹配场景不能为空", "匹配场景"));
         String expression = requireText(request.getMatchExpression(), "匹配表达式不能为空");
         if (!PaymentRouteExpressionEvaluator.isValid(expression)) {
             throw new IllegalArgumentException("路由规则表达式不合法");
         }
         entity.setMatchExpression(expression);
-        String targetChannelCode = requireText(request.getTargetChannelCode(), "目标渠道不能为空");
-        if (paymentConfigMapper.findChannelForRouting(targetChannelCode) == null) {
+        String targetChannelCode = requireBusinessKey(request.getTargetChannelCode(), "目标渠道");
+        PaymentChannelRoutingConfigDTO targetChannel = paymentConfigMapper.findChannelForRouting(targetChannelCode);
+        if (targetChannel == null) {
             throw new IllegalArgumentException("目标渠道配置不存在");
         }
         entity.setTargetChannelCode(targetChannelCode);
         String fallbackChannelCode = StringUtils.hasText(request.getFallbackChannelCode())
-                ? request.getFallbackChannelCode().trim() : "";
-        if (StringUtils.hasText(fallbackChannelCode)
-                && paymentConfigMapper.findChannelForRouting(fallbackChannelCode) == null) {
+                ? requireBusinessKey(request.getFallbackChannelCode(), "兜底渠道") : "";
+        PaymentChannelRoutingConfigDTO fallbackChannel = StringUtils.hasText(fallbackChannelCode)
+                ? paymentConfigMapper.findChannelForRouting(fallbackChannelCode) : null;
+        if (StringUtils.hasText(fallbackChannelCode) && fallbackChannel == null) {
             throw new IllegalArgumentException("兜底渠道配置不存在");
         }
         if (targetChannelCode.equalsIgnoreCase(fallbackChannelCode)) {
             throw new IllegalArgumentException("目标渠道与兜底渠道不能相同");
+        }
+        if (fallbackChannel != null) {
+            String targetPaymentMethod = normalizePaymentMethod(targetChannel.getPaymentMethod());
+            String fallbackPaymentMethod = normalizePaymentMethod(fallbackChannel.getPaymentMethod());
+            if (!StringUtils.hasText(targetPaymentMethod)
+                    || !targetPaymentMethod.equals(fallbackPaymentMethod)) {
+                throw new IllegalArgumentException("目标渠道与兜底渠道支付方式必须一致");
+            }
         }
         entity.setFallbackChannelCode(fallbackChannelCode);
         Integer rolloutPercentage = request.getRolloutPercentage() == null
@@ -2611,10 +2688,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("路由规则灰度比例必须在0到100之间");
         }
         entity.setRolloutPercentage(rolloutPercentage);
-        String rolloutSalt = requireText(request.getRolloutSalt(), "路由规则分桶盐不能为空");
-        if (rolloutSalt.length() > 64) {
-            throw new IllegalArgumentException("路由规则分桶盐不能超过64个字符");
-        }
+        String rolloutSalt = requireBoundedText(
+                request.getRolloutSalt(), "路由规则分桶盐不能为空", "路由规则分桶盐", 64);
         entity.setRolloutSalt(rolloutSalt);
         entity.setPriority(resolveRoutePriority(request.getPriority()));
         entity.setStatus(resolveStatus(request.getEnabled()));
@@ -2651,15 +2726,15 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setChangeType(changeType);
         version.setSourceVersionNo(sourceVersionNo);
         version.setChangeReason(changeReason);
-        paymentConfigMapper.insertRouteRuleVersion(version);
+        if (paymentConfigMapper.insertRouteRuleVersion(version) != 1) {
+            throw new IllegalStateException("支付路由规则版本事实新增未实际生效");
+        }
     }
 
     private String resolveChangeReason(String changeReason, String defaultReason) {
-        String resolvedReason = StringUtils.hasText(changeReason) ? changeReason.trim() : defaultReason;
-        if (resolvedReason.length() > 255) {
-            throw new IllegalArgumentException("路由规则变更原因不能超过255个字符");
-        }
-        return resolvedReason;
+        return StringUtils.hasText(changeReason)
+                ? requireBoundedText(changeReason, "路由规则变更原因不能为空", "路由规则变更原因", 255)
+                : defaultReason;
     }
 
     private PaymentRouteRuleReviewEntity buildRouteRuleReview(PaymentRouteRuleConfigEntity candidate,
@@ -2705,7 +2780,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentRouteRuleReviewEntity review = buildRouteRuleReview(
                 candidate, requester, reason, operationType, baseVersionNo, sourceVersionNo);
         try {
-            paymentConfigMapper.insertRouteRuleReview(review);
+            if (paymentConfigMapper.insertRouteRuleReview(review) != 1) {
+                throw new IllegalStateException("支付路由规则复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
@@ -2745,7 +2822,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         int affectedRows = paymentConfigMapper.completeRouteRuleReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment,
                 priorityCollisionDetected, priorityCollisionAcknowledged, priorityCollisionRuleCodesJson);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("路由规则复核状态已变化，请刷新后重试");
         }
     }
@@ -2989,14 +3066,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireReviewIdentity(String identity, String message) {
-        if (containsIsoControl(identity)) {
-            throw new IllegalArgumentException("人员声明不能包含控制字符");
-        }
-        String normalized = requireText(identity, message);
-        if (normalized.length() > 64) {
-            throw new IllegalArgumentException("人员声明不能超过64个字符");
-        }
-        return normalized;
+        return requireBoundedText(identity, message, "人员声明", 64);
     }
 
     private boolean containsIsoControl(String value) {
@@ -3012,9 +3082,22 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireReviewText(String text, String message) {
-        String normalized = requireText(text, message);
-        if (normalized.length() > 255) {
-            throw new IllegalArgumentException("复核说明不能超过255个字符");
+        return requireBoundedText(text, message, "复核说明", 255);
+    }
+
+    private String requireBoundedText(String text, String emptyMessage, String fieldName, int maxLength) {
+        if (containsIsoControl(text)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
+        if (text == null || !StringUtils.hasText(text)) {
+            throw new IllegalArgumentException(emptyMessage);
+        }
+        if (text.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        String normalized = text.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
         }
         return normalized;
     }
@@ -3228,14 +3311,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                              String reviewComment) {
         int affectedRows = paymentConfigMapper.completeAlertProviderReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("告警通知供应商复核状态已变化，请刷新后重试");
         }
     }
 
     private void insertAlertProviderReview(PaymentAlertProviderReviewEntity review) {
         try {
-            paymentConfigMapper.insertAlertProviderReview(review);
+            if (paymentConfigMapper.insertAlertProviderReview(review) != 1) {
+                throw new IllegalStateException("告警通知供应商复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该告警通知供应商已有待复核申请");
         }
@@ -3329,9 +3414,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
         String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
-        String rosterCode = (StringUtils.hasText(overrideRosterCode)
-                ? requireImportText(overrideRosterCode, "值班路由编码不能为空", 64)
-                : requireImportText(request.getRosterCode(), "值班路由编码不能为空", 64))
+        String rosterCode = (overrideRosterCode == null
+                ? requireBusinessKey(request.getRosterCode(), "值班路由编码")
+                : requireBusinessKey(overrideRosterCode, "值班路由编码"))
                 .toUpperCase(Locale.ROOT);
         if (paymentConfigMapper.findPendingIssueDutyRosterReviewForUpdate(rosterCode) != null) {
             throw new IllegalArgumentException("该异常告警值班路由已有待复核申请");
@@ -3391,14 +3476,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                                String reviewComment) {
         int affectedRows = paymentConfigMapper.completeIssueDutyRosterReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("异常告警值班路由复核状态已变化，请刷新后重试");
         }
     }
 
     private void insertIssueDutyRosterReview(PaymentIssueDutyRosterReviewEntity review) {
         try {
-            paymentConfigMapper.insertIssueDutyRosterReview(review);
+            if (paymentConfigMapper.insertIssueDutyRosterReview(review) != 1) {
+                throw new IllegalStateException("异常告警值班路由复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该异常告警值班路由已有待复核申请");
         }
@@ -3453,20 +3540,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("异常告警值班路由请求不能为空");
         }
         PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
-        entity.setRosterCode((StringUtils.hasText(overrideRosterCode)
-                ? overrideRosterCode.trim()
-                : requireText(request.getRosterCode(), "值班路由编码不能为空"))
+        entity.setRosterCode((overrideRosterCode == null
+                ? requireBusinessKey(request.getRosterCode(), "值班路由编码")
+                : requireBusinessKey(overrideRosterCode, "值班路由编码"))
                 .toUpperCase(Locale.ROOT));
-        entity.setIssueType(requireText(request.getIssueType(), "异常类型不能为空"));
+        entity.setIssueType(requireSafeConfigText(request.getIssueType(), "异常类型不能为空", "异常类型"));
         entity.setSeverity(resolveSeverity(request.getSeverity()));
-        entity.setResponsibilityGroup(requireText(request.getResponsibilityGroup(), "责任组不能为空"));
-        entity.setReceiver(requireText(request.getReceiver(), "值班接收人不能为空"));
-        entity.setNotifyChannels(requireText(request.getNotifyChannels(), "通知通道不能为空"));
-        entity.setEscalationLevel(requireText(request.getEscalationLevel(), "升级等级不能为空"));
-        entity.setEscalationReceiver(requireText(request.getEscalationReceiver(), "升级接收人不能为空"));
-        entity.setEscalationPolicy(requireText(request.getEscalationPolicy(), "升级策略不能为空"));
+        entity.setResponsibilityGroup(requireSafeConfigText(
+                request.getResponsibilityGroup(), "责任组不能为空", "责任组"));
+        entity.setReceiver(requireSafeConfigText(request.getReceiver(), "值班接收人不能为空", "值班接收人"));
+        entity.setNotifyChannels(requireSafeConfigText(request.getNotifyChannels(), "通知通道不能为空", "通知通道"));
+        entity.setEscalationLevel(requireSafeConfigText(request.getEscalationLevel(), "升级等级不能为空", "升级等级"));
+        entity.setEscalationReceiver(requireSafeConfigText(
+                request.getEscalationReceiver(), "升级接收人不能为空", "升级接收人"));
+        entity.setEscalationPolicy(requireSafeConfigText(
+                request.getEscalationPolicy(), "升级策略不能为空", "升级策略"));
         entity.setEscalationTimeoutMinutes(resolveEscalationTimeoutMinutes(request.getEscalationTimeoutMinutes()));
-        entity.setScheduleTag(requireText(request.getScheduleTag(), "班次标签不能为空"));
+        entity.setScheduleTag(requireSafeConfigText(request.getScheduleTag(), "班次标签不能为空", "班次标签"));
         int effectiveStartHour = resolveDutyRosterHour(request.getEffectiveStartHour(), 0, "班次生效开始小时不能为空");
         int effectiveEndHour = resolveDutyRosterHour(request.getEffectiveEndHour(), 23, "班次生效结束小时不能为空");
         entity.setEffectiveStartHour(Integer.valueOf(effectiveStartHour));
@@ -3543,14 +3633,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireBusinessKey(String value, String fieldName) {
-        if (containsIsoControl(value)) {
-            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
-        }
-        String normalized = requireText(value, fieldName + "不能为空");
-        if (normalized.length() > 64) {
-            throw new IllegalArgumentException(fieldName + "不能超过64个字符");
-        }
-        return normalized;
+        return requireBoundedText(value, fieldName + "不能为空", fieldName, 64);
     }
 
     private Integer resolvePriority(Integer priority) {
@@ -3706,14 +3789,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                        String reviewComment) {
         int affectedRows = paymentConfigMapper.completeGatewayReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("支付网关复核状态已变化，请刷新后重试");
         }
     }
 
     private void insertGatewayReview(PaymentGatewayReviewEntity review) {
         try {
-            paymentConfigMapper.insertGatewayReview(review);
+            if (paymentConfigMapper.insertGatewayReview(review) != 1) {
+                throw new IllegalStateException("支付网关复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付网关已有待复核申请");
         }
@@ -3828,7 +3913,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setChangeType(changeType);
         version.setSourceVersionNo(sourceVersionNo);
         version.setChangeReason(changeReason);
-        paymentConfigMapper.insertGatewayVersion(version);
+        if (paymentConfigMapper.insertGatewayVersion(version) != 1) {
+            throw new IllegalStateException("支付网关版本事实新增未实际生效");
+        }
     }
 
     private PaymentGatewayConfigEntity copyGatewayEntity(PaymentGatewayVersionEntity version) {
@@ -3910,7 +3997,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                              String reviewComment) {
         int affectedRows = paymentConfigMapper.completeControlPolicyReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("支付控制策略复核状态已变化，请刷新后重试");
         }
     }
@@ -3945,7 +4032,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setChangeType(changeType);
         version.setSourceVersionNo(sourceVersionNo);
         version.setChangeReason(changeReason);
-        paymentConfigMapper.insertControlPolicyVersion(version);
+        if (paymentConfigMapper.insertControlPolicyVersion(version) != 1) {
+            throw new IllegalStateException("支付控制策略版本事实新增未实际生效");
+        }
     }
 
     private PaymentControlPolicyEntity copyControlPolicyEntity(PaymentControlPolicyVersionEntity version) {
@@ -3970,7 +4059,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private void insertControlPolicyReview(PaymentControlPolicyReviewEntity review) {
         try {
-            paymentConfigMapper.insertControlPolicyReview(review);
+            if (paymentConfigMapper.insertControlPolicyReview(review) != 1) {
+                throw new IllegalStateException("支付控制策略复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付控制策略已有待复核申请");
         }
@@ -3990,11 +4081,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付控制策略启停状态不能为空");
         }
         String accessToken = StringUtils.hasText(request.getAccessTokenValue())
-                ? request.getAccessTokenValue().trim()
+                ? requireBoundedText(
+                        request.getAccessTokenValue(), "接口访问令牌不能为空", "接口访问令牌", 128)
                 : current == null ? "" : current.getAccessTokenValue();
-        if (accessToken.length() > 128) {
-            throw new IllegalArgumentException("接口访问令牌不能超过128个字符");
-        }
         if (request.getTokenAuthRequired().booleanValue() && !StringUtils.hasText(accessToken)) {
             throw new IllegalArgumentException("开启令牌鉴权时接口访问令牌不能为空");
         }
@@ -4092,7 +4181,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setChangeType(changeType);
         version.setSourceVersionNo(sourceVersionNo);
         version.setChangeReason(changeReason);
-        paymentConfigMapper.insertChannelVersion(version);
+        if (paymentConfigMapper.insertChannelVersion(version) != 1) {
+            throw new IllegalStateException("支付渠道版本事实新增未实际生效");
+        }
     }
 
     private PaymentChannelConfigEntity copyChannelEntity(PaymentChannelVersionEntity version) {
@@ -4137,16 +4228,25 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                        String reviewComment) {
         int affectedRows = paymentConfigMapper.completeChannelReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("支付渠道复核状态已变化，请刷新后重试");
         }
     }
 
     private void insertChannelReview(PaymentChannelReviewEntity review) {
         try {
-            paymentConfigMapper.insertChannelReview(review);
+            if (paymentConfigMapper.insertChannelReview(review) != 1) {
+                throw new IllegalStateException("支付渠道复核申请新增未实际生效");
+            }
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该支付渠道已有待复核申请");
+        }
+    }
+
+    private void ensureChannelPaymentMethodUnchanged(PaymentChannelConfigEntity current,
+                                                      PaymentChannelConfigEntity candidate) {
+        if (current != null && !Objects.equals(current.getPaymentMethod(), candidate.getPaymentMethod())) {
+            throw new IllegalArgumentException("支付渠道支付方式不可变，请新建渠道");
         }
     }
 
@@ -4482,7 +4582,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                           String reviewComment) {
         int affectedRows = paymentConfigMapper.completeReturnCodeReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("渠道返回码复核状态已变化，请刷新后重试");
         }
     }
@@ -4506,7 +4606,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                                 String appliedBatchNo) {
         int affectedRows = paymentConfigMapper.completeReturnCodeImportReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment, appliedBatchNo);
-        if (affectedRows == 0) {
+        if (affectedRows != 1) {
             throw new IllegalArgumentException("返回码导入复核状态已变化，请刷新后重试");
         }
     }
@@ -4719,17 +4819,42 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     private void validateImportText(String value, String fieldName, int maxLength, List<String> errors) {
         if (!StringUtils.hasText(value)) {
             errors.add(fieldName + " 不能为空");
+        } else if (containsIsoControl(value)) {
+            errors.add(fieldName + " 不能包含控制字符");
         } else if (value.length() > maxLength) {
             errors.add(fieldName + " 长度不能超过 " + maxLength);
         }
     }
 
     private String requireImportText(String value, String message, int maxLength) {
+        if (containsIsoControl(value)) {
+            throw new IllegalArgumentException(message.replace("不能为空", "不能包含控制字符"));
+        }
         String normalized = requireText(value, message);
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(message.replace("不能为空", "长度不能超过 " + maxLength));
         }
         return normalized;
+    }
+
+    private String requireSafeConfigText(String value, String message, String fieldName) {
+        if (containsIsoControl(value)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
+        return requireText(value, message);
+    }
+
+    private String requireProtocolBody(String value) {
+        if (value != null) {
+            for (int index = 0; index < value.length(); index++) {
+                char character = value.charAt(index);
+                if (Character.isISOControl(character)
+                        && character != '\n' && character != '\r' && character != '\t') {
+                    throw new IllegalArgumentException("协议正文不能包含非法控制字符");
+                }
+            }
+        }
+        return requireText(value, "协议正文不能为空");
     }
 
     private String returnCodeMappingKey(String channelCode, String channelReturnCode) {

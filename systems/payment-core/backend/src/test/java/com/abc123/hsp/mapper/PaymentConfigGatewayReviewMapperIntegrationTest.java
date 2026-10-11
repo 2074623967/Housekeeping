@@ -63,6 +63,10 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
             assertEquals(Integer.valueOf(1), mapper.findLatestGatewayVersionNo("GATEWAY_WX_ACQ"));
             assertEquals("BASELINE", mapper.findGatewayVersion("GATEWAY_WX_ACQ", 1).getChangeType());
             assertEquals(1, mapper.insertGatewayReview(review("GWR-TEST-001")));
+            assertNull(mapper.findPendingGatewayReviewForUpdate("gateway_wx_acq"));
+            assertNull(mapper.findGatewayReviewForUpdate("gwr-test-001"));
+            assertEquals(0, mapper.completeGatewayReview(
+                    "gwr-test-001", "APPROVED", "success", "checker-b", "别名复核"));
             assertEquals("GWR-TEST-001",
                     mapper.findPendingGatewayReviewForUpdate("GATEWAY_WX_ACQ").getRequestNo());
             assertEquals("DISABLED",
@@ -98,6 +102,28 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     session.getMapper(PaymentConfigMapper.class).findGatewayVersions("GATEWAY_WX_ACQ");
             assertEquals(1, versions.size());
             assertEquals("BASELINE", versions.get(0).getChangeType());
+        }
+    }
+
+    @Test
+    void shouldKeepGatewayConfigurationAndVersionsOutOfCaseAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            PaymentGatewayConfigEntity gateway = mapper.findGatewayByCodeForUpdate("GATEWAY_WX_ACQ");
+            assertEquals(1, mapper.insertGatewayVersion(version(gateway, 1)));
+
+            assertNull(mapper.findGatewayByCode("gateway_wx_acq"));
+            assertNull(mapper.findGatewayByCodeForUpdate("gateway_wx_acq"));
+            assertEquals(0, mapper.findGatewayVersions("gateway_wx_acq").size());
+            assertNull(mapper.findGatewayVersion("gateway_wx_acq", 1));
+            assertNull(mapper.findLatestGatewayVersionNo("gateway_wx_acq"));
+
+            gateway.setGatewayCode("gateway_wx_acq");
+            gateway.setGatewayName("别名网关");
+            assertEquals(0, mapper.updateGateway(gateway));
+            session.clearCache();
+            assertEquals("微信收单网关", mapper.findGatewayByCode("GATEWAY_WX_ACQ").getGatewayName());
+            assertEquals("BASELINE", mapper.findGatewayVersion("GATEWAY_WX_ACQ", 1).getChangeType());
         }
     }
 
@@ -198,7 +224,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_gateway_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_gateway_config");
             statement.execute("CREATE TABLE t_payment_gateway_config ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "gateway_name VARCHAR(128) NOT NULL, access_mode VARCHAR(64) NOT NULL, "
                     + "channel_scope VARCHAR(256) NOT NULL, environment_scope VARCHAR(128) NOT NULL, "
                     + "api_base_url VARCHAR(256) NOT NULL, protocol_type VARCHAR(64) NOT NULL, "
@@ -210,7 +236,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, "
                     + "priority INT NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_gateway_version ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR(64) NOT NULL, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR_IGNORECASE(64) NOT NULL, "
                     + "version_no INT NOT NULL, gateway_name VARCHAR(128) NOT NULL, "
                     + "access_mode VARCHAR(64) NOT NULL, channel_scope VARCHAR(256) NOT NULL, "
                     + "environment_scope VARCHAR(128) NOT NULL, api_base_url VARCHAR(256) NOT NULL, "
@@ -225,7 +251,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     + "change_reason VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, "
                     + "UNIQUE(gateway_code, version_no))");
             statement.execute("CREATE TABLE t_payment_gateway_review ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
                     + "gateway_code VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
                     + "operation_type VARCHAR(32) NOT NULL, "
                     + "gateway_name VARCHAR(128) NOT NULL, access_mode VARCHAR(64) NOT NULL, "
@@ -236,7 +262,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     + "release_stage VARCHAR(64) NOT NULL, gray_strategy VARCHAR(256) NOT NULL, "
                     + "callback_whitelist VARCHAR(256) NOT NULL, adapter_registry VARCHAR(256) NOT NULL, "
                     + "timeout_ms INT NOT NULL, retry_policy VARCHAR(128) NOT NULL, priority INT NOT NULL, "
-                    + "pending_gateway_code VARCHAR(64) UNIQUE, base_fingerprint VARCHAR(64), "
+                    + "pending_gateway_code VARCHAR_IGNORECASE(64) UNIQUE, base_fingerprint VARCHAR(64), "
                     + "candidate_status VARCHAR(32) NOT NULL, "
                     + "candidate_status_type VARCHAR(32) NOT NULL, requester VARCHAR(64) NOT NULL, "
                     + "request_reason VARCHAR(255) NOT NULL, review_status VARCHAR(32) NOT NULL, "

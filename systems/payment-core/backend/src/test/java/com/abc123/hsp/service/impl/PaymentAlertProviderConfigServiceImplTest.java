@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import com.abc123.hsp.entity.PaymentAlertProviderConfigEntity;
 import com.abc123.hsp.entity.PaymentAlertProviderReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +32,11 @@ class PaymentAlertProviderConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void defaultAlertProviderReviewInsertSucceeds() {
+        lenient().when(paymentConfigMapper.insertAlertProviderReview(any())).thenReturn(1);
+    }
 
     @Test
     void shouldSubmitCreateUpdateAndStatusCandidatesWithoutChangingRuntime() {
@@ -59,6 +66,20 @@ class PaymentAlertProviderConfigServiceImplTest {
         assertEquals("STATUS_CHANGE", captor.getAllValues().get(2).getOperationType());
         assertEquals("DISABLED", captor.getAllValues().get(2).getCandidateStatus());
         verify(paymentConfigMapper, never()).insertAlertProvider(any());
+        verify(paymentConfigMapper, never()).updateAlertProvider(any());
+    }
+
+    @Test
+    void shouldStopStatusReviewWhenDatabaseAffectsNoRow() {
+        when(paymentConfigMapper.findAlertProviderByCodeForUpdate("ALERT_IM_WECOM"))
+                .thenReturn(provider("ENABLED"));
+        when(paymentConfigMapper.insertAlertProviderReview(any())).thenReturn(0);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .toggleAlertProvider(statusRequest("alert_im_wecom", false)));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
         verify(paymentConfigMapper, never()).updateAlertProvider(any());
     }
 

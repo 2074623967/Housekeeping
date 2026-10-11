@@ -23,6 +23,7 @@ import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
@@ -73,16 +74,53 @@ class PaymentConfigServiceImplTest {
     void setUpRouteRuleConflictLock() {
         org.mockito.Mockito.lenient().when(paymentConfigMapper.lockRouteRuleConflictSet())
                 .thenReturn(Long.valueOf(1L));
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.updateRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.updateProtocol(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertProtocol(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertRouteRuleVersion(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertProtocolReview(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolReviewEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertProtocolVersion(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolVersionEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertIssueDutyRosterReview(
+                org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterReviewEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertAlertProviderReview(
+                org.mockito.ArgumentMatchers.any(com.abc123.hsp.entity.PaymentAlertProviderReviewEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.insertControlPolicyReview(
+                org.mockito.ArgumentMatchers.any(com.abc123.hsp.entity.PaymentControlPolicyReviewEntity.class)))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.updateControlPolicySelfCheck(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
     }
 
     @Test
     void shouldCreateAndUpdateValidatedRouteRule() {
         PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
         com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
-                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+                routingChannel();
         target.setChannelCode("wx_h5");
         com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
-                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+                routingChannel();
         fallback.setChannelCode("alipay_h5");
         when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
         when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
@@ -125,6 +163,78 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopRouteRuleCreateWhenDatabaseAffectsNoRow() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
+                routingChannel();
+        target.setChannelCode("wx_h5");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
+                routingChannel();
+        fallback.setChannelCode("alipay_h5");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+        when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP")).thenReturn(null);
+        when(paymentConfigMapper.insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRuleVersion(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+    }
+
+    @Test
+    void shouldStopRouteRuleUpdateWhenDatabaseAffectsNoRow() {
+        PaymentRouteRuleConfigEntity current = new PaymentRouteRuleConfigEntity();
+        current.setRuleCode("RULE_HOME_APP");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"))
+                .thenReturn(Integer.valueOf(1));
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
+                routingChannel();
+        target.setChannelCode("wx_h5");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
+                routingChannel();
+        fallback.setChannelCode("alipay_h5");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+        when(paymentConfigMapper.updateRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .updateRouteRule("RULE_HOME_APP", buildRouteRuleRequest()));
+        verify(paymentConfigMapper).updateRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRuleVersion(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+    }
+
+    @Test
+    void shouldStopRouteRuleCreateWhenVersionInsertDoesNotTakeEffect() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
+                routingChannel();
+        target.setChannelCode("wx_h5");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
+                routingChannel();
+        fallback.setChannelCode("alipay_h5");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+        when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP")).thenReturn(null);
+        when(paymentConfigMapper.insertRouteRuleVersion(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+        verify(paymentConfigMapper).insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
     void shouldRejectInvalidRouteRuleRolloutConfiguration() {
         PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
         request.setRolloutPercentage(Integer.valueOf(101));
@@ -157,7 +267,7 @@ class PaymentConfigServiceImplTest {
     void shouldRejectDuplicateRouteRuleCode() {
         PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
         com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO channel =
-                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+                routingChannel();
         when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(channel);
         when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(channel);
         when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP"))
@@ -175,7 +285,7 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
         request.setFallbackChannelCode("wx_h5");
         com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO channel =
-                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+                routingChannel();
         when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(channel);
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 
@@ -193,13 +303,167 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldRejectOversizedRouteRuleChangeReason() {
+    void shouldRejectRouteRuleFallbackFromAnotherPaymentMethodBeforePublishing() {
         PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
-        request.setChangeReason(String.join("", Collections.nCopies(256, "a")));
-        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
+                routingChannel();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
+                routingChannel();
+        fallback.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectRouteRuleFallbackWithMissingPaymentMethod() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldAllowBankCardAliasForRouteRuleFallback() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target = routingChannel();
+        target.setPaymentMethod("银行卡");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback = routingChannel();
+        fallback.setPaymentMethod("银行转账");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request);
+
+        verify(paymentConfigMapper).insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectCrossMethodRouteRuleReviewBeforeWritingCandidate() {
+        PaymentRouteRuleReviewSubmitRequestDTO request = new PaymentRouteRuleReviewSubmitRequestDTO();
+        request.setRequester("maker-a");
+        request.setCandidate(buildRouteRuleRequest());
+        request.getCandidate().setChangeReason("更新渠道兜底");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback = routingChannel();
+        fallback.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleReview(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class));
+    }
+
+    @Test
+    void shouldRejectPendingCrossMethodRouteRuleAtApproval() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("批准前复验");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback = routingChannel();
+        fallback.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).updateRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectCrossMethodHistoricalRouteRuleRollback() {
+        PaymentRouteRuleRollbackRequestDTO request = new PaymentRouteRuleRollbackRequestDTO();
+        request.setVersionNo(Integer.valueOf(1));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复历史规则");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP")).thenReturn(Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRuleVersion("RULE_HOME_APP", Integer.valueOf(1)))
+                .thenReturn(buildRouteRuleVersionEntity(1, "terminal=H5"));
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback = routingChannel();
+        fallback.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitRouteRuleRollbackReview("RULE_HOME_APP", request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class));
+    }
+
+    @Test
+    void shouldAllowDisablingButRejectEnablingHistoricalCrossMethodRouteRule() {
+        PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
+        current.setStatus("ENABLED");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP")).thenReturn(Integer.valueOf(3));
+        PaymentRouteRuleStatusReviewRequestDTO request = new PaymentRouteRuleStatusReviewRequestDTO();
+        request.setRuleCode("RULE_HOME_APP");
+        request.setRequester("maker-a");
+        request.setChangeReason("停用历史跨方式兜底");
+        request.setEnabled(false);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleStatusReview(request);
+
+        verify(paymentConfigMapper).insertRouteRuleReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "STATUS_CHANGE".equals(review.getOperationType())
+                        && "DISABLED".equals(review.getStatus())));
+
+        current.setStatus("DISABLED");
+        request.setEnabled(true);
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback = routingChannel();
+        fallback.setPaymentMethod("支付宝");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleStatusReview(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("目标渠道与兜底渠道支付方式必须一致", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.times(1)).insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class));
+    }
+
+    @Test
+    void shouldRejectOversizedRouteRuleChangeReason() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        request.setChangeReason(String.join("", Collections.nCopies(255, "a")) + " ");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(routingChannel());
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
@@ -361,9 +625,9 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP")).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
         when(paymentConfigMapper.findRouteRuleReviews()).thenReturn(Collections.<PaymentRouteRuleReviewDTO>emptyList());
@@ -380,6 +644,28 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("home-app-v1", captor.getValue().getRolloutSalt());
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldStopRouteRuleReviewWhenDatabaseAffectsNoRow() {
+        PaymentRouteRuleReviewSubmitRequestDTO request = new PaymentRouteRuleReviewSubmitRequestDTO();
+        request.setCandidate(buildRouteRuleRequest());
+        request.getCandidate().setChangeReason("复核申请写入失败");
+        request.setRequester("maker-a");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(routingChannel());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP")).thenReturn(Integer.valueOf(3));
+        when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
+        when(paymentConfigMapper.insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleReview(request));
     }
 
     @Test
@@ -458,9 +744,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode())).thenReturn(current);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
@@ -508,9 +794,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
                 .thenReturn(Arrays.asList(existingCollision, newCollision));
@@ -545,9 +831,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
                 .thenReturn(null);
@@ -622,9 +908,9 @@ class PaymentConfigServiceImplTest {
         action.setReviewComment("配置与风险检查通过");
         when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.lockRouteRuleConflictSet()).thenReturn(null);
 
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -655,9 +941,9 @@ class PaymentConfigServiceImplTest {
         reviewer.setReviewer("reviewer-b");
         reviewer.setReviewComment("review");
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(4));
@@ -702,6 +988,14 @@ class PaymentConfigServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        PaymentRouteRuleReviewSubmitRequestDTO oversizedRequesterRequest =
+                new PaymentRouteRuleReviewSubmitRequestDTO();
+        oversizedRequesterRequest.setCandidate(buildRouteRuleRequest());
+        oversizedRequesterRequest.setRequester(String.join("", Collections.nCopies(64, "I")) + " ");
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.submitRouteRuleReview(oversizedRequesterRequest));
     }
 
     @Test
@@ -735,9 +1029,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(1);
 
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -757,9 +1051,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
         String sensitiveDetail = "jdbc:mysql://internal-db/payment?password=review-secret\n"
                 + "insert into t_payment_route_rule_review token=review-token";
@@ -788,9 +1082,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode())).thenReturn(null);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
                 .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(null);
@@ -810,6 +1104,38 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopRouteRuleReviewWhenCreateInsertDoesNotTakeEffect() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        review.setOperationType("CREATE");
+        review.setBaseVersionNo(null);
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("新规则配置检查通过");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode())).thenReturn(null);
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(routingChannel());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(routingChannel());
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.insertRouteRule(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertRouteRuleVersion(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).completeRouteRuleReview(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldPrioritizeBlockerOverUnacknowledgedPriorityCollision() {
         PaymentRouteRuleReviewEntity review = buildPendingReview();
         PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
@@ -824,9 +1150,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
                 .thenReturn(Arrays.asList(potentialCollision, conflicting));
@@ -858,9 +1184,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
                 .thenReturn(Collections.singletonList(potentialCollision));
@@ -913,9 +1239,9 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRuleVersion("RULE_HOME_APP", Integer.valueOf(1))).thenReturn(target);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1),
@@ -950,9 +1276,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"))
                 .thenReturn(Integer.valueOf(0), Integer.valueOf(0), Integer.valueOf(1));
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         mockOverviewDependencies();
 
         new PaymentConfigServiceImpl(paymentConfigMapper).updateRouteRule("RULE_HOME_APP", request);
@@ -1045,6 +1371,27 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopRouteRuleStatusReviewWhenReviewInsertDoesNotTakeEffect() {
+        PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"))
+                .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
+        when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
+        when(paymentConfigMapper.insertRouteRuleReview(
+                org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class))).thenReturn(0);
+        PaymentRouteRuleStatusReviewRequestDTO request = new PaymentRouteRuleStatusReviewRequestDTO();
+        request.setRuleCode("RULE_HOME_APP");
+        request.setEnabled(false);
+        request.setRequester("maker-a");
+        request.setChangeReason("停用异常路由");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitRouteRuleStatusReview(request));
+    }
+
+    @Test
     void shouldPublishStatusChangeOnlyAfterReviewApproval() {
         PaymentRouteRuleReviewEntity review = buildPendingReview();
         review.setOperationType("STATUS_CHANGE");
@@ -1090,9 +1437,9 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+                .thenReturn(routingChannel());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
@@ -1264,6 +1611,61 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectControlCharactersInProtocolCandidateText() {
+        PaymentProtocolUpsertRequestDTO candidate = buildProtocolRequest();
+        candidate.setProtocolName("家政协议\n伪造");
+        PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
+        request.setRequester("protocol-maker");
+        request.setCandidate(candidate);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolReview(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("协议名称不能包含控制字符", exception.getMessage());
+        org.mockito.Mockito.verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertProtocolReview(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldAllowProtocolBodyLineBreaksButRejectOtherControlCharacters() {
+        PaymentProtocolUpsertRequestDTO candidate = buildProtocolRequest();
+        candidate.setProtocolBody("第一行\n第二行\u0000伪造");
+        when(paymentConfigMapper.findProtocolTypeOptions())
+                .thenReturn(Collections.singletonList(buildProtocolTypeOption()));
+        PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
+        request.setRequester("protocol-maker");
+        request.setCandidate(candidate);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolReview(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("协议正文不能包含非法控制字符", exception.getMessage());
+        org.mockito.Mockito.verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertProtocolReview(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectControlCharactersInReturnCodeImportText() {
+        PaymentChannelConfigDTO channel = buildChannel("wx_h5", "微信支付", "MCH-WX", "ENABLED");
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.singletonList(channel));
+
+        PaymentReturnCodeImportRequestDTO request = new PaymentReturnCodeImportRequestDTO();
+        request.setCsvContent("channelCode,channelReturnCode,standardizedCode,standardizedMessage,"
+                + "handlingSuggestion,retryable,manualInterventionRequired,mappingVersion,status,priority\n"
+                + "wx_h5,SUCCESS,SUCCESS,\"支付\n成功\",,否,否,1,ENABLED,1\n");
+
+        PaymentReturnCodeImportResultDTO result = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .previewReturnCodeImport(request);
+
+        org.junit.jupiter.api.Assertions.assertFalse(result.getValid());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getItems().get(0).getMessage()
+                .contains("standardizedMessage 不能包含控制字符"));
+    }
+
+    @Test
     void shouldExposeIssueDutyRosterInOverview() {
         PaymentIssueDutyRosterDTO roster = new PaymentIssueDutyRosterDTO();
         roster.setRosterCode("DUTY_WAIT_CALLBACK_P1");
@@ -1337,6 +1739,7 @@ class PaymentConfigServiceImplTest {
         channel.setSceneScope("家政服务/充值");
         channel.setRiskControlTag("实名校验");
         channel.setStatus("ENABLED");
+        channel.setStatusType("success");
         channel.setUpdatedAt("2026-08-03 10:00:00");
         when(paymentConfigMapper.findChannelsForExport()).thenReturn(Arrays.asList(channel));
 
@@ -1345,6 +1748,7 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("配置域,主键编码"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"支付渠道\""));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"wx_h5\""));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("状态样式=success"));
         org.junit.jupiter.api.Assertions.assertFalse(csv.contains("\"路由规则\""));
         verify(paymentConfigMapper).findChannelsForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
@@ -1363,6 +1767,141 @@ class PaymentConfigServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("wx_h5"));
         verify(paymentConfigMapper).findChannelsForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportGatewayStatusStylesInGovernanceSnapshot() {
+        PaymentGatewayConfigDTO gateway = new PaymentGatewayConfigDTO();
+        gateway.setGatewayCode("GATEWAY-WX");
+        gateway.setGatewayName("微信支付网关");
+        gateway.setStatus("ENABLED");
+        gateway.setStatusType("success");
+        gateway.setCertificateStatus("VALID");
+        gateway.setCertificateStatusType("success");
+        when(paymentConfigMapper.findGatewaysForExport()).thenReturn(Collections.singletonList(gateway));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("GATEWAYS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("证书状态样式=success"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("启停状态样式=success"));
+        verify(paymentConfigMapper).findGatewaysForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportControlPolicyStatusStylesInGovernanceSnapshot() {
+        PaymentControlPolicyDTO policy = new PaymentControlPolicyDTO();
+        policy.setSourceAppId("housekeeping-app-web");
+        policy.setSourceAppName("家政服务端");
+        policy.setStatus("ENABLED");
+        policy.setStatusType("success");
+        policy.setSelfCheckStatus("WARN");
+        policy.setSelfCheckStatusType("warn");
+        when(paymentConfigMapper.findControlPoliciesForExport()).thenReturn(Collections.singletonList(policy));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("CONTROL_POLICIES");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("自检状态样式=warn"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("启停状态样式=success"));
+        verify(paymentConfigMapper).findControlPoliciesForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportRouteRuleStatusStyleInGovernanceSnapshot() {
+        PaymentRouteRuleConfigDTO routeRule = new PaymentRouteRuleConfigDTO();
+        routeRule.setRuleCode("RULE_HOME_APP");
+        routeRule.setRuleName("家政服务端路由");
+        routeRule.setStatus("ENABLED");
+        routeRule.setStatusType("success");
+        when(paymentConfigMapper.findRouteRulesForExport()).thenReturn(Collections.singletonList(routeRule));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("ROUTE_RULES");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("状态样式=success"));
+        verify(paymentConfigMapper).findRouteRulesForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportProtocolStatusStyleInGovernanceSnapshot() {
+        PaymentProtocolConfigDTO protocol = new PaymentProtocolConfigDTO();
+        protocol.setProtocolCode("PROTO_PAYMENT_AUTH");
+        protocol.setTemplateCode("TPL_PAYMENT_AUTH_V1");
+        protocol.setProtocolName("支付授权协议");
+        protocol.setStatus("ENABLED");
+        protocol.setStatusType("success");
+        when(paymentConfigMapper.findProtocolsForExport()).thenReturn(Collections.singletonList(protocol));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("PROTOCOLS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("状态样式=success"));
+        verify(paymentConfigMapper).findProtocolsForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportReturnCodeStatusStylesInGovernanceSnapshot() {
+        PaymentChannelReturnCodeConfigDTO mapping = new PaymentChannelReturnCodeConfigDTO();
+        mapping.setChannelCode("wx_h5");
+        mapping.setChannelReturnCode("USERPAYING");
+        mapping.setStandardizedCode("PAYMENT_PROCESSING");
+        mapping.setStatus("ENABLED");
+        mapping.setStatusType("success");
+        mapping.setArchiveStatus("ACTIVE");
+        mapping.setArchiveStatusType("success");
+        when(paymentConfigMapper.findReturnCodeMappingsForExport())
+                .thenReturn(Collections.singletonList(mapping));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("RETURN_CODES");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("归档状态样式=success"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("映射状态样式=success"));
+        verify(paymentConfigMapper).findReturnCodeMappingsForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportAlertProviderStatusStyleInGovernanceSnapshot() {
+        PaymentAlertProviderConfigDTO provider = new PaymentAlertProviderConfigDTO();
+        provider.setProviderCode("ALERT_IM_WECOM");
+        provider.setChannelCode("IM");
+        provider.setProviderName("企业微信告警");
+        provider.setStatus("ENABLED");
+        provider.setStatusType("success");
+        when(paymentConfigMapper.findAlertProvidersForExport())
+                .thenReturn(Collections.singletonList(provider));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("ALERT_PROVIDERS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("状态样式=success"));
+        verify(paymentConfigMapper).findAlertProvidersForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldExportIssueDutyRosterStatusStyleInGovernanceSnapshot() {
+        PaymentIssueDutyRosterDTO roster = new PaymentIssueDutyRosterDTO();
+        roster.setRosterCode("DUTY_WAIT_CALLBACK_P1");
+        roster.setSeverity("P1");
+        roster.setIssueType("WAIT_CALLBACK");
+        roster.setStatus("ENABLED");
+        roster.setStatusType("success");
+        when(paymentConfigMapper.findIssueDutyRostersForExport())
+                .thenReturn(Collections.singletonList(roster));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .exportGovernanceSnapshotCsv("ISSUE_DUTY_ROSTERS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("状态样式=success"));
+        verify(paymentConfigMapper).findIssueDutyRostersForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
     }
 
@@ -1410,6 +1949,35 @@ class PaymentConfigServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("超过1000条"));
         verify(paymentConfigMapper).findChannelsForExport();
+        verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldAllowGovernanceAllExportAtCombinedLimit() {
+        PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
+        PaymentRouteRuleConfigDTO routeRule = new PaymentRouteRuleConfigDTO();
+        when(paymentConfigMapper.findChannelsForExport()).thenReturn(Collections.nCopies(999, channel));
+        when(paymentConfigMapper.findRouteRulesForExport()).thenReturn(Collections.singletonList(routeRule));
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("ALL");
+
+        org.junit.jupiter.api.Assertions.assertEquals(1001, csv.split("\n").length);
+    }
+
+    @Test
+    void shouldRejectGovernanceAllExportAboveCombinedLimit() {
+        PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
+        PaymentRouteRuleConfigDTO routeRule = new PaymentRouteRuleConfigDTO();
+        when(paymentConfigMapper.findChannelsForExport()).thenReturn(Collections.nCopies(999, channel));
+        when(paymentConfigMapper.findRouteRulesForExport()).thenReturn(Collections.nCopies(2, routeRule));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("ALL"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("超过1000条"));
+        verify(paymentConfigMapper).findChannelsForExport();
+        verify(paymentConfigMapper).findRouteRulesForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
     }
 
@@ -1758,6 +2326,35 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopAllEnabledSelfChecksWhenStatusUpdateDoesNotTakeEffect() {
+        PaymentControlPolicySelfCheckItemDTO item = new PaymentControlPolicySelfCheckItemDTO();
+        item.setSourceAppId("housekeeping-app-web");
+        when(paymentConfigMapper.findEnabledControlPolicySelfCheckItems())
+                .thenReturn(Collections.singletonList(item));
+        PaymentControlPolicyDTO policy = new PaymentControlPolicyDTO();
+        policy.setSourceAppId("housekeeping-app-web");
+        policy.setAllowedPaymentMethods("微信支付");
+        policy.setAllowedChannelCodes("wx_h5");
+        policy.setAllowedMerchantNos("MCH_HOME_APP");
+        policy.setTokenAuthRequired("关闭");
+        when(paymentConfigMapper.findControlPolicyBySourceAppId("housekeeping-app-web"))
+                .thenReturn(policy);
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付", "MCH_HOME_APP", "ENABLED")));
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.singletonList(
+                buildGateway("wx_h5", "ENABLED")));
+        when(paymentConfigMapper.updateControlPolicySelfCheck(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .runAllEnabledControlPolicySelfChecks());
+    }
+
+    @Test
     void shouldTreatNullSelfCheckAndChannelListsAsEmpty() {
         when(paymentConfigMapper.findEnabledControlPolicySelfCheckItems()).thenReturn(null);
         PaymentControlPolicySelfCheckSummaryDTO summary =
@@ -1901,6 +2498,55 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopProtocolReviewWhenVersionInsertDoesNotTakeEffect() {
+        PaymentProtocolConfigEntity current = buildProtocolEntity();
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("已核对协议条款");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
+                .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
+        when(paymentConfigMapper.insertProtocolVersion(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolVersionEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveProtocolReview("PRV-001", request));
+
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).completeProtocolReview(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldStopProtocolReviewWhenDatabaseAffectsNoRow() {
+        PaymentProtocolConfigEntity current = buildProtocolEntity();
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("已核对协议条款");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
+                .thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.updateProtocol(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveProtocolReview("PRV-001", request));
+        verify(paymentConfigMapper).updateProtocol(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertProtocolVersion(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolVersionEntity.class));
+    }
+
+    @Test
     void shouldSubmitNewProtocolReviewWithoutPublishing() {
         PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
         request.setRequester("protocol-maker");
@@ -1916,6 +2562,20 @@ class PaymentConfigServiceImplTest {
                         && "新增测试协议".equals(review.getRequestReason())));
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+    }
+
+    @Test
+    void shouldStopProtocolReviewInsertWhenDatabaseAffectsNoRow() {
+        PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
+        request.setRequester("protocol-maker");
+        request.setCandidate(buildProtocolRequest());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
+        when(paymentConfigMapper.insertProtocolReview(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolReviewEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolReview(request));
     }
 
     @Test
@@ -1940,6 +2600,30 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldStopNewProtocolReviewWhenConfigInsertDoesNotTakeEffect() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        review.setOperationType("CREATE");
+        review.setBaseVersionNo(null);
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("同意新增");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.insertProtocol(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class))).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveProtocolReview("PRV-001", request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).insertProtocolVersion(
+                org.mockito.ArgumentMatchers.any(PaymentProtocolVersionEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).completeProtocolReview(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void shouldRejectProtocolReviewWithoutPublishing() {
         PaymentProtocolReviewEntity review = buildPendingProtocolReview();
         PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
@@ -1955,6 +2639,24 @@ class PaymentConfigServiceImplTest {
                 .updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
         verify(paymentConfigMapper).completeProtocolReview(
                 "PRV-001", "REJECTED", "danger", "protocol-checker", "条款需要修订");
+    }
+
+    @Test
+    void shouldRejectProtocolReviewWhenCompletionUpdatesMultipleRows() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("条款需要修订");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.completeProtocolReview(
+                "PRV-001", "REJECTED", "danger", "protocol-checker", "条款需要修订")).thenReturn(2);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .rejectProtocolReview("PRV-001", request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("支付协议复核状态已变化，请刷新后重试", exception.getMessage());
     }
 
     @Test
@@ -2020,13 +2722,26 @@ class PaymentConfigServiceImplTest {
     void shouldRejectProtocolChangeWithoutReason() {
         PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
         request.setChangeReason(" ");
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request));
 
         org.junit.jupiter.api.Assertions.assertEquals("协议变更原因不能为空", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectProtocolReasonWithTrailingSpaceAtRawLimit() {
+        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        request.setChangeReason(String.join("", Collections.nCopies(255, "a")) + " ");
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("协议变更原因不能超过255个字符", exception.getMessage());
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
     }
@@ -2212,6 +2927,13 @@ class PaymentConfigServiceImplTest {
         version.setChangeType("BASELINE");
         version.setChangeReason("初始化协议基线");
         return version;
+    }
+
+    private com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO routingChannel() {
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO channel =
+                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+        channel.setPaymentMethod("微信支付");
+        return channel;
     }
 
     private PaymentRouteRuleUpsertRequestDTO buildRouteRuleRequest() {

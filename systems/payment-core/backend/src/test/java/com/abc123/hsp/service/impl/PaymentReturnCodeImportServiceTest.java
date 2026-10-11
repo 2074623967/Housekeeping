@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -39,6 +41,15 @@ class PaymentReturnCodeImportServiceTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void defaultReturnCodeImportReviewInsertSucceeds() {
+        lenient().when(paymentConfigMapper.insertReturnCodeImportReview(any())).thenReturn(1);
+        lenient().when(paymentConfigMapper.insertReturnCodeImportBatch(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+        lenient().when(paymentConfigMapper.upsertReturnCodeMapping(any())).thenReturn(1);
+    }
 
     @Test
     void shouldPreviewCreateUpdateAndUnchangedRowsWithQuotedCsvValue() {
@@ -134,6 +145,29 @@ class PaymentReturnCodeImportServiceTest {
     }
 
     @Test
+    void shouldStopReviewSubmissionWhenDatabaseAffectsNoRow() {
+        PaymentChannelReturnCodeConfigDTO current =
+                mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
+        String csv = HEADER
+                + "wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,等待用户支付,等待回调,是,否,v2,ENABLED,1\n";
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(current));
+        when(paymentConfigMapper.findReturnCodeMappingsForUpdate())
+                .thenReturn(Collections.singletonList(current));
+        when(paymentConfigMapper.insertReturnCodeImportReview(any())).thenReturn(0);
+        stubChannels("wx_h5");
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        PaymentReturnCodeImportReviewSubmitRequestDTO request = submitRequest(csv);
+        request.setBaselineFingerprint(service.previewReturnCodeImport(request(csv)).getBaselineFingerprint());
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> service.submitReturnCodeImportReview(request));
+
+        assertTrue(exception.getMessage().contains("未实际生效"));
+        verify(paymentConfigMapper, never()).insertReturnCodeImportBatch(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void shouldRejectReviewSubmissionWithoutAnyConfigurationChange() {
         PaymentChannelReturnCodeConfigDTO current =
                 mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
@@ -159,6 +193,7 @@ class PaymentReturnCodeImportServiceTest {
                 mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
         PaymentChannelReturnCodeConfigDTO updated =
                 mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "等待用户支付", 1, "ACTIVE");
+        updated.setMappingVersion("v2");
         String csv = HEADER
                 + "wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,等待用户支付,等待回调,是,否,v2,ENABLED,1\n";
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
@@ -169,6 +204,7 @@ class PaymentReturnCodeImportServiceTest {
         when(paymentConfigMapper.findReturnCodeImportReviewForUpdate("RCR-001")).thenReturn(review);
         when(paymentConfigMapper.findReturnCodeMappingsForUpdate()).thenReturn(Collections.singletonList(current));
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(updated));
+        when(paymentConfigMapper.upsertReturnCodeMapping(any())).thenReturn(2);
         when(paymentConfigMapper.findReturnCodeImportReviews())
                 .thenReturn(Collections.singletonList(new PaymentReturnCodeImportReviewDTO()));
         when(paymentConfigMapper.completeReturnCodeImportReview(
@@ -184,6 +220,77 @@ class PaymentReturnCodeImportServiceTest {
                 eq(baseline), any(), eq(1), eq(0), eq(1), eq(0), eq(1), eq("APPLIED"), eq("success"));
         verify(paymentConfigMapper).completeReturnCodeImportReview(
                 eq("RCR-001"), eq("APPROVED"), eq("success"), eq("checker-b"), eq("复核通过"), any());
+    }
+
+    @Test
+    void shouldStopImportApprovalWhenMappingUpsertDoesNotTakeEffect() {
+        PaymentChannelReturnCodeConfigDTO current =
+                mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
+        String csv = HEADER
+                + "wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,等待用户支付,等待回调,是,否,v2,ENABLED,1\n";
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(current));
+        stubChannels("wx_h5");
+        String baseline = service.previewReturnCodeImport(request(csv)).getBaselineFingerprint();
+        PaymentReturnCodeImportReviewEntity review = review(csv, baseline, "maker-a");
+        when(paymentConfigMapper.findReturnCodeImportReviewForUpdate("RCR-001")).thenReturn(review);
+        when(paymentConfigMapper.findReturnCodeMappingsForUpdate()).thenReturn(Collections.singletonList(current));
+        when(paymentConfigMapper.upsertReturnCodeMapping(any())).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.approveReturnCodeImportReview("RCR-001", action("checker-b", "复核通过")));
+        verify(paymentConfigMapper, never()).insertReturnCodeImportBatch(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(paymentConfigMapper, never()).completeReturnCodeImportReview(
+                any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectAliasUpsertReportedAsSuccessfulWithoutExactMapping() {
+        PaymentChannelReturnCodeConfigDTO current =
+                mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
+        String csv = HEADER
+                + "wx_h5,userpaying,PAYMENT-CHANNEL-1001,等待用户支付,等待回调,是,否,v2,ENABLED,1\n";
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(current));
+        stubChannels("wx_h5");
+        String baseline = service.previewReturnCodeImport(request(csv)).getBaselineFingerprint();
+        when(paymentConfigMapper.findReturnCodeImportReviewForUpdate("RCR-001"))
+                .thenReturn(review(csv, baseline, "maker-a"));
+        when(paymentConfigMapper.findReturnCodeMappingsForUpdate()).thenReturn(Collections.singletonList(current));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.approveReturnCodeImportReview("RCR-001", action("checker-b", "复核通过")));
+        verify(paymentConfigMapper).upsertReturnCodeMapping(any());
+        verify(paymentConfigMapper, never()).insertReturnCodeImportBatch(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldStopImportApprovalWhenAuditBatchInsertDoesNotTakeEffect() {
+        PaymentChannelReturnCodeConfigDTO current =
+                mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中", 1, "ACTIVE");
+        PaymentChannelReturnCodeConfigDTO updated =
+                mapping("wx_h5", "USERPAYING", "PAYMENT-CHANNEL-1001", "等待用户支付", 1, "ACTIVE");
+        updated.setMappingVersion("v2");
+        String csv = HEADER
+                + "wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,等待用户支付,等待回调,是,否,v2,ENABLED,1\n";
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(current));
+        stubChannels("wx_h5");
+        String baseline = service.previewReturnCodeImport(request(csv)).getBaselineFingerprint();
+        PaymentReturnCodeImportReviewEntity review = review(csv, baseline, "maker-a");
+        when(paymentConfigMapper.findReturnCodeImportReviewForUpdate("RCR-001")).thenReturn(review);
+        when(paymentConfigMapper.findReturnCodeMappingsForUpdate()).thenReturn(Collections.singletonList(current));
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.singletonList(updated));
+        when(paymentConfigMapper.insertReturnCodeImportBatch(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.approveReturnCodeImportReview("RCR-001", action("checker-b", "复核通过")));
+        verify(paymentConfigMapper, never()).completeReturnCodeImportReview(
+                any(), any(), any(), any(), any(), any());
     }
 
     @Test
