@@ -86,5 +86,10 @@ public interface ReconciliationMapper {
 
     int insertCrossSystemFact(CrossSystemFactRequestDTO request);
 
+    CrossSystemFactDTO findCrossSystemFact(@Param("businessChainId") String businessChainId,
+                                           @Param("systemCode") String systemCode,
+                                           @Param("factType") String factType,
+                                           @Param("factNo") String factNo);
+
     List<CrossSystemFactDTO> findCrossSystemFacts(@Param("businessChainId") String businessChainId);
 }

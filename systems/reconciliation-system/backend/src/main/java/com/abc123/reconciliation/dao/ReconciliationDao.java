@@ -70,5 +70,8 @@ public interface ReconciliationDao {
 
     int insertCrossSystemFact(CrossSystemFactRequestDTO request);
 
+    CrossSystemFactDTO findCrossSystemFact(String businessChainId, String systemCode,
+                                           String factType, String factNo);
+
     List<CrossSystemFactDTO> findCrossSystemFacts(String businessChainId);
 }

@@ -15,4 +15,5 @@
 
 1. 新建环境执行 `schema.sql`。
 2. 已有环境执行 `migrations/2026-08-09-add-batch-readiness-gate.sql`。
-3. 发布后调用批次准入检查接口，确认 `readiness_status` 已按现有跨系统事实回填。
+3. 已有环境执行 `migrations/2026-10-02-add-cross-system-fact-payment-scene.sql`，历史事实的 `pay_scene` 保持为空。
+4. 发布后调用批次准入检查接口，确认 `readiness_status` 已按现有跨系统事实回填。

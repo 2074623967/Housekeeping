@@ -51,6 +51,54 @@ class ReconciliationIntegrationTest {
     }
 
     @Test
+    void shouldRejectZeroAmountRecordsBeforeReconciliation() {
+        ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
+        request.setBusinessDate("2026-08-07");
+        request.setChannelCode("WECHAT");
+        ReconciliationBatchListItemDTO batch = service.createBatch(request);
+
+        ChannelRecordRequestDTO channel = new ChannelRecordRequestDTO();
+        channel.setChannelTradeNo("WX-ZERO-1");
+        channel.setPaymentOrderId("PAY-ZERO-1");
+        channel.setAmount(BigDecimal.ZERO);
+        assertThrows(BusinessException.class, () -> service.addChannelRecord(batch.getBatchNo(), channel));
+
+        InternalRecordRequestDTO internal = new InternalRecordRequestDTO();
+        internal.setPaymentOrderId("PAY-ZERO-1");
+        internal.setAmount(BigDecimal.ZERO);
+        assertThrows(BusinessException.class, () -> service.addInternalRecord(batch.getBatchNo(), internal));
+
+        channel.setChannelTradeNo("WX-SCALE-1");
+        channel.setPaymentOrderId("PAY-SCALE-1");
+        channel.setAmount(new BigDecimal("10.001"));
+        assertThrows(BusinessException.class, () -> service.addChannelRecord(batch.getBatchNo(), channel));
+
+        internal.setPaymentOrderId("PAY-SCALE-1");
+        internal.setAmount(new BigDecimal("10.001"));
+        assertThrows(BusinessException.class, () -> service.addInternalRecord(batch.getBatchNo(), internal));
+    }
+
+    @Test
+    void shouldRejectInvalidCrossSystemFactAmountsBeforeChainEvaluation() {
+        for (BigDecimal amount : new BigDecimal[] {
+                null,
+                BigDecimal.ZERO,
+                new BigDecimal("10.001"),
+                new BigDecimal("10000000000000000.00")
+        }) {
+            CrossSystemFactRequestDTO request = new CrossSystemFactRequestDTO();
+            request.setBusinessChainId("CHAIN-INVALID-AMOUNT");
+            request.setSystemCode("payment-core");
+            request.setFactType("PAYMENT_SUCCESS");
+            request.setFactNo("PAY-INVALID-AMOUNT-" + (amount == null ? "NULL" : amount.toPlainString()));
+            request.setBusinessNo("ORDER-INVALID-AMOUNT");
+            request.setFactStatus("SUCCESS");
+            request.setAmount(amount);
+            assertThrows(BusinessException.class, () -> service.recordCrossSystemFact(request));
+        }
+    }
+
+    @Test
     void shouldMatchAndDetectAmountDifference() {
         ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
         request.setBusinessDate("2026-08-04");
@@ -313,6 +361,61 @@ class ReconciliationIntegrationTest {
         assertEquals("BLOCKED", checked.getReadinessStatus());
         assertEquals(1, checked.getReadinessAbnormalChainCount());
         assertEquals("reconciliation-ops", checked.getReadinessBlockingOwner());
+    }
+
+    @Test
+    void shouldProjectPaySceneAsFirstClassCrossSystemFact() {
+        CrossSystemFactRequestDTO request = new CrossSystemFactRequestDTO();
+        request.setBusinessChainId("CHAIN-PAY-SCENE-001");
+        request.setSystemCode("payment-core");
+        request.setFactType("PAYMENT_SUCCESS");
+        request.setFactNo("PAY-SCENE-001");
+        request.setBusinessNo("ORD-SCENE-001");
+        request.setFactStatus("SUCCESS");
+        request.setPayScene("HOME_CLEAN");
+        request.setAmount(new BigDecimal("88.00"));
+
+        CrossSystemChainSnapshotDTO snapshot = service.recordCrossSystemFact(request);
+
+        assertEquals(1, snapshot.getFacts().size());
+        assertEquals("HOME_CLEAN", snapshot.getFacts().get(0).getPayScene());
+    }
+
+    @Test
+    void shouldRejectRepeatedCrossSystemFactWhenPaySceneChanges() {
+        CrossSystemFactRequestDTO request = new CrossSystemFactRequestDTO();
+        request.setBusinessChainId("CHAIN-PAY-REPLAY-001");
+        request.setSystemCode("payment-core");
+        request.setFactType("PAYMENT_SUCCESS");
+        request.setFactNo("PAY-REPLAY-001");
+        request.setBusinessNo("ORD-REPLAY-001");
+        request.setFactStatus("SUCCESS");
+        request.setPayScene("HOME_CLEAN");
+        request.setAmount(new BigDecimal("88.00"));
+
+        service.recordCrossSystemFact(request);
+        request.setPayScene("HOME_REPAIR");
+
+        assertThrows(BusinessException.class, () -> service.recordCrossSystemFact(request));
+    }
+
+    @Test
+    void shouldRejectDowngradingSuccessfulCrossSystemFact() {
+        CrossSystemFactRequestDTO request = new CrossSystemFactRequestDTO();
+        request.setBusinessChainId("CHAIN-PAY-DOWNGRADE-001");
+        request.setSystemCode("payment-core");
+        request.setFactType("PAYMENT_SUCCESS");
+        request.setFactNo("PAY-DOWNGRADE-001");
+        request.setBusinessNo("ORD-DOWNGRADE-001");
+        request.setFactStatus("SUCCESS");
+        request.setAmount(new BigDecimal("88.00"));
+
+        service.recordCrossSystemFact(request);
+        request.setFactStatus("PENDING");
+
+        assertThrows(BusinessException.class, () -> service.recordCrossSystemFact(request));
+        assertEquals("SUCCESS", service.crossSystemChain("CHAIN-PAY-DOWNGRADE-001")
+                .getFacts().get(0).getFactStatus());
     }
 
     private void recordCompleteChain(String paymentOrderId) {

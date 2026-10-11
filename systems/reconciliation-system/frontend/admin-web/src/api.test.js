@@ -1,5 +1,50 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { downloadBatchDetail, normalizeCrossSystemChainResult, normalizeReconciliationBatchResult } from "./api.js";
+
+const validChain = {
+  businessChainId: "CHAIN-001",
+  factCount: 0,
+  facts: [],
+  hasAbnormalFact: false,
+  diagnosis: "等待事实",
+  chainStatus: "WAITING",
+  responsibilityStatus: "UNASSIGNED",
+  nextAction: "等待支付成功事实",
+  abnormalFactCount: 0,
+  completedStageCount: 0,
+  expectedStageCount: 4,
+  financialCloseable: false
+};
+
+test("requires reconciliation batch and chain identities on operation responses", () => {
+  assert.equal(normalizeReconciliationBatchResult({ batchNo: "REC-001" }, "REC-001").batchNo, "REC-001");
+  assert.equal(normalizeCrossSystemChainResult(validChain, "CHAIN-001").businessChainId, "CHAIN-001");
+  assert.throws(
+    () => normalizeReconciliationBatchResult({ batchNo: "REC-002" }, "REC-001"),
+    (error) => error.code === "RECONCILIATION-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizeCrossSystemChainResult({ ...validChain, businessChainId: "CHAIN-002" }, "CHAIN-001"),
+    (error) => error.code === "RECONCILIATION-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  for (const invalidChain of [
+    { ...validChain, facts: [{ factNo: "FACT-001" }] },
+    { ...validChain, factCount: 1, facts: [{
+      businessChainId: "CHAIN-001", systemCode: "payment-core", factType: "PAYMENT_SUCCESS",
+      factNo: "FACT-001", factStatus: "SUCCESS", payScene: 123
+    }] },
+    { ...validChain, hasAbnormalFact: true },
+    { ...validChain, responsibilityStatus: "CLOSED" },
+    { ...validChain, completedStageCount: 5 },
+    { ...validChain, chainStatus: "COMPLETED", responsibilityStatus: "CLOSED", completedStageCount: 4, financialCloseable: false }
+  ]) {
+    assert.throws(
+      () => normalizeCrossSystemChainResult(invalidChain),
+      (error) => error.code === "RECONCILIATION-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+});
 
 test("keeps the reconciliation service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
@@ -76,14 +121,26 @@ test("encodes business chain identifiers when loading cross-system facts", async
     requestedUrl = url;
     return new Response(JSON.stringify({
       code: "0",
-      data: { businessChainId: "CHAIN/001", chainStatus: "COMPLETED" }
+      data: {
+        ...validChain,
+        businessChainId: "CHAIN/001",
+        chainStatus: "COMPLETED",
+        responsibilityStatus: "CLOSED",
+        completedStageCount: 4,
+        financialCloseable: true
+      }
     }), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   try {
     const { getCrossSystemChain } = await import(`./api.js?chain=${Date.now()}`);
     assert.deepEqual(await getCrossSystemChain("CHAIN/001"), {
       businessChainId: "CHAIN/001",
-      chainStatus: "COMPLETED"
+      ...validChain,
+      businessChainId: "CHAIN/001",
+      chainStatus: "COMPLETED",
+      responsibilityStatus: "CLOSED",
+      completedStageCount: 4,
+      financialCloseable: true
     });
     assert.equal(requestedUrl, "/api/reconciliation/cross-system/chains/CHAIN%2F001");
   } finally {
@@ -178,5 +235,70 @@ test("normalizes array reconciliation pages without leaking array indexes", asyn
     });
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("aborts slow reconciliation requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "reconciliation-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "reconciliation-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    const { getOverview } = await import(`./api.js?timeout=${Date.now()}`);
+    await assert.rejects(
+      getOverview(),
+      (error) => error.code === "RECONCILIATION-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("aborts slow reconciliation exports and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "reconciliation-export-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "reconciliation-export-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      downloadBatchDetail("REC-TIMEOUT"),
+      (error) => error.code === "RECONCILIATION-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });

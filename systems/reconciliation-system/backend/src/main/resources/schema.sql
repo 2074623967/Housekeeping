@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS t_cross_system_fact_snapshot (
     fact_type VARCHAR(64) NOT NULL COMMENT '事实类型',
     fact_no VARCHAR(128) NOT NULL COMMENT '来源事实编号',
     business_no VARCHAR(128) NOT NULL COMMENT '来源业务编号',
+    pay_scene VARCHAR(64) NULL COMMENT '支付业务场景，历史事实可为空',
     fact_status VARCHAR(64) NOT NULL COMMENT '事实状态',
     amount DECIMAL(18,2) NULL COMMENT '事实金额',
     snapshot_version BIGINT NULL COMMENT '来源配置快照版本',

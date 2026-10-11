@@ -5,18 +5,25 @@ const createRequestError = (code, message, cause) => {
   return error;
 };
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 const request = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "RECONCILIATION-CLIENT-TIMEOUT"
       : "RECONCILIATION-CLIENT-NETWORK";
     throw createRequestError(code, error?.name === "AbortError" ? "对账服务请求超时" : "无法连接对账服务", error);
+  } finally {
+    clearTimeout(timeoutId);
   }
   let body;
   try {
@@ -37,13 +44,30 @@ export const getBatches = ({ pageNo = 1, pageSize = 20 } = {}) => {
     .then((page) => normalizePage(page, pageNo, pageSize));
 };
 export const getBatchDetail = (batchNo) =>
-  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`).then(normalizeBatchDetail);
-export const downloadBatchDetail = (batchNo) =>
-  fetch(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/export`)
-    .then(async (response) => {
-      if (!response.ok) throw new Error("导出失败");
-      return response.blob();
-    });
+  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`)
+    .then((data) => normalizeReconciliationBatchResult(data, batchNo))
+    .then(normalizeBatchDetail);
+export const downloadBatchDetail = async (batchNo) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+  try {
+    let response;
+    try {
+      response = await fetch(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/export`, {
+        signal: controller.signal
+      });
+    } catch (error) {
+      const code = error?.name === "AbortError"
+        ? "RECONCILIATION-CLIENT-TIMEOUT"
+        : "RECONCILIATION-CLIENT-NETWORK";
+      throw createRequestError(code, error?.name === "AbortError" ? "对账服务导出请求超时" : "无法连接对账服务", error);
+    }
+    if (!response.ok) throw createRequestError(`RECONCILIATION-CLIENT-HTTP-${response.status}`, "导出失败");
+    return response.blob();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 export const getDifferences = (query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => value && params.set(key, value));
@@ -74,14 +98,89 @@ const normalizeBatchDetail = (detail) => {
     differences: Array.isArray(detail.differences) ? detail.differences : []
   };
 };
+
+export const normalizeReconciliationBatchResult = (data, expectedBatchNo = "") => {
+  if (!data || typeof data !== "object" || typeof data.batchNo !== "string"
+      || !data.batchNo.trim() || (expectedBatchNo && data.batchNo !== expectedBatchNo)) {
+    throw createRequestError(
+      "RECONCILIATION-CLIENT-INVALID-BUSINESS-RESULT",
+      "对账批次响应未确认当前批次"
+    );
+  }
+  return data;
+};
+
+export const normalizeCrossSystemChainResult = (data, expectedBusinessChainId = "") => {
+  if (!data || typeof data !== "object" || typeof data.businessChainId !== "string"
+      || !data.businessChainId.trim()
+      || !Number.isInteger(data.factCount) || data.factCount < 0
+      || !Array.isArray(data.facts) || data.facts.length !== data.factCount
+      || data.facts.some((fact) => !isValidChainFact(fact, data.businessChainId))
+      || !CHAIN_STATUS_TYPES.has(data.chainStatus)
+      || !RESPONSIBILITY_STATUS_TYPES.has(data.responsibilityStatus)
+      || typeof data.diagnosis !== "string" || !data.diagnosis.trim()
+      || typeof data.nextAction !== "string" || !data.nextAction.trim()
+      || !Number.isInteger(data.abnormalFactCount) || data.abnormalFactCount < 0
+      || data.abnormalFactCount > data.factCount
+      || data.hasAbnormalFact !== (data.abnormalFactCount > 0)
+      || !Number.isInteger(data.expectedStageCount) || data.expectedStageCount <= 0
+      || !Number.isInteger(data.completedStageCount)
+      || data.completedStageCount < 0
+      || data.completedStageCount > data.expectedStageCount
+      || !isConsistentChainState(data)
+      || (expectedBusinessChainId && data.businessChainId !== expectedBusinessChainId)) {
+    throw createRequestError(
+      "RECONCILIATION-CLIENT-INVALID-BUSINESS-RESULT",
+      "跨系统链路响应未确认当前业务链路"
+    );
+  }
+  return data;
+};
+
+const CHAIN_STATUS_TYPES = new Set(["WAITING", "IN_PROGRESS", "EXCEPTION", "COMPLETED"]);
+const RESPONSIBILITY_STATUS_TYPES = new Set(["UNASSIGNED", "PENDING", "MANUAL_REVIEW", "CLOSED"]);
+
+const isValidChainFact = (fact, businessChainId) => Boolean(
+  fact && typeof fact === "object"
+    && typeof fact.businessChainId === "string"
+    && fact.businessChainId.trim() === businessChainId.trim()
+    && typeof fact.systemCode === "string" && fact.systemCode.trim()
+    && typeof fact.factType === "string" && fact.factType.trim()
+    && typeof fact.factNo === "string" && fact.factNo.trim()
+    && typeof fact.factStatus === "string" && fact.factStatus.trim()
+    && (fact.payScene == null || typeof fact.payScene === "string")
+);
+
+const isConsistentChainState = (data) => {
+  const expectedResponsibility = {
+    WAITING: "UNASSIGNED",
+    IN_PROGRESS: "PENDING",
+    EXCEPTION: "MANUAL_REVIEW",
+    COMPLETED: "CLOSED"
+  }[data.chainStatus];
+  if (data.responsibilityStatus !== expectedResponsibility) {
+    return false;
+  }
+  if (data.chainStatus === "EXCEPTION") {
+    return data.abnormalFactCount > 0 && data.financialCloseable === false;
+  }
+  if (data.chainStatus === "COMPLETED") {
+    return data.abnormalFactCount === 0
+      && data.completedStageCount === data.expectedStageCount
+      && data.financialCloseable === true;
+  }
+  return data.abnormalFactCount === 0 && data.financialCloseable === false;
+};
 export const runBatch = (batchNo) =>
-  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/run`, { method: "POST" });
+  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/run`, { method: "POST" })
+    .then((data) => normalizeReconciliationBatchResult(data, batchNo));
 export const checkBatchReadiness = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/readiness-check`, {
     method: "POST"
-  });
+  }).then((data) => normalizeReconciliationBatchResult(data, batchNo));
 export const getCrossSystemChain = (businessChainId) =>
-  request(`/api/reconciliation/cross-system/chains/${encodeURIComponent(businessChainId)}`);
+  request(`/api/reconciliation/cross-system/chains/${encodeURIComponent(businessChainId)}`)
+    .then((data) => normalizeCrossSystemChainResult(data, businessChainId));
 export const resolveDifference = (differenceNo, payload) =>
   request(`/api/reconciliation/differences/${encodeURIComponent(differenceNo)}/resolve`, {
     method: "POST",

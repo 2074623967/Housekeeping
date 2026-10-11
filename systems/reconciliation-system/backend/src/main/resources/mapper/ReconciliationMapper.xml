@@ -170,21 +170,34 @@
 
     <insert id="insertCrossSystemFact">
         INSERT INTO t_cross_system_fact_snapshot
-        (business_chain_id, system_code, fact_type, fact_no, business_no, fact_status,
+        (business_chain_id, system_code, fact_type, fact_no, business_no, pay_scene, fact_status,
          amount, snapshot_version, occurred_at, payload)
-        VALUES (#{businessChainId}, #{systemCode}, #{factType}, #{factNo}, #{businessNo},
+        VALUES (#{businessChainId}, #{systemCode}, #{factType}, #{factNo}, #{businessNo}, #{payScene},
                 #{factStatus}, #{amount}, #{snapshotVersion}, #{occurredAt}, #{payload})
         ON DUPLICATE KEY UPDATE
             fact_status = VALUES(fact_status),
             amount = VALUES(amount),
             snapshot_version = VALUES(snapshot_version),
+            pay_scene = VALUES(pay_scene),
             occurred_at = VALUES(occurred_at),
             payload = VALUES(payload)
     </insert>
 
+    <select id="findCrossSystemFact"
+            resultType="com.abc123.reconciliation.dto.CrossSystemFactDTO">
+        SELECT business_chain_id, system_code, fact_type, fact_no, business_no, pay_scene, fact_status,
+               amount, snapshot_version, occurred_at, payload, created_at
+        FROM t_cross_system_fact_snapshot
+        WHERE business_chain_id = #{businessChainId}
+          AND system_code = #{systemCode}
+          AND fact_type = #{factType}
+          AND fact_no = #{factNo}
+        LIMIT 1
+    </select>
+
     <select id="findCrossSystemFacts"
             resultType="com.abc123.reconciliation.dto.CrossSystemFactDTO">
-        SELECT business_chain_id, system_code, fact_type, fact_no, business_no, fact_status,
+        SELECT business_chain_id, system_code, fact_type, fact_no, business_no, pay_scene, fact_status,
                amount, snapshot_version, occurred_at, payload, created_at
         FROM t_cross_system_fact_snapshot
         WHERE business_chain_id = #{businessChainId}

@@ -155,6 +155,12 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
+    public CrossSystemFactDTO findCrossSystemFact(String businessChainId, String systemCode,
+                                                  String factType, String factNo) {
+        return mapper.findCrossSystemFact(businessChainId, systemCode, factType, factNo);
+    }
+
+    @Override
     public List<CrossSystemFactDTO> findCrossSystemFacts(String businessChainId) {
         return safeList(mapper.findCrossSystemFacts(businessChainId));
     }

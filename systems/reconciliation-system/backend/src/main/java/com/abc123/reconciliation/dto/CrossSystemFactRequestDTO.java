@@ -20,6 +20,8 @@ public class CrossSystemFactRequestDTO {
     private String factNo;
     /** 来源系统业务编号。 */
     private String businessNo;
+    /** 支付业务场景。 */
+    private String payScene;
     /** 事实状态。 */
     private String factStatus;
     /** 事实金额。 */

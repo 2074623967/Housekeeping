@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -62,6 +63,8 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     private static final String RESPONSIBILITY_PENDING = "PENDING";
     private static final String RESPONSIBILITY_MANUAL_REVIEW = "MANUAL_REVIEW";
     private static final String RESPONSIBILITY_CLOSED = "CLOSED";
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final String PAYMENT_STAGE = "payment-core|PAYMENT_SUCCESS";
     private static final String CLEARING_STAGE = "clearing-system|CLEARING_GENERATED";
     private static final String SETTLEMENT_STAGE = "settlement-system|SETTLEMENT_CREATED";
@@ -97,10 +100,10 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     @Transactional
     public ReconciliationBatchListItemDTO addChannelRecord(String batchNo, ChannelRecordRequestDTO request) {
         requiredBatch(batchNo);
-        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())
-                || request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())) {
             throw new BusinessException("渠道账单记录字段不完整");
         }
+        validateRecordAmount(request.getAmount(), "渠道账单金额必须大于0且最多保留2位小数");
         ChannelRecordEntity entity = new ChannelRecordEntity();
         entity.setBatchNo(batchNo);
         entity.setChannelTradeNo(required(request.getChannelTradeNo(), "渠道流水号不能为空"));
@@ -116,10 +119,10 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     @Transactional
     public ReconciliationBatchListItemDTO addInternalRecord(String batchNo, InternalRecordRequestDTO request) {
         requiredBatch(batchNo);
-        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())
-                || request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())) {
             throw new BusinessException("平台支付事实字段不完整");
         }
+        validateRecordAmount(request.getAmount(), "平台支付事实金额必须大于0且最多保留2位小数");
         InternalRecordEntity entity = new InternalRecordEntity();
         entity.setBatchNo(batchNo);
         entity.setPaymentOrderId(request.getPaymentOrderId().trim());
@@ -129,6 +132,13 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         entity.setPaidTime(request.getPaidTime() == null ? LocalDateTime.now() : request.getPaidTime());
         dao.insertInternalRecord(batchNo, entity);
         return requiredBatch(batchNo);
+    }
+
+    private void validateRecordAmount(BigDecimal amount, String message) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new BusinessException(message);
+        }
     }
 
     @Override
@@ -301,6 +311,7 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     @Transactional
     public CrossSystemChainSnapshotDTO recordCrossSystemFact(CrossSystemFactRequestDTO request) {
         validateCrossSystemFact(request);
+        validateRecordAmount(request.getAmount(), "跨系统事实金额必须大于0且最多保留2位小数");
         request.setBusinessChainId(request.getBusinessChainId().trim());
         request.setSystemCode(request.getSystemCode().trim());
         request.setFactType(request.getFactType().trim());
@@ -310,8 +321,26 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         if (request.getOccurredAt() == null) {
             request.setOccurredAt(LocalDateTime.now());
         }
+        CrossSystemFactDTO existing = dao.findCrossSystemFact(
+                request.getBusinessChainId(), request.getSystemCode(), request.getFactType(), request.getFactNo());
+        if (existing != null) {
+            validateRepeatedCrossSystemFact(existing, request);
+        }
         dao.insertCrossSystemFact(request);
         return crossSystemChain(request.getBusinessChainId());
+    }
+
+    private void validateRepeatedCrossSystemFact(CrossSystemFactDTO existing, CrossSystemFactRequestDTO request) {
+        if (!Objects.equals(existing.getBusinessNo(), request.getBusinessNo())
+                || (!Objects.equals(existing.getFactStatus(), request.getFactStatus())
+                    && !("PENDING".equals(existing.getFactStatus())
+                        && "SUCCESS".equals(request.getFactStatus())))
+                || !Objects.equals(existing.getPayScene(), request.getPayScene())
+                || existing.getAmount() == null
+                || request.getAmount() == null
+                || existing.getAmount().compareTo(request.getAmount()) != 0) {
+            throw new BusinessException("重复跨系统事实与已落库事实不一致");
+        }
     }
 
     @Override
