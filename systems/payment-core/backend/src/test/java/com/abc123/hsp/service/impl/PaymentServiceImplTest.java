@@ -60,6 +60,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -5764,6 +5765,34 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "payment submit concurrency token was not created atomically",
                 exception.getCause().getMessage());
+    }
+
+    @Test
+    void shouldBlockWhenInitialSubmitConcurrencyTokenInsertCollides() throws Exception {
+        when(paymentMapper.insertSubmitConcurrencyToken(
+                "PRE-TOKEN-RACE", "PAY-TOKEN-RACE", "default-app", "IDEMP-TOKEN-RACE",
+                "H5", "127.0.0.1", 120))
+                .thenThrow(new DuplicateKeyException("sensitive conflicting token data"));
+
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService);
+        java.lang.reflect.Method method = PaymentServiceImpl.class.getDeclaredMethod(
+                "occupySubmitConcurrencyToken", String.class, String.class, String.class,
+                String.class, String.class, String.class);
+        method.setAccessible(true);
+
+        java.lang.reflect.InvocationTargetException exception = assertThrows(
+                java.lang.reflect.InvocationTargetException.class,
+                () -> method.invoke(service, "PRE-TOKEN-RACE", "PAY-TOKEN-RACE", "default-app",
+                        "H5", "127.0.0.1", "IDEMP-TOKEN-RACE"));
+        assertTrue(exception.getCause() instanceof BusinessException);
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                ((BusinessException) exception.getCause()).getCode());
+        assertFalse(exception.getCause().getMessage().contains("sensitive"));
+        verify(paymentMapper, never()).occupySubmitConcurrencyToken(
+                "PRE-TOKEN-RACE", "PAY-TOKEN-RACE", "default-app", "IDEMP-TOKEN-RACE",
+                "H5", "127.0.0.1", 120);
     }
 
     @Test

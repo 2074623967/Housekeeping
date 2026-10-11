@@ -2841,15 +2841,20 @@ public class PaymentServiceImpl implements PaymentService {
                                               String idempotencyKey) {
         PaymentSubmitConcurrencyTokenDTO currentToken = paymentMapper.findSubmitConcurrencyToken(prepayOrderNo, sourceAppId);
         if (currentToken == null) {
-            if (paymentMapper.insertSubmitConcurrencyToken(
-                    prepayOrderNo,
-                    paymentOrderId,
-                    sourceAppId,
-                    idempotencyKey,
-                    terminal,
-                    clientIp,
-                    SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS) != 1) {
-                throw new IllegalStateException("payment submit concurrency token was not created atomically");
+            try {
+                if (paymentMapper.insertSubmitConcurrencyToken(
+                        prepayOrderNo,
+                        paymentOrderId,
+                        sourceAppId,
+                        idempotencyKey,
+                        terminal,
+                        clientIp,
+                        SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS) != 1) {
+                    throw new IllegalStateException("payment submit concurrency token was not created atomically");
+                }
+            } catch (DuplicateKeyException exception) {
+                throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED,
+                        "当前预付单提交令牌已被占用，请刷新并核对原支付及渠道事实");
             }
             return;
         }
