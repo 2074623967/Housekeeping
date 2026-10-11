@@ -526,3 +526,7 @@ payment-core H2/HTTP 定向测试先由主动查单确认成功，再重放查�
 ## 56. 2026-10-10 管理端退款申请清键失败后的本机回归
 
 隔离 Chrome/mock 中，首笔虚构申请模拟响应丢失并按原键刷新恢复；第二次 POST 返回原退款单后，注入 `Storage.removeItem` 对申请分区静默无效。页面同时显示原退款单 `REVIEWING` 和“本地申请键未能清理”，分区被标记为 `confirmed`。恢复删除能力并刷新，重输相同内容后页面提示未决申请无法核实，退款申请 POST 始终为两次；测试结束清理该隔离资料。管理端工具定向 `7/7`、全量 `313/313`、Vite 构建与原管理端动作浏览器脚本通过。仅为本机 mock 与前端事实反馈，不证明跨会话、真实渠道退款到账、可信身份或目标 MySQL 8 验收。
+
+## 57. 2026-10-11 当前基线九服务支付链路复验
+
+在固定端口和现存后端 PID 的写前隔离检查通过后，执行 `local-stack.sh verify payment-chain`。运营配置、风控、网关、账务、清分、结算、退款、对账和支付核心九个后端依次 `READY`，所选 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`。本机虚构交易以回调收口支付，生成成功事件、清分和结算事实，并由独立 refund-center 承接退款；账务包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账链路为 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。脚本退出码 `0`，九个后端均停服，相关端口和 PID 文件复核无遗留。只证明隔离 H2/demo 及本机 HTTP 协议链路，未验证真实渠道资金、目标 MySQL 8、多实例、可信主体或生产发布。

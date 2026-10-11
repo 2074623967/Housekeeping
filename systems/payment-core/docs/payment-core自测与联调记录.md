@@ -28255,3 +28255,7 @@ App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 
 ### 10.980 2026-10-11 回调、批量异常动作和退款出站 HTTP 同进程回归
 
 获准回环监听后，离线 Maven 在同一测试进程联合执行 `PaymentCallbackTransportHttpIntegrationTest`、`PaymentIssueBatchActionHttpIntegrationTest` 与 `RefundOutboxHttpIntegrationTest`，Surefire 分别 `1/1`、`1/1`、`8/8`，合计 `10/10`，零失败、错误、跳过。回调测试覆盖拒绝请求返回 HTTP 503 而一般查询错误仍维持原 HTTP 契约；批量异常动作覆盖同键重放、内容冲突、显式空键及大小写独立键的日志留痕；退款出站覆盖演示回调、受理未知和重发门禁。同一进程各随机 H2/demo 上下文退出后关闭，未连接正式渠道。该组合只确认这三组本地入口及上下文隔离，不代表全部后端用例、目标 MySQL 8、多实例、资金事实、可信身份或发布。
+
+### 10.981 2026-10-11 九服务 H2/demo 支付链路复验
+
+当前基线 `local-stack.sh verify payment-chain` 通过写前隔离检查后启动九个本地后端，HTTP 冒烟及跨系统 happy-path 均 `[PASS]`；支付回调、清分、结算、账务和退款事实进入对账链路，状态 `COMPLETED`、`4/4`、`financialCloseable=true`。退出后九服务和相关端口/PID 清理确认。该证据不代替真实渠道与资金、目标 MySQL 8、多实例、可信身份或发布。详见跨系统记录第 57 节。
