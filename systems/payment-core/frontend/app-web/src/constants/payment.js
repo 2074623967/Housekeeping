@@ -30,6 +30,10 @@ export const PAYMENT_RESULT_STATE_META = {
     title: "支付提交处理中",
     hint: "渠道受理尚未确认，请刷新支付详情并等待状态推进，勿重复付款。"
   },
+  fail: {
+    title: "支付结果待核查",
+    hint: "当前支付结果尚未确认，请勿重复付款；请刷新支付详情或联系服务方核查渠道与订单事实。"
+  },
   risk_review: {
     title: "待风控复核",
     hint: "本次支付命中风控复核，请等待运营或风控审核后再继续支付。"
@@ -47,8 +51,8 @@ export const PAYMENT_RESULT_STATE_META = {
     hint: "预付单已创建，但还未正式提交到支付渠道。"
   },
   pending: {
-    title: "支付处理中",
-    hint: "渠道回调可能稍有延迟，可主动查单刷新真实支付结果。"
+    title: "支付结果待核查",
+    hint: "当前支付状态尚未确认，请勿重复付款；请刷新支付详情并联系服务方核查。"
   }
 };
 
@@ -79,6 +83,9 @@ export function resolvePaymentResultState(paymentStatus) {
   }
   if (paymentStatus === "PAYING") {
     return "paying";
+  }
+  if (paymentStatus === "FAIL") {
+    return "fail";
   }
   if (paymentStatus === "WAIT_CALLBACK") {
     return "wait_callback";

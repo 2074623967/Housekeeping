@@ -331,7 +331,11 @@ test("maps payment terminal states without inventing success", () => {
   assert.equal(resultMeta("SUCCESS").tone, "success");
   assert.equal(resultMeta("CLOSED").tone, "danger");
   assert.equal(resultMeta("WAIT_CALLBACK").title, "支付处理中");
-  assert.equal(resultMeta("UNKNOWN").title, "支付处理中");
+  assert.equal(resultMeta("UNKNOWN").title, "支付结果待核查");
+  assert.doesNotMatch(resultMeta("UNKNOWN").hint, /主动查单|等待渠道回调/);
+  assert.equal(resultMeta("FAIL").title, "支付结果待核查");
+  assert.match(resultMeta("FAIL").hint, /刷新|联系/);
+  assert.doesNotMatch(resultMeta("FAIL").hint, /主动查单|支付失败/);
   assert.equal(resultMeta("PAYING").title, "支付提交处理中");
   assert.match(resultMeta("PAYING").hint, /刷新/);
   assert.match(resultMeta("PAYING").hint, /不可主动查单或关单/);

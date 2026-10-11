@@ -154,6 +154,27 @@ test("keeps PAYING result read-only until channel acceptance is confirmed", asyn
   }
 });
 
+test("shows FAIL as an unverified result without offering channel actions", async () => {
+  let queryCalls = 0;
+  paymentApi.getDetail = () => Promise.resolve({
+    ...paymentDetail("FAIL"),
+    latestAttemptStatus: "结果未知，待查单"
+  });
+  paymentApi.query = () => { queryCalls += 1; return Promise.resolve(paymentDetail()); };
+  const page = createPage();
+  page.onLoad({ paymentOrderId: "PAY-1", prepayOrderNo: "PRE-TRUSTED", scene: "balance-pay" });
+  try {
+    await flushPromises();
+    assert.equal(page.data.meta.title, "支付结果待核查");
+    assert.equal(page.data.canQuery, false);
+    assert.equal(page.data.canClose, false);
+    await page.queryPayment();
+    assert.equal(queryCalls, 0);
+  } finally {
+    page.onUnload();
+  }
+});
+
 test("does not load or act on a payment result for an unsupported external scene", async () => {
   let requestCount = 0;
   paymentApi.getDetail = () => {

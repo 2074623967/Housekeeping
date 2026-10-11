@@ -14,8 +14,18 @@ test("checks completion time and channel transaction before offering a query", (
 
 test("guides PAYING results to refresh rather than channel query", () => {
   const source = readFileSync(viewPath, "utf8");
-  assert.match(source, /resultState\.value === "paying"[\s\S]*刷新支付详情[\s\S]*不要重复付款/);
-  assert.match(source, /resultState\.value === "paying"[\s\S]*不可主动查单或关单/);
+  const payingChecklist = source.split('if (resultState.value === "paying") {')[1].split('\n  }')[0];
+  assert.match(payingChecklist, /刷新支付详情[\s\S]*不要重复付款/);
+  assert.match(payingChecklist, /不可主动查单或关单/);
+  assert.doesNotMatch(payingChecklist, /pendingHint|优先主动查单/);
+});
+
+test("guides FAIL results to verify payment facts without unavailable actions", () => {
+  const source = readFileSync(viewPath, "utf8");
+  const failChecklist = source.split('if (resultState.value === "fail") {')[1]?.split('\n  }')[0];
+  assert.ok(failChecklist);
+  assert.match(failChecklist, /刷新支付详情[\s\S]*联系运营/);
+  assert.doesNotMatch(failChecklist, /pendingHint|主动查单|直接关闭/);
 });
 
 test("offers a route-bound retry when the payment result first fails to load", () => {

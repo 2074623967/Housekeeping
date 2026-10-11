@@ -101,9 +101,13 @@ test("only allows local close before channel submission", () => {
   assert.equal(canClosePaymentLocally("PREPAY_CREATED", "", "渠道提交中"), false);
 });
 
-test("pending result directs users to trusted payment facts", () => {
-  assert.match(PAYMENT_RESULT_STATE_META.pending.hint, /主动查单/);
-  assert.doesNotMatch(PAYMENT_RESULT_STATE_META.pending.hint, /模拟回调/);
+test("uncertain and failed payment results never direct unavailable channel queries", () => {
+  assert.equal(resolvePaymentResultState("FAIL"), "fail");
+  assert.equal(resolvePaymentResultState("UNKNOWN"), "pending");
+  assert.match(PAYMENT_RESULT_STATE_META.fail.hint, /刷新支付详情|联系/);
+  assert.doesNotMatch(PAYMENT_RESULT_STATE_META.fail.hint, /主动查单|支付失败/);
+  assert.doesNotMatch(PAYMENT_RESULT_STATE_META.pending.hint, /主动查单/);
+  assert.equal(canQueryPaymentChannel("FAIL", "处理中", null, "WX-1", "wx_h5"), false);
 });
 
 test("keeps channel submission in progress distinct from accepted callback waiting", () => {

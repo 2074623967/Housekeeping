@@ -219,9 +219,14 @@ const nextStepChecklist = computed(() => {
   }
   if (resultState.value === "paying") {
     return [
-      bizSceneMeta.value.pendingHint,
       "渠道受理尚未确认，请刷新支付详情并等待状态推进，不要重复付款或更换幂等键。",
       "此时不可主动查单或关单；长时间未推进请保留支付单号联系运营核查。"
+    ];
+  }
+  if (resultState.value === "fail") {
+    return [
+      "当前支付结果待确认，请勿重复付款，也不要将本地状态视为资金失败证明。",
+      "请刷新支付详情；若仍无法核实，保留支付单号并联系运营核查渠道与订单事实。"
     ];
   }
   if (resultState.value === "wait_callback") {
@@ -233,10 +238,8 @@ const nextStepChecklist = computed(() => {
     ];
   }
   return [
-    bizSceneMeta.value.pendingHint,
-    "当前结果尚未最终收口，可先执行主动查单刷新最新状态。",
-    "若渠道回调存在延迟，建议结合路由轨迹、回调轨迹和事件轨迹一起排查。",
-    "若渠道结果尚未确认，保持当前支付单并继续查单，不能直接关闭后重试。"
+    "当前状态尚未确认，请勿重复付款或自行关闭支付单。",
+    "请刷新支付详情，保留支付单号并联系运营核查渠道与订单事实。"
   ];
 });
 const recoveryActions = computed(() => {
@@ -282,8 +285,14 @@ const recoveryActions = computed(() => {
       "不可主动查单或关单，请在状态推进后按页面可用操作继续。"
     ];
   }
+  if (resultState.value === "fail") {
+    return [
+      "刷新支付详情并保留支付单号，勿按未核实的结果重新支付。",
+      "联系运营核查渠道流水、回调和业务订单事实。"
+    ];
+  }
   return [
-    "优先主动查单；只有确认从未提交渠道的支付单才可本地关闭。",
+    "优先刷新支付详情，未确认资金结果前不要重复付款或关闭支付单。",
     "保留支付单号、预付单号、幂等键，便于后台快速联查。"
   ];
 });

@@ -343,7 +343,14 @@ function resultMeta(status) {
       hint: "渠道受理尚未确认，请刷新支付详情并等待状态推进，勿重复付款；当前不可主动查单或关单。"
     };
   }
-  return { title: "支付处理中", tone: "warn", hint: "请等待渠道回调，超时后可主动查单。" };
+  if (status === "WAIT_CALLBACK") {
+    return { title: "支付处理中", tone: "warn", hint: "请等待渠道回调，超时后可主动查单。" };
+  }
+  return {
+    title: "支付结果待核查",
+    tone: status === "FAIL" ? "danger" : "warn",
+    hint: "当前支付结果尚未确认，请勿重复付款；请刷新支付详情或联系服务方核查。"
+  };
 }
 
 module.exports = {
