@@ -46,6 +46,15 @@ test("marks anomalous successful records while keeping record details available"
   assert.match(source, /openPayment\(row\)/);
 });
 
+test("distinguishes unaccepted channel submissions in record rows and operator snapshots", () => {
+  assert.match(source, /column\.key === 'paymentStatus' && isChannelSubmissionUnaccepted\(row\.paymentStatus, row\.latestAttemptStatus, row\.externalTransactionNo\)/);
+  assert.match(source, /isChannelSubmissionUnaccepted\(selectedRow\.paymentStatus, selectedRow\.latestAttemptStatus, selectedRow\.externalTransactionNo\)/);
+  assert.match(source, /渠道受理未确认/);
+  assert.match(source, /勿主动查单或重复提交/);
+  assert.match(source, /<span>最近尝试<\/span><strong>\{\{ selectedRow\.latestAttemptStatus \|\| "—" \}\}<\/strong>/);
+  assert.match(source, /v-else class="ops-row"[^>]*>[^<]*<span>典型场景<\/span>/);
+});
+
 test("links unverified successful refunds to the matching refund review filter", () => {
   assert.match(source, /row\.unverifiedRefundCount > 0/);
   assert.match(source, /!canUseSnapshot\.value \|\| !row\?\.paymentOrderId \|\| !\(row\.unverifiedRefundCount > 0\)/);
