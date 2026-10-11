@@ -58,6 +58,44 @@ class PaymentDiagnosticHttpIntegrationTest {
     }
 
     @Test
+    void shouldExposePersistedPendingCallbackRequestAcrossDiagnosticsOverHttp() throws Exception {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        String databaseUrl = "jdbc:h2:mem:payment_request_callback_http_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--server.address=127.0.0.1",
+                "--server.port=0",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
+            String query = "paymentOrderId=PAY202607190002&requestStatus=%E7%AD%89%E5%BE%85%E5%9B%9E%E8%B0%83";
+            assertEquals("等待回调", get(objectMapper, port, "/api/payment-requests?" + query)
+                    .path("data").path("items").get(0).path("requestStatus").asText());
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET attempt_status = '待回调' "
+                    + "WHERE attempt_no = 'ATT202607190002'"));
+
+            JsonNode overview = get(objectMapper, port, "/api/payment-requests/overview?" + query)
+                    .path("data");
+            assertEquals(1, overview.path("totalRequestCount").asInt());
+            assertEquals(1, overview.path("waitingCallbackRequestCount").asInt());
+            assertEquals(0, overview.path("processingRequestCount").asInt());
+            JsonNode page = get(objectMapper, port, "/api/payment-requests?" + query).path("data");
+            assertEquals(1, page.path("total").asInt());
+            assertEquals("待回调", page.path("items").get(0).path("requestStatus").asText());
+            assertEquals("warn", page.path("items").get(0).path("requestStatusType").asText());
+            JsonNode detail = get(objectMapper, port, "/api/payment-requests/ATT202607190002")
+                    .path("data");
+            assertEquals("待回调", detail.path("requestStatus").asText());
+            assertTrue(getCsv(port, "/api/payment-requests/export?" + query).contains("\"待回调\""));
+        }
+    }
+
+    @Test
     void shouldListInvalidSuccessFactsButRejectDetailOverHttp() throws Exception {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
         String databaseUrl = "jdbc:h2:mem:payment_diagnostic_http_" + System.nanoTime()
