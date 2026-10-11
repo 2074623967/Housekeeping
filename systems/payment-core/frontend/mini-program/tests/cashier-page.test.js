@@ -280,6 +280,73 @@ test("uses the refreshed cashier instead of a late native payment callback after
   }
 });
 
+test("keeps the cashier read-only after result navigation fails and retries after refresh", async () => {
+  const previousWx = global.wx;
+  let redirects = 0;
+  global.wx = {
+    redirectTo: ({ fail }) => {
+      redirects += 1;
+      if (fail) {
+        fail({ errMsg: "redirectTo:fail" });
+      }
+    }
+  };
+  paymentApi.getCashier = () => Promise.resolve(pendingCashier());
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.visibilityVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    idempotencyKey: "MINI-PRE-001", loading: false, canSubmit: true });
+  try {
+    page.onHide();
+    page.onShow();
+    await flushPromises();
+    assert.equal(redirects, 1);
+    assert.equal(page.data.staleCashier, true);
+    assert.equal(page.data.canSubmit, false);
+    assert.match(page.data.errorMessage, /结果页跳转失败.*刷新收银台/);
+
+    global.wx.redirectTo = () => { redirects += 1; };
+    await page.loadCashier();
+    assert.equal(redirects, 2);
+    assert.equal(page.data.staleCashier, false);
+    assert.equal(page.data.canSubmit, false);
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+  } finally {
+    page.onUnload();
+    global.wx = previousWx;
+  }
+});
+
+test("ignores a navigation failure from a previous cashier visibility cycle", async () => {
+  const previousWx = global.wx;
+  const failures = [];
+  global.wx = { redirectTo: ({ fail }) => { failures.push(fail); } };
+  paymentApi.getCashier = () => Promise.resolve(pendingCashier());
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.visibilityVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(), loading: false });
+  try {
+    page.onHide();
+    page.onShow();
+    await flushPromises();
+    page.onHide();
+    page.onShow();
+    await flushPromises();
+    assert.equal(failures.length, 2);
+    failures[0]({ errMsg: "redirectTo:fail" });
+    assert.equal(page.data.staleCashier, false);
+    assert.equal(page.data.errorMessage, "");
+    assert.equal(page.data.canSubmit, false);
+  } finally {
+    page.onUnload();
+    global.wx = previousWx;
+  }
+});
+
 test("keeps the cashier latest attempt completion time in the loaded snapshot", async () => {
   paymentApi.getCashier = () => Promise.resolve(cashier());
   const page = createPage();

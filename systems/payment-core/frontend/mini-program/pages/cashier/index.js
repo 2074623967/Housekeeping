@@ -89,13 +89,27 @@ Page({
   },
 
   redirectToPaymentResult(paymentOrderId, prepayOrderNo, paymentMethod = PAYMENT_METHOD) {
+    const navigationVersion = this.visibilityVersion;
+    const requestVersion = this.cashierRequestVersion;
     this.resultNavigationStarted = true;
     this.setData({ canSubmit: false });
     wx.redirectTo({
       url: `/pages/result/index?paymentOrderId=${encodeURIComponent(paymentOrderId)}`
         + `&prepayOrderNo=${encodeURIComponent(prepayOrderNo)}`
         + `&paymentMethod=${encodeURIComponent(paymentMethod)}`
-        + `&scene=${encodeURIComponent(this.data.scene.key)}`
+        + `&scene=${encodeURIComponent(this.data.scene.key)}`,
+      fail: () => {
+        if (!this.pageActive || navigationVersion !== this.visibilityVersion
+            || requestVersion !== this.cashierRequestVersion) {
+          return;
+        }
+        this.stopCountdown();
+        this.setData({
+          staleCashier: true,
+          canSubmit: false,
+          errorMessage: "支付结果页跳转失败，请刷新收银台核对原支付状态，勿重复付款。"
+        });
+      }
     });
   },
 
