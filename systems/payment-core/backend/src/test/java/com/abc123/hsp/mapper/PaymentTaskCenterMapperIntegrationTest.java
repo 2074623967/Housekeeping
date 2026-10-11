@@ -294,6 +294,34 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotOfferUnacceptedChannelSubmissionsToManualOrAutomaticQueries() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道提交中' "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            session.clearCache();
+
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 20, 100).contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+            assertEquals(5, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(2, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+
+            statement.executeUpdate("UPDATE t_payment_order SET channel_transaction_no = 'WX-ACCEPTED' "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            session.clearCache();
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 20, 100).contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+            assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+        }
+    }
+
+    @Test
     void shouldExcludeUnverifiedPrepayBindingsFromPaymentQueryCandidatesAndCounts() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

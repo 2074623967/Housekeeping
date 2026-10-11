@@ -842,6 +842,11 @@
                              CAST(p.payment_order_id AS BINARY(256))) = 1)
     </sql>
 
+    <sql id="acceptedPaymentQueryAttempt">
+        NOT (latest_attempt.attempt_status = '渠道提交中'
+             AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL)
+    </sql>
+
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
         SELECT candidates.payment_order_id
         FROM (
@@ -865,6 +870,7 @@
               AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
               AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
               AND <include refid="verifiedPaymentQueryPrepayBinding" />
+              AND <include refid="acceptedPaymentQueryAttempt" />
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
@@ -906,6 +912,7 @@
               AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
               AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
               AND <include refid="verifiedPaymentQueryPrepayBinding" />
+              AND <include refid="acceptedPaymentQueryAttempt" />
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
               AND (
                 query_history.latest_query_at IS NULL
@@ -1134,6 +1141,7 @@
           AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
           AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
           AND <include refid="verifiedPaymentQueryPrepayBinding" />
+          AND <include refid="acceptedPaymentQueryAttempt" />
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
     </select>
 
@@ -1164,6 +1172,7 @@
           AND CHAR_LENGTH(p.status) = CHAR_LENGTH('WAIT_CALLBACK')
           AND CAST(p.status AS BINARY(32)) = CAST('WAIT_CALLBACK' AS BINARY(32))
           AND <include refid="verifiedPaymentQueryPrepayBinding" />
+          AND <include refid="acceptedPaymentQueryAttempt" />
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL
