@@ -58,7 +58,7 @@ class PaymentDiagnosticHttpIntegrationTest {
     }
 
     @Test
-    void shouldExposePersistedPendingCallbackRequestAcrossDiagnosticsOverHttp() throws Exception {
+    void shouldExposeSubmissionStatusTransitionAcrossRequestDiagnosticsOverHttp() throws Exception {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
         String databaseUrl = "jdbc:h2:mem:payment_request_callback_http_" + System.nanoTime()
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
@@ -76,6 +76,24 @@ class PaymentDiagnosticHttpIntegrationTest {
             String query = "paymentOrderId=PAY202607190002&requestStatus=%E7%AD%89%E5%BE%85%E5%9B%9E%E8%B0%83";
             assertEquals("等待回调", get(objectMapper, port, "/api/payment-requests?" + query)
                     .path("data").path("items").get(0).path("requestStatus").asText());
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET attempt_status = '渠道提交中' "
+                    + "WHERE attempt_no = 'ATT202607190002'"));
+            String processingQuery = "paymentOrderId=PAY202607190002&requestStatus=%E5%A4%84%E7%90%86%E4%B8%AD";
+            JsonNode processingOverview = get(objectMapper, port,
+                    "/api/payment-requests/overview?" + processingQuery).path("data");
+            assertEquals(1, processingOverview.path("totalRequestCount").asInt());
+            assertEquals(1, processingOverview.path("processingRequestCount").asInt());
+            assertEquals(0, processingOverview.path("waitingCallbackRequestCount").asInt());
+            JsonNode processingPage = get(objectMapper, port, "/api/payment-requests?" + processingQuery)
+                    .path("data");
+            assertEquals(1, processingPage.path("total").asInt());
+            assertEquals("渠道提交中", processingPage.path("items").get(0).path("requestStatus").asText());
+            assertEquals("warn", processingPage.path("items").get(0).path("requestStatusType").asText());
+            assertEquals("渠道提交中", get(objectMapper, port, "/api/payment-requests/ATT202607190002")
+                    .path("data").path("requestStatus").asText());
+            assertTrue(getCsv(port, "/api/payment-requests/export?" + processingQuery).contains("\"渠道提交中\""));
+            assertEquals(0, get(objectMapper, port, "/api/payment-requests?" + query)
+                    .path("data").path("total").asInt());
             assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET attempt_status = '待回调' "
                     + "WHERE attempt_no = 'ATT202607190002'"));
 
@@ -92,6 +110,8 @@ class PaymentDiagnosticHttpIntegrationTest {
                     .path("data");
             assertEquals("待回调", detail.path("requestStatus").asText());
             assertTrue(getCsv(port, "/api/payment-requests/export?" + query).contains("\"待回调\""));
+            assertEquals(0, get(objectMapper, port, "/api/payment-requests?" + processingQuery)
+                    .path("data").path("total").asInt());
         }
     }
 
