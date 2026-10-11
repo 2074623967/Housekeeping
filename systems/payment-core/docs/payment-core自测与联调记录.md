@@ -28259,3 +28259,7 @@ App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 
 ### 10.981 2026-10-11 九服务 H2/demo 支付链路复验
 
 当前基线 `local-stack.sh verify payment-chain` 通过写前隔离检查后启动九个本地后端，HTTP 冒烟及跨系统 happy-path 均 `[PASS]`；支付回调、清分、结算、账务和退款事实进入对账链路，状态 `COMPLETED`、`4/4`、`financialCloseable=true`。退出后九服务和相关端口/PID 清理确认。该证据不代替真实渠道与资金、目标 MySQL 8、多实例、可信身份或发布。详见跨系统记录第 57 节。
+
+### 10.982 2026-10-11 九服务主动网关查单闭环复验
+
+与上节回调收口分开，当前基线 `local-stack.sh verify payment-query-chain` 在写前隔离检查通过后启动九后端和本机查询上游，HTTP 冒烟与主动网关查单 happy-path 均 `[PASS]`，支付收口来源为 `GATEWAY_QUERY`。下游清分、结算、账务及退款事实进入对账链路，`COMPLETED`、`4/4`、`financialCloseable=true`；退出后所有本轮服务、端口和 PID 均清理。只证明本机 H2/demo 与假上游，不替代真实渠道、目标 MySQL 8、多实例、资金、可信身份或发布。详见跨系统记录第 58 节。

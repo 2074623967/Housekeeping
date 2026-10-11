@@ -9095,3 +9095,7 @@ H2/MyBatis 将同退款单两条尝试的 demo 渠道号分别落库并按号查
 ### 10.901 2026-10-11 当前代码九服务本地 happy-path
 
 隔离 `verify payment-chain` 的九后端 `READY`、HTTP 冒烟和跨系统 happy-path 均通过；对账 `COMPLETED`、`4/4`、`financialCloseable=true`，脚本退出后停服及端口/PID 清理。仅关闭当前基线的本地 H2/demo 九服务回归，目标 MySQL 8、多实例、正式渠道资金、可信身份及发布仍未验。详见自测记录 10.981、跨系统记录第 57 节。
+
+### 10.902 2026-10-11 当前代码九服务网关主动查单路径
+
+隔离 `verify payment-query-chain` 启动九后端与本机查询上游，HTTP 冒烟和跨系统 happy-path 均通过；支付由 `GATEWAY_QUERY` 收口，对账 `COMPLETED`、`4/4`、`financialCloseable=true`，随后服务与端口/PID 清理。仅关闭当前基线的本机假上游查单回归，正式渠道资金、目标 MySQL 8、多实例、可信身份与发布仍未验。详见自测记录 10.982、跨系统记录第 58 节。

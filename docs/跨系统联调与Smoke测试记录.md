@@ -530,3 +530,7 @@ payment-core H2/HTTP 定向测试先由主动查单确认成功，再重放查�
 ## 57. 2026-10-11 当前基线九服务支付链路复验
 
 在固定端口和现存后端 PID 的写前隔离检查通过后，执行 `local-stack.sh verify payment-chain`。运营配置、风控、网关、账务、清分、结算、退款、对账和支付核心九个后端依次 `READY`，所选 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`。本机虚构交易以回调收口支付，生成成功事件、清分和结算事实，并由独立 refund-center 承接退款；账务包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账链路为 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。脚本退出码 `0`，九个后端均停服，相关端口和 PID 文件复核无遗留。只证明隔离 H2/demo 及本机 HTTP 协议链路，未验证真实渠道资金、目标 MySQL 8、多实例、可信主体或生产发布。
+
+## 58. 2026-10-11 当前基线九服务主动网关查单链路复验
+
+在固定端口、环境覆盖与现存 PID 的写前隔离检查通过后，执行 `local-stack.sh verify payment-query-chain`。本机受控查询上游及九个后端均 `READY`，HTTP 冒烟与跨系统主动查单 happy-path 均 `[PASS]`；虚构支付由 `GATEWAY_QUERY` 收口，后续支付成功、清分、结算、账务与退款事实进入对账，链路 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。退出码 `0`，九个后端与查询上游均停服，相关端口和 PID 文件复核无遗留。此路径仅使用 H2/demo 与本机假上游，不证明真实渠道查单、资金到账、目标 MySQL 8、多实例、可信身份或发布。
