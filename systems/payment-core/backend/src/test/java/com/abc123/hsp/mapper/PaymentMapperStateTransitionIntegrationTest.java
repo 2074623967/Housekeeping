@@ -2202,6 +2202,52 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldNotLetActiveSubmitTokenStarveOtherExpiredPayments() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            mapper.recordExpiryCloseFailure("PAY-OLDER", "previous failure", 0, 2, 3600);
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, "
+                    + "holder_idempotency_key, holder_terminal, holder_client_ip, "
+                    + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                    + "('PRE-OLDER-LOCK', 'PAY-OLDER', 'app', 'ACTIVE', "
+                    + "'pending-key', 'APP', '127.0.0.1', NOW(), "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())");
+
+            assertEquals("PAY-LEGACY-BLANK", mapper.findExpiredPayments(1).get(0).getPaymentOrderId());
+            assertEquals(2, mapper.findExpiredPayments(100).size());
+            assertEquals(1, mapper.deleteStaleExpiryCloseRetries(100));
+            assertEquals(0, countExpiryCloseRetries(session));
+
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status='RELEASED' "
+                    + "WHERE payment_order_id='PAY-OLDER'");
+            session.clearCache();
+            assertEquals("PAY-OLDER", mapper.findExpiredPayments(1).get(0).getPaymentOrderId());
+        }
+    }
+
+    @Test
+    void shouldKeepExpiryCandidateAndRetryForCaseVariantTokenOwner() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            mapper.recordExpiryCloseFailure("PAY-OLDER", "previous failure", 0, 2, 3600);
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, source_app_id, token_status, "
+                    + "holder_idempotency_key, holder_terminal, holder_client_ip, "
+                    + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                    + "('PRE-ALIAS-LOCK', 'pay-older', 'app', 'ACTIVE', "
+                    + "'alias-key', 'APP', '127.0.0.1', NOW(), "
+                    + "TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())");
+
+            assertEquals("PAY-OLDER", mapper.findExpiredPayments(1).get(0).getPaymentOrderId());
+            assertEquals(0, mapper.deleteStaleExpiryCloseRetries(100));
+            assertEquals(1, countExpiryCloseRetries(session));
+        }
+    }
+
+    @Test
     void shouldNotTreatCaseVariantSubmitTokenAsExactPaymentOwner() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
