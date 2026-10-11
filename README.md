@@ -125,10 +125,18 @@ tools/dev/local-stack.sh up all
 # 查看状态或重新执行前端、后端及代理链路冒烟
 tools/dev/local-stack.sh status all
 tools/dev/local-stack.sh smoke all
-tools/dev/local-stack.sh happy-path
 
 # 在同一受控会话完成全栈启动、HTTP 冒烟、跨系统 happy-path 并自动停止
 tools/dev/local-stack.sh verify all
+
+# 在所有相关端口空闲、无现存 PID 时仅验证隔离支付链路并自动停止
+tools/dev/local-stack.sh verify payment-chain
+
+# 相同九服务链路改由本机网关主动查单收口支付，受控上游和 H2 证书 fixture 随会话清理
+tools/dev/local-stack.sh verify payment-query-chain
+
+# 仅启动 H2/demo 支付核心与风控后端，验证人工复核并自动停止
+tools/dev/local-stack.sh verify risk-review
 ```
 
 `up` 会在当前终端持续托管服务，适合在同一个 Codex 任务窗口中暂停后继续；暂停任务不会主动停止已启动进程，回到窗口后可继续执行 `status`、`smoke` 或业务验收。macOS 如果系统默认 Java 只有 JRE，可显式指定完整 JDK 和已有 Maven 缓存：
@@ -138,6 +146,8 @@ HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home \
 HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository \
 bash tools/dev/local-stack.sh up all
 ```
+
+支付核心主动查单穿过真实 gateway-access 的本地双服务回归可执行 `node tools/dev/payment-core-gateway-query-smoke.mjs`（按需指定 `HSP_MAVEN_BIN`、`HSP_JAVA_HOME`）。脚本仅启动回环 HTTP 与精确 H2/demo 服务，网关证书调整只写当次 H2 fixture；清分/账务仍是本机受控 mock，不代表真实渠道或九服务验收。
 
 也可以只运行某一类或某个系统：
 
@@ -151,15 +161,27 @@ tools/dev/local-stack.sh up payment-core
 
 `verify all` 适合一次性验收本地骨架。它把启动、冒烟、跨系统 happy-path 和停止放在同一个受控会话中，避免运行器回收后台进程后留下 stale PID。
 
+`verify risk-review` 只启动支付核心和风控中心后端，不启动前端；它在隔离 H2/demo 中创建虚拟支付单，验证待审、批准后变更方式/渠道/商户均返回 `PAYMENT-1024` 且无支付尝试，原请求批准后继续到 `WAIT_CALLBACK`。命令拒绝数据库、端口、关键网关等环境覆盖，拒绝现存两服务 PID 文件和相关端口已有服务；运行前先确认本机端口未被代理到共享环境。脚本在首笔写入前校验本机 HTTP 地址、payment-core H2/demo 身份和仅在 `local-risk-review` profile + H2 驱动下可用的风控身份端点；异常退出也清理本次启动的服务。`node --test tools/dev/cross-system-risk-review.test.mjs` 可单独运行断言测试；身份标记不是认证，不代表生产审核身份、目标 MySQL 8 迁移或真实资金验收。
+
+跨系统 happy-path 只能经隔离的 `verify payment-chain` / `verify all` 运行；`local-stack.sh happy-path` 是前者的别名，不能在 `up all` 或 `start backends` 保持运行时复用已有服务，须先停服。入口要求本机有 `lsof` 与 `nc`，在启动前拒绝数据库和下游覆盖、现存后端 PID 文件与目标端口监听，启动后要求每个目标后端由本轮进程提供；首笔写请求前还要求九个目标为固定本机端口，并逐一读取各自的 H2 演示身份，任何缺失、错配或重定向均失败闭合。支付核心身份仅在 `demo` + H2、其他八服务仅在受控 `local-payment-chain` profile + H2 驱动下可用；本地标记不是跨系统认证，也不代替外部部署和实际资金核验。
+
+确认本地 `payment-core` 使用 `local-stack.sh` 的 demo profile 且系统 Chrome 可用时，可执行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo`：它仅在 `localhost:18081` 的后端返回 demo profile + H2 专属身份标记后，才创建一笔虚构预付单，随后在 App/H5/PC 的收银台和结果页检查各自端口的只读详情响应与订单金额渲染，不提交支付。缺少显式 `--demo` 或身份标记时脚本不写入预付单；标记仅防止误连非演示后端，不是认证凭据。脚本单测为 `node --test tools/dev/payment-terminal-browser-smoke.test.mjs`；如 Chrome 不在默认 macOS 路径，可设置 `HSP_CHROME_BIN`。在会回收后台进程的运行器内，应将 `local-stack.sh start payment-core`、浏览器脚本和 `local-stack.sh stop payment-core` 放在同一受控会话，并确保异常退出也执行停服。
+
+如需核验 **payment-core 同源退款** 的处理中用户页，显式执行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo --refund-demo`。此模式会在本地 H2/demo 环境模拟支付提交、成功回调、退款申请与审核，随后只读检查三端共九页；它不覆盖独立 `refund-center` 的退款来源，也不证明真实渠道受理、资金到账或用户归属授权。不要对非演示服务使用此模式。
+
+如需继续核验同一笔 demo 退款从处理中进入成功终态，可追加 `--refund-success-demo`；脚本读取本轮退款尝试号与渠道退款号后模拟成功回调，分别检查处理态和成功态的三端只读页面。此选项必须与 `--demo --refund-demo` 一起使用，不代表真实到账或独立退款中心闭环。
+
+如需核验退款失败终态，改为追加 `--refund-fail-demo`（同样必须与 `--demo --refund-demo` 一起使用，不能与 `--refund-success-demo` 同时使用）；脚本基于本轮渠道尝试和受理号模拟失败回调，并分别检查处理态和失败态的 App/H5/PC 页面。只覆盖 payment-core 同源虚构退款，不证明独立退款中心查询、可信用户归属或真实渠道失败处理。
+
 运行日志位于 `.runtime/local-stack/logs/`，PID 文件位于 `.runtime/local-stack/pids/`。
 
 ### 本地入口
 
 | 系统 | 前端入口 |
 | --- | --- |
-| 支付后台 | http://127.0.0.1:5174 |
-| 支付 App / H5 / PC | http://127.0.0.1:5175 / 5176 / 5177 |
-| 钱包账户 | http://127.0.0.1:5178 |
+| 支付后台 | http://localhost:5174 |
+| 支付 App / H5 / PC | http://localhost:5175 / 5176 / 5177 |
+| 钱包账户 | http://localhost:5178 |
 | 退款中心 | http://127.0.0.1:5179 |
 | 对账系统 | http://127.0.0.1:5180 |
 | 保证金 | http://127.0.0.1:5181 |
