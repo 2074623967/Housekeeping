@@ -152,10 +152,7 @@
         (event_id, event_type, aggregate_id, payload_json, status)
         VALUES
         (CONCAT('REVT-', REPLACE(UUID(), '-', '')), 'REFUND_SUCCESS', #{refundOrderId},
-         CONCAT('{"refundOrderId":"', #{refundOrderId},
-                '","paymentOrderId":"', #{paymentOrderId},
-                '","payScene":"', COALESCE(#{payScene}, ''),
-                '","refundAmount":"', #{refundAmount}, '"}'), 'PENDING')
+         #{payloadJson}, 'PENDING')
     </insert>
 
     <select id="overview" resultType="com.abc123.refund.dto.RefundOverviewDTO">

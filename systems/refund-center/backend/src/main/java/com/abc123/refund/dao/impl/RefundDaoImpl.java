@@ -11,6 +11,8 @@ import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOrderEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.abc123.refund.mapper.RefundMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,6 +24,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class RefundDaoImpl implements RefundDao {
+
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final RefundMapper refundMapper;
 
@@ -99,7 +103,12 @@ public class RefundDaoImpl implements RefundDao {
     @Override
     public int insertSuccessOutbox(String refundOrderId, String paymentOrderId, String payScene,
                                    BigDecimal refundAmount) {
-        return refundMapper.insertSuccessOutbox(refundOrderId, paymentOrderId, payScene, refundAmount);
+        ObjectNode payload = JSON_MAPPER.createObjectNode();
+        payload.put("refundOrderId", refundOrderId);
+        payload.put("paymentOrderId", paymentOrderId);
+        payload.put("payScene", payScene == null ? "" : payScene);
+        payload.put("refundAmount", refundAmount.toPlainString());
+        return refundMapper.insertSuccessOutbox(refundOrderId, payload.toString());
     }
 
     @Override

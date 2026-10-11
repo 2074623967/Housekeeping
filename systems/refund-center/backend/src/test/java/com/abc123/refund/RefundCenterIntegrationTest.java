@@ -19,6 +19,8 @@ import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.mapper.RefundMapper;
 import com.abc123.refund.service.RefundService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -177,6 +179,41 @@ class RefundCenterIntegrationTest {
         RefundOutboxDispatchRequestDTO dispatch = new RefundOutboxDispatchRequestDTO();
         dispatch.setSimulateResult("SUCCESS");
         assertEquals("SENT", refundService.dispatchOutbox(outbox.getEventId(), dispatch).getStatus());
+    }
+
+    @Test
+    void shouldStoreValidSuccessOutboxJsonForEscapedPaymentScene() throws Exception {
+        String paymentOrderId = "PAY-IT-JSON-\"" + UUID.randomUUID();
+        String payScene = "HOME_\"CLEAN\\WEEK\nLY";
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-JSON");
+        source.setPaidAmount(new BigDecimal("30.00"));
+        source.setPayScene(payScene);
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId(paymentOrderId);
+        request.setRefundAmount(new BigDecimal("10.00"));
+        RefundListItemDTO refund = refundService.apply(request);
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(refund.getRefundOrderId());
+        refundService.approve(action);
+        refundService.submit(action);
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setRefundOrderId(refund.getRefundOrderId());
+        callback.setResult("SUCCESS");
+        callback.setChannelRefundId("CH-IT-JSON");
+        refundService.callback(callback);
+
+        RefundOutboxQueryDTO outboxQuery = new RefundOutboxQueryDTO();
+        outboxQuery.setAggregateId(refund.getRefundOrderId());
+        String payloadJson = refundService.listOutbox(outboxQuery).getItems().get(0).getPayloadJson();
+        JsonNode payload = new ObjectMapper().readTree(payloadJson);
+        assertEquals(refund.getRefundOrderId(), payload.get("refundOrderId").asText());
+        assertEquals(paymentOrderId, payload.get("paymentOrderId").asText());
+        assertEquals(payScene, payload.get("payScene").asText());
+        assertEquals("10.00", payload.get("refundAmount").asText());
     }
 
     @Test

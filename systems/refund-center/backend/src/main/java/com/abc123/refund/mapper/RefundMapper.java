@@ -59,9 +59,7 @@ public interface RefundMapper {
                   @Param("remark") String remark);
 
     int insertSuccessOutbox(@Param("refundOrderId") String refundOrderId,
-                            @Param("paymentOrderId") String paymentOrderId,
-                            @Param("payScene") String payScene,
-                            @Param("refundAmount") BigDecimal refundAmount);
+                            @Param("payloadJson") String payloadJson);
 
     RefundOverviewDTO overview();
 
