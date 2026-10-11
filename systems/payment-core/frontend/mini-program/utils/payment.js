@@ -1,5 +1,4 @@
 const SOURCE_APP_ID = "housekeeping-mini-program";
-const DEMO_ACCESS_TOKEN = "token-housekeeping-mini-program";
 const PAYMENT_METHOD = "微信支付";
 const CHANNEL_CODE = "WX_H5";
 const MERCHANT_NO = "MCH_WX_10001";
@@ -55,15 +54,39 @@ function normalizeAmount(value) {
   if (!/^(0|[1-9]\d{0,15})(\.\d{1,2})?$/.test(text)) {
     return "";
   }
-  const normalized = Number(text);
-  if (!Number.isFinite(normalized) || normalized <= 0) {
+  const [integerPart, fractionPart] = text.split(".");
+  const normalizedInteger = (integerPart || "").replace(/^0+/, "") || "0";
+  const normalizedFraction = (fractionPart || "").padEnd(2, "0");
+  if (normalizedInteger === "0" && normalizedFraction === "00") {
     return "";
   }
-  return normalized.toFixed(2);
+  return `${normalizedInteger}.${normalizedFraction}`;
 }
 
 function resolveScene(sceneKey) {
-  return SCENES[sceneKey] || SCENES["balance-pay"];
+  return typeof sceneKey === "string" && Object.prototype.hasOwnProperty.call(SCENES, sceneKey)
+    ? SCENES[sceneKey]
+    : SCENES["balance-pay"];
+}
+
+function resolveLinkedScene(sceneKey, payScene = null) {
+  const scene = sceneKey == null
+    ? SCENES["balance-pay"]
+    : typeof sceneKey === "string" && Object.prototype.hasOwnProperty.call(SCENES, sceneKey.trim())
+      ? SCENES[sceneKey.trim()]
+      : null;
+  return scene && (payScene == null || payScene === scene.payScene)
+    ? scene
+    : { key: "", title: "未识别业务", payScene: "" };
+}
+
+function resolvePaymentAccessToken() {
+  if (typeof getApp !== "function") {
+    return "";
+  }
+  const app = getApp();
+  const token = app && app.globalData ? app.globalData.paymentAccessToken : "";
+  return typeof token === "string" ? token.trim() : "";
 }
 
 function createOrderNo(scene, timestamp) {
@@ -71,29 +94,57 @@ function createOrderNo(scene, timestamp) {
   return `${resolvedScene.orderPrefix}-${timestamp || Date.now()}`;
 }
 
-function createIdempotencyKey(prepayOrderNo, timestamp, randomPart) {
-  const suffix = randomPart || Math.random().toString(16).slice(2);
-  return `MINI-${prepayOrderNo}-${timestamp || Date.now()}-${suffix}`;
+function createIdempotencyKey(prepayOrderNo) {
+  const normalized = typeof prepayOrderNo === "string" ? prepayOrderNo.trim() : "";
+  return normalized ? `MINI-${normalized}` : "";
 }
 
-function canQueryPayment(status, latestAttemptStatus) {
-  if (["SUCCESS", "CLOSED"].includes(status)) {
+function canQueryPayment(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
+  if (status === "SUCCESS") {
     return true;
   }
   const attemptStatus = typeof latestAttemptStatus === "string" ? latestAttemptStatus.trim() : "";
-  return status === "WAIT_CALLBACK" && Boolean(attemptStatus && attemptStatus !== "-");
+  if (status === "CLOSED" && !attemptStatus && !channelTransactionNo) {
+    return true;
+  }
+  return ["WAIT_CALLBACK", "CLOSED"].includes(status)
+    && Boolean(attemptStatus && attemptStatus !== "-")
+    && !["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]
+      .includes(attemptStatus.toUpperCase())
+    && typeof channel === "string" && Boolean(channel.trim())
+    && latestAttemptCompletedAt == null;
 }
 
 function resolveRemainingSeconds(expiresAt, now) {
-  if (!expiresAt) {
+  if (!isValidPaymentDateTime(expiresAt)) {
     return 0;
   }
-  const expiresTimestamp = new Date(String(expiresAt).replace(" ", "T")).getTime();
+  const expiresTimestamp = Date.parse(expiresAt.replace(" ", "T"));
   const currentTimestamp = now == null ? Date.now() : now;
   if (!Number.isFinite(expiresTimestamp) || !Number.isFinite(currentTimestamp)) {
     return 0;
   }
   return Math.max(0, Math.floor((expiresTimestamp - currentTimestamp) / 1000));
+}
+
+function isValidPaymentDateTime(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) {
+    return false;
+  }
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, 0);
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second;
 }
 
 function canSubmitPayment(cashier, now) {
@@ -103,10 +154,29 @@ function canSubmitPayment(cashier, now) {
   const attemptStatus = typeof cashier.latestAttemptStatus === "string"
     ? cashier.latestAttemptStatus.trim()
     : "";
-  return cashier.status === "待支付"
-    && cashier.paymentStatus === "PREPAY_CREATED"
-    && (!attemptStatus || attemptStatus === "-")
+  const hasAttemptFact = cashier.latestAttemptStatus != null
+    && (typeof cashier.latestAttemptStatus !== "string" || Boolean(attemptStatus && attemptStatus !== "-"));
+  const hasSubmittedChannel = cashier.channelTransactionNo != null
+    && (typeof cashier.channelTransactionNo !== "string" || Boolean(cashier.channelTransactionNo.trim()));
+  const originalReview = cashier.status === "待风控复核"
+    && cashier.paymentStatus === "RISK_REVIEW"
+    && cashier.reviewPaymentMethod === PAYMENT_METHOD
+    && typeof cashier.reviewChannelCode === "string"
+    && cashier.reviewChannelCode.toLowerCase() === CHANNEL_CODE.toLowerCase();
+  return ((cashier.status === "待支付" && cashier.paymentStatus === "PREPAY_CREATED") || originalReview)
+    && !hasAttemptFact
+    && !hasSubmittedChannel
     && resolveRemainingSeconds(cashier.expiresAt, now) > 0;
+}
+
+function resolveCashierStatusClass(statusType) {
+  if (statusType === "success") {
+    return "status-success";
+  }
+  if (statusType === "danger") {
+    return "status-danger";
+  }
+  return "status-warn";
 }
 
 function normalizeNativePaymentParams(payload) {
@@ -116,6 +186,11 @@ function normalizeNativePaymentParams(payload) {
   }
   const requiredFields = ["timeStamp", "nonceStr", "package", "signType", "paySign"];
   if (requiredFields.some((field) => typeof source[field] !== "string" || !source[field].trim())) {
+    return null;
+  }
+  if (!/^\d+$/.test(source.timeStamp.trim())
+      || !/^prepay_id=.+$/.test(source.package.trim())
+      || !["RSA", "HMAC-SHA256"].includes(source.signType.trim())) {
     return null;
   }
   return requiredFields.reduce((params, field) => {
@@ -148,6 +223,76 @@ function requestNativePayment(payload) {
       }
     });
   });
+}
+
+function canRedirectAfterNativePayment(result) {
+  return Boolean(result && result.invoked === true);
+}
+
+function normalizeIdentifier(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function matchesPreservedText(expected, actual) {
+  return expected == null
+    || actual == null
+    || normalizeIdentifier(expected) === normalizeIdentifier(actual);
+}
+
+function matchesPaymentSubmission(
+  prepayOrderNo, paymentOrderId, orderNo, result, expectedAmount, expectedBillNo, expectedCustomerName,
+  expectedPaymentMethod, expectedPayScene
+) {
+  const normalizedPrepayOrderNo = normalizeIdentifier(prepayOrderNo);
+  const normalizedPaymentOrderId = normalizeIdentifier(paymentOrderId);
+  const normalizedOrderNo = normalizeIdentifier(orderNo);
+  const resultPrepayOrderNo = normalizeIdentifier(result && result.prepayOrderNo);
+  const resultPaymentOrderId = normalizeIdentifier(result && result.paymentOrderId);
+  const resultOrderNo = normalizeIdentifier(result && result.orderNo);
+  const resultBusinessChainId = normalizeIdentifier(result && result.businessChainId);
+  const normalizedExpectedAmount = expectedAmount == null ? "" : normalizeAmount(expectedAmount);
+  const normalizedResultAmount = result && normalizeAmount(result.amount);
+  return Boolean(
+    normalizedPrepayOrderNo
+    && normalizedPaymentOrderId
+    && normalizedOrderNo
+    && result && typeof result === "object" && !Array.isArray(result)
+    && resultPrepayOrderNo === normalizedPrepayOrderNo
+    && resultPaymentOrderId === normalizedPaymentOrderId
+    && resultBusinessChainId === `CHAIN-${normalizedPaymentOrderId}`
+    && resultOrderNo === normalizedOrderNo
+    && matchesPreservedText(expectedBillNo, result && result.billNo)
+    && matchesPreservedText(expectedCustomerName, result && result.customerName)
+    && matchesPreservedText(expectedPaymentMethod, result && result.paymentMethod)
+    && (expectedPayScene == null
+      || normalizeIdentifier(result && result.payScene) === normalizeIdentifier(expectedPayScene))
+    && (!normalizedExpectedAmount || normalizedResultAmount === normalizedExpectedAmount)
+  );
+}
+
+function matchesCashierSnapshot(prepayOrderNo, snapshot, cashier, expectedPayScene) {
+  const normalizedPrepayOrderNo = normalizeIdentifier(prepayOrderNo);
+  const snapshotPaymentOrderId = normalizeIdentifier(snapshot && snapshot.paymentOrderId);
+  const snapshotBusinessChainId = normalizeIdentifier(snapshot && snapshot.businessChainId);
+  const snapshotOrderNo = normalizeIdentifier(snapshot && snapshot.orderNo);
+  const cashierPrepayOrderNo = normalizeIdentifier(cashier && cashier.prepayOrderNo);
+  const cashierPaymentOrderId = normalizeIdentifier(cashier && cashier.paymentOrderId);
+  const cashierBusinessChainId = normalizeIdentifier(cashier && cashier.businessChainId);
+  const cashierOrderNo = normalizeIdentifier(cashier && cashier.orderNo);
+  return Boolean(
+    normalizedPrepayOrderNo
+    && snapshot && cashier
+    && cashierPrepayOrderNo === normalizedPrepayOrderNo
+    && cashierPaymentOrderId === snapshotPaymentOrderId
+    && snapshotBusinessChainId === `CHAIN-${snapshotPaymentOrderId}`
+    && cashierBusinessChainId === snapshotBusinessChainId
+    && cashierOrderNo === snapshotOrderNo
+    && matchesPreservedText(snapshot && snapshot.billNo, cashier && cashier.billNo)
+    && matchesPreservedText(snapshot && snapshot.customerName, cashier && cashier.customerName)
+    && (expectedPayScene == null
+      || normalizeIdentifier(cashier && cashier.payScene) === normalizeIdentifier(expectedPayScene))
+    && normalizeAmount(cashier.amount) === normalizeAmount(snapshot.amount)
+  );
 }
 
 function canClosePayment(status, channelTransactionNo, latestAttemptStatus) {
@@ -196,7 +341,6 @@ function resultMeta(status) {
 
 module.exports = {
   CHANNEL_CODE,
-  DEMO_ACCESS_TOKEN,
   MERCHANT_NO,
   PAYMENT_DETAIL_REFRESH_INTERVAL_MS,
   PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS,
@@ -206,15 +350,21 @@ module.exports = {
   TERMINAL,
   canClosePayment,
   canQueryPayment,
+  canRedirectAfterNativePayment,
   canSubmitPayment,
+  matchesPaymentSubmission,
+  matchesCashierSnapshot,
   createIdempotencyKey,
   createOrderNo,
   normalizeAmount,
   normalizeNativePaymentParams,
   requestNativePayment,
   resolvePaymentDetailRefreshDelay,
+  resolvePaymentAccessToken,
+  resolveLinkedScene,
   resolveRemainingSeconds,
   resolveScene,
+  resolveCashierStatusClass,
   resultMeta,
   shouldAutoRefreshPaymentDetail
 };

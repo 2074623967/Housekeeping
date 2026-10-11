@@ -8,15 +8,18 @@
   <view wx:if="{{loading}}" class="panel empty-state">支付结果加载中...</view>
   <view wx:elif="{{!detail}}" class="panel">
     <view class="error-banner">{{errorMessage || '当前没有可用支付结果快照'}}</view>
+    <button class="primary-button" disabled="{{!paymentOrderId}}" bindtap="loadDetail">重试加载支付结果</button>
     <button class="secondary-button" bindtap="backToEntry">返回业务入口</button>
   </view>
   <block wx:else>
     <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
     <view wx:if="{{successMessage}}" class="success-banner">{{successMessage}}</view>
+    <view wx:if="{{staleDetail}}" class="error-banner">最新支付结果未能确认，当前详情仅供核对上次读取的事实；请勿重复付款，等待自动重试或手动刷新结果。</view>
+    <view wx:if="{{autoRefreshPaused}}" class="error-banner">自动刷新已暂停，当前展示上次成功查询的状态；请刷新结果或联系服务方。</view>
 
     <view class="panel result-summary result-{{meta.tone}}">
       <view class="result-mark">{{meta.tone === 'success' ? '✓' : meta.tone === 'danger' ? '!' : '…'}}</view>
-      <view class="section-title">{{detail.status}}</view>
+      <view class="section-title">{{staleDetail ? '待核查' : detail.status}}</view>
       <view class="page-subtitle">{{scene.title}} · MINI_PROGRAM</view>
     </view>
 
@@ -26,14 +29,32 @@
         <view class="detail-row"><text class="detail-label">支付单号</text><text class="detail-value">{{detail.paymentOrderId}}</text></view>
         <view class="detail-row"><text class="detail-label">预付单号</text><text class="detail-value">{{detail.prepayOrderNo || prepayOrderNo || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">订单号</text><text class="detail-value">{{detail.orderNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">账单号</text><text class="detail-value">{{detail.billNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">客户名称</text><text class="detail-value">{{detail.customerName || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">支付金额</text><text class="detail-value">{{detail.amount || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">支付方式</text><text class="detail-value">{{detail.paymentMethod || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">渠道编码</text><text class="detail-value">{{detail.channel || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">渠道流水</text><text class="detail-value">{{detail.channelTransactionNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付成功时间</text><text class="detail-value">{{detail.successAt || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">最近尝试</text><text class="detail-value">{{detail.latestAttemptStatus || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">最近尝试完成时间</text><text class="detail-value">{{detail.latestAttemptCompletedAt || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">发起终端</text><text class="detail-value">{{detail.latestTerminal || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">客户端 IP</text><text class="detail-value">{{detail.latestClientIp || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">幂等键</text><text class="detail-value">{{detail.latestIdempotencyKey || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">查单来源</text><text class="detail-value">{{detail.querySource || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">渠道返回码</text><text class="detail-value">{{detail.channelReturnCode || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">标准错误码</text><text class="detail-value">{{detail.standardizedCode || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">标准错误说明</text><text class="detail-value">{{detail.standardizedMessage || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">映射版本</text><text class="detail-value">{{detail.returnCodeMappingVersion || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">映射命中</text><text class="detail-value">{{detail.returnCodeMappingMatched == null ? '-' : (detail.returnCodeMappingMatched ? '是' : '否')}}</text></view>
+        <view class="detail-row"><text class="detail-label">是否可重试</text><text class="detail-value">{{detail.retryable || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">需要人工介入</text><text class="detail-value">{{detail.manualInterventionRequired || '-'}}</text></view>
       </view>
+    </view>
+
+    <view wx:if="{{detail.handlingSuggestion}}" class="panel">
+      <view class="section-title">渠道处理建议</view>
+      <view class="detail-value">{{detail.handlingSuggestion}}</view>
     </view>
 
     <view class="panel">
@@ -44,8 +65,8 @@
         </button>
         <button wx:if="{{canClose}}" class="danger-button" loading="{{actionName === 'close'}}" disabled="{{loading || actionName}}" bindtap="closePayment">关闭支付单</button>
         <button class="secondary-button" disabled="{{loading || actionName}}" bindtap="loadDetail">刷新结果</button>
-        <button class="secondary-button" disabled="{{actionName || !prepayOrderNo}}" bindtap="backToCashier">返回收银台</button>
-        <button class="secondary-button" disabled="{{actionName}}" bindtap="backToEntry">返回业务入口</button>
+        <button class="secondary-button" disabled="{{actionName || staleDetail || !prepayOrderNo}}" bindtap="backToCashier">返回收银台</button>
+        <button class="secondary-button" disabled="{{actionName || staleDetail}}" bindtap="backToEntry">返回业务入口</button>
       </view>
     </view>
   </block>

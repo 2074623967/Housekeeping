@@ -1,0 +1,416 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+const { paymentApi } = require("../utils/request");
+
+test("renders the cashier bill number", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
+  assert.match(source, /账单号.*cashier\.billNo/);
+});
+
+test("shows the original method and transaction for an already submitted cashier", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
+  assert.match(source, /原渠道流水号[^\n]*cashier\.channelTransactionNo/);
+  assert.match(source, /channel-name">\{\{cashier\.paymentMethod \|\| cashier\.reviewPaymentMethod \|\| '微信支付'\}\}/);
+  assert.match(source, /wx:if="\{\{cashier\.paymentMethod\}\}"[^>]*>原支付渠道：\{\{cashier\.channel\}\}/);
+  assert.match(source, /WAIT_CALLBACK' \? '等待原渠道回调'/);
+  assert.match(source, /SUCCESS' \? '支付已完成'/);
+  assert.match(source, /disabled="\{\{!canSubmit \|\| loading \|\| actionName\}\}" bindtap="submitPayment"/);
+  assert.doesNotMatch(source, /bindtap="regenerateIdempotencyKey"/);
+});
+
+test("binds cashier loads to the selected mini-program scene", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../pages/cashier/index.js"), "utf8");
+  assert.match(source, /paymentApi\.getCashier\([\s\S]*this\.data\.scene\.payScene/);
+  assert.match(source, /paymentApi\.submit\([\s\S]*this\.data\.scene\.payScene/);
+});
+
+let pageDefinition;
+const originalPage = global.Page;
+global.Page = (definition) => {
+  pageDefinition = definition;
+};
+require("../pages/cashier/index");
+global.Page = originalPage;
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function flushPromises() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function createPage() {
+  return {
+    ...pageDefinition,
+    data: { ...pageDefinition.data },
+    setData(update) {
+      Object.assign(this.data, update);
+    }
+  };
+}
+
+function cashier() {
+  return {
+    prepayOrderNo: "PRE-001",
+    paymentOrderId: "PAY-001",
+    businessChainId: "CHAIN-PAY-001",
+    payScene: "BALANCE_PAY_MINI_PROGRAM",
+    orderNo: "ORDER-001",
+    amount: "68.00",
+    channels: ["微信支付"],
+    status: "待支付",
+    paymentStatus: "PREPAY_CREATED",
+    latestAttemptCompletedAt: "2026-09-27 10:01:00",
+    expiresAt: "2099-01-01 00:00:00"
+  };
+}
+
+function pendingCashier() {
+  return {
+    ...cashier(), status: "待回调", paymentStatus: "WAIT_CALLBACK",
+    paymentMethod: "微信支付", channel: "wx_h5", channelTransactionNo: "WX-LOCAL-001",
+    latestAttemptStatus: "等待回调", latestAttemptCompletedAt: null
+  };
+}
+
+test("does not query or submit a cashier for an unsupported external scene", async () => {
+  let requestCount = 0;
+  paymentApi.getCashier = () => {
+    requestCount += 1;
+    return Promise.resolve(cashier());
+  };
+  for (const options of [
+    { prepayOrderNo: "PRE-001", scene: "unknown" },
+    { prepayOrderNo: "PRE-001", payScene: "HOME_CLEAN_MINI_PROGRAM" },
+    { prepayOrderNo: "PRE-001", scene: "balance-pay", payScene: "WALLET_RECHARGE_MINI_PROGRAM" }
+  ]) {
+    const page = createPage();
+    page.onLoad(options);
+    await page.loadCashier();
+    await page.submitPayment();
+    assert.equal(page.data.cashier, null);
+    assert.equal(page.data.canSubmit, false);
+    assert.match(page.data.errorMessage, /不支持该业务场景/);
+    page.onUnload();
+  }
+  assert.equal(requestCount, 0);
+});
+
+test("does not write an in-flight cashier response after page unload", async () => {
+  const request = deferred();
+  paymentApi.getCashier = () => request.promise;
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  page.onUnload();
+  request.resolve(cashier());
+  await flushPromises();
+
+  assert.equal(page.data.cashier, null);
+  assert.equal(page.data.loading, true);
+});
+
+test("keeps the cashier latest attempt completion time in the loaded snapshot", async () => {
+  paymentApi.getCashier = () => Promise.resolve(cashier());
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  await flushPromises();
+
+  assert.equal(page.data.cashier.latestAttemptCompletedAt, "2026-09-27 10:01:00");
+  page.onUnload();
+});
+
+test("rejects a manual cashier refresh that changes the payment identity", async () => {
+  let response = cashier();
+  paymentApi.getCashier = () => Promise.resolve(response);
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  await flushPromises();
+  response = { ...cashier(), paymentOrderId: "PAY-OTHER", businessChainId: "CHAIN-PAY-OTHER" };
+  await page.loadCashier();
+
+  assert.equal(page.data.cashier, null);
+  assert.equal(page.data.canSubmit, false);
+  assert.match(page.data.errorMessage, /当前支付单不一致/);
+  page.onUnload();
+});
+
+test("accepts a manual cashier refresh for the same payment", async () => {
+  let response = cashier();
+  paymentApi.getCashier = () => Promise.resolve(response);
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "PRE-001" });
+  await flushPromises();
+  response = { ...cashier(), latestAttemptCompletedAt: "2026-09-27 10:02:00" };
+  await page.loadCashier();
+
+  assert.equal(page.data.cashier.latestAttemptCompletedAt, "2026-09-27 10:02:00");
+  assert.equal(page.data.errorMessage, "");
+  page.onUnload();
+});
+
+test("trims the prepay order number from the cashier route", async () => {
+  let requestedPrepayOrderNo = "";
+  paymentApi.getCashier = (prepayOrderNo) => {
+    requestedPrepayOrderNo = prepayOrderNo;
+    return Promise.resolve(cashier());
+  };
+  const page = createPage();
+
+  page.onLoad({ prepayOrderNo: "%20PRE-001%20" });
+  await flushPromises();
+
+  assert.equal(requestedPrepayOrderNo, "PRE-001");
+  assert.equal(page.data.prepayOrderNo, "PRE-001");
+  page.onUnload();
+});
+
+test("reuses the same mini-program payment key after page recreation and an uncertain submit", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  const submitted = [];
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = { redirectTo() {} };
+  paymentApi.getCashier = () => Promise.resolve(cashier());
+  paymentApi.submit = (request) => {
+    submitted.push(request);
+    return Promise.reject(new Error("提交响应丢失"));
+  };
+  try {
+    for (let index = 0; index < 2; index += 1) {
+      const page = createPage();
+      page.onLoad({ prepayOrderNo: "PRE-001" });
+      try {
+        await flushPromises();
+        assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+        assert.equal(page.data.canSubmit, true);
+        await page.submitPayment();
+      } finally {
+        page.onUnload();
+      }
+    }
+    assert.equal(submitted.length, 2);
+    assert.deepEqual(submitted[1], submitted[0]);
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("does not write submit state after page unload", async () => {
+  const submitRequest = deferred();
+  const previousGetApp = global.getApp;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  paymentApi.submit = () => submitRequest.promise;
+  const page = createPage();
+  page.pageActive = true;
+  page.setData({
+    prepayOrderNo: "PRE-001",
+    cashier: cashier(),
+    loading: false,
+    canSubmit: true,
+    actionName: ""
+  });
+
+  const submit = page.submitPayment();
+  page.onUnload();
+  submitRequest.resolve({
+    prepayOrderNo: "PRE-001",
+    paymentOrderId: "PAY-001",
+    businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001",
+    amount: "68.00"
+  });
+  await submit;
+
+  global.getApp = previousGetApp;
+  assert.equal(page.data.actionName, "submit");
+  assert.equal(page.data.errorMessage, "");
+});
+
+test("sends reviewed submissions to the result page without invoking native payment", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let redirectedUrl = "";
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    redirectTo: ({ url }) => { redirectedUrl = url; },
+    requestPayment: () => { throw new Error("native payment must not start during review"); }
+  };
+  paymentApi.submit = () => Promise.resolve({
+    prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", amount: "68.00", payScene: "BALANCE_PAY_MINI_PROGRAM",
+    paymentMethod: "微信支付", paymentStatus: "RISK_REVIEW"
+  });
+  const page = createPage();
+  page.pageActive = true;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: {
+    ...cashier(), status: "待风控复核", paymentStatus: "RISK_REVIEW",
+    reviewPaymentMethod: "微信支付", reviewChannelCode: "WX_H5"
+  }, loading: false, canSubmit: true });
+  try {
+    await page.submitPayment();
+    assert.match(redirectedUrl, /paymentOrderId=PAY-001/);
+    assert.equal(page.data.errorMessage, "");
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("reports a post-action cashier refresh for another payment", async () => {
+  paymentApi.getCashier = () => Promise.resolve({
+    ...cashier(),
+    paymentOrderId: "PAY-OTHER",
+    orderNo: "ORDER-OTHER"
+  });
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({
+    prepayOrderNo: "PRE-001",
+    cashier: cashier(),
+    canSubmit: false,
+    actionName: "submit"
+  });
+
+  await page.loadCashierAfterAction();
+
+  assert.equal(page.data.cashier.paymentOrderId, "PAY-001");
+  assert.match(page.data.errorMessage, /当前支付单不一致/);
+  assert.equal(page.data.canSubmit, false);
+  assert.equal(page.data.staleCashier, true);
+});
+
+test("redirects to the result page when a lost submit response reads back pending or successful", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let redirectedUrl = "";
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = { redirectTo: ({ url }) => { redirectedUrl = url; } };
+  paymentApi.submit = () => Promise.reject(new Error("提交响应丢失"));
+  try {
+    for (const expectedStatus of ["WAIT_CALLBACK", "SUCCESS"]) {
+      redirectedUrl = "";
+      paymentApi.getCashier = () => Promise.resolve(expectedStatus === "SUCCESS" ? {
+        ...pendingCashier(), status: "支付成功", paymentStatus: "SUCCESS",
+        latestAttemptStatus: "成功", latestAttemptCompletedAt: "2026-09-27 10:02:00",
+        successAt: "2026-09-27 10:02:00"
+      } : pendingCashier());
+      const page = createPage();
+      page.pageActive = true;
+      page.cashierRequestVersion = 0;
+      page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+        idempotencyKey: "IDEMP-LOCAL-001", loading: false, canSubmit: true });
+      try {
+        await page.submitPayment();
+        assert.equal(page.data.cashier.paymentStatus, expectedStatus);
+        assert.equal(page.data.staleCashier, false);
+        assert.equal(page.data.canSubmit, false);
+        assert.equal(page.data.idempotencyKey, "IDEMP-LOCAL-001");
+        assert.match(redirectedUrl, /paymentOrderId=PAY-001.*prepayOrderNo=PRE-001.*paymentMethod=/);
+        assert.match(page.data.errorMessage, /提交响应丢失/);
+      } finally {
+        page.onUnload();
+      }
+    }
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("marks an unverified submit stale and routes only after a trusted manual refresh", async () => {
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
+  assert.match(source, /staleCashier \? '待核查' : cashier\.status/);
+  assert.match(source, /wx:if="\{\{staleCashier\}\}"[^>]*>当前仅展示上次收银台快照，刷新确认前请勿重复付款/);
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let redirectedUrl = "";
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = { redirectTo: ({ url }) => { redirectedUrl = url; } };
+  paymentApi.submit = () => Promise.reject(new Error("提交响应丢失"));
+  paymentApi.getCashier = () => Promise.reject(new Error("收银台读回失败"));
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    loading: false, canSubmit: true });
+  try {
+    await page.submitPayment();
+    assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+    assert.equal(page.data.staleCashier, true);
+    assert.equal(page.data.canSubmit, false);
+    assert.equal(redirectedUrl, "");
+    assert.match(page.data.errorMessage, /提交响应丢失.*收银台读回失败.*支付状态未经确认/);
+
+    paymentApi.getCashier = () => Promise.resolve(pendingCashier());
+    await page.loadCashier();
+    assert.equal(page.data.staleCashier, false);
+    assert.equal(page.data.canSubmit, false);
+    assert.match(redirectedUrl, /paymentOrderId=PAY-001/);
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("preserves the reviewed method when a failed submit reads back risk review", async () => {
+  const previousWx = global.wx;
+  let redirectedUrl = "";
+  global.wx = { redirectTo: ({ url }) => { redirectedUrl = url; } };
+  paymentApi.getCashier = () => Promise.resolve({
+    ...cashier(), status: "待风控复核", paymentStatus: "RISK_REVIEW",
+    reviewPaymentMethod: "支付宝", reviewChannelCode: "alipay_h5"
+  });
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier() });
+  try {
+    await page.loadCashierAfterAction(new Error("响应丢失"));
+    assert.ok(redirectedUrl.includes(`paymentMethod=${encodeURIComponent("支付宝")}`));
+  } finally {
+    page.onUnload();
+    global.wx = previousWx;
+  }
+});
+
+test("ignores a delayed submit readback after the cashier page unloads", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let redirects = 0;
+  const readback = deferred();
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = { redirectTo: () => { redirects += 1; } };
+  paymentApi.submit = () => Promise.reject(new Error("提交响应丢失"));
+  paymentApi.getCashier = () => readback.promise;
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    loading: false, canSubmit: true });
+  try {
+    const action = page.submitPayment();
+    await flushPromises();
+    page.onUnload();
+    readback.resolve(pendingCashier());
+    await action;
+    assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+    assert.equal(redirects, 0);
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});

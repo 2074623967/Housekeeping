@@ -2,21 +2,24 @@
   <view class="page-header">
     <view class="eyebrow">REFUND PROGRESS</view>
     <view class="page-title">{{meta.title}}</view>
-    <view class="page-subtitle">{{meta.hint}} 用户端只提供只读查询，不执行审核或失败重试。</view>
+    <view class="page-subtitle">{{meta.hint}} {{scene.title}} · 用户端只提供只读查询，不执行审核或失败重试。</view>
   </view>
 
   <view wx:if="{{loading}}" class="panel empty-state">退款进度加载中...</view>
   <view wx:elif="{{!detail}}" class="panel">
     <view class="error-banner">{{errorMessage || '当前没有可用退款进度快照'}}</view>
+    <button class="primary-button" disabled="{{!refundOrderId}}" bindtap="loadDetail">重试加载退款进度</button>
     <button class="secondary-button" bindtap="backToEntry">返回业务入口</button>
   </view>
   <block wx:else>
     <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
     <view wx:if="{{successMessage}}" class="success-banner">{{successMessage}}</view>
+    <view wx:if="{{staleDetail}}" class="error-banner">最新退款进度未能确认，当前详情仅供核对上次读取的事实；请勿重复申请退款，等待自动刷新或手动刷新。</view>
+    <view wx:if="{{pollingPaused}}" class="error-banner">自动刷新已暂停，当前展示上次成功查询的状态；请手动刷新退款进度。</view>
 
     <view class="panel refund-summary refund-{{meta.tone}}">
       <view class="result-mark">{{meta.tone === 'success' ? '✓' : meta.tone === 'danger' ? '!' : '…'}}</view>
-      <view class="section-title">{{detail.status}}</view>
+      <view class="section-title">{{staleDetail ? '待核查' : detail.status}}</view>
       <view class="page-subtitle">退款单 {{detail.refundOrderId}}</view>
     </view>
 
@@ -24,14 +27,20 @@
       <view class="section-title">退款详情</view>
       <view class="detail-list">
         <view class="detail-row"><text class="detail-label">退款金额</text><text class="detail-value">{{detail.refundAmount || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">原支付金额</text><text class="detail-value">{{detail.paidAmount || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">原支付单号</text><text class="detail-value">{{detail.paymentOrderId || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付场景</text><text class="detail-value">{{detail.payScene || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">原订单号</text><text class="detail-value">{{detail.orderNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">客户名称</text><text class="detail-value">{{detail.customerName || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付方式</text><text class="detail-value">{{detail.paymentMethod || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">退款方式</text><text class="detail-value">{{detail.refundMethod || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">退款原因</text><text class="detail-value">{{detail.refundReason || '-'}}</text></view>
-        <view class="detail-row"><text class="detail-label">申请时间</text><text class="detail-value">{{detail.appliedAt || '-'}}</text></view>
-        <view class="detail-row"><text class="detail-label">成功时间</text><text class="detail-value">{{detail.successAt || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">申请时间</text><text class="detail-value">{{detail.appliedAtDisplay || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">成功时间</text><text class="detail-value">{{detail.successAtDisplay || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">终态时间</text><text class="detail-value">{{detail.terminalAtDisplay || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">退款渠道</text><text class="detail-value">{{detail.channelCode || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">渠道退款单号</text><text class="detail-value">{{detail.channelRefundNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">渠道受理时间</text><text class="detail-value">{{detail.channelSubmittedAtDisplay || '-'}}</text></view>
       </view>
     </view>
 
@@ -47,7 +56,7 @@
     <view class="panel">
       <view class="button-row button-row-single">
         <button class="primary-button" loading="{{refreshing}}" disabled="{{refreshing}}" bindtap="refreshDetail">{{refreshing ? '刷新中...' : '刷新退款进度'}}</button>
-        <button class="secondary-button" disabled="{{refreshing}}" bindtap="backToEntry">返回业务入口</button>
+        <button class="secondary-button" disabled="{{refreshing || staleDetail}}" bindtap="backToEntry">返回业务入口</button>
       </view>
     </view>
   </block>

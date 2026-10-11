@@ -2,6 +2,7 @@ const {
   SCENES,
   createOrderNo,
   normalizeAmount,
+  resolveLinkedScene,
   resolveScene
 } = require("../../utils/payment");
 const { paymentApi } = require("../../utils/request");
@@ -26,19 +27,25 @@ Page({
   },
 
   onLoad(options) {
-    this.applyScene(options && options.scene);
+    const sceneKey = options && Object.prototype.hasOwnProperty.call(options, "scene")
+      ? options.scene
+      : null;
+    const payScene = options && Object.prototype.hasOwnProperty.call(options, "payScene")
+      ? options.payScene
+      : null;
+    this.applyScene(sceneKey, payScene);
   },
 
-  applyScene(sceneKey) {
+  applyScene(sceneKey, payScene = null) {
     if (this.data.submitting) {
       return;
     }
-    const scene = resolveScene(sceneKey);
+    const scene = resolveLinkedScene(sceneKey, payScene);
     this.setData({
       activeSceneKey: scene.key,
       activeScene: scene,
       form: buildForm(scene),
-      errorMessage: ""
+      errorMessage: scene.payScene ? "" : "当前小程序暂不支持该业务场景，请先选择上方已支持的场景。"
     });
   },
 
@@ -55,7 +62,7 @@ Page({
   },
 
   resetForm() {
-    if (this.data.submitting) {
+    if (this.data.submitting || !this.data.activeScene.payScene) {
       return;
     }
     this.setData({
@@ -66,6 +73,10 @@ Page({
 
   async createPrepay() {
     if (this.data.submitting) {
+      return;
+    }
+    if (!this.data.activeScene.payScene) {
+      this.setData({ errorMessage: "请先选择小程序已支持的业务场景。" });
       return;
     }
     const customerName = this.data.form.customerName.trim();
@@ -93,8 +104,9 @@ Page({
       if (!prepay || !prepay.prepayOrderNo) {
         throw new Error("预付单响应为空或缺少预付单号");
       }
+      const prepayOrderNo = prepay.prepayOrderNo.trim();
       wx.navigateTo({
-        url: `/pages/cashier/index?prepayOrderNo=${encodeURIComponent(prepay.prepayOrderNo)}`
+        url: `/pages/cashier/index?prepayOrderNo=${encodeURIComponent(prepayOrderNo)}`
           + `&scene=${encodeURIComponent(this.data.activeScene.key)}`
       });
     } catch (error) {

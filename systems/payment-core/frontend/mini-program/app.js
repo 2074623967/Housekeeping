@@ -1,5 +1,6 @@
 App({
   globalData: {
-    apiBaseUrl: "http://127.0.0.1:18081"
+    apiBaseUrl: "http://localhost:18081",
+    paymentAccessToken: ""
   }
 });

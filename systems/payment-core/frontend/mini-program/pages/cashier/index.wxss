@@ -9,7 +9,7 @@
   font-weight: 750;
 }
 
-.wechat-channel {
+.payment-channel {
   display: flex;
   align-items: center;
   gap: 18rpx;
@@ -19,7 +19,7 @@
   background: #f0fdf4;
 }
 
-.wechat-mark {
+.payment-mark {
   display: flex;
   width: 64rpx;
   height: 64rpx;
@@ -56,6 +56,20 @@
   box-shadow: 0 0 0 2rpx #16a34a;
 }
 
+.payment-channel.other-channel {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.other-channel .payment-mark,
+.other-channel .selected-dot {
+  background: #2563eb;
+}
+
+.other-channel .selected-dot {
+  box-shadow: 0 0 0 2rpx #2563eb;
+}
+
 .idempotency-box {
   margin: 22rpx 0;
   padding: 20rpx;
@@ -69,15 +83,4 @@
   font-family: monospace;
   font-size: 22rpx;
   word-break: break-all;
-}
-
-.text-button {
-  width: auto;
-  min-height: 54rpx;
-  margin: 12rpx 0 0;
-  padding: 0;
-  background: transparent;
-  color: #0f766e;
-  font-size: 24rpx;
-  line-height: 54rpx;
 }

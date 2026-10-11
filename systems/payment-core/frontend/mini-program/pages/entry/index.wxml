@@ -16,7 +16,11 @@
     >{{item.label}}</button>
   </scroll-view>
 
-  <view class="panel scene-summary">
+  <view wx:if="{{!activeScene.payScene}}" class="panel">
+    <view class="error-banner">{{errorMessage}}</view>
+  </view>
+
+  <view wx:if="{{activeScene.payScene}}" class="panel scene-summary">
     <view>
       <view class="section-title">{{activeScene.title}}</view>
       <view class="page-subtitle">终端 MINI_PROGRAM · 独立来源策略 · 微信支付</view>
@@ -24,7 +28,7 @@
     <view class="amount-preview">¥{{form.amount || activeScene.defaultAmount}}</view>
   </view>
 
-  <view class="panel">
+  <view wx:if="{{activeScene.payScene}}" class="panel">
     <label class="field">
       <text class="field-label">客户名称</text>
       <input class="field-input" value="{{form.customerName}}" data-field="customerName" disabled="{{submitting}}" bindinput="updateField" placeholder="请输入客户名称" />
