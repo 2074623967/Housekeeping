@@ -8722,6 +8722,7 @@ function createValidPaymentTaskCenterOverview(overrides = {}) {
     expiredPaymentCount: 5,
     dueExpiredPaymentCount: 2,
     backingOffExpiredPaymentCount: 3,
+    blockedExpiredPaymentCount: 0,
     pendingCallbackCount: 1,
     pendingQueryBacklogCount: 4,
     duePendingQueryCount: 1,
@@ -8892,8 +8893,12 @@ test("enforces payment task center counter relationships", () => {
   };
 
   assert.deepEqual(normalizePaymentTaskCenterOverviewResult(valid), valid);
+  assert.equal(normalizePaymentTaskCenterOverviewResult({
+    ...valid, backingOffExpiredPaymentCount: 2, blockedExpiredPaymentCount: 1
+  }).blockedExpiredPaymentCount, 1);
   for (const invalid of [
     { ...valid, dueExpiredPaymentCount: 4, backingOffExpiredPaymentCount: 2 },
+    { ...valid, blockedExpiredPaymentCount: 1 },
     { ...valid, duePendingQueryCount: 5 },
     { ...valid, duePendingRefundQueryCount: 4 },
     { ...valid, recentQueryFailureCount: 9 },

@@ -22,3 +22,10 @@ test("rechecks overview and task runs after an ambiguous task execution error", 
   assert.match(source, /async function refreshSnapshots\(query, afterAction = false\) \{[\s\S]*?Promise\.allSettled\(\[\s*paymentTaskCenterApi\.getOverview\(\),\s*fetchTaskRuns\(query\)/);
   assert.match(source, /const canUseTaskRuns = computed\(\(\) => canUseOverview\.value[\s\S]*?!taskRunsErrorMessage\.value\)/);
 });
+
+test("shows blocked expired payments separately from runnable close candidates", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /超时支付令牌阻断待核对[\s\S]*?overview\.blockedExpiredPaymentCount/);
+  assert.match(source, /活跃提交令牌阻断的记录/);
+  assert.match(source, /overview\.dueExpiredPaymentCount === 0/);
+});

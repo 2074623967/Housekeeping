@@ -226,6 +226,26 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldEscalateActiveSubmitTokenBlockedExpiryAsManualReviewRisk() {
+        PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
+        summary.setExpiredPaymentCount(3);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(summary);
+        when(paymentTaskCenterMapper.countDueExpiredPayments()).thenReturn(1);
+        when(paymentTaskCenterMapper.countBackingOffExpiredPayments()).thenReturn(1);
+        when(paymentTaskCenterMapper.countBlockedExpiredPayments()).thenReturn(1);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(1, overview.getBlockedExpiredPaymentCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_EXPIRY".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("活跃提交令牌阻断 1 笔")
+                        && alert.getAlertMessage().contains("人工核对")));
+    }
+
+    @Test
     void shouldExposeIssueAlertReceiptQueryQueueMetricsInOverview() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(13);

@@ -12,6 +12,7 @@ const overview = ref({
   expiredPaymentCount: 0,
   dueExpiredPaymentCount: 0,
   backingOffExpiredPaymentCount: 0,
+  blockedExpiredPaymentCount: 0,
   pendingCallbackCount: 0,
   pendingQueryBacklogCount: 0,
   duePendingQueryCount: 0,
@@ -353,7 +354,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">待超时关单</div>
             <div class="detail-value">{{ overview.expiredPaymentCount }}</div>
-            <div class="meta">可执行 {{ overview.dueExpiredPaymentCount }} · 失败退避中 {{ overview.backingOffExpiredPaymentCount }}</div>
+            <div class="meta">可执行 {{ overview.dueExpiredPaymentCount }} · 失败退避中 {{ overview.backingOffExpiredPaymentCount }} · 令牌阻断待核对 {{ overview.blockedExpiredPaymentCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">待收口支付中</div>
@@ -718,7 +719,7 @@ onMounted(loadOverview);
                 <tr>
                   <td>超时支付待关闭</td>
                   <td>{{ overview.expiredPaymentCount }}</td>
-                  <td>全部业务积压，包含当前可执行和失败退避中的记录</td>
+                  <td>全部业务积压，包含可执行、失败退避和活跃提交令牌阻断的记录</td>
                 </tr>
                 <tr>
                   <td>超时支付当前可关闭</td>
@@ -729,6 +730,11 @@ onMounted(loadOverview);
                   <td>超时支付失败退避中</td>
                   <td>{{ overview.backingOffExpiredPaymentCount }}</td>
                   <td>本轮不进入关单候选，达到下次重试时间后重新参与筛选</td>
+                </tr>
+                <tr>
+                  <td>超时支付令牌阻断待核对</td>
+                  <td>{{ overview.blockedExpiredPaymentCount }}</td>
+                  <td>提交令牌仍活跃，不进入自动关单；需人工核对原支付及渠道事实</td>
                 </tr>
                 <tr>
                   <td>支付中待收口</td>

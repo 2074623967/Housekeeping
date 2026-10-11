@@ -314,6 +314,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         overview.setDueExpiredPaymentCount(paymentTaskCenterMapper.countDueExpiredPayments());
         overview.setBackingOffExpiredPaymentCount(paymentTaskCenterMapper.countBackingOffExpiredPayments());
+        overview.setBlockedExpiredPaymentCount(paymentTaskCenterMapper.countBlockedExpiredPayments());
         overview.setUnknownRefundSubmitEventCount(
                 paymentTaskCenterMapper.countUnknownRefundSubmitEvents());
         overview.setPendingQueryBacklogCount(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(
@@ -1773,6 +1774,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int expiredPaymentCount = valueOrZero(overview.getExpiredPaymentCount());
         int dueExpiredPaymentCount = valueOrZero(overview.getDueExpiredPaymentCount());
         int backingOffExpiredPaymentCount = valueOrZero(overview.getBackingOffExpiredPaymentCount());
+        int blockedExpiredPaymentCount = valueOrZero(overview.getBlockedExpiredPaymentCount());
         int pendingCallbackCount = valueOrZero(overview.getPendingCallbackCount());
         int pendingQueryBacklogCount = valueOrZero(overview.getPendingQueryBacklogCount());
         int duePendingQueryCount = valueOrZero(overview.getDuePendingQueryCount());
@@ -1813,12 +1815,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "超时支付待关闭",
                 expiredPaymentCount,
                 expiredPaymentCount > 0
-                        ? String.format("存在 %d 笔超时支付：可执行 %d 笔、失败退避中 %d 笔",
-                        expiredPaymentCount, dueExpiredPaymentCount, backingOffExpiredPaymentCount)
+                        ? String.format("存在 %d 笔超时支付：可执行 %d 笔、失败退避中 %d 笔、活跃提交令牌阻断 %d 笔，阻断项须人工核对原支付事实",
+                        expiredPaymentCount, dueExpiredPaymentCount, backingOffExpiredPaymentCount,
+                        blockedExpiredPaymentCount)
                         : "暂无超时支付待关闭",
                 "/payment-task-center",
-                expiredPaymentCount > 10 ? "P1" : "P2",
-                expiredPaymentCount > 10 ? "danger" : "warn"
+                expiredPaymentCount == 0 ? "P3"
+                        : blockedExpiredPaymentCount > 0 || expiredPaymentCount > 10 ? "P1" : "P2",
+                expiredPaymentCount == 0 ? "success"
+                        : blockedExpiredPaymentCount > 0 || expiredPaymentCount > 10 ? "danger" : "warn"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_CALLBACK",

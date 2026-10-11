@@ -714,6 +714,48 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldSeparateActiveSubmitTokensFromRunnableExpiryCloseBacklogs() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+            assertEquals(0, mapper.countBlockedExpiredPayments());
+
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, token_status, expire_at) VALUES "
+                    + "('PRE-DUE-TOKEN', 'PAY-EXPIRY-DUE', 'ACTIVE', TIMESTAMPADD(MINUTE, -1, NOW())), "
+                    + "('PRE-BACKOFF-TOKEN', 'PAY-EXPIRY-BACKOFF', 'ACTIVE', "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW()))");
+            session.clearCache();
+            assertEquals(1, mapper.countDueExpiredPayments());
+            assertEquals(0, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+            assertEquals(2, mapper.countBlockedExpiredPayments());
+
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token "
+                    + "SET token_status = 'RELEASED' WHERE prepay_order_no = 'PRE-DUE-TOKEN'");
+            session.clearCache();
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(0, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+            assertEquals(1, mapper.countBlockedExpiredPayments());
+
+            statement.executeUpdate("UPDATE t_payment_submit_concurrency_token "
+                    + "SET token_status = 'RELEASED' WHERE prepay_order_no = 'PRE-BACKOFF-TOKEN'");
+            statement.executeUpdate("INSERT INTO t_payment_submit_concurrency_token "
+                    + "(prepay_order_no, payment_order_id, token_status, expire_at) VALUES "
+                    + "('PRE-ALIAS-TOKEN', 'pay-expiry-due', 'ACTIVE', TIMESTAMPADD(MINUTE, -1, NOW()))");
+            session.clearCache();
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+            assertEquals(3, mapper.findOverviewSummary().getExpiredPaymentCount());
+            assertEquals(0, mapper.countBlockedExpiredPayments());
+        }
+    }
+
+    @Test
     void shouldCountOnlyExpiryBacklogsEligibleForActualClose() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -2351,6 +2393,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
+            statement.execute("DROP TABLE IF EXISTS t_payment_submit_concurrency_token");
             statement.execute("DROP TABLE IF EXISTS t_payment_expiry_close_retry");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
@@ -2367,6 +2410,10 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64), "
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_submit_concurrency_token ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
+                    + "payment_order_id VARCHAR_IGNORECASE(64), token_status VARCHAR_IGNORECASE(32), "
+                    + "expire_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_expiry_close_retry ("
                     + "payment_order_id VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, next_retry_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_notify_log ("

@@ -33,6 +33,11 @@ public interface PaymentTaskCenterMapper {
     int countBackingOffExpiredPayments();
 
     /**
+     * 统计已过期但仍被活跃提交令牌阻断、须核对原渠道事实的支付单。
+     */
+    int countBlockedExpiredPayments();
+
+    /**
      * 统计必须查单或人工核查的退款提交未知事件。
      */
     int countUnknownRefundSubmitEvents();

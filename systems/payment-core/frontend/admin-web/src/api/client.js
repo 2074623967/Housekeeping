@@ -3927,6 +3927,7 @@ function isUniqueChannelMetricSeries(items) {
 export function normalizePaymentTaskCenterOverviewResult(data) {
   const countFields = [
     "expiredPaymentCount", "dueExpiredPaymentCount", "backingOffExpiredPaymentCount",
+    "blockedExpiredPaymentCount",
     "pendingCallbackCount", "pendingQueryBacklogCount", "duePendingQueryCount",
     "pendingRefundQueryBacklogCount", "duePendingRefundQueryCount", "queryMonitorWindowHours",
     "recentQueryCount", "recentQueryFailureCount", "queryFailureCountThreshold",
@@ -4007,7 +4008,9 @@ export function normalizePaymentTaskCenterOverviewResult(data) {
     || (data.expiredPaymentCount != null
       && data.dueExpiredPaymentCount != null
       && data.backingOffExpiredPaymentCount != null
-      && data.dueExpiredPaymentCount + data.backingOffExpiredPaymentCount > data.expiredPaymentCount)
+      && data.blockedExpiredPaymentCount != null
+      && data.dueExpiredPaymentCount + data.backingOffExpiredPaymentCount
+        + data.blockedExpiredPaymentCount > data.expiredPaymentCount)
     || (data.pendingQueryBacklogCount != null
       && data.duePendingQueryCount != null
       && data.duePendingQueryCount > data.pendingQueryBacklogCount)

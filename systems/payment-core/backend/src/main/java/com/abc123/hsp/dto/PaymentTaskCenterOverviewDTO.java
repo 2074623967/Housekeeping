@@ -15,6 +15,8 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer dueExpiredPaymentCount;
     /** 当前处于超时关单失败退避窗口的支付单数。 */
     private Integer backingOffExpiredPaymentCount;
+    /** 活跃提交令牌阻断自动关单、需要人工核对的超时支付单数。 */
+    private Integer blockedExpiredPaymentCount;
     /** 待收口支付中单数。 */
     private Integer pendingCallbackCount;
     /** 已达到主动补查阈值的支付单数。 */
