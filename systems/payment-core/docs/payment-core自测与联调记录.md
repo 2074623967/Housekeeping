@@ -3957,7 +3957,7 @@
    - `accounting-system`：`18210`
    - 均显式注入 RabbitMQ 凭据：
      - `HSP_RABBITMQ_USERNAME = hsp`
-     - `HSP_RABBITMQ_PASSWORD = hsp-local-drill-20260801`
+     - `HSP_RABBITMQ_PASSWORD = <已脱敏的本地演练密码>`
 4. 通过 RabbitMQ management API 向 `payment.trade` 发布坏报文：
    - `messageId = MQ-FAST-RETRY-DLQ-20260805-001`
    - `correlationId = MQ-FAST-RETRY-DLQ-20260805-001`
@@ -17487,3 +17487,10751 @@ README 的旧批次回归数字已更新为当前可验证基线：payment-core 
 ### 9.102 2026-09-26 任务中心人工补偿入口接入共享租约
 
 待回调支付主动查单、处理中退款主动查单、失败事件重发和失败退款重试四个人工入口现在统一复用现有数据库任务租约，与自动调度共享相同的任务编码和 `120` 秒租期；无法获取租约时直接返回既有跳过结果，不读取候选、不调用渠道或下游服务，执行结束后按 owner 释放租约。任务中心定向测试通过 `69/69`，并验证人工租约的获取、释放和输入校验；payment-core 临时副本全量回归为 `1243` tests、`0` failures、`0` errors、`0` skipped。本轮只收口 payment-core 任务中心的人工/自动并发边界，不代表真实 MySQL 锁等待、生产多实例调度、渠道协议或正式发布治理条件已完成。
+
+### 9.103 2026-09-26 运营列表排序输入原文边界统一
+
+账单、收银台会话、支付事件、支付流水、支付处理日志、支付请求、支付路由执行和支付流水记录八类运营列表现在统一在 `trim` 前校验排序字段与排序方向的控制字符及原文长度，避免尾部空格绕过输入容量限制；新增共享排序参数归一化工具及边界测试。定向回归覆盖受影响服务和工具测试共 `1246/1246`，失败 `0`、错误 `0`、跳过 `0`；`git diff --check` 通过。本轮只强化运营查询输入契约，不改变 SQL 排序白名单、支付事实、导出语义、真实数据库查询计划或正式发布治理结论。
+
+### 9.104 2026-09-26 支付配置复核文本原文边界补强
+
+协议变更原因、路由规则变更原因、maker-checker 复核说明和路由规则分桶盐现在均在 `trim` 前校验控制字符与原文长度，避免“达到上限 + 尾部空格”绕过配置写入或复核动作边界；协议配置定向测试 `84/84` 通过，payment-core 后端全量回归为 `1247/1247`，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化支付配置治理输入契约，不改变候选复核、版本基线、运行态发布或正式发布治理结论。
+
+### 9.105 2026-09-26 支付配置业务键与人员声明原文边界补强
+
+渠道、路由规则、协议、网关、来源应用等配置业务键，以及 maker-checker 申请人/复核人声明现在统一在 `trim` 前校验控制字符与 `64` 字符原文上限，避免尾部空格绕过配置定位和异人复核边界；配置中心定向测试 `86/86` 通过，payment-core 后端全量回归保持 `1247/1247`，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化配置治理输入契约，不改变候选复核、版本基线、运行态发布或正式发布治理结论。
+
+### 9.106 2026-09-26 支付协议与路由新增写入编码校验补强
+
+协议复核候选、协议新增构造路径和路由规则新增/编辑构造路径现在统一使用业务键有界校验，覆盖控制字符及 `64` 字符原文上限，避免 override 编码或新增请求字段通过 `trim` 绕过边界；新增协议与路由非法编码的 mapper 零交互测试。当前环境缺少 `mvn` 和 Maven Wrapper，本轮未执行测试命令；`git diff --check` 通过，既有 `1247/1247` 基线保持不变。本轮只强化支付配置写入输入契约，不改变候选复核、版本基线、运行态发布或正式发布治理结论。
+
+### 9.107 2026-09-26 路由目标与兜底渠道编码边界补强
+
+路由规则目标渠道和兜底渠道编码现在统一使用业务键有界校验，覆盖控制字符及 `64` 字符原文上限，避免渠道字段直接 `trim` 绕过路由配置边界；新增目标渠道非法输入的 mapper 零交互测试。当前环境缺少 `mvn` 和 Maven Wrapper，本轮未执行测试命令；`git diff --check` 通过。本轮只强化路由配置输入契约，不改变渠道存在性校验、路由匹配或正式发布治理结论。
+
+### 9.108 2026-09-26 跨系统 happy-path 当前环境复核
+
+复核已有运行证据显示支付成功、清分、结算、账务、退款和对账链路均已完成，历史样例的对账状态为 `COMPLETED` 且 `financialCloseable=true`；本轮直接重跑 `node tools/dev/cross-system-happy-path.mjs` 时当前本地服务未启动，返回 `fetch failed`，因此不新增当前运行成功结论，也不替代已有历史证据或正式发布治理结论。
+
+### 9.109 2026-09-26 路由渠道编码边界定向回归
+
+使用仓库自带 JDK 8 与 Maven 3.9.16 执行 `PaymentConfigServiceImplTest`、`PaymentConfigBusinessKeyValidationTest`，共 `88/88` 通过，失败 `0`、错误 `0`、跳过 `0`；`git diff --check` 通过。回归覆盖协议/路由业务键、目标渠道控制字符及超长原文输入，并验证非法值在 mapper 访问前被拒绝。本轮只强化配置输入契约，不改变跨系统运行证据或正式发布治理结论。
+
+### 9.110 2026-09-26 本地后端栈启动复核
+
+通过 `tools/dev/local-stack.sh doctor backends` 确认仓库自带 Maven、JDK、javac 和依赖缓存可用；执行 `tools/dev/local-stack.sh start backends` 时 ops-config-system、risk-control-system 均在 `90` 秒内未就绪，随后停止本轮启动，payment-core 及跨系统 happy-path 未执行。当前不新增本地栈成功结论，也不改变已有历史运行证据或正式发布治理结论。
+
+### 9.111 2026-09-26 控制策略自检配置编码边界补强
+
+支付控制策略自检入口的 `configCode` 现在统一使用业务键有界校验，覆盖控制字符及 `64` 字符原文上限，避免直接 `trim` 绕过配置定位边界；新增非法配置编码 mapper 零交互测试。配置中心定向回归 `89/89` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化运营配置输入契约，不改变策略自检逻辑或正式发布治理结论。
+
+### 9.112 2026-09-26 payment-core 全量后端回归
+
+通过 `node tools/dev/backend-regression.mjs --only payment-core` 执行 payment-core 后端全量回归，使用仓库自带 Maven 3.9.16、JDK 8 和本地依赖缓存，共 `1250/1250` 通过，失败 `0`、错误 `0`、跳过 `0`。该结果验证当前工作树在 demo/H2 测试基线下可回归，不替代真实渠道、生产中间件、跨系统运行态或正式发布治理证据。
+
+### 9.113 2026-09-26 payment-core 用户端矩阵回归
+
+通过 `node tools/dev/payment-core-user-regression.mjs` 执行用户端矩阵：API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、小程序 `21/21`，失败 `0`；App、H5、PC 生产构建全部通过，小程序无构建脚本且按现有约定执行测试。该结果验证用户端合同、路由、支付状态门禁和构建产物，不替代真实设备、渠道或发布后现场核验。
+
+### 9.114 2026-09-26 管理端运营矩阵回归
+
+通过 `node tools/dev/frontend-admin-regression.mjs` 执行管理端矩阵，`12/12` 应用测试与生产构建全部通过，失败 `0`；payment-core 管理端定向测试为 `72/72`。该结果验证运营列表、详情、状态门禁、任务中心和跨系统查询前端契约，不替代真实后端栈、权限系统、生产数据或发布后现场核验。
+
+### 9.115 2026-09-26 本地后端栈端口绑定根因确认
+
+单独启动 ops-config-system 时 Spring Boot 上下文和 Hikari 数据源均初始化成功，但 Tomcat 绑定 `18170` 端口返回 `java.net.SocketException: Operation not permitted`；因此此前本地栈服务在启动窗口内未就绪的根因是当前执行环境禁止 localhost 端口绑定，而非应用编译或数据库初始化失败。权限提升启动请求未在审查期限内完成，本轮不新增跨系统 happy-path 成功结论。
+
+### 9.116 2026-09-26 控制策略访问令牌边界补强
+
+支付控制策略接口访问令牌现在统一使用有界文本校验，拒绝控制字符并保留 `128` 字符容量约束，避免管理端配置直接 `trim` 后写入异常令牌；新增非法令牌不写入复核申请的回归。payment-core 后端全量回归 `1251/1251` 通过，失败 `0`、错误 `0`、跳过 `0`。本轮只强化运营配置输入契约，不改变令牌继承、自检或正式发布治理结论。
+
+### 9.117 2026-09-26 值班路由编码边界补强
+
+异常告警值班路由新增/提交及实体构造路径现在统一使用业务键有界校验，覆盖控制字符及 `64` 字符原文上限，避免 `requireImportText` 或 override 分支直接 `trim` 绕过配置边界；新增非法值 mapper 零交互测试。payment-core 后端全量回归 `1252/1252` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化运营配置输入契约，不改变值班路由复核状态机或正式发布治理结论。
+
+### 9.118 2026-09-26 运营配置导入文本控制字符边界补强
+
+共享 `requireImportText` 现在在名称、模板、策略等运营配置导入字段写入前统一拒绝控制字符，避免原始文本进入候选复核或实体；新增支付控制策略来源应用名称非法文本回归。payment-core 后端全量回归 `1253/1253` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化运营配置输入契约，不改变配置复核状态机或正式发布治理结论。
+
+### 9.119 2026-09-26 返回码 CSV 控制字符边界补强
+
+返回码 CSV 预检的标准化消息、处理建议、版本等文本字段现在统一拒绝控制字符，避免带引号换行或其他控制字符进入返回码候选；新增带引号换行字段的预检回归。payment-core 后端全量回归 `1254/1254` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化运营批量导入输入契约，不改变返回码复核、版本基线或正式发布治理结论。
+
+### 9.120 2026-09-26 payment-core 门禁审计复核
+
+重新执行 `node tools/release/audit_payment_core_gate.mjs --root-dir . --pack docs/releases/evidence/test-20260809-regression --stdout-json`：`regressionEvidenceReady=true`、`releaseMaterialsReady=true`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前阻断仍为回归汇总未放行 `test -> master` 与 release 正式放行条件未闭环；本轮不执行合并、切版或补写治理事实。
+
+### 9.121 2026-09-26 支付协议候选文本边界补强
+
+支付协议名称、类型、模板、签约和风控等候选文本现在统一拒绝控制字符，协议正文仍保留合法换行能力；新增协议名称非法文本复核回归。payment-core 后端全量回归 `1255/1255` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化支付协议配置输入契约，不改变候选复核、版本基线或正式发布治理结论。
+
+### 9.122 2026-09-26 路由候选文本边界补强
+
+路由规则名称和匹配场景现在统一拒绝控制字符，避免运营候选文本进入路由规则配置；新增非法规则名称 mapper 零交互回归。payment-core 后端全量回归 `1256/1256` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化路由配置输入契约，不改变表达式求值、冲突检测或正式发布治理结论。
+
+### 9.123 2026-09-26 路由候选文本回归确认
+
+路由规则名称和匹配场景安全文本校验已通过 payment-core 后端全量回归，结果为 `1256/1256`，失败 `0`、错误 `0`、跳过 `0`；`git diff --check` 通过。本轮确认合法表达式与既有路由配置行为未受影响，不改变跨系统运行证据或正式发布治理结论。
+
+### 9.124 2026-09-26 值班路由业务文本边界补强
+
+异常类型、责任组、值班接收人、通知通道和升级策略等值班路由业务文本现在统一拒绝控制字符，避免告警运营候选携带不可见控制内容；新增异常类型非法文本 mapper 零交互回归。payment-core 后端全量回归 `1257/1257` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化告警运营配置输入契约，不改变值班路由状态机、告警派发或正式发布治理结论。
+
+### 9.125 2026-09-26 支付协议正文控制字符边界补强
+
+支付协议正文现在允许正常换行、回车和制表，但拒绝 NUL 等其他不可见控制字符，避免协议候选携带不可解析内容；新增换行保留与非法控制字符回归。payment-core 后端全量回归 `1258/1258` 通过，失败 `0`、错误 `0`、跳过 `0`，`git diff --check` 通过。本轮只强化协议正文输入契约，不改变协议正文的合法多行语义、候选复核或正式发布治理结论。
+
+### 9.126 2026-09-26 退款重试操作人边界与死信状态闭合
+
+退款失败重试现在统一拒绝空白、控制字符和超过 64 字符的操作人，并在加载失败退款前完成校验；死信重放在 `markReplayed` 未更新任务时转入 `REPLAY_FAILED`，避免任务卡在 `REPLAYING`。新增两条状态与输入边界回归；`RefundRetryTaskServiceImplTest`、`PaymentDeadLetterTaskServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.127 2026-09-26 支付事件查询空值契约补强
+
+支付事件列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免管理端服务层调用触发空指针；新增空查询列表回归。`PaymentEventServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.128 2026-09-26 支付请求查询空值契约补强
+
+支付请求列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免管理端服务层调用触发空指针；新增空查询列表回归。`PaymentRequestServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.129 2026-09-26 支付日志查询空值契约补强
+
+支付日志列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免管理端服务层调用触发空指针；新增空查询列表回归。`PaymentLogServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.130 2026-09-26 支付流水查询空值契约补强
+
+支付流水列表和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免管理端服务层调用触发空指针；新增空查询列表回归。`PaymentFlowServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.131 2026-09-26 支付主流程查询空值契约补强
+
+支付单列表和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免用户支付主流程服务层调用触发空指针；新增空查询列表回归。`PaymentServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.132 2026-09-26 路由执行查询空值契约补强
+
+路由执行列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免管理端排障调用触发空指针；新增空查询列表回归。`PaymentRouteExecutionServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.133 2026-09-26 收银台会话查询空值契约补强
+
+收银台会话列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免运营排障调用触发空指针；新增空查询列表回归。`CashierSessionServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.134 2026-09-26 payment-core 全量回归确认
+
+本轮查询契约修复及既有 payment-core 改动完成全量后端回归，仓库回归脚本结果为 `1/1 backend modules passed`；`git diff --check` 通过。测试日志中的故障异常来自既有异常隔离与回滚测试场景，不构成失败。本轮未重新生成跨系统运行证据或正式发布放行结论。
+
+### 9.135 2026-09-26 订单查询空值契约补强
+
+订单列表和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免订单运营服务层调用触发空指针；新增空查询列表回归。`OrderServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.136 2026-09-26 账单查询空值契约补强
+
+账单列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免账单运营服务层调用触发空指针；新增空查询列表回归。`BillServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.137 2026-09-26 退款查询空值契约补强
+
+退款列表和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免退款运营服务层调用触发空指针；新增空查询列表回归。`RefundServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.138 2026-09-26 支付记录查询空值契约补强
+
+支付记录列表和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免支付记录运营服务层调用触发空指针；新增空查询列表回归。`PaymentRecordServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.139 2026-09-26 结算查询空值契约补强
+
+服务者结算列表、概览和 CSV 导出现在对 `null` 查询统一使用默认分页与筛选对象，避免结算运营服务层调用触发空指针；新增空查询列表回归。`SettlementServiceImplTest` 定向测试通过，`git diff --check` 通过。本轮未重新生成 payment-core 全量或跨系统运行证据。
+
+### 9.140 2026-09-26 payment-core 全量回归确认
+
+退款、支付记录和结算查询契约修复完成后，payment-core 后端全量回归脚本结果为 `1/1 backend modules passed`；`git diff --check` 通过。测试日志中的异常来自既有错误隔离、事务回滚和租约失败场景。本轮未重新生成跨系统运行证据或正式发布放行结论。
+
+### 9.141 2026-09-26 发布门禁状态复核
+
+发布门禁审计确认回归证据包 `10/10` 场景完整、缺失证据 `0`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`。当前阻断为回归汇总未放行、正式审批签字未形成、现场核验仍为模板、master 稳定观察尚未形成结束结论；本轮不伪造治理材料、不执行合并或创建 release。
+
+### 9.142 2026-09-26 payment-core 用户端回归确认
+
+payment-core 用户端回归脚本完成 `5/5`：API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、小程序 `21/21`；App/H5/PC 生产构建通过，小程序按包声明无 build 脚本。本轮未改变跨系统运行证据及发布门禁结论。
+
+### 9.143 2026-09-26 管理端全量回归确认
+
+管理端全量回归脚本完成 `12/12`，全部应用测试与生产构建通过，其中 payment-core admin `72/72`。本轮未改变跨系统运行证据及发布门禁结论。
+
+### 9.144 2026-09-26 事件重发查询校验前移
+
+事件重发在调用投递服务之前校验返回列表的查询参数，避免非法查询在外部投递后才报错并导致本地事务回滚。新增非法查询时投递服务与 Mapper 零交互测试，`PaymentEventServiceImplTest` 通过。该修复不保证外部投递与数据库事务原子性，不改变发布门禁结论。
+
+### 9.145 2026-09-26 死信重放快照读取失败闭合
+
+死信任务完成 `REPLAYING` 抢占后，快照读取异常现在也进入统一失败处理并尝试写入 `REPLAY_FAILED`，避免任务因读取异常停留在处理中；新增快照读取失败回归。`PaymentDeadLetterTaskServiceImplTest` 通过，`git diff --check` 通过。本轮未重新生成全量或跨系统运行证据。
+
+### 9.146 2026-09-26 死信状态修复全量回归确认
+
+死信重放状态闭合修复完成后，payment-core 后端全量回归脚本结果为 `1/1 backend modules passed`；`git diff --check` 通过。日志中的异常来自既有错误隔离、事务回滚和租约失败测试场景，不构成失败。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.147 2026-09-26 跨系统运行与发布门禁复核
+
+当前运行环境执行 `node tools/dev/cross-system-happy-path.mjs` 立即返回 `fetch failed`，本轮未生成新的跨系统成功证据；不能用历史日志替代。门禁审计仍为回归证据包 `10/10` 完整，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`；`git diff --check` 通过。
+
+### 9.148 2026-09-26 退款未知结果事件状态闭合
+
+退款渠道返回未知结果时，事件现在要求 `markPublishUnknown` 实际更新一行，否则以状态更新失败结束，避免退款尝试已停止直接重试但事件仍停留在可重试状态；`PaymentEventDispatchServiceImplTest` 定向测试 `55/55` 通过。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.149 2026-09-26 事件失败与死信状态更新闭合
+
+事件派发失败或达到最大重试次数进入死信时，现在要求对应 Mapper 更新实际影响一行，否则抛出状态更新失败，避免异常路径返回失败但事件仍停留在旧状态；新增状态更新失败回归，`PaymentEventDispatchServiceImplTest` 定向测试 `56/56` 通过。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.150 2026-09-26 事件状态闭合修复全量回归确认
+
+失败、死信及退款未知结果状态闭合修复完成后，payment-core 后端全量回归脚本结果为 `1/1 backend modules passed`；本轮未重新生成跨系统运行证据，发布门禁结论不变。
+
+### 9.151 2026-09-26 支付提交未知结果收银台状态闭合
+
+支付渠道提交结果未知时，支付单已标记待确认后，预付单收银台状态更新现在要求实际影响一行，否则抛出原子性失败，避免支付单与收银台状态分叉；`PaymentServiceImplTest` 定向测试 `96/96`、payment-core 全量回归 `1/1 backend modules passed`。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.152 2026-09-26 支付提交未知结果状态契约回归确认
+
+支付 Mapper 的预付单状态更新接口现在返回影响行数，未知结果收口路径已完成契约化；`PaymentServiceImplTest` `96/96` 通过，payment-core 全量回归 `1/1 backend modules passed`，`git diff --check` 通过。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.153 2026-09-26 回调与主动查单收银台状态闭合
+
+支付回调成功/待回调以及主动查单成功路径，现在要求预付单收银台状态更新实际影响一行，否则抛出原子性失败，避免支付单状态与收银台状态分叉；`PaymentServiceImplTest` `96/96`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮未重新生成跨系统运行证据或发布放行结论。
+
+### 9.154 2026-09-26 退款状态 CAS 严格行数校验
+
+退款回调收口与人工状态流转现在要求 CAS 更新恰好影响一行，返回多行也视为状态异常，避免数据异常时继续写入操作日志、创建渠道尝试或派发事件；新增多行更新回归，`RefundServiceImplTest` `56/56`、payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统脚本当前仍返回 `fetch failed`。
+
+### 9.155 2026-09-26 支付关闭收银台状态闭合
+
+人工关闭未提交渠道的支付单时，现在要求预付单“已关闭”状态实际更新一行，否则抛出原子性失败，避免支付单已关闭但收银台仍显示旧状态；新增关闭状态更新失败回归，`PaymentServiceImplTest` `97/97`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.156 2026-09-26 管理端路由规则更新状态闭合
+
+管理端编辑路由规则时，现在要求配置更新实际影响一行，否则停止版本记录与后续发布流程，避免规则未落库却产生新版本审计；新增更新失败回归，`PaymentConfigServiceImplTest` `88/88`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.157 2026-09-26 管理端支付协议更新状态闭合
+
+管理端审批更新支付协议时，现在要求协议配置更新实际影响一行，否则停止版本记录与复核完成，避免协议未落库却产生已发布版本；新增更新失败回归，`PaymentConfigServiceImplTest` `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.158 2026-09-26 管理端支付网关更新行数收紧
+
+管理端审批更新支付网关时，影响行数现在必须恰好为一行，多行更新也视为失败，避免异常数据下继续生成网关版本并完成复核；配置服务 `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.159 2026-09-26 管理端路由规则审批更新状态闭合
+
+管理端审批发布路由规则时，运行配置更新现在也要求实际影响一行，避免复核流程生成版本记录但运行规则未落库；配置服务 `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.160 2026-09-26 路由审批分支回归确认
+
+路由规则普通编辑与审批发布两条更新路径均完成实际影响行校验；`PaymentConfigServiceImplTest` `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过，`git diff --check` 通过。本轮未重新生成跨系统成功证据。
+
+### 9.161 2026-09-26 管理端异常告警值班路由更新行数收紧
+
+管理端审批更新异常告警值班路由时，影响行数现在必须恰好为一行，多行更新也视为失败，避免异常数据下继续完成复核；配置服务 `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过。本轮跨系统环境仍不可达。
+
+### 9.162 2026-09-26 管理端支付控制策略更新行数收紧
+
+管理端审批更新支付控制策略时，影响行数现在必须恰好为一行，多行更新也视为失败，避免异常数据下继续生成策略版本并完成复核；配置服务 `89/89`、payment-core 全量回归 `1/1 backend modules passed` 通过。发布门禁审计仍显示正式审批、现场核验和稳定观察结论未闭环。
+
+### 9.163 2026-09-26 告警回执回写行数收紧
+
+告警供应商回执回写现在要求实际影响恰好一行，只有单行成功才继续确认来源告警，避免多行异常回写被误判为送达；`PaymentIssueAlertDeliveryServiceImplTest` `60/60`、payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.164 2026-09-26 告警主派发状态更新行数收紧
+
+告警主派发状态回写现在要求实际影响恰好一行，避免多行异常更新后继续执行来源确认；`PaymentIssueAlertDeliveryServiceImplTest` `60/60`、payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.165 2026-09-26 告警多行回写回归补强
+
+新增供应商回执多行更新回归，确认影响行数为 2 时不会确认来源告警；`PaymentIssueAlertDeliveryServiceImplTest` `61/61`、payment-core 全量回归 `1/1 backend modules passed` 通过，`git diff --check` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.166 2026-09-26 管理端通道与返回码更新行数收紧
+
+管理端审批发布支付通道及更新渠道返回码映射时，持久化更新现在要求影响行数恰好为一行，多行结果也视为失败，避免异常数据下继续记录版本或完成复核；`PaymentConfigServiceImplTest` 通过，payment-core 全量回归仍为 `1/1 backend modules passed`。跨系统 happy-path 仍未形成成功证据。
+
+### 9.167 2026-09-26 用户支付端到端声明式回归确认
+
+执行 `node tools/dev/payment-core-user-regression.mjs`，api-client、app-web、H5、PC、mini-program 共 `5/5 user apps passed their declared checks`，各前端测试与生产构建均通过；这证明用户端契约和构建链路当前可验证，但不替代跨系统真实 HTTP happy-path。
+
+### 9.168 2026-09-26 支付协议复核完成状态行数收紧
+
+支付协议复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；新增多行回写回归，`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.169 2026-09-26 路由规则复核完成状态行数收紧
+
+路由规则复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.170 2026-09-26 告警供应商复核完成状态行数收紧
+
+告警通知供应商复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.171 2026-09-26 异常告警值班路由复核完成状态行数收紧
+
+异常告警值班路由复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.172 2026-09-26 支付网关复核完成状态行数收紧
+
+支付网关复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.173 2026-09-26 支付控制策略复核完成状态行数收紧
+
+支付控制策略复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.174 2026-09-26 渠道返回码复核完成状态行数收紧
+
+渠道返回码复核完成状态写回现在要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.175 2026-09-26 通道与返回码导入复核状态行数收紧
+
+支付渠道复核、返回码导入复核完成状态写回现在均要求影响行数恰好为一行，多行更新会停止复核闭合；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.176 2026-09-26 告警供应商配置更新行数收紧
+
+告警通知供应商配置新增与更新现在均要求影响行数恰好为一行，避免多行异常写入后继续生成版本并完成复核；`PaymentConfigServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.177 2026-09-26 告警回执回查尝试状态行数收紧
+
+告警供应商回执回查尝试状态更新现在要求影响行数恰好为一行，避免多行异常更新后错误推进回查次数；`PaymentIssueAlertDeliveryServiceImplTest` 通过。跨系统 happy-path 仍未形成成功证据。
+
+### 9.178 2026-09-26 跨系统本地运行环境探测
+
+执行 `node tools/dev/cross-system-happy-path.mjs` 仍返回 `fetch failed`。尝试启动本地后端栈时，首个服务因沙箱禁止监听本地端口而以 `java.net.SocketException: Operation not permitted` 退出，已清理残余进程；本轮未形成真实跨系统 happy-path 成功证据。
+
+### 9.179 2026-09-26 payment-core 全量回归确认
+
+执行 `node tools/dev/backend-regression.mjs --only payment-core`，`1/1 backend modules passed`；测试中的异常日志属于既有失败隔离与事务回滚场景。跨系统 happy-path 仍受本地端口监听限制，未形成成功证据。
+
+### 9.180 2026-09-26 发布门禁审计复核
+
+执行发布门禁审计，回归证据包 `10/10` 场景完整且缺失证据为 `0`，但 `canPromoteTestToMaster=false`、`canCreateRelease=false`；正式签字、现场核验记录、稳定观察结束结论及正式候选版仍未闭环，未宣称发布就绪。
+
+### 9.181 2026-09-26 死信任务状态转换行数收紧
+
+死信任务准备重放、人工结案、进入重放和重放完成四个状态转换现在均要求影响行数恰好为一行；新增多行更新回归，`PaymentDeadLetterTaskServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.182 2026-09-26 支付提交占用状态行数收紧
+
+支付提交占用预支付单时现在要求更新恰好影响一行，多行命中按并发占用失败处理；并发占用回归改为模拟影响行数 `2`，`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.183 2026-09-26 支付成功回调落库行数收紧
+
+支付成功回调将渠道结果落库时现在要求状态更新恰好影响一行，多行命中按已被其他状态处理，避免继续推进后续结算；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.184 2026-09-26 支付待处理回调落库行数收紧
+
+支付非成功回调写入待处理状态时现在要求状态更新恰好影响一行，多行命中按状态竞争处理，避免继续写入不确定回调结果；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.185 2026-09-26 支付查询成功结算行数收紧
+
+支付查询确认渠道成功并落库时现在要求成功状态更新恰好影响一行，多行命中按状态竞争处理，避免重复推进结算、账单和成功事件；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.186 2026-09-26 支付关闭状态行数收紧
+
+关闭未提交支付单时现在要求状态更新恰好影响一行，多行命中按关闭竞态处理；关闭竞态回归改为模拟影响行数 `2`，`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.187 2026-09-26 支付提交结果绑定行数收紧
+
+支付提交返回的渠道交易号绑定到支付单时现在要求更新恰好影响一行，多行命中按绑定竞态处理，避免继续推进错误渠道结果；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.188 2026-09-26 支付未知提交结果恢复行数收紧
+
+支付渠道提交结果未知时的状态恢复现在要求更新恰好影响一行，多行命中按状态竞争处理，避免错误推进未知结果恢复；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.189 2026-09-26 过期支付关闭行数收紧
+
+过期未提交支付单关闭时现在要求状态更新恰好影响一行，多行命中按关闭竞态处理，避免重复写入失效事件；`PaymentExpiryTaskServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.190 2026-09-26 payment-core 全量回归复核
+
+再次执行 `node tools/dev/backend-regression.mjs --only payment-core`，结果为 `1/1 backend modules passed`；异常与回滚日志均来自既有故障隔离测试。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.191 2026-09-26 过期关闭预支付状态写回闭合
+
+过期支付关闭成功后，预支付单失效状态现在要求更新恰好影响一行，否则不发布失效事件；补齐成功与批量失败隔离测试夹具，`PaymentExpiryTaskServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.192 2026-09-26 过期关闭修复后全量回归
+
+执行 `node tools/dev/backend-regression.mjs --only payment-core`，结果为 `1/1 backend modules passed`；失败隔离与事务回滚日志符合既有测试预期。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.193 2026-09-26 用户支付端联合回归复核
+
+执行 `node tools/dev/payment-core-user-regression.mjs`，api-client、app-web、H5、PC、mini-program 共 `5/5 user apps passed their declared checks`，前端测试与构建均通过；真实跨系统 HTTP happy-path 仍未形成。
+
+### 9.194 2026-09-26 支付方式与渠道绑定行数闭合
+
+支付方式/渠道绑定 Mapper 现在返回影响行数，提交主流程与风控留痕路径均要求恰好影响一行，避免写回失败后继续推进支付；`PaymentServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.195 2026-09-26 支付返回码快照行数闭合
+
+支付返回码标准化快照 Mapper 现在返回影响行数，提交和查单成功路径均要求恰好影响一行，避免快照未落库却继续推进支付状态；`PaymentServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.196 2026-09-26 风控支付状态行数闭合
+
+风控复核、拒绝和拦截留痕时，支付单状态更新 Mapper 现在返回影响行数并要求恰好影响一行，避免状态未落库却继续推进收银台状态；`PaymentServiceImplTest` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.197 2026-09-26 风控状态接口全量回归
+
+风控支付状态 Mapper 改造后执行 `node tools/dev/backend-regression.mjs --only payment-core`，结果为 `1/1 backend modules passed`；异常日志均来自既有隔离测试。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.198 2026-09-26 支付运营配置快照行数闭合
+
+支付路由和支付尝试的运营配置版本快照 Mapper 现在返回影响行数，提交时两条快照写回均要求恰好影响一行，避免版本事实缺失却继续调用渠道；`PaymentServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.199 2026-09-26 支付尝试创建行数闭合
+
+支付提交创建支付尝试记录的 Mapper 现在返回影响行数，提交事务要求恰好创建一条尝试记录后才调用渠道；`PaymentServiceImplTest` 97 项通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.200 2026-09-26 支付尝试接口全量回归
+
+支付尝试 Mapper 返回类型变更后执行 `node tools/dev/backend-regression.mjs --only payment-core`，结果为 `1/1 backend modules passed`；异常日志来自既有故障隔离测试。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.201 2026-09-26 支付路由记录行数闭合
+
+支付提交写入路由记录的 Mapper 现在返回影响行数，提交事务要求恰好写入一条路由记录后才继续记录处理日志和调用渠道；`PaymentServiceImplTest` 97 项通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.202 2026-09-26 支付处理日志行数闭合
+
+支付服务处理日志写入现在要求恰好创建一条日志记录，避免路由、提交或查单事实未落库却继续推进后续状态；`PaymentServiceImplTest` 97 项通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.203 2026-09-26 支付处理日志修复后全量回归
+
+执行 `node tools/dev/backend-regression.mjs --only payment-core`，结果为 `1/1 backend modules passed`；回滚与异常输出来自既有故障隔离测试。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.204 2026-09-26 支付通知日志行数闭合
+
+支付通知日志写入现在要求恰好创建一条日志记录，提交、回调和查单通知事实未落库时立即中止后续流程；`PaymentServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.205 2026-09-26 预付单创建写入行数闭合
+
+预付单创建流程中的账单、支付单和预付单插入 Mapper 现在返回影响行数，并分别要求恰好创建一行；新增三条失败路径测试验证任一步失败都会停止后续写入。`PaymentServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.206 2026-09-26 支付事件写入行数闭合
+
+支付提交、风控、回调、查单和关闭主流程的事件写入现在要求恰好创建一条事件记录，事件未落库时不再继续记录处理日志或释放后续流程；新增关闭事件失败路径测试，`PaymentServiceImplTest` 101 项与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.207 2026-09-26 过期关单事实写入行数闭合
+
+过期关单任务的事件和处理日志写入现在均要求恰好创建一条记录，任一事实未落库都会进入任务失败和重试记录流程；新增事件写入失败测试，`PaymentExpiryTaskServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.208 2026-09-26 风控预付单状态行数闭合
+
+风控复核、拒绝和拦截路径现在要求支付单状态与预付单状态更新均恰好影响一行，避免支付单已进入风控态但收银台预付单仍停留旧状态；新增状态更新失败测试，`PaymentServiceImplTest` 102 项与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.209 2026-09-26 提交并发令牌创建行数闭合
+
+支付提交首次创建并发令牌时现在要求恰好创建一条记录，避免令牌未落库却继续进入路由和渠道调用；新增令牌写入失败测试，`PaymentServiceImplTest` 103 项与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.210 2026-09-26 退款尝试创建行数闭合
+
+退款审批进入渠道下发前创建退款尝试现在要求恰好创建一条记录，避免尝试事实未落库却继续写事件和触发渠道派发；新增退款尝试写入失败测试，`RefundServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.211 2026-09-26 退款提交 outbox 行数闭合
+
+退款尝试创建成功后写入渠道提交 outbox 现在要求恰好创建或更新一条记录，outbox 未落库时不再注册事务回调或触发渠道派发；新增 outbox 写入失败测试，`RefundServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.212 2026-09-26 退款操作日志行数闭合
+
+退款申请、回调、查单、状态流转和渠道受理恢复的操作日志现在均要求恰好创建一条记录，审计日志未落库时不再继续渠道下发；新增操作日志写入失败测试，`RefundServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.213 2026-09-26 退款申请单创建行数闭合
+
+退款申请单创建现在要求恰好创建一条记录，退款单未落库时不再继续写申请操作日志或返回申请结果；新增申请单写入失败测试，`RefundServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.214 2026-09-26 回调 nonce 防重放写入行数闭合
+
+回调验签成功后的 nonce 写入现在要求恰好创建一条记录；写入影响行数为零时立即中止回调验签成功路径，避免 nonce 未落库却继续进入业务处理。新增零行失败路径测试，`PaymentCallbackSignatureServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.215 2026-09-26 异常处理 action log 行数闭合
+
+异常批处理写入 action log 现在要求恰好创建一条记录；action log 未落库时立即中止，不再继续确认已处理告警。新增零行失败路径测试，`PaymentIssueServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.216 2026-09-26 异常告警确认更新行数闭合
+
+人工确认待确认告警时现在要求状态更新恰好影响一行；并发状态已变化或更新未落库时立即失败，不再继续确认来源告警或读取成功结果。新增零行失败路径测试，`PaymentIssueServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.217 2026-09-26 限流拒绝事实写入行数闭合
+
+支付渠道查单和告警回执查回限流命中时，拒绝事实写入现在要求恰好创建一条记录；写入失败仍保持限流业务码并阻止后续调用，避免请求被拒绝但审计事实丢失。新增两类零行失败测试，两组限流定向测试与 payment-core 全量回归 `1/1 backend modules passed` 通过。跨系统 happy-path 仍受本地运行环境限制。
+
+### 9.218 2026-09-26 跨系统真实 HTTP happy-path 闭环
+
+执行 `HSP_LOCAL_START_TIMEOUT_SECONDS=120 tools/dev/local-stack.sh verify all`，完整 HTTP 冒烟通过，`tools/dev/cross-system-happy-path.mjs` 返回 `[PASS] cross-system local happy path`。本次链路覆盖 payment-core 支付成功、清分生成、结算创建、账务入账、退款成功和对账事实，`reconciliationChainStatus=COMPLETED`、`reconciliationCompletedStageCount=4`、`reconciliationExpectedStageCount=4`、`reconciliationFinancialCloseable=true`；联调样例支付单 `PAY1790412623757d8f4d8ab`、退款单 `REF20260926165024550`，服务退出后自动清理前端进程。
+
+### 9.219 2026-09-26 路由规则新增写入行数闭合
+
+管理端新增支付路由规则现在要求配置记录恰好创建一条后才写入版本事实并返回成功；零行写入时不再生成版本记录。新增新增失败路径测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。
+
+### 9.220 2026-09-26 路由规则复核申请写入行数闭合
+
+管理端提交支付路由规则复核申请现在要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增零行失败路径测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。
+
+### 9.221 2026-09-26 支付协议复核申请写入行数闭合
+
+管理端提交支付协议复核申请现在要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增零行失败路径测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归 `1/1 backend modules passed` 通过。
+
+### 9.222 2026-09-26 支付渠道复核申请写入行数闭合
+
+管理端提交支付渠道状态、创建和更新复核申请现在统一要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增渠道状态复核零行失败路径测试，`PaymentChannelStatusReviewServiceImplTest` 24 项、`PaymentConfigServiceImplTest` 93 项定向测试通过。
+
+### 9.223 2026-09-26 渠道返回码复核申请写入行数闭合
+
+管理端提交渠道返回码单条启停复核申请现在要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增零行失败路径测试，`PaymentReturnCodeMappingConfigServiceImplTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.224 2026-09-26 渠道返回码导入复核申请写入行数闭合
+
+管理端提交渠道返回码批量导入复核申请现在要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增零行失败路径测试，`PaymentReturnCodeImportServiceTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.225 2026-09-26 支付网关复核申请写入行数闭合
+
+管理端提交支付网关状态、创建、更新和回滚复核申请现在统一要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增网关状态复核零行失败路径测试，`PaymentGatewayConfigServiceImplTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.226 2026-09-26 异常告警值班路由复核申请写入行数闭合
+
+管理端提交异常告警值班路由创建、更新和启停复核申请现在统一要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增启停复核零行失败路径测试，`PaymentIssueDutyRosterConfigServiceImplTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.227 2026-09-26 告警通知供应商复核申请写入行数闭合
+
+管理端提交告警通知供应商创建、更新和启停复核申请现在统一要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增启停复核零行失败路径测试，`PaymentAlertProviderConfigServiceImplTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.228 2026-09-26 支付控制策略复核申请写入行数闭合
+
+管理端提交支付控制策略状态、创建、更新和回滚复核申请现在统一要求复核记录恰好创建一条后才返回申请结果；零行写入时立即失败，重复申请仍转换为受控业务异常。新增状态复核零行失败路径测试，`PaymentControlPolicyConfigServiceImplTest` 与 `PaymentConfigServiceImplTest` 定向测试通过。
+
+### 9.229 2026-09-26 支付协议版本事实写入行数闭合
+
+支付协议复核审批和存量协议首次提交复核时写入版本事实现在要求恰好创建一条；版本事实未落库时立即失败，不再继续完成复核申请。新增审批版本零行失败路径测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.230 2026-09-26 支付路由规则版本事实写入行数闭合
+
+路由规则新增、更新、基线和复核审批写入版本事实现在要求恰好创建一条；版本事实未落库时立即失败。新增新增路由规则版本零行失败路径测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.231 2026-09-26 支付网关版本事实写入行数闭合
+
+支付网关复核审批和存量网关首次提交复核时写入版本事实现在要求恰好创建一条；版本事实未落库时立即失败，不再继续完成复核申请。新增网关审批版本零行失败路径测试，`PaymentGatewayConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.232 2026-09-26 支付控制策略版本事实写入行数闭合
+
+支付控制策略复核审批和存量策略首次提交复核时写入版本事实现在要求恰好创建一条；版本事实未落库时立即失败，不再继续完成复核申请。新增控制策略审批版本零行失败路径测试，`PaymentControlPolicyConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.233 2026-09-26 支付渠道版本事实写入行数闭合
+
+支付渠道复核审批和存量渠道首次提交复核时写入版本事实现在要求恰好创建一条；版本事实未落库时立即失败，不再继续完成复核申请。新增渠道状态审批版本零行失败路径测试，`PaymentChannelStatusReviewServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.234 2026-09-26 路由规则复核新增写入行数闭合
+
+路由规则复核审批的新增分支现在要求配置记录恰好创建一条后才写入版本事实并完成复核；零行写入时立即失败。新增新增审批配置零行失败测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.235 2026-09-26 支付协议复核新增写入行数闭合
+
+支付协议复核审批的新增分支现在要求配置记录恰好创建一条后才写入版本事实并完成复核；零行写入时立即失败。新增新增审批配置零行失败测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.236 2026-09-26 路由规则状态复核申请写入行数闭合
+
+路由规则状态和回滚复核申请共用的写入路径现在要求复核记录恰好创建一条；零行写入时立即失败，重复申请仍转换为受控业务异常。新增状态复核申请零行失败测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.237 2026-09-26 返回码导入批次审计写入行数闭合
+
+返回码批量导入审批现在要求导入批次审计记录恰好创建一条后才完成复核；审计事实未落库时立即失败。新增导入批次零行失败测试，`PaymentReturnCodeImportServiceTest` 与 payment-core 全量回归通过。
+
+### 9.238 2026-09-26 支付控制策略自检更新行数闭合
+
+单个和批量支付控制策略自检现在要求结果状态更新恰好影响一行；更新未落库时立即失败，不再返回自检成功或继续处理后续条目。新增批量自检零行失败测试，`PaymentConfigServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.239 2026-09-26 返回码导入映射写入行数闭合
+
+返回码批量导入审批的每条新增或更新映射现在要求恰好影响一行；映射未落库时立即失败，不再生成批次审计或完成复核。新增映射 upsert 零行失败测试，`PaymentReturnCodeImportServiceTest` 与 payment-core 全量回归通过。
+
+### 9.240 2026-09-26 退款事件派发操作日志写入行数闭合
+
+退款事件派发的渠道受理、失败和未知结果操作日志现在要求恰好创建一条；日志未落库时立即失败，不再继续标记事件成功或未知。新增渠道受理日志零行失败测试，`PaymentEventDispatchServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.241 2026-09-26 支付任务运行日志写入行数闭合
+
+任务中心正常任务结果现在要求运行日志恰好创建一条后才返回任务结果；日志未落库时立即失败。新增无候选任务运行日志零行失败测试，`PaymentTaskCenterServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.242 2026-09-26 支付日终批次写入行数闭合
+
+支付日终批次现在要求批次记录恰好创建一条后才返回执行结果；批次未落库时立即失败。新增日终批次零行失败测试，`PaymentDayEndServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.243 2026-09-26 支付任务失败运行日志写入行数闭合
+
+任务中心异常路径现在要求失败运行日志恰好创建一条；日志未落库时抛出明确异常，同时保留原始任务异常并将审计写入异常加入 suppressed。新增日终失败日志零行测试，`PaymentTaskCenterServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.244 2026-09-26 异常告警派发日志写入行数闭合
+
+异常告警各渠道派发结果日志现在要求恰好创建一条；日志未落库时当前告警批次按失败处理，不再继续更新来源派发状态。新增派发日志零行失败测试，`PaymentIssueAlertDeliveryServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.245 2026-09-26 异常告警任务运行日志写入行数闭合
+
+异常告警派发、回执回查和租约跳过结果现在要求任务运行日志恰好创建一条；日志未落库时立即失败。新增告警任务日志零行失败测试，`PaymentIssueAlertDeliveryServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.246 2026-09-26 任务中心租约跳过日志写入行数闭合
+
+任务中心自动任务检测到其他实例持有租约时，现在要求跳过运行日志恰好创建一条；日志未落库时立即失败，不再返回未审计的跳过结果。新增租约跳过日志零行失败测试，`PaymentTaskCenterServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.247 2026-09-26 主动查单监控告警写入行数闭合
+
+主动查单失败或限流阈值告警现在要求告警日志恰好创建一条；零行写入时立即失败，不再被误计为冷却窗口抑制。新增查询监控告警零行失败测试，`PaymentTaskCenterServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.248 2026-09-26 异常 SLA 告警生成行数闭合
+
+异常 SLA 告警生成现在要求写入结果恰好为一条；异常影响行数不再被当作告警生成成功，并进入失败统计。新增告警写入异常行数测试，`PaymentTaskCenterServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.249 2026-09-26 异常告警来源确认更新行数闭合
+
+异常告警回执确认现在要求来源确认更新恰好影响一行，或已被并发实例确认；异常多行更新不再被当作确认成功。新增来源确认多行更新测试，`PaymentIssueAlertDeliveryServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.250 2026-09-26 支付提交并发令牌更新行数闭合
+
+支付提交并发令牌抢占现在要求条件更新恰好影响一行；零行仍按并发提交冲突处理，多行更新立即失败，不再被误判为令牌抢占成功。新增并发令牌多行更新测试，`PaymentServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.251 2026-09-26 支付事件兼容重发更新行数闭合
+
+支付事件兼容重发入口现在要求状态更新恰好影响一行；多行更新不再被当作重发成功，也不会继续写入重发审计。新增兼容重发多行更新测试，`PaymentEventServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.252 2026-09-26 支付预付单状态更新行数闭合
+
+支付提交将预付单置为支付中的条件更新现在区分 0 行竞态与异常多行结果；0 行仍按已有并发提交状态回查，多行或非法负数立即失败，不再被误判为支付处理中。新增预付单状态多行更新测试，`PaymentServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.253 2026-09-26 退款事件尝试状态写入行数闭合
+
+退款事件派发在失败或未知结果分支中现在要求退款尝试状态更新及未知渠道事实写入恰好影响一行；写入未实际生效时不再继续推进事件失败、未知或成功状态。新增退款尝试失败状态多行更新测试，`PaymentEventDispatchServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.254 2026-09-26 支付回调与主动查单状态更新行数闭合
+
+支付成功回调、待处理回调和主动查单成功收口现在区分 0 行并发竞态与异常多行结果；0 行继续回查最新状态，多行更新立即失败，不再被当作并发幂等收口。新增主动查单成功多行更新测试，`PaymentServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.255 2026-09-26 支付渠道受理绑定行数闭合
+
+支付渠道提交结果绑定现在区分 0 行并发回查与异常多行结果；多行更新立即失败，不再继续读取支付终态并写入返回码、尝试和事件事实。新增渠道受理绑定多行更新测试，`PaymentServiceImplTest` 与 payment-core 全量回归通过。
+
+### 9.256 2026-09-26 跨系统支付退款对账 happy-path 实际通过
+
+在本地已启动的 payment-core、清分、结算、账务、退款中心和对账服务上执行 `node tools/dev/cross-system-happy-path.mjs`，完成预付、支付提交、微信回调成功、支付事件派发、清分、结算、账务入账、退款审批提交、退款回调成功、退款事件幂等派发及对账事实闭环。订单 `LOCAL-HAPPY-1790424571804-30912` 对应支付单 `PAY17904245718575c4591e5`、清分单 `CLO20017`、结算单 `SLT20019`、退款单 `REF20260926200932754`；对账链路为 `COMPLETED`，完成阶段数 `4/4`，`financialCloseable=true`。同时将脚本默认本机地址统一为 `localhost`，兼容 Java 仅监听 IPv6 回环地址的本地运行环境。
+
+### 9.257 2026-09-26 用户端 API 默认地址与本地栈代理闭合
+
+用户端 API client、App/H5/PC Vite 代理、小程序默认配置及本地栈 payment-core 代理统一使用 `localhost:18081`；保留环境变量和命令行显式地址覆盖。这样在 Java 仅监听 IPv6 回环地址的本地环境中，用户支付端不会因 `127.0.0.1` 连接失败。`payment-core-user-regression.mjs` 实际通过：API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、小程序 `21/21`，App/H5/PC 生产构建全部通过。
+
+### 9.258 2026-09-26 DLQ 补偿 smoke 默认地址闭合
+
+死信补偿 smoke 的 RabbitMQ 管理端、payment-core、账务、结算和清分默认地址统一使用 `localhost`，避免 IPv6-only 本地服务被 `127.0.0.1` 误判为不可用。DLQ smoke 契约测试实际通过 `7/7`，覆盖支付成功/清分生成重放、人工结案、业务键提取和输入校验。
+
+### 9.259 2026-09-26 DLQ 重放失败状态更新行数闭合
+
+死信重放发送异常或重放状态收口异常时，现在要求 `REPLAY_FAILED` 状态更新恰好影响一行；零行或多行不会再返回可能仍处于 `REPLAYING` 的任务，并保留原始重放异常为 suppressed cause。新增失败状态零行回归，`PaymentDeadLetterTaskServiceImplTest` 定向 `23/23` 通过。
+
+### 9.260 2026-09-26 退款查单限流拒绝事实写入行数闭合
+
+退款渠道查单触发共享限流时，现在要求拒绝事实写入恰好影响一行；写入零行或多行时返回明确的拒绝事实落库失败，不再继续以未审计的限流结果结束请求。新增拒绝事实零行回归，`RefundChannelQueryRateLimitServiceImplTest` 定向 `4/4` 通过。
+
+### 9.261 2026-09-26 退款查单限流修复后 payment-core 全量回归
+
+本轮修复后执行 `node tools/dev/backend-regression.mjs --only payment-core`，实际输出权威标记 `[backend-regression] 1/1 backend modules passed`；过程中预期异常分支日志均由既有测试触发，未产生失败或错误退出。
+
+### 9.262 2026-09-26 支付提交限流获取行数闭合
+
+支付提交共享限流桶现在区分零行限流、恰好一行成功和异常多行结果；多行获取不会再误放行支付请求。新增接口限流获取多行回归，`PaymentSubmitRateLimitServiceImplTest` 定向 `5/5` 通过；修复后 payment-core 全量回归权威标记为 `[backend-regression] 1/1 backend modules passed`。
+
+### 9.263 2026-09-26 支付渠道查单限流获取行数闭合
+
+支付渠道主动查单共享限流桶现在区分零行限流、恰好一行成功和异常多行结果；多行获取不会再误放行渠道查单。新增查单限流获取多行回归，`PaymentChannelQueryRateLimitServiceImplTest` 定向 `6/6` 通过；修复后 payment-core 全量回归权威标记为 `[backend-regression] 1/1 backend modules passed`。
+
+### 9.264 2026-09-26 告警回执查单限流获取行数闭合
+
+告警供应商回执查单共享限流桶现在区分零行限流、恰好一行成功和异常多行结果；多行获取不会再误放行回执查询。新增告警回执查单限流获取多行回归，`PaymentIssueAlertReceiptQueryRateLimitServiceImplTest` 定向 `6/6` 通过。
+
+### 9.265 2026-09-26 退款查单限流获取行数闭合
+
+退款渠道查单共享限流桶现在区分零行限流、恰好一行成功和异常多行结果；多行获取不会再误放行退款查单，同时保留拒绝事实写入恰好一行保护。新增查单限流获取多行回归，`RefundChannelQueryRateLimitServiceImplTest` 定向 `5/5` 通过。
+
+### 9.266 2026-09-26 后端本地 HTTP 默认地址 IPv6 兼容
+
+payment-core 后端 gateway-access 支付提交、支付查单、退款提交、退款查单，以及清分、账务、风控和运营配置 HTTP 下游默认地址统一使用 `localhost`；保留环境变量显式地址覆盖，并同步事件派发器内置 fallback。新增本地 HTTP 默认地址配置契约测试，定向配置测试通过；随后执行 payment-core 后端全量回归，权威标记为 `[backend-regression] 1/1 backend modules passed`。数据库和 RabbitMQ 默认连接地址未在本轮改变。
+
+### 9.267 2026-09-26 管理端代理与本地栈 IPv6 默认地址闭合
+
+11 个非 payment-core 管理端 Vite 代理默认 API target、`local-stack.sh` 管理端 API target，以及本地栈前端监听和 backend/frontend/proxy 健康检查地址统一使用 `localhost`；所有环境变量覆盖和端口保持不变。执行 `node tools/dev/frontend-admin-regression.mjs` 实际通过 `12/12 admin apps passed test and build`，并通过 `bash -n tools/dev/local-stack.sh` 与 `git diff --check`。本轮只修复本地开发和受控联调地址选择，不改变各系统业务接口或生产部署配置。
+
+### 9.268 2026-09-26 支付管理端跨应用导航 IPv6 默认地址闭合
+
+支付管理端系统目录、收银台链接、退款进度链接和对账链路诊断链接的默认地址统一使用 `localhost`，保留 `VITE_*_BASE_URL` 显式覆盖。支付管理端前端测试实际通过 `72/72`，生产构建通过；此前已通过的管理端 `12/12` 回归基线不受影响。该项保证 IPv6-only 本地环境下从运营后台点击跨应用入口不会回到不可达的 `127.0.0.1` 地址。
+
+### 9.269 2026-09-26 跨系统退款账务与风控配置默认地址 IPv6 兼容
+
+退款中心向账务系统派发退款成功事实、风控中心读取运营配置有效快照的默认 HTTP 地址统一使用 `localhost`，保留 `REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_URL` 和 `RISK_CONTROL_OPS_CONFIG_SNAPSHOT_URL` 显式覆盖。新增两个 YAML 配置契约测试并分别通过；本轮修复跨系统 HTTP 默认地址，不改变事件结构、账务科目或风控策略语义。
+
+### 9.270 2026-09-26 本地数据库与 RabbitMQ 默认地址 IPv6 兼容
+
+payment-core 的 MySQL 与 RabbitMQ 默认地址，以及清分、结算、账务三个 RabbitMQ 默认地址统一使用 `localhost`，保留现有环境变量覆盖。新增 `tools/dev/local-infrastructure-defaults.test.mjs` 配置契约测试并通过；payment-core 后端全量回归实际通过，权威标记为 `[backend-regression] 1/1 backend modules passed`。本轮只修复本地基础设施地址选择，不改变数据库 schema、RabbitMQ 拓扑或消息契约。
+
+### 9.271 2026-09-26 跨系统 happy-path 失败端点诊断闭合
+
+跨系统 happy-path 请求层此前在目标服务未启动时只输出裸 `fetch failed`，无法定位具体依赖。本轮为请求异常补充 URL、原始错误和服务可达性提示，并将脚本主入口隔离以支持单元测试；新增 `cross-system-happy-path.test.mjs` 定向 `2/2` 通过。停止本地栈时实际输出已明确指向 `http://localhost:18081/api/payments/prepay`；跨系统成功链路仍需在本地服务启动后执行，不将未启动状态误报为业务回归。
+
+### 9.272 2026-09-26 完整本地栈跨系统 happy-path 实际通过
+
+执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`，12 个后端和 15 个前端端点全部 `READY`，HTTP 冒烟通过；随后实际完成支付提交、微信回调、支付事件、清分、结算、账务入账、退款审批/回调、退款事件幂等派发和对账链路。结果为 reconciliation `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`；本次生成订单 `LOCAL-HAPPY-1790429187235-38863`、支付单 `PAY1790429187285abdde8c2`、清分单 `CLO20019`、结算单 `SLT20021`、退款单 `REF20260926212627853`。验证结束后本地栈前端进程已由脚本清理。
+
+### 9.273 2026-09-26 全仓后端回归通过
+
+执行 `node tools/dev/backend-regression.mjs`，payment-core、gateway-access、清分、结算、账务、退款、对账、风控、运营配置、保证金、钱包账户和钱包共 `12/12 backend modules passed`。测试过程中的故障注入异常均为既有断言路径，未形成失败退出；该结果补齐了本轮默认地址和跨系统 happy-path 变更后的全仓后端回归证据。
+
+### 9.274 2026-09-26 小程序支付请求超时契约闭合
+
+微信小程序支付请求此前只对平台返回的超时错误做分类，但未显式设置请求超时时间，实际行为依赖开发者工具或运行平台默认值。本轮为所有小程序支付请求统一设置 `10000ms` 超时，并在请求回归中断言该选项；小程序用户端回归通过，其他用户端 API 与构建基线不受影响。
+
+### 9.275 2026-09-26 自动任务租约更新行数闭合
+
+自动任务租约获取和续期此前只判断影响行数大于零，异常多行结果可能被误当作有效租约并继续执行或续期。本轮统一要求获取、续期恰好影响一行，新增获取多行和续期多行回归；payment-core 后端定向回归通过，其他任务执行语义不变。
+
+### 9.276 2026-09-26 自动任务租约释放异常可观测
+
+自动任务租约释放此前忽略影响行数，租约因并发丢失、数据库异常或异常多行结果未释放时没有运营信号。本轮在释放未恰好影响一行时记录结构化告警，同时保留关闭幂等和不向任务主流程抛出清理异常的行为；新增释放多行回归，payment-core 后端定向回归通过。
+
+### 9.277 2026-09-26 管理端导出窗口安全属性统一
+
+管理端导出入口此前有部分窗口仅设置 `noopener`，未统一阻断来源引用信息。本轮将全部 `window.open` 导出入口统一为 `noopener,noreferrer`，新增静态安全契约测试；payment-core 管理端前端回归通过，不改变导出 URL、筛选条件或 CSV 内容。
+
+### 9.278 2026-09-26 当前 HEAD 完整本地栈 happy-path 复验
+
+执行 `HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all`，复用的 12 个后端及启动的 15 个前端/代理端点全部 `READY`，HTTP 冒烟通过。跨系统脚本实际完成支付提交、微信成功回调、支付事件派发、清分、结算、账务入账、退款审批/提交/成功回调、退款成功事件幂等派发和对账事实查询。
+
+本次运行生成：订单 `LOCAL-HAPPY-1790432908315-45284`、支付单 `PAY1790432908361bfa36835`、支付事件 `EVT1790432908461bc76377a`、清分单 `CLO20020`、结算单 `SLT20022`、退款单 `REF20260926222828988`、退款事件 `REVT-6c302963926b4052a29ae4072b83c949`。对账链路返回 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`；脚本结束后启动的前端进程已统一清理。
+
+该结果证明当前受控本地 H2/demo/HTTP 骨架可完成跨系统联调，不替代真实渠道、RabbitMQ/DLQ、生产 MySQL、资金到账、正式审批或发布放行证据。
+
+### 9.279 2026-09-26 用户端支付主流程回归
+
+执行 `node tools/dev/payment-core-user-regression.mjs`，API client `10/10`、App `27/27`、H5 `2/2`、PC `2/2`、微信小程序 `21/21` 通过；App、H5、PC 生产构建通过，小程序和 API client 按工程约定无 build script。覆盖预付单、收银台、支付提交、结果刷新、主动查单、受限关单、退款进度、原生支付参数、请求错误分类和竞态防护。
+
+该结果证明当前五类用户端代码契约和构建链路可回归，不替代真实微信/支付宝渠道、真机支付、合法域名、用户登录态、生产资金结果或跨系统运行态证据。
+
+### 9.294 2026-09-27 收银台终端可用支付方式契约闭合
+
+收银台接口此前固定返回微信支付、支付宝和银行卡，用户端只能在响应后按终端过滤，接口本身可能向调用方暴露当前终端不可用的支付方式。本轮新增可选 `terminal` 查询参数；`APP_WEB/H5_WEB/MINI_PROGRAM` 返回微信支付和支付宝，`PC_WEB` 返回支付宝和银行卡，缺省或未知终端保留全量列表以兼容已有内部调用。App、H5、PC 和小程序请求收银台时携带各自终端标识，新增后端终端过滤和前端 URL 契约测试。
+
+该改动只闭合终端展示契约，不证明渠道配置、真实微信/支付宝/银行受理、可信身份或生产渠道可用性已经完成。
+
+### 9.295 2026-09-27 收银台渠道展示跟随生效控制策略
+
+上一轮终端过滤仍是固定支付方式集合，未消费 payment-core 已生效的来源应用控制策略；运营关闭某个支付方式后，收银台可能仍展示该方式。本轮已知终端先按来源应用读取生效控制策略，并只返回策略允许的微信支付、支付宝或银行卡；无生效策略时保留终端默认集合，兼容历史内部调用。新增 PC 策略收紧回归测试，并保留未知终端的兼容回退。
+
+该改动只同步收银台展示与本地生效策略，不替代真实渠道健康检查、可信身份权限、生产配置发布或真实资金受理验证。
+
+### 9.280 2026-09-26 全量管理端回归复核
+
+执行 `node tools/dev/frontend-admin-regression.mjs`，12 个管理端应用全部通过测试与生产构建，权威标记为 `12/12 admin apps passed test and build`。本轮新增导出下载超时保护后的关键结果包括：payment-core `73/73`、accounting `10/10`、clearing `10/10`、reconciliation `11/11`、refund-center `11/11`、risk-control `9/9`、ops-config `9/9`、gateway-access `9/9`、settlement `11/11`、wallet-account `10/10`、wallet-system `6/6`，以及 deposit `7/7`。
+
+该结果证明管理端请求和导出生命周期改动未破坏现有页面契约与构建，不替代真实身份权限、生产网络、渠道、资金事实或发布治理验收。
+
+### 9.281 2026-09-26 payment-core 后端全量回归复核
+
+执行 `node tools/dev/backend-regression.mjs --only payment-core`，payment-core 后端模块通过，权威标记为 `[backend-regression] 1/1 backend modules passed`。测试输出中的异常、回滚和租约释放告警均来自预期故障注入或回归路径，未形成失败退出。
+
+该结果复核当前支付核心工作树的后端测试基线，不替代真实支付渠道、生产 MySQL/RabbitMQ、资金到账、正式身份权限或发布治理验收。
+
+### 9.282 2026-09-26 全仓后端回归复核
+
+执行 `node tools/dev/backend-regression.mjs`，payment-core、gateway-access、清分、结算、账务、退款、对账、风控、运营配置、保证金、钱包账户和钱包共 `12/12 backend modules passed`。测试输出中的异常、回滚和租约释放告警均来自预期故障注入或回归路径，未形成失败退出。
+
+该结果验证当前工作树的跨模块后端回归基线，不替代真实渠道、生产 MySQL/RabbitMQ、资金到账、正式身份权限或发布治理验收。
+
+### 9.283 2026-09-26 用户支付过期预付单请求时闭合
+
+收银台展示和支付提交此前主要依赖定时失效任务；本轮新增基于数据库 `NOW()` 的请求时校验，仅针对仍为 `PREPAY_CREATED` 且收银台未提交的过期预付单生效。收银台返回“已失效”，提交返回 `PAYMENT-1068`，已提交待回调或已完成支付不受影响。新增收银台展示和提交拒绝回归；`PaymentServiceImplTest` 定向回归通过，payment-core 全量回归权威标记为 `[backend-regression] 1/1 backend modules passed`。
+
+该结果闭合定时任务延迟窗口内的本地支付入口保护，不替代真实渠道、生产数据库时钟一致性、用户身份或正式发布验收。
+
+### 9.284 2026-09-26 用户端收银台服务端过期状态闭合
+
+收银台前端此前主要依据本地 `expiresAt` 倒计时判断可提交和可关闭；当服务端已返回“已失效”而客户端时钟尚未到期时，页面可能错误保留提交入口，且无法执行仍然允许的未提交关单。本轮将服务端“已失效”纳入提交阻断、风险提示和本地关单状态判断，并补充前端契约回归。`node tools/dev/payment-core-user-regression.mjs` 实际通过 `5/5 user apps passed their declared checks`，其中 app-web `28/28`，构建通过。
+
+该结果闭合用户端展示与服务端过期事实的状态一致性，不替代真实浏览器时钟、渠道受理、用户身份或生产发布验收。
+
+### 9.285 2026-09-26 小程序收银台过期状态视觉闭合
+
+微信小程序收银台此前虽已阻止过期预付单提交，但将服务端 `danger` 状态统一渲染为普通告警样式，用户难以区分“已失效”和一般待支付状态。本轮增加服务端收银台状态到视觉类名的明确映射，保留成功、危险和普通告警三类展示；新增小程序状态样式契约测试，`npm test` 通过 `22/22`，随后用户端矩阵通过 `5/5 user apps passed their declared checks`。
+
+该结果改善小程序状态反馈一致性，不替代真实微信基础库、原生支付、合法域名、用户身份或生产发布验收。
+
+### 9.293 2026-09-26 小程序原生支付调用事实闭合
+
+微信小程序收银台此前在提交响应缺少 `timeStamp / nonceStr / package / signType / paySign` 时仍会跳转结果页，可能让用户误以为已经发起实际支付。本轮要求 `wx.requestPayment` 返回 `invoked=true` 后才允许跳转结果页；缺少原生参数时明确报错并回收银台状态，新增原生调用成功、缺失参数和空结果回归。
+
+### 9.292 2026-09-26 小程序支付令牌受控注入
+
+微信小程序支付工具此前将本地 demo 访问令牌直接写入业务模块，生产发布包可能携带示例凭证。本轮改为从 `app.js` 的 `globalData.paymentAccessToken` 读取，仓库默认空值；提交前缺少令牌时明确阻断并提示配置，新增已配置和缺失两种回归。README 同步说明真实环境必须由受控配置、用户登录态和安全后端注入。
+
+### 9.291 2026-09-26 用户入口令牌生产构建隔离
+
+App/H5/PC 业务入口此前将本地 demo 访问令牌直接写入前端配置，生产构建会携带静态令牌。本轮改为读取 `VITE_PAYMENT_ACCESS_TOKEN_APP/H5/PC` 环境注入值，只有 Vite 开发模式允许 demo 回退，生产模式缺少配置时按未注入处理；新增配置解析测试。该改动不替代真实用户身份、短时令牌签发和生产密钥托管。
+
+### 9.290 2026-09-26 用户端退款进度瞬时失败续轮询
+
+退款进度页此前自动刷新遇到一次网络或接口异常后直接停止轮询，处理中退款可能停留在旧状态，用户只能手动刷新。本轮让自动失败在请求仍属于当前退款单、状态未进入终态且未超过 5 次上限时继续调度；手动刷新仍直接展示错误，终态不继续轮询。新增轮询重试条件单测。
+
+### 9.289 2026-09-26 重复支付提交仍执行访问控制
+
+支付提交接口此前在支付单已进入待回调、成功、关闭或风控终态时提前返回当前预付单，绕过来源应用、渠道和访问令牌校验。虽然不会重复下单，但未授权请求仍可利用提交接口读取结果。本轮将状态复用移动到路由和提交控制策略校验之后，保留幂等复用行为并新增无效访问令牌回归；`PaymentServiceImplTest` 定向回归通过。
+
+### 9.288 2026-09-26 跨系统 Happy-Path 结算审批状态校验
+
+跨系统 happy-path 此前只确认结算单已生成，未校验结算状态、审核状态和出款状态，可能把已绕过审批或已错误出款的结果当作链路成功。本轮新增结算草稿契约：必须为“待审核 / 待审核 / 待出款”，并补充通过与越权状态失败测试；脚本仍继续由对账链路验证后续事实收口。
+
+### 9.287 2026-09-26 管理端日终触发结果事实化
+
+支付日终管理页此前在接口成功返回后固定提示“已触发”，没有展示返回批次的 `COMPLETED/WARNING` 状态和对账准入结论，可能将存在未收口风险的日终批次误认为已完成。本轮根据服务端返回的最近业务日、批次状态和对账准入状态生成事实化提示；`WARNING` 明确提示继续处理告警，未知字段降级为要求核对最近批次。新增三种结果状态单测。
+
+### 9.286 2026-09-26 PC 收银台二维码联调占位防误用
+
+PC 收银台此前根据支付单信息拼接随机二维码图案和“支付载荷”，虽然标注为模拟载体，仍可能被误认为真实渠道支付凭证。本轮改为明确的不可扫码联调占位，仅在当前收银台快照有效且允许提交时展示；已失效、已提交、已关闭或无效快照统一显示状态提示，并保留支付单号、渠道编码和主动查单入口。新增 PC 占位显示条件契约测试，真实渠道二维码接入仍作为生产差距保留。
+
+### 9.296 2026-09-27 严格控制策略自检失败时关闭收银台渠道展示
+
+收银台此前即使读取到来源应用的生效渠道策略，在严格模式自检状态为 `WARNING` 或其他非 `PASS` 时仍会展示支付方式；用户选择后才在支付提交阶段被策略拒绝。本轮与提交门禁统一口径：严格模式且自检未通过时返回空渠道列表，前端展示“暂无可用支付方式”，避免引导用户进入必然失败的提交流程。新增严格模式自检失败回归测试。
+
+该改动只闭合本地控制策略与收银台展示的一致性，不代表渠道真实健康检查、生产配置发布或用户身份权限已完成。
+
+### 9.297 2026-09-27 管理端任务动作结果计数校验
+
+任务中心人工动作此前直接将响应交给页面；当后端返回空对象或缺少计数时，页面可能提示“执行完成：处理 0 条”，掩盖无法确认的真实结果。本轮为全部任务动作统一要求 `processedCount/successCount/warningCount/failCount` 为非负整数，非法响应进入任务失败提示，不再伪造成功事实。新增管理端 API client 回归测试。
+
+该改动只强化前端事实确认，不替代后端任务运行日志、数据库提交结果、消息投递或生产运维权限证据。
+
+### 9.298 2026-09-27 跨系统 Happy-Path 退款审批状态校验
+
+跨系统 happy-path 此前只检查退款接口返回成功码和最终 `SUCCESS`，没有验证退款审批与渠道提交阶段是否真的经过 `APPROVED -> PROCESSING`。本轮新增中间状态契约：审批响应必须为 `APPROVED`，渠道提交响应必须为 `PROCESSING`，否则脚本立即失败；新增对应工具函数测试。
+
+该结果强化本地退款流程状态证据，不代表真实退款渠道受理、资金到账、生产凭证或财务核验已经完成。
+
+### 9.299 2026-09-27 跨系统 Happy-Path 支付账务台账校验
+
+跨系统 happy-path 此前验证了账务 `PAYMENT_SUCCESS` 事件，但未直接验证支付成功事件生成唯一贷方台账。本轮新增 `PAYMENT_SUCCESS_EVENT` 台账查询，要求指定支付单恰好生成一条贷方流水；退款成功继续要求唯一借方流水，新增通用台账断言测试。
+
+该结果强化本地账务分录证据，不代表生产账户、真实资金到账、财务核销或正式关账已完成。
+
+### 9.300 2026-09-27 跨系统 Happy-Path 清分结算金额一致性校验
+
+跨系统 happy-path 此前验证清分和结算状态，但没有确认支付金额经过清分后仍正确传递到结算。​本轮要求清分 `orderAmount` 等于本次支付金额 `¥88.00`，并要求清分 `workerAmount` 与结算 `netSettleAmount` 完全一致，新增金额错配回归测试。
+
+该结果只证明本地金额字段传递和格式化口径一致，不代表生产费率、真实资金分账、结算出款或财务核销已完成。
+
+### 9.301 2026-09-27 管理端退款动作响应归属校验
+
+退款管理端审核、主动查单和失败重试此前直接使用接口响应更新当前详情或列表，未确认响应中的退款单号与操作目标一致。​本轮统一要求响应包含目标 `refundOrderId` 和非空状态，错单或结构异常进入失败提示，不再覆盖当前退款快照。新增退款动作响应归属回归测试。
+
+该改动只强化管理端动作事实归属，不替代后端状态机、可信操作人权限、真实退款渠道或资金到账证据。
+
+### 9.302 2026-09-27 管理端支付动作响应归属校验
+
+支付管理端主动查单和人工关单此前直接使用接口响应更新当前支付单快照，未确认响应中的支付单号与操作目标一致。本轮统一要求响应包含目标 `paymentOrderId` 和非空状态，错单或结构异常进入失败提示，新增支付动作响应归属回归测试。
+
+该改动只强化管理端动作事实归属，不替代后端人工权限、支付状态机、真实渠道查单或关单事实。
+
+### 9.303 2026-09-27 管理端退款申请响应事实校验
+
+退款申请接口此前未复用退款动作响应校验，空响应或缺少退款单号时仍可能被页面提示为“申请已受理”。本轮要求申请、审核、查单和重试响应均包含非空 `refundOrderId` 与状态；新增缺少退款单号回归测试。
+
+该改动只强化管理端退款申请展示事实，不替代后端退款幂等、审批状态机、真实渠道受理或资金到账证据。
+
+### 9.304 2026-09-27 渠道启停申请响应事实校验
+
+支付配置管理端的渠道启停申请此前将空响应归一化为数组后仍提示“申请已提交”，无法确认后端是否实际生成申请记录。本轮仅对渠道启停写操作要求返回至少一条申请记录；空或非法响应进入失败提示，查询接口仍保留空集合语义。新增 API client 回归测试。
+
+该改动只强化运营配置申请的前端事实确认，不替代后端复核审批、配置发布、渠道健康检查或生产权限证据。
+
+### 9.305 2026-09-27 支付渠道复核申请响应事实校验
+
+渠道配置页的新增/修改渠道提交复核此前仍可能将空响应提示为“已提交复核”。本轮复用非空申请记录校验，要求渠道复核申请返回至少一条申请记录；异常响应进入失败提示，新增对应 API client 回归覆盖。
+
+该改动只强化配置申请事实确认，不替代后端审批、版本发布、渠道探活或生产权限证据。
+
+### 9.306 2026-09-27 路由规则启停申请响应事实校验
+
+支付配置管理端的路由规则启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求路由规则启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化路由规则运营申请的前端事实确认，不替代后端复核审批、规则发布、路由生效或生产权限证据。
+
+### 9.307 2026-09-27 支付协议启停申请响应事实校验
+
+支付配置管理端的支付协议启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付协议启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付协议运营申请的前端事实确认，不替代后端复核审批、协议发布、协议可用性或生产权限证据。
+
+### 9.308 2026-09-27 路由规则复核申请响应事实校验
+
+支付配置管理端的路由规则新增/修改复核申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求路由规则复核提交返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化路由规则配置申请的前端事实确认，不替代后端复核审批、冲突校验、规则发布或生产权限证据。
+
+### 9.309 2026-09-27 支付协议复核申请响应事实校验
+
+支付配置管理端的支付协议新增/修改复核申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付协议复核提交返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付协议配置申请的前端事实确认，不替代后端复核审批、协议发布、协议可用性或生产权限证据。
+
+### 9.310 2026-09-27 支付网关启停申请响应事实校验
+
+支付配置管理端的支付网关启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付网关启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付网关运营申请的前端事实确认，不替代后端复核审批、网关探活、证书校验或生产权限证据。
+
+### 9.311 2026-09-27 支付网关复核申请响应事实校验
+
+支付配置管理端的支付网关新增/修改复核申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付网关复核提交返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付网关配置申请的前端事实确认，不替代后端复核审批、证书校验、网关探活或生产权限证据。
+
+### 9.312 2026-09-27 支付控制策略启停申请响应事实校验
+
+支付配置管理端的支付控制策略启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付控制策略启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付控制策略运营申请的前端事实确认，不替代后端复核审批、自检结果、策略发布或生产权限证据。
+
+### 9.313 2026-09-27 支付控制策略复核申请响应事实校验
+
+支付配置管理端的支付控制策略新增/修改复核申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付控制策略复核提交返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付控制策略配置申请的前端事实确认，不替代后端复核审批、自检结果、策略发布或生产权限证据。
+
+### 9.314 2026-09-27 支付返回码启停申请响应事实校验
+
+支付配置管理端的支付返回码启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付返回码启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付返回码运营申请的前端事实确认，不替代后端复核审批、映射校验、配置发布或生产权限证据。
+
+### 9.315 2026-09-27 支付返回码导入复核申请响应事实校验
+
+支付配置管理端的支付返回码导入复核申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付返回码导入复核提交返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付返回码导入运营申请的前端事实确认，不替代后端预览校验、复核审批、映射发布或生产权限证据。
+
+### 9.316 2026-09-27 支付值班路由启停申请响应事实校验
+
+支付配置管理端的支付值班路由启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付值班路由启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付值班路由运营申请的前端事实确认，不替代后端复核审批、值班规则校验、配置发布或生产权限证据。
+
+### 9.317 2026-09-27 支付值班路由新增申请响应事实校验
+
+支付配置管理端的支付值班路由新增申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成配置申请。本轮复用非空申请记录校验，要求支付值班路由新增申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付值班路由新增申请的前端事实确认，不替代后端字段校验、复核审批、路由生效或生产权限证据。
+
+### 9.318 2026-09-27 支付告警供应商启停申请响应事实校验
+
+支付配置管理端的支付告警供应商启停申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成复核申请。本轮复用非空申请记录校验，要求支付告警供应商启停申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付告警供应商运营申请的前端事实确认，不替代后端复核审批、供应商连通性校验、配置发布或生产权限证据。
+
+### 9.319 2026-09-27 支付告警供应商新增申请响应事实校验
+
+支付配置管理端的支付告警供应商新增申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成配置申请。本轮复用非空申请记录校验，要求支付告警供应商新增申请返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付告警供应商新增申请的前端事实确认，不替代后端字段校验、复核审批、连通性校验或生产权限证据。
+
+### 9.320 2026-09-27 支付告警供应商修改申请响应事实校验
+
+支付配置管理端的支付告警供应商修改申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成配置申请。本轮要求修改接口返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付告警供应商修改申请的前端事实确认，不替代后端字段校验、复核审批、连通性校验或生产权限证据。
+
+### 9.321 2026-09-27 支付值班路由修改申请响应事实校验
+
+支付配置管理端的支付值班路由修改申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成配置申请。本轮要求修改接口返回至少一条申请记录；异常响应进入失败提示，查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付值班路由修改申请的前端事实确认，不替代后端字段校验、复核审批、路由生效或生产权限证据。
+
+### 9.322 2026-09-27 支付渠道回滚申请响应事实校验
+
+支付配置管理端的支付渠道版本回滚申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成回滚复核申请。本轮要求回滚接口返回至少一条申请记录；异常响应进入失败提示，版本查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付渠道回滚申请的前端事实确认，不替代后端版本基线校验、复核审批、渠道探活或生产发布权限证据。
+
+### 9.323 2026-09-27 支付网关回滚申请响应事实校验
+
+支付配置管理端的支付网关版本回滚申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成回滚复核申请。本轮要求回滚接口返回至少一条申请记录；异常响应进入失败提示，版本查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付网关回滚申请的前端事实确认，不替代后端版本基线校验、复核审批、证书校验或生产发布权限证据。
+
+### 9.324 2026-09-27 支付协议回滚申请响应事实校验
+
+支付配置管理端的支付协议版本回滚申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成回滚复核申请。本轮要求回滚接口返回至少一条申请记录；异常响应进入失败提示，版本查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付协议回滚申请的前端事实确认，不替代后端版本基线校验、复核审批、协议可用性或生产发布权限证据。
+
+### 9.325 2026-09-27 支付控制策略回滚申请响应事实校验
+
+支付配置管理端的支付控制策略版本回滚申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成回滚复核申请。本轮要求回滚接口返回至少一条申请记录；异常响应进入失败提示，版本查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付控制策略回滚申请的前端事实确认，不替代后端版本基线校验、自检结果、复核审批或生产发布权限证据。
+
+### 9.326 2026-09-27 支付路由规则回滚申请响应事实校验
+
+支付配置管理端的支付路由规则版本回滚申请此前仍可能将空响应提示为“申请已提交”，无法确认后端是否实际生成回滚复核申请。本轮要求回滚接口返回至少一条申请记录；异常响应进入失败提示，版本查询接口仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付路由规则回滚申请的前端事实确认，不替代后端版本基线校验、冲突校验、复核审批或生产发布权限证据。
+
+### 9.327 2026-09-27 支付路由规则复核通过响应事实校验
+
+支付配置管理端的支付路由规则复核通过动作此前仍可能将空响应提示为“已通过并应用”，无法确认后端是否实际完成复核处理。本轮要求复核通过接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付路由规则复核动作的前端事实确认，不替代后端冲突校验、可信复核身份、规则发布或生产权限证据。
+
+### 9.328 2026-09-27 支付路由规则复核驳回响应事实校验
+
+支付配置管理端的支付路由规则复核驳回动作此前仍可能将空响应提示为“已驳回”，无法确认后端是否实际完成复核处理。本轮要求复核驳回接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付路由规则复核驳回动作的前端事实确认，不替代后端冲突校验、可信复核身份、规则状态机或生产权限证据。
+
+### 9.329 2026-09-27 支付协议复核通过响应事实校验
+
+支付配置管理端的支付协议复核通过动作此前仍可能将空响应提示为“已通过并应用”，无法确认后端是否实际完成复核处理。本轮要求复核通过接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付协议复核通过动作的前端事实确认，不替代后端版本校验、可信复核身份、协议发布或生产权限证据。
+
+### 9.330 2026-09-27 支付控制策略复核通过响应事实校验
+
+支付配置管理端的支付控制策略复核通过动作此前仍可能将空响应提示为“已通过并应用”，无法确认后端是否实际完成复核处理。本轮要求复核通过接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付控制策略复核通过动作的前端事实确认，不替代后端自检、可信复核身份、策略发布或生产权限证据。
+
+### 9.331 2026-09-27 支付协议复核驳回响应事实校验
+
+支付配置管理端的支付协议复核驳回动作此前仍可能将空响应提示为“已驳回”，无法确认后端是否实际完成复核处理。本轮要求复核驳回接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付协议复核驳回动作的前端事实确认，不替代后端版本校验、可信复核身份、协议状态机或生产权限证据。
+
+### 9.332 2026-09-27 支付渠道复核通过响应事实校验
+
+支付配置管理端的支付渠道复核通过动作此前仍可能将空响应提示为“已通过并应用”，无法确认后端是否实际完成复核处理。本轮要求复核通过接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付渠道复核通过动作的前端事实确认，不替代后端版本校验、可信复核身份、渠道探活或生产发布权限证据。
+
+### 9.333 2026-09-27 支付渠道复核驳回响应事实校验
+
+支付配置管理端的支付渠道复核驳回动作此前仍可能将空响应提示为“已驳回”，无法确认后端是否实际完成复核处理。本轮要求复核驳回接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付渠道复核驳回动作的前端事实确认，不替代后端版本校验、可信复核身份、渠道状态机或生产权限证据。
+
+### 9.334 2026-09-27 支付配置复核动作响应事实校验
+
+支付配置管理端的值班路由、告警供应商、支付返回码、返回码导入、支付网关及控制策略复核动作此前仍可能将空响应提示为操作成功，无法确认后端是否实际完成复核处理。本轮要求上述十二个通过或驳回接口返回至少一条处理记录；异常响应进入失败提示，待复核查询仍保留空集合语义。新增 API client 空响应回归测试。
+
+该改动只强化支付配置复核动作的前端事实确认，不替代后端版本校验、可信复核身份、渠道探活、策略自检、配置发布或生产权限证据。
+
+### 9.335 2026-09-27 支付异常告警确认响应事实校验
+
+支付异常告警管理端的人工确认动作此前仍可能将空响应提示为“已确认回执”，无法确认后端是否实际更新并返回告警记录。本轮要求确认接口返回对象记录；空响应进入失败提示，并新增 API client 回归测试。
+
+该改动只强化支付异常告警确认动作的前端事实确认，不替代后端告警状态机、操作人身份校验、供应商回执核对或生产权限证据。
+
+### 9.336 2026-09-27 用户支付预付单响应事实校验
+
+用户支付入口此前收到空预付单响应时会在路由跳转阶段触发不稳定的属性错误，无法明确说明支付创建结果不可确认。本轮要求预付接口成功响应包含非空预付单号；异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PREPAY` 错误，并新增 app-web API client 回归测试。
+
+该改动只强化用户支付入口的预付单响应事实确认，不替代后端幂等键、订单状态机、渠道支付或真实资金处理证据。
+
+### 9.337 2026-09-27 跨系统 happy-path 预付单身份前置校验
+
+跨系统本地 happy-path 脚本此前收到缺少预付单号或支付单号的成功响应时，会继续请求包含 `undefined` 标识的下游接口，导致根因被掩盖。本轮在支付创建后立即校验 `prepayOrderNo/paymentOrderId`，并新增脚本单测；不改变真实渠道、消息中间件或跨库生产一致性结论。
+
+### 9.338 2026-09-27 死信补偿动作响应事实校验
+
+支付管理端死信任务的复核、人工结案和重放动作此前仍可能将空响应提示为操作成功，无法确认后端是否实际更新任务状态。本轮要求三个动作返回任务实体；空响应进入稳定的 `PAYMENT-CLIENT-INVALID-DEAD-LETTER-ACTION` 错误，并新增 API client 回归测试。
+
+该改动只强化死信运营动作的前端事实确认，不替代后端状态机、消息代理发布确认、下游消费或真实补偿完成证据。
+
+### 9.339 2026-09-27 告警回执回查响应事实校验
+
+支付异常告警管理端的供应商回执回查动作此前收到空响应时才会在读取结果字段阶段失败，错误信息不稳定。本轮要求回查接口返回对象结果，空响应进入稳定的 `PAYMENT-CLIENT-INVALID-ISSUE-RECEIPT-QUERY` 错误，并新增 API client 回归测试。
+
+该改动只强化告警回执回查的前端事实确认，不替代真实供应商回执、外部网关、可信操作人或生产告警送达证据。
+
+### 9.340 2026-09-27 支付事件重发列表响应事实校验
+
+支付事件管理端重发动作此前收到空响应时会在列表刷新阶段失败，无法明确区分重发接口未返回列表事实与页面刷新异常。本轮要求重发接口返回包含 `items` 数组的分页结果；异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-EVENT-ACTION` 错误，并新增 API client 回归测试。
+
+该改动只强化支付事件重发后的列表事实确认，不替代消息代理发布确认、下游消费、重试策略或生产事件治理证据。
+
+### 9.341 2026-09-27 异常批量处理列表响应事实校验
+
+支付异常管理端的批量分派、跟进和备注动作此前只依据 HTTP 成功提示“已记录”，未校验后端返回的刷新列表；空响应可能掩盖动作结果不可确认。本轮要求批量动作返回包含 `items` 数组的分页结果，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-ISSUE-BATCH-ACTION` 错误，并新增 API client 回归测试。
+
+该改动只强化异常批量处理的前端事实确认，不替代后端逐条状态更新、操作审计、权限校验或生产并发一致性证据。
+
+### 9.342 2026-09-27 日终触发批次结果事实校验
+
+支付日终管理端手动触发此前通过通用对象归一化处理空成功响应，可能将 `{}` 合并进总览并提示日终已返回结果。本轮要求触发接口返回非空 `latestBatchStatus`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-DAY-END-ACTION` 错误，并新增 API client 回归测试。
+
+该改动只强化日终触发结果的前端事实确认，不替代渠道对账、内部账务核对、差异处理或生产批次治理证据。
+
+### 9.343 2026-09-27 支付控制策略自检结果事实校验
+
+支付配置管理端控制策略自检此前通过通用成功响应直接替换配置总览，空对象可能清空页面列表却提示“自检已完成”。本轮要求自检接口返回 `controlPolicies` 数组，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONTROL-POLICY-SELF-CHECK` 错误，并新增 API client 回归测试。
+
+该改动只强化控制策略自检结果的前端事实确认，不替代后端策略评估、可信权限、配置发布或支付提交准入证据。
+
+### 9.344 2026-09-27 路由规则预检结果事实校验
+
+支付配置管理端路由规则表达式预检此前只直接读取返回消息，空成功响应会在页面读取阶段产生不稳定错误，无法区分校验未执行与表达式不命中。本轮要求预检接口返回布尔型 `valid`、`matched` 及非空 `message`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-ROUTE-RULE-VALIDATION` 错误，并新增 API client 回归测试。
+
+该改动只强化路由规则预检结果的前端事实确认，不替代后端规则冲突检测、正式复核、生产灰度或真实网关探活证据。
+
+### 9.345 2026-09-27 返回码导入预检结果事实校验
+
+支付返回码导入预检此前只直接接受接口响应，空响应或缺少基线指纹、计数和逐行结果时会在提交或展示阶段才失败。本轮要求预检接口返回完整的基线指纹、有效性、应用状态、计数和 `items` 数组，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-RETURN-CODE-IMPORT-PREVIEW` 错误，并新增 API client 回归测试。
+
+该改动只强化返回码导入预检的前端事实确认，不替代后端 CSV 解析、并发基线复验、审批复核或真实渠道码表校验。
+
+### 9.346 2026-09-27 完整本地栈跨系统 happy-path 当前批次验证
+
+在当前工作树执行 `bash tools/dev/local-stack.sh verify`，12 个后端和 15 个前端代理全部 READY，HTTP 冒烟通过，并完成支付创建、支付提交、回调收口、支付事件、清分、结算、账务、退款和对账链路。当前批次对账链为 `COMPLETED`，阶段 `4/4`，`financialCloseable=true`；验证结束后脚本已停止本轮启动的前端进程。
+
+该证据证明受控本地 H2/demo/HTTP 栈的当前批次可运行，不替代真实微信/支付宝/银行渠道、生产 MySQL/RabbitMQ、资金到账、可信鉴权或正式发布治理证据。
+
+### 9.347 2026-09-27 用户支付提交响应事实校验
+
+用户收银台提交支付此前仍由页面层检查响应身份，API client 收到空成功响应时无法立即给出稳定错误。本轮要求支付提交接口同时返回非空 `prepayOrderNo` 和 `paymentOrderId`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT` 错误，并新增 app-web API client 回归测试。
+
+该改动只强化用户支付提交响应的前端事实确认，不替代后端幂等处理、渠道受理、支付回调或真实资金结果证据。
+
+### 9.348 2026-09-27 小程序支付创建与提交响应事实校验
+
+小程序请求层此前对预付单创建和支付提交的成功响应直接透传，页面层虽有局部字段判断，但空成功响应无法在 API 边界统一识别。本轮为 `prepay` 要求返回非空 `prepayOrderNo`，为 `submit` 要求同时返回非空 `prepayOrderNo` 和 `paymentOrderId`，分别使用稳定错误码 `PAYMENT-MINI-INVALID-PREPAY` 与 `PAYMENT-MINI-INVALID-PAYMENT-SUBMIT`，并补充请求层回归测试。验证结果：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js` 通过（5/5）。
+
+### 9.349 2026-09-27 用户支付查单与关单响应事实校验
+
+用户支付结果页的主动查单和关单此前由页面层检查响应归属，app-web 与小程序请求层会直接透传空成功响应或缺少支付单事实的结果。本轮依据后端 `PaymentDetailDTO` 契约，要求两端的 `query` 与 `close` 响应同时包含非空 `paymentOrderId` 和 `prepayOrderNo`，异常响应分别进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ACTION` 与 `PAYMENT-MINI-INVALID-PAYMENT-ACTION` 错误，并补充两端 API client 回归测试。
+
+验证结果：app-web API 测试通过，小程序完整测试集通过；该改动只强化客户端响应归属校验，不替代渠道查单、关单状态机或真实渠道结果证据。
+
+### 9.350 2026-09-27 用户退款详情响应事实校验
+
+用户退款进度页此前在页面层判断 `refundOrderId` 归属，app-web 与小程序 API 层会直接透传空成功响应。本轮依据后端 `RefundDetailDTO` 契约，要求退款详情响应包含非空 `refundOrderId`，异常响应分别进入稳定的 `PAYMENT-CLIENT-INVALID-REFUND-DETAIL` 与 `PAYMENT-MINI-INVALID-REFUND-DETAIL` 错误，并补充两端 API client 回归测试。
+
+该改动只强化退款进度查询的客户端响应事实确认，不替代退款审核、渠道退款受理、回调收口或真实资金到账证据。
+
+### 9.351 2026-09-27 用户支付详情响应事实校验
+
+用户支付结果页此前在页面层判断 `paymentOrderId` 归属，app-web 与小程序 API 层会直接透传空成功响应。本轮依据后端 `PaymentDetailDTO` 契约，要求支付详情响应包含非空 `paymentOrderId`，异常响应分别进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL` 与 `PAYMENT-MINI-INVALID-PAYMENT-DETAIL` 错误，并补充两端 API client 回归测试。
+
+该改动只强化支付结果详情的客户端响应事实确认，不替代支付状态机、渠道回调、主动查单或真实资金结果证据。
+
+### 9.352 2026-09-27 用户收银台响应事实校验
+
+用户收银台此前在页面层判断 `prepayOrderNo` 是否匹配当前路由，app-web 与小程序 API 层会直接透传空成功响应。本轮依据后端 `CashierPageDTO` 契约，要求收银台响应包含非空 `prepayOrderNo`，异常响应分别进入稳定的 `PAYMENT-CLIENT-INVALID-CASHIER` 与 `PAYMENT-MINI-INVALID-CASHIER` 错误，并补充两端 API client 回归测试。
+
+该改动只强化收银台响应归属的客户端事实确认，不替代预付单有效期、支付方式可用性、风控准入或渠道受理证据。
+
+### 9.353 2026-09-27 用户预付单创建双标识响应校验
+
+后端 `PrepayOrderDTO` 同时包含 `prepayOrderNo` 和 `paymentOrderId`，但两端此前只在 API 边界校验预付单号，支付单创建事实缺失时仍可能继续进入收银台。本轮要求 app-web 与小程序的 `prepay` 响应同时包含两个非空标识，沿用 `PAYMENT-CLIENT-INVALID-PREPAY` 与 `PAYMENT-MINI-INVALID-PREPAY` 错误，并补充缺少支付单号的回归测试。
+
+该改动只强化预付单创建响应事实确认，不替代后端原子创建、幂等复用、订单金额核验或渠道支付受理证据。
+
+### 9.354 2026-09-27 管理端退款详情响应事实校验
+
+管理端退款详情此前仅清洗 `attempts` 和 `operationLogs`，空响应或返回其他退款单时仍由页面层判断。本轮要求 `refundApi.getDetail` 返回非空且匹配请求的 `refundOrderId`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-REFUND-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端退款详情的响应归属确认，不替代退款审核权限、退款状态机、渠道查询或资金到账证据。
+
+### 9.355 2026-09-27 管理端支付详情响应事实校验
+
+管理端支付详情此前由页面层判断 `paymentOrderId` 是否匹配当前路由，API 层会直接透传空响应或其他支付单详情。本轮要求 `paymentApi.getDetail` 返回非空且匹配请求的 `paymentOrderId`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端支付详情的响应归属确认，不替代支付状态机、渠道查单、回调收口或账务事实证据。
+
+### 9.356 2026-09-27 管理端支付记录详情响应事实校验
+
+管理端支付记录详情此前由页面层判断 `paymentOrderId` 是否匹配当前路由，API 层会直接透传空响应或其他支付单记录。本轮要求 `paymentRecordApi.getDetail` 返回非空且匹配请求的 `paymentOrderId`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-RECORD-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化支付记录详情的响应归属确认，不替代账务记录生成、支付状态机或对账事实证据。
+
+### 9.357 2026-09-27 管理端支付事件详情响应事实校验
+
+管理端支付事件详情此前由页面层判断 `eventNo` 是否匹配当前路由，API 层会直接透传空响应或其他事件详情。本轮要求 `paymentEventApi.getDetail` 返回非空且匹配请求的 `eventNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-EVENT-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化支付事件详情的响应归属确认，不替代事件发布状态、重发操作、下游投递或消息可靠性证据。
+
+### 9.358 2026-09-27 管理端支付请求详情响应事实校验
+
+管理端支付请求详情此前由页面层判断 `requestNo` 是否匹配当前路由，API 层会直接透传空响应或其他请求详情。本轮要求 `paymentRequestApi.getDetail` 返回非空且匹配请求的 `requestNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-REQUEST-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化支付请求详情的响应归属确认，不替代支付尝试状态、路由执行、幂等键或渠道请求事实证据。
+
+### 9.359 2026-09-27 管理端支付流水详情响应事实校验
+
+管理端支付流水详情此前由页面层判断 `flowSource` 和 `flowNo` 是否匹配当前路由，API 层会直接透传空响应或其他流水详情。本轮要求 `paymentFlowApi.getDetail` 返回非空且同时匹配请求来源和来源编号，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-FLOW-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化支付流水详情的响应归属确认，不替代过程流水生成、路由事实、渠道回调或事件投递证据。
+
+### 9.360 2026-09-27 管理端支付路由详情响应事实校验
+
+管理端支付路由详情此前由页面层判断 `routeNo` 是否匹配当前路由，API 层会直接透传空响应或其他路由详情。本轮要求 `paymentRouteApi.getDetail` 返回非空且匹配请求的 `routeNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ROUTE-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化支付路由详情的响应归属确认，不替代路由规则评估、运营配置快照、渠道选择或支付提交证据。
+
+### 9.362 2026-09-27 管理端收银会话详情响应事实校验
+
+管理端收银会话详情此前由页面层判断 `sessionNo` 是否匹配当前路由，API 层会直接透传空响应或其他会话详情。本轮要求 `cashierSessionApi.getDetail` 返回非空且匹配请求的 `sessionNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CASHIER-SESSION-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化收银会话详情的响应归属确认，不替代预付单状态、支付尝试、账单关联或订单事实证据。
+
+### 9.361 2026-09-27 完整本地栈跨系统 happy-path 回归验证
+
+在当前工作树执行 `bash tools/dev/local-stack.sh verify`，12 个后端依赖和 15 个前端代理全部 READY，HTTP 冒烟通过，并再次完成支付创建、支付提交、回调收口、支付事件、清分、结算、账务、退款、退款事件和对账链路。当前批次对账链为 `COMPLETED`，阶段 `4/4`，`financialCloseable=true`；验证结束后脚本已停止本轮启动的前端进程。
+
+本次运行生成支付单、支付事件、清分单、结算单、退款单和退款事件事实，账务事件包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账事实覆盖支付成功、清分生成、结算创建、账务入账和退款成功。
+
+该证据证明受控本地 H2/demo/HTTP 栈在本轮客户端契约变更后仍可运行，不替代真实微信/支付宝/银行渠道、生产 MySQL/RabbitMQ、资金到账、可信鉴权或正式发布治理证据。
+
+### 9.363 2026-09-27 管理端订单详情响应事实校验
+
+管理端订单详情此前仅由页面层判断 `orderNo` 是否匹配当前路由，API 层会直接透传空响应或其他订单详情。本轮要求 `orderApi.getDetail` 返回非空且匹配请求的 `orderNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-ORDER-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端订单详情的响应归属确认，不替代订单状态、账单、支付事实或履约状态的后端一致性证据。
+
+### 9.364 2026-09-27 管理端账单详情响应事实校验
+
+管理端账单详情此前仅由页面层判断 `billNo` 是否匹配当前路由，API 层会直接透传空响应或其他账单详情。本轮要求 `billApi.getDetail` 返回非空且匹配请求的 `billNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-BILL-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端账单详情的响应归属确认，不替代账单金额、订单关联、支付事实或账单状态的后端一致性证据。
+
+### 9.365 2026-09-27 管理端支付交易异常详情响应事实校验
+
+管理端支付交易异常详情此前仅由页面层判断 `issueNo` 是否匹配当前路由，API 层会直接透传空响应或其他异常详情。本轮要求 `paymentIssueApi.getDetail` 返回非空且匹配请求的 `issueNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ISSUE-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端异常详情的响应归属确认，不替代异常状态机、责任归属、告警派发或处置动作的后端事实证据。
+
+### 9.366 2026-09-27 管理端支付异常告警详情响应事实校验
+
+管理端支付异常告警详情此前仅由页面层判断 `alertNo` 是否匹配当前路由，API 层会直接透传空响应或其他告警详情。本轮要求 `paymentIssueApi.getAlertDetail` 返回非空且匹配请求的 `alertNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ISSUE-ALERT-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端异常告警详情的响应归属确认，不替代告警状态、供应商投递、回执回查或告警确认动作的后端事实证据。
+
+### 9.367 2026-09-27 管理端支付处理日志详情响应事实校验
+
+管理端支付处理日志详情此前仅由页面层判断 `logNo` 是否匹配当前路由，API 层会直接透传空响应或其他日志详情。本轮要求 `paymentLogApi.getDetail` 返回非空且匹配请求的 `logNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-LOG-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端处理日志详情的响应归属确认，不替代支付处理阶段、来源事实、日志级别或支付状态的后端一致性证据。
+
+### 9.368 2026-09-27 管理端支付任务执行详情响应事实校验
+
+管理端支付任务执行详情此前仅由页面层判断 `taskLogNo` 是否匹配当前路由，API 层会直接透传空响应或其他任务详情。本轮要求 `paymentTaskCenterApi.getTaskRunDetail` 返回非空且匹配请求的 `taskLogNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-TASK-RUN-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端任务执行详情的响应归属确认，不替代任务状态、处理计数、告警升级或重跑动作的后端事实证据。
+
+### 9.369 2026-09-27 管理端支付死信任务详情响应事实校验
+
+管理端支付死信任务详情此前仅由页面层判断 `taskNo` 是否匹配当前路由，API 层会直接透传空响应或其他死信任务详情。本轮要求 `paymentDeadLetterTaskApi.getDetail` 返回非空且匹配请求的 `taskNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-DEAD-LETTER-TASK-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端死信任务详情的响应归属确认，不替代消息重放状态、目标系统、人工处置或补偿结果的后端事实证据。
+
+### 9.370 2026-09-27 管理端支付日终批次详情响应事实校验
+
+管理端支付日终批次详情此前仅由页面层判断 `batchNo` 是否匹配当前路由，API 层会直接透传空响应或其他批次详情。本轮要求 `paymentDayEndApi.getDetail` 返回非空且匹配请求的 `batchNo`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-DAY-END-DETAIL` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端日终批次详情的响应归属确认，不替代日终批次状态、支付成功差异、退款事实或财务可关账判断的后端证据。
+
+### 9.371 2026-09-27 管理端死信任务动作响应事实校验
+
+管理端死信任务的复核、人工结案和重放动作此前仅校验返回对象非空，未确认返回实体是否仍属于请求的 `taskNo`。本轮统一要求三个动作返回非空且匹配请求任务号，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-DEAD-LETTER-ACTION` 错误，并补充匹配与串任务回归测试。
+
+该改动只强化死信动作响应的请求归属确认，不替代重放权限、状态机、人工审批或下游消息投递事实。
+
+### 9.372 2026-09-27 管理端支付异常告警确认动作响应事实校验
+
+管理端支付异常告警确认动作此前仅校验返回对象非空，未确认返回的告警实体是否属于请求的 `alertNo`。本轮要求 `paymentIssueApi.acknowledgeAlert` 返回非空且匹配请求告警号，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-ISSUE-ACTION` 错误，并补充匹配与串告警回归测试。
+
+该改动只强化告警确认响应的请求归属确认，不替代告警确认权限、供应商回执、责任归属或状态收口的后端事实。
+
+### 9.373 2026-09-27 管理端支付渠道复核动作响应事实校验
+
+管理端支付渠道复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充渠道复核串请求回归测试。
+
+该改动只强化渠道复核动作的响应归属确认，不替代审批权限、配置生效、版本发布或渠道连通性证据。
+
+### 9.374 2026-09-27 管理端支付路由规则复核动作响应事实校验
+
+管理端支付路由规则复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充路由规则复核串请求回归测试。
+
+该改动只强化路由规则复核动作的响应归属确认，不替代审批权限、规则冲突预检、配置生效或版本发布证据。
+
+### 9.375 2026-09-27 管理端支付协议复核动作响应事实校验
+
+管理端支付协议复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充支付协议复核串请求回归测试。
+
+该改动只强化支付协议复核动作的响应归属确认，不替代审批权限、协议可用性、配置生效或版本发布证据。
+
+### 9.376 2026-09-27 管理端支付控制策略复核动作响应事实校验
+
+管理端支付控制策略复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充控制策略复核串请求回归测试。
+
+该改动只强化控制策略复核动作的响应归属确认，不替代审批权限、策略预检、自检结果、配置生效或版本发布证据。
+
+### 9.377 2026-09-27 管理端支付告警供应商复核动作响应事实校验
+
+管理端支付告警供应商复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充告警供应商复核串请求回归测试。
+
+该改动只强化告警供应商复核动作的响应归属确认，不替代审批权限、供应商连通性、投递回执或配置生效证据。
+
+### 9.378 2026-09-27 管理端支付返回码复核动作响应事实校验
+
+管理端支付返回码复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充支付返回码复核串请求回归测试。
+
+该改动只强化支付返回码复核动作的响应归属确认，不替代审批权限、返回码语义、导入预检、配置生效或版本发布证据。
+
+### 9.379 2026-09-27 管理端支付返回码导入复核动作响应事实校验
+
+管理端支付返回码导入复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充导入复核串请求回归测试。
+
+该改动只强化返回码导入复核动作的响应归属确认，不替代导入预检、基线指纹、审批权限、配置生效或版本发布证据。
+
+### 9.380 2026-09-27 管理端支付网关复核动作响应事实校验
+
+管理端支付网关复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充支付网关复核串请求回归测试。
+
+该改动只强化支付网关复核动作的响应归属确认，不替代审批权限、网关连通性、版本切换或配置生效证据。
+
+### 9.381 2026-09-27 管理端支付值班路由复核动作响应事实校验
+
+管理端支付值班路由复核通过和驳回动作此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `requestNo`。本轮要求两个动作返回集合中至少包含匹配请求编号的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充值班路由复核串请求回归测试。
+
+该改动只强化值班路由复核动作的响应归属确认，不替代审批权限、值班编排、告警派发或配置生效证据。
+
+### 9.382 2026-09-27 管理端订单发起支付预付单双标识响应校验
+
+管理端订单页可以直接发起支付并进入收银台，但 `paymentApi.prepay` 此前直接透传响应，仅由页面后续使用字段，缺少 API 边界事实确认。本轮要求管理端预付单响应包含非空 `prepayOrderNo` 和 `paymentOrderId`，并在请求包含 `orderNo` 时精确匹配订单号；异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-PREPAY` 错误，并补充管理端 API client 回归测试。
+
+该改动只强化管理端发起支付响应事实确认，不替代后端原子创建、幂等复用、金额核验、收银台准入或渠道支付受理证据。
+
+### 9.383 2026-09-27 管理端支付控制策略自检响应事实校验
+
+管理端控制策略自检请求此前只校验返回总览包含 `controlPolicies` 数组，未确认总览包含本次请求的 `configCode`。本轮要求自检响应的控制策略列表中包含匹配请求的 `sourceAppId`，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONTROL-POLICY-SELF-CHECK` 错误，并补充串策略回归测试。
+
+该改动只强化控制策略自检响应归属确认，不替代自检规则完整性、运行态生效、鉴权配置或实际流量验证证据。
+
+### 9.384 2026-09-27 管理端支付渠道回滚响应事实校验
+
+管理端支付渠道历史版本回滚申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `channelCode`。本轮要求回滚申请返回集合中至少包含匹配请求渠道编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串渠道回滚回归测试。
+
+该改动只强化渠道回滚申请响应的请求归属确认，不替代版本存在性、回滚权限、复核审批、运行态切换或渠道连通性证据。
+
+### 9.385 2026-09-27 管理端支付网关回滚响应事实校验
+
+管理端支付网关历史版本回滚申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `gatewayCode`。本轮要求回滚申请返回集合中至少包含匹配请求网关编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串网关回滚回归测试。
+
+该改动只强化网关回滚申请响应的请求归属确认，不替代版本存在性、回滚权限、复核审批、运行态切换或证书与网关连通性证据。
+
+### 9.386 2026-09-27 管理端支付协议回滚响应事实校验
+
+管理端支付协议历史版本回滚申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `protocolCode`。本轮要求回滚申请返回集合中至少包含匹配请求协议编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串协议回滚回归测试。
+
+该改动只强化协议回滚申请响应的请求归属确认，不替代版本存在性、回滚权限、复核审批、运行态切换或协议可用性证据。
+
+### 9.387 2026-09-27 管理端支付控制策略回滚响应事实校验
+
+管理端支付控制策略历史版本回滚申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `sourceAppId`。本轮要求回滚申请返回集合中至少包含匹配请求应用标识的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串策略回滚回归测试。
+
+该改动只强化控制策略回滚申请响应的请求归属确认，不替代版本存在性、回滚权限、自检结果、复核审批、运行态切换或鉴权配置证据。
+
+### 9.388 2026-09-27 管理端支付路由规则回滚响应事实校验
+
+管理端支付路由规则历史版本回滚申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `ruleCode`。本轮要求回滚申请返回集合中至少包含匹配请求规则编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串规则回滚回归测试。
+
+该改动只强化路由规则回滚申请响应的请求归属确认，不替代版本存在性、回滚权限、冲突校验、复核审批、运行态切换或路由命中验证证据。
+
+### 9.389 2026-09-27 管理端支付路由规则复核申请响应事实校验
+
+管理端支付路由规则复核申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `ruleCode`。本轮要求申请响应至少包含匹配候选规则编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串规则申请回归测试。
+
+该改动只强化路由规则复核申请响应的请求归属确认，不替代规则字段校验、冲突预检、复核审批、运行态生效或实际流量命中证据。
+
+### 9.390 2026-09-27 管理端支付路由规则启停申请响应事实校验
+
+管理端支付路由规则启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `ruleCode`。本轮要求启停申请响应至少包含匹配请求规则编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串规则启停回归测试。
+
+该改动只强化路由规则启停申请响应的请求归属确认，不替代启停权限、规则冲突校验、复核审批、运行态生效或实际流量命中证据。
+
+### 9.391 2026-09-27 管理端支付渠道启停申请响应事实校验
+
+管理端支付渠道启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `channelCode`。本轮要求启停申请响应至少包含匹配请求渠道编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串渠道启停回归测试。
+
+该改动只强化支付渠道启停申请响应的请求归属确认，不替代启停权限、渠道配置校验、复核审批、运行态生效或渠道连通性证据。
+
+### 9.392 2026-09-27 管理端支付渠道复核申请响应事实校验
+
+管理端支付渠道完整复核申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `channelCode`。本轮要求申请响应至少包含匹配候选渠道编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串渠道申请回归测试。
+
+该改动只强化支付渠道复核申请响应的请求归属确认，不替代渠道字段校验、版本基线校验、复核审批、运行态生效或渠道连通性证据。
+
+### 9.393 2026-09-27 管理端支付网关启停申请响应事实校验
+
+管理端支付网关启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `gatewayCode`。本轮要求启停申请响应至少包含匹配请求网关编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串网关启停回归测试。
+
+该改动只强化支付网关启停申请响应的请求归属确认，不替代启停权限、网关配置校验、复核审批、运行态生效或证书与网关连通性证据。
+
+### 9.394 2026-09-27 管理端支付协议启停申请响应事实校验
+
+管理端支付协议启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `protocolCode`。本轮要求启停申请响应至少包含匹配请求协议编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串协议启停回归测试。
+
+该改动只强化支付协议启停申请响应的请求归属确认，不替代启停权限、协议配置校验、复核审批、运行态生效或协议可用性证据。
+
+### 9.395 2026-09-27 管理端支付控制策略启停申请响应事实校验
+
+管理端支付控制策略启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `sourceAppId`。本轮要求启停申请响应至少包含匹配请求应用标识的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串策略启停回归测试。
+
+该改动只强化控制策略启停申请响应的请求归属确认，不替代启停权限、策略配置校验、自检结果、复核审批、运行态生效或鉴权配置证据。
+
+### 9.396 2026-09-27 管理端支付协议复核申请响应事实校验
+
+管理端支付协议完整复核申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `protocolCode`。本轮要求申请响应至少包含匹配候选协议编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串协议申请回归测试。
+
+该改动只强化支付协议复核申请响应的请求归属确认，不替代协议字段校验、版本基线校验、复核审批、运行态生效或协议可用性证据。
+
+### 9.397 2026-09-27 管理端支付网关复核申请响应事实校验
+
+管理端支付网关完整复核申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `gatewayCode`。本轮要求申请响应至少包含匹配候选网关编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串网关申请回归测试。
+
+该改动只强化支付网关复核申请响应的请求归属确认，不替代网关字段校验、版本基线校验、复核审批、运行态生效或证书与网关连通性证据。
+
+### 9.398 2026-09-27 管理端支付控制策略复核申请响应事实校验
+
+管理端支付控制策略完整复核申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `sourceAppId`。本轮要求申请响应至少包含匹配候选应用标识的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串策略申请回归测试。
+
+该改动只强化控制策略复核申请响应的请求归属确认，不替代策略字段校验、版本基线校验、自检结果、复核审批、运行态生效或鉴权配置证据。
+
+### 9.399 2026-09-27 管理端支付告警供应商启停申请响应事实校验
+
+管理端支付告警供应商启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `providerCode`。本轮要求启停申请响应至少包含匹配请求供应商编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串供应商启停回归测试。
+
+该改动只强化告警供应商启停申请响应的请求归属确认，不替代启停权限、供应商配置校验、复核审批、运行态生效或投递连通性证据。
+
+### 9.400 2026-09-27 管理端支付值班路由启停申请响应事实校验
+
+管理端支付值班路由启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `rosterCode`。本轮要求启停申请响应至少包含匹配请求值班路由编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串值班路由启停回归测试。
+
+该改动只强化值班路由启停申请响应的请求归属确认，不替代启停权限、值班配置校验、复核审批、运行态生效或告警派发连通性证据。
+
+### 9.401 2026-09-27 管理端支付告警供应商新增申请响应事实校验
+
+管理端支付告警供应商新增申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `providerCode`。本轮要求新增申请响应至少包含匹配候选供应商编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串供应商新增回归测试。
+
+该改动只强化告警供应商新增申请响应的请求归属确认，不替代供应商字段校验、复核审批、运行态生效或投递连通性证据。
+
+### 9.402 2026-09-27 管理端支付值班路由新增申请响应事实校验
+
+管理端支付值班路由新增申请此前仅校验返回集合非空，未确认返回集合中包含当前候选的 `rosterCode`。本轮要求新增申请响应至少包含匹配候选值班路由编码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串值班路由新增回归测试。
+
+该改动只强化值班路由新增申请响应的请求归属确认，不替代值班字段校验、复核审批、运行态生效或告警派发连通性证据。
+
+### 9.403 2026-09-27 管理端支付返回码启停申请响应事实校验
+
+管理端支付返回码启停申请此前仅校验返回集合非空，未确认返回集合中包含当前请求的 `channelCode` 与 `channelReturnCode`。本轮要求启停申请响应至少包含匹配渠道和返回码的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串渠道与返回码回归测试。
+
+该改动只强化支付返回码启停申请响应的请求归属确认，不替代返回码字段校验、复核审批、运行态生效或渠道实际返回语义证据。
+
+### 9.404 2026-09-27 管理端支付返回码导入复核申请响应事实校验
+
+管理端支付返回码导入复核申请此前仅校验返回集合非空，未确认返回集合中包含本次预检使用的 `baselineFingerprint`。本轮要求申请响应至少包含匹配基线指纹的导入复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充串基线导入回归测试。
+
+该改动只强化返回码导入申请响应与预检基线的绑定，不替代 CSV 内容校验、差异预检、复核审批、运行态生效或渠道返回语义证据。
+
+### 9.405 2026-09-27 管理端支付值班路由与告警供应商修改申请响应事实校验
+
+管理端支付值班路由、告警供应商修改申请此前仅校验返回集合非空，未确认返回集合中分别包含路径参数 `rosterCode`、`providerCode`。本轮要求修改申请响应至少包含匹配路径主键的复核事实，异常响应进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-ACTION` 错误，并补充有效与串对象回归测试。
+
+该改动只强化两个修改申请响应与请求路径主键的绑定，不替代配置字段校验、版本基线校验、复核审批、运行态生效或告警派发连通性证据。
+
+### 9.406 2026-09-27 用户支付主流程响应请求归属校验
+
+用户端预付、支付提交、查单、关单此前仅校验响应包含支付主键，未确认响应属于当前请求。本轮分别绑定请求订单号、预付单号和支付单号，串单响应进入稳定的 `PAYMENT-CLIENT-INVALID-PREPAY`、`PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT` 或 `PAYMENT-CLIENT-INVALID-PAYMENT-ACTION` 错误，并补充串主键回归测试。
+
+该改动只强化用户支付主流程响应与当前请求的归属关系，不替代后端幂等控制、渠道受理、异步回调、资金到账或最终支付状态确认。
+
+### 9.407 2026-09-27 用户支付详情读取响应路径归属校验
+
+用户端收银台、支付详情和退款详情读取此前仅校验响应包含对应主键，未确认响应与当前路径参数一致。本轮分别绑定 `prepayOrderNo`、`paymentOrderId` 和 `refundOrderId`，串实体响应进入稳定的 `PAYMENT-CLIENT-INVALID-CASHIER`、`PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL` 或 `PAYMENT-CLIENT-INVALID-REFUND-DETAIL` 错误，并补充串主键回归测试。
+
+该改动只强化用户端读取响应与当前详情路径的归属关系，不替代后端权限隔离、订单状态判断、退款执行或渠道查询证据。
+
+### 9.408 2026-09-27 小程序支付 API 响应请求归属校验
+
+小程序支付 API 层此前仅校验预付、支付提交、查单、关单及详情读取响应的形状，未确认响应属于当前请求。本轮与 app-web 保持一致，绑定订单号、预付单号、支付单号和退款单号，补充串主键回归测试。
+
+该改动只强化小程序 API 响应与当前请求的归属关系，不替代页面层状态判断、后端鉴权、渠道受理、异步回调或资金到账证据。
+
+### 9.409 2026-09-27 跨系统 happy-path 预付响应业务单绑定
+
+跨系统 happy-path 此前仅确认预付响应包含预付单号和支付单号，未确认响应中的 `orderNo` 属于本次生成的业务单。本轮将预付响应绑定到本次请求订单号，串业务单响应在进入支付、清分、结算、账务和退款链路前即失败，并补充回归测试。
+
+该改动只强化 happy-path 起点的业务单归属，不替代真实渠道回调、跨系统消息投递、账务记账、对账收口或生产基础设施证据。
+
+### 9.410 2026-09-27 支付 API CLI 命令响应主键归属校验
+
+支付 API CLI 此前只校验 HTTP 状态和统一响应信封，未确认命令返回的支付单、预付单或退款单属于请求参数。本轮为预付、收银台、支付提交、支付详情、查单、关单及退款命令增加主键归属校验，串实体响应进入稳定的 `PAYMENT-API-CLIENT-INVALID-RESPONSE` 错误，并补充回归测试。
+
+该改动只强化 CLI 成功响应的业务事实确认，不替代服务端鉴权、渠道受理、异步回调、资金到账或生产发布治理。
+
+### 9.411 2026-09-27 跨系统 happy-path 支付与预付身份连续性校验
+
+跨系统 happy-path 此前对支付详情和回调主要校验状态及渠道交易号，未同时确认支付单号和预付单号在提交、回调两个阶段保持连续。本轮增加两阶段身份绑定与串身份回归测试。
+
+该改动只强化本地 happy-path 的支付实体连续性，不替代真实渠道回调验签、异步消息投递、资金到账或生产运行验证。
+
+### 9.412 2026-09-27 跨系统 happy-path 退款与支付身份连续性校验
+
+跨系统退款链路此前主要校验申请、审核、提交和回调状态，未确认各阶段返回的退款单始终关联同一原支付单。本轮补充退款单号与支付单号绑定，串退款或串支付响应在退款阶段即失败，并补充回归测试。
+
+该改动只强化本地退款 happy-path 的实体连续性，不替代退款渠道受理、到账核验、账务记账、对账收口或生产运行验证。
+
+### 9.413 2026-09-27 跨系统 happy-path 清分与结算身份连续性校验
+
+跨系统 happy-path 此前对结算单主要校验审批状态和金额，未确认结算响应关联触发它的清分单。本轮要求结算单包含有效 `settlementNo` 且 `clearingNo` 精确匹配清分单，补充串清分单回归测试。
+
+该改动只强化本地清分到结算链路的实体归属，不替代真实消息投递、结算审核、出款执行、资金到账或生产运行验证。
+
+### 9.414 2026-09-27 跨系统 happy-path 账务事件业务键校验
+
+跨系统 happy-path 此前对账务事件主要校验事件类型，未确认 `bizNo` 与支付单、清分单或退款单一致。本轮要求支付成功、清分生成和退款成功事件各自精确匹配业务键且唯一，补充串业务键和重复事件回归测试。
+
+该改动只强化本地账务事件消费结果的业务键确认，不替代真实消息代理、账务幂等、资金事实、对账收口或生产运行验证。
+
+### 9.415 2026-09-27 跨系统 happy-path 对账链路身份校验
+
+跨系统 happy-path 此前对账快照主要校验完成状态、阶段数和可收口标志，未确认返回的 `businessChainId` 及每条事实都属于当前支付链路。本轮增加链路 ID、事实数量和事实归属校验，补充串链路回归测试。
+
+该改动只强化本地对账快照的链路归属，不替代真实对账批次、消息投递、财务审核、资金事实或生产运行验证。
+
+### 9.416 2026-09-27 跨系统 happy-path 支付到清分身份校验
+
+跨系统 happy-path 此前对清分单主要校验查询结果数量和清分状态，未确认清分单关联本次支付单。本轮要求清分响应包含有效 `clearingNo` 且 `paymentOrderId` 精确匹配当前支付单，补充串支付单回归测试。
+
+该改动只强化本地支付到清分链路的实体归属，不替代真实事件投递、清分规则、结算处理、资金事实或生产运行验证。
+
+### 9.417 2026-09-27 受控本地全栈 HTTP 冒烟与 happy-path 复验
+
+使用 `bash tools/dev/local-stack.sh verify` 完成受控本地全栈复验：12 个后端外部服务全部 `READY`，15 个前端开发服务及代理全部 `READY`，HTTP 冒烟通过；支付成功、清分、结算、账务、退款和对账链路全部通过，对账状态为 `COMPLETED`，阶段数 `4/4`，`financialCloseable=true`。
+
+该结果证明当前本地 H2/demo/HTTP 栈中的业务键断言可运行，不替代真实渠道受理、生产 MySQL/RabbitMQ、资金到账、可信鉴权或正式发布治理证据。
+
+### 9.418 2026-09-27 跨系统 happy-path 支付金额连续性校验
+
+跨系统 happy-path 此前已校验支付、清分和结算实体及清分/结算金额，但未在支付成功响应入口确认支付金额与本次请求金额一致。本轮增加支付成功金额校验，并补充金额错配与非法金额回归测试。
+
+该改动只强化本地 happy-path 的金额事实连续性，不替代服务端金额校验、渠道扣款、账务金额核对、退款金额约束或生产资金验证。
+
+### 9.419 2026-09-27 支付金额连续性全栈复验
+
+使用 `bash tools/dev/local-stack.sh verify` 复验金额断言：12 个后端外部服务和 15 个前端及代理全部 `READY`，HTTP 冒烟通过，支付成功金额断言通过，清分、结算、账务、退款和对账链路通过；对账状态为 `COMPLETED`，阶段数 `4/4`，`financialCloseable=true`。
+
+该结果仍限定于受控本地 H2/demo/HTTP 栈，不替代真实渠道扣款、生产数据库与消息代理、资金到账或正式发布治理证据。
+
+### 9.420 2026-09-27 H5 与 PC 用户端支付主流程回归
+
+确认 H5、PC 的收银台、结果页和退款进度通过 shared 视图复用 app-web 支付主流程契约；两端测试均为 `2/2`，生产构建均通过，验证最近支付响应归属和金额校验改动未产生端类型回归。
+
+该结果只证明 H5/PC 本地前端构建与路由回归，不替代真实浏览器交互、真实渠道、终端鉴权或生产发布验收。
+
+### 9.421 2026-09-27 跨系统 happy-path 退款金额连续性校验
+
+跨系统 happy-path 此前已校验退款单号、原支付单号和各阶段状态，但未确认退款申请、审核、提交和回调返回的退款金额始终等于本次申请的 `18.00`。本轮增加四阶段退款金额断言，并补充金额错配与非法金额回归测试。
+
+该改动只强化本地 happy-path 的退款金额事实连续性，不替代服务端退款上限校验、渠道退款受理、资金到账、账务金额核对或生产运行验证。
+
+### 9.422 2026-09-27 跨系统 happy-path 账务分录金额连续性校验
+
+跨系统 happy-path 此前已确认账务分录的业务键和借贷方向，但未确认支付成功与退款成功分录金额分别等于支付 `88.00` 和退款 `18.00`。本轮增加两类账务分录金额断言，并补充金额错配与非法金额回归测试。
+
+该改动只强化本地 happy-path 的账务金额事实连续性，不替代生产总账核算、数据库一致性、消息投递、渠道扣款、资金到账或正式财务对账。
+
+### 9.423 2026-09-27 管理端退款申请原支付单归属校验
+
+管理端退款申请此前只校验返回退款单号和状态，未确认返回结果仍关联本次请求的原支付单。本轮要求退款申请响应必须返回有效 `paymentOrderId`，且与请求支付单一致；串支付单或缺少原支付单事实时进入稳定的 `PAYMENT-CLIENT-INVALID-REFUND-ACTION` 错误，并补充回归测试。
+
+该改动只强化管理端退款申请响应与请求支付单的归属关系，不替代服务端退款上限校验、渠道受理、退款到账、账务核对或生产运行验证。
+
+### 9.424 2026-09-27 用户端退款详情原支付单事实校验
+
+H5/app-web 与小程序退款详情读取此前只校验 `refundOrderId`，未确认返回详情包含有效原支付单号。本轮要求两端退款详情响应同时包含有效 `refundOrderId` 与 `paymentOrderId`，缺少原支付单事实时进入稳定的端侧退款详情错误，并补充两端契约回归测试。
+
+该改动只强化用户端退款详情的实体完整性，不替代后端权限隔离、退款状态判断、渠道退款受理、资金到账或生产运行验证。
+
+### 9.425 2026-09-27 用户端收银台支付单事实校验
+
+H5/app-web 与小程序收银台读取此前只校验 `prepayOrderNo`，未确认响应包含后续提交支付所需的 `paymentOrderId`。本轮要求收银台响应同时包含有效预付单号和支付单号，缺少支付单事实时进入稳定的端侧收银台错误，并补充两端契约回归测试。
+
+该改动只强化用户端收银台响应的支付实体完整性，不替代后端订单状态判断、渠道受理、异步回调或资金到账证据。
+
+### 9.426 2026-09-27 用户端收银台订单金额事实校验
+
+H5/app-web 与小程序收银台此前已校验预付单号和支付单号，但仍允许缺少业务订单号或待支付金额的响应进入页面。本轮要求收银台响应同时包含有效 `orderNo` 与 `amount`，缺少展示和支付依据时进入稳定的端侧收银台错误，并补充两端回归测试。
+
+该改动只强化用户端收银台展示事实完整性，不替代后端金额校验、订单状态判断、渠道受理或资金到账证据。
+
+### 9.427 2026-09-27 用户端支付提交订单金额事实校验
+
+H5/app-web 与小程序支付提交此前已校验预付单号和支付单号，但仍允许缺少订单号或金额的提交响应进入结果页。本轮要求提交响应同时包含有效 `orderNo` 与 `amount`，缺少业务上下文时进入稳定的端侧支付提交错误，并补充两端回归测试。
+
+该改动只强化用户端支付提交结果的业务事实完整性，不替代后端金额校验、渠道受理、异步回调、资金到账或最终状态确认。
+
+### 9.428 2026-09-27 用户端查单关单订单金额事实校验
+
+H5/app-web 与小程序主动查单、关单此前已校验支付单号和预付单号，但仍允许缺少订单号或金额的支付详情响应进入结果页。本轮要求两类动作响应同时包含有效 `orderNo` 与 `amount`，缺少业务上下文时进入稳定的端侧支付动作错误，并补充两端回归测试。
+
+该改动只强化用户端查单和关单结果的业务事实完整性，不替代后端状态机、渠道查询、关闭规则、异步回调或资金事实确认。
+
+### 9.429 2026-09-27 用户端查单关单状态事实校验
+
+H5/app-web 与小程序主动查单、关单响应此前已校验支付实体、订单号和金额，但仍允许缺少 `status` 的结果进入页面。本轮要求两类动作响应必须返回非空支付状态，缺少状态事实时进入稳定的端侧支付动作错误，并补充两端回归测试。
+
+该改动只强化用户端支付动作结果的状态事实完整性，不替代后端状态机、渠道查询、关闭规则、异步回调或资金到账确认。
+
+### 9.430 2026-09-27 用户端预付订单金额事实校验
+
+H5/app-web 与小程序预付响应此前已校验预付单号和支付单号，但仍允许缺少业务订单号或金额的创建结果进入收银台。本轮要求预付响应同时包含有效 `orderNo` 与 `amount`，缺少业务上下文时进入稳定的端侧预付错误，并补充两端回归测试。
+
+该改动只强化用户端预付创建结果的业务事实完整性，不替代后端订单金额校验、幂等控制、收银台状态判断或渠道受理证据。
+
+### 9.431 2026-09-27 跨系统 happy-path 对账事实金额连续性校验
+
+跨系统 happy-path 此前已校验对账链路 ID、事实归属和阶段收口，但未校验对账事实金额与支付、清分、结算、账务及退款金额一致。本轮为五类跨系统事实增加金额连续性断言，并补充金额错配与缺失事实回归测试。
+
+该改动只强化本地对账快照中的金额事实连续性，不替代生产财务核算、消息投递、渠道扣款、资金到账或正式对账审核。
+
+### 9.432 2026-09-27 用户端支付金额数值合法性校验
+
+用户端预付、收银台、支付提交及查单关单响应此前只要求金额非空，非数值或非正金额仍可能被页面接受。本轮两端统一要求金额为可解析的正数，格式异常进入对应稳定的支付响应错误，并补充非法金额回归测试。
+
+该改动只强化浏览器和小程序 API 边界的金额格式门禁，不替代服务端金额校验、精度控制、渠道扣款或资金事实确认。
+
+### 9.433 2026-09-27 用户端支付详情完整事实校验
+
+H5/app-web 与小程序支付详情读取此前只校验 `paymentOrderId`，未确认响应包含预付单号、订单号、金额和状态。本轮要求详情响应同时具备这些核心业务事实，缺失或非法时进入稳定的端侧支付详情错误，并补充两端回归测试。
+
+该改动只强化用户端支付详情展示和后续操作的事实完整性，不替代后端权限隔离、状态机、渠道查询或资金事实确认。
+
+### 9.434 2026-09-27 用户端退款详情金额状态事实校验
+
+H5/app-web 与小程序退款详情读取此前已校验退款单号和原支付单号，但仍允许缺少退款金额或状态的响应进入退款进度页。本轮要求详情响应同时包含有效 `refundAmount` 与 `status`，缺失或非法时进入稳定的端侧退款详情错误，并补充两端回归测试。
+
+该改动只强化用户端退款进度展示事实，不替代后端退款状态机、渠道受理、资金到账或账务核对证据。
+
+### 9.435 2026-09-27 管理端退款动作金额归属校验
+
+管理端退款申请、审核、查单和重试响应此前只校验退款单号、原支付单号和状态，未确认返回退款金额有效；退款申请也未绑定请求金额。本轮要求动作响应返回有效 `refundAmount`，且申请响应金额必须匹配请求金额，并补充错额回归测试。
+
+该改动只强化管理端退款动作响应的金额事实门禁，不替代服务端退款上限校验、渠道受理、到账核验或账务对账。
+
+### 9.436 2026-09-27 管理端支付动作订单金额事实校验
+
+管理端支付查单、关单响应此前只校验支付单号和状态，未确认返回订单号和有效金额。本轮要求两个支付动作响应同时包含 `orderNo`、有效 `amount` 和非空 `status`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ACTION` 错误，并补充回归测试。
+
+该改动只强化管理端支付动作响应的业务事实门禁，不替代服务端状态机、渠道查询、关闭规则或资金事实确认。
+
+### 9.437 2026-09-27 管理端支付与退款详情核心事实校验
+
+管理端支付详情此前只校验支付单号，退款详情只校验退款单号，缺少预付单号、订单号、原支付单号、金额或状态时仍可能进入详情页。本轮要求支付详情包含有效 `prepayOrderNo`、`orderNo`、`amount`、`status`，退款详情包含有效 `paymentOrderId`、`refundAmount`、`status`，异常结果进入稳定的详情错误，并补充管理端 API 回归测试。
+
+该改动只强化管理端详情展示和关联跳转所依赖的业务事实，不替代服务端权限隔离、状态机、渠道查询、退款受理、资金到账或正式对账证据。
+
+### 9.438 2026-09-27 管理端支付记录详情金额状态事实校验
+
+管理端支付记录详情此前只校验支付单号，页面仍可能在缺少支付金额或支付状态时展示不完整快照并开放查单入口。本轮要求详情响应包含有效正数 `paymentAmount` 与非空 `paymentStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-RECORD-DETAIL` 错误，并补充金额、状态和空响应回归测试。
+
+该改动只强化管理端支付记录详情的展示和运营动作前置事实，不替代服务端权限隔离、渠道查单、状态机、异步回调或资金事实确认。
+
+### 9.439 2026-09-27 管理端支付请求详情状态事实校验
+
+管理端支付请求详情此前只校验请求编号，页面可能在缺少请求状态时展示不完整的尝试快照。考虑到失败请求可以合法地没有支付单号，本轮只要求返回非空 `requestStatus`，缺失时进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-REQUEST-DETAIL` 错误，并补充状态缺失回归测试。
+
+该改动只强化管理端支付请求详情的状态展示事实，不替代服务端请求状态机、渠道受理、异步回调、权限隔离或资金事实确认。
+
+### 9.440 2026-09-27 管理端订单详情金额状态事实校验
+
+管理端订单详情此前只校验订单号，订单应收金额或订单状态缺失时仍可能进入支付联查视图。本轮要求详情返回有效正数 `orderAmount` 与非空 `orderStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-ORDER-DETAIL` 错误，并补充金额、状态和空响应回归测试。
+
+该改动只强化管理端订单详情的支付联查前置事实，不替代订单服务金额核算、订单状态机、支付受理或资金到账确认。
+
+### 9.441 2026-09-27 管理端账单详情金额状态事实校验
+
+管理端账单详情此前只校验账单号，账单应收金额或账单状态缺失时仍可能进入支付联查视图。本轮要求详情返回有效正数 `billAmount` 与非空 `billStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-BILL-DETAIL` 错误，并补充金额、状态和空响应回归测试。
+
+该改动只强化管理端账单详情的支付联查前置事实，不替代账单服务金额核算、账单状态机、支付受理或资金到账确认。
+
+### 9.442 2026-09-27 管理端支付事件详情类型状态事实校验
+
+管理端支付事件详情此前只校验事件号，事件类型或发布状态缺失时仍可能进入事件运营视图。本轮要求详情返回非空 `eventType` 与 `publishStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-EVENT-DETAIL` 错误，并补充类型、状态和空响应回归测试。
+
+该改动只强化管理端支付事件详情的运营展示事实，不替代事件投递、重试、下游消费、消息可靠性或生产运行验证。
+
+### 9.443 2026-09-27 管理端支付路由详情金额结果事实校验
+
+管理端支付路由详情此前只校验路由编号，缺少路由金额或路由结果时仍可能进入运营视图。本轮要求详情返回有效正数 `amount` 与非空 `routeResult`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ROUTE-DETAIL` 错误，并补充金额、结果和空响应回归测试。
+
+该改动只强化管理端路由详情的运营展示事实，不替代服务端路由决策、渠道选择、配置快照、支付受理或资金事实确认。
+
+### 9.444 2026-09-27 管理端支付流水详情类型状态事实校验
+
+管理端支付流水详情此前只校验来源类型和来源编号，流水类型或业务处理状态缺失时仍可能进入运营视图。本轮要求详情返回非空 `flowType` 与 `businessStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-FLOW-DETAIL` 错误，并补充类型、状态和空响应回归测试。
+
+该改动只强化管理端支付流水详情的运营展示事实，不替代支付尝试、渠道回调、路由记录、事件投递或生产资金事实确认。
+
+### 9.445 2026-09-27 管理端收银台会话详情金额状态事实校验
+
+管理端收银台会话详情此前只校验会话编号，缺少会话金额或会话状态时仍可能进入收银台联查视图。本轮要求详情返回有效正数 `amount` 与非空 `sessionStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-CASHIER-SESSION-DETAIL` 错误，并补充金额、状态和空响应回归测试。
+
+该改动只强化管理端收银台会话详情的展示事实，不替代预付单状态机、支付提交、渠道受理、异步回调或资金事实确认。
+
+### 9.446 2026-09-27 管理端支付处理日志阶段级别事实校验
+
+管理端支付处理日志详情此前只校验日志编号，缺少处理阶段或日志级别时仍可能进入排障视图。本轮要求详情返回非空 `processStage` 与 `logLevel`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-LOG-DETAIL` 错误，并补充阶段、级别和空响应回归测试。
+
+该改动只强化管理端日志详情的排障展示事实，不替代日志持久化、支付状态机、消息投递、渠道事实或生产审计证据。
+
+### 9.447 2026-09-27 管理端支付异常详情类型等级状态事实校验
+
+管理端支付异常详情此前只校验异常编号，异常类型、严重等级或处理状态缺失时仍可能进入异常运营视图。本轮要求详情返回非空 `issueType`、`severity` 与 `handlingStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ISSUE-DETAIL` 错误，并补充类型、等级、状态和空响应回归测试。
+
+该改动只强化管理端异常详情的运营展示事实，不替代异常责任归属、SLA、告警派发、人工处置或生产审计证据。
+
+### 9.448 2026-09-27 管理端支付异常告警状态回执事实校验
+
+管理端支付异常告警详情此前只校验告警编号，告警状态或回执状态缺失时仍可能进入告警运营视图。本轮要求详情返回非空 `alertStatus` 与 `ackStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-PAYMENT-ISSUE-ALERT-DETAIL` 错误，并补充状态、回执和空响应回归测试。
+
+该改动只强化管理端告警详情的运营展示事实，不替代告警派发、供应商投递、回执回查、人工确认或生产通知可靠性证据。
+
+### 9.449 2026-09-27 管理端支付任务详情状态计数事实校验
+
+管理端支付任务执行详情此前只校验任务日志号，任务状态或处理计数缺失、为负数时仍可能进入运营统计视图。本轮要求详情返回非空 `taskStatus` 以及非负整数 `processedCount`、`successCount`、`warningCount`、`failCount`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-TASK-RUN-DETAIL` 错误，并补充状态、计数和空响应回归测试。
+
+该改动只强化管理端任务详情的执行统计事实，不替代任务调度、幂等执行、补偿处理、告警升级或生产运行证据。
+
+### 9.450 2026-09-27 管理端支付死信详情状态重放计数事实校验
+
+管理端支付死信详情此前只校验任务号，任务状态或重放次数缺失、为负数时仍可能进入补偿操作视图。本轮要求详情返回非空 `taskStatus` 与非负整数 `replayCount`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-DEAD-LETTER-TASK-DETAIL` 错误，并补充状态、计数和空响应回归测试。
+
+该改动只强化管理端死信详情的补偿前置事实，不替代消息消费、重放投递、目标系统处理、幂等核验或生产资金事实。
+
+### 9.451 2026-09-27 管理端支付日终详情日期状态事实校验
+
+管理端支付日终批次详情此前只校验批次号，业务日期或批次状态缺失时仍可能进入日终运营视图。本轮要求详情返回非空 `bizDate` 与 `batchStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-DAY-END-DETAIL` 错误，并补充日期、状态和空响应回归测试。
+
+该改动只强化管理端日终批次详情的运营展示事实，不替代日终核算、对账收口、差异处置、财务关账或生产资金确认。
+
+### 9.452 2026-09-27 管理端支付配置总览集合与关键事实校验
+
+管理端支付配置总览此前只将空响应降级为空对象，渠道、路由规则、协议、返回码、网关、控制策略、告警供应商和值班路由等集合缺失或条目主键/状态缺失时仍可能进入运营页面并误显示为零配置。本轮要求总览返回九个明确集合，配置条目返回非空业务编码与状态，返回码映射同时返回非空渠道返回码，协议类型字典返回非空编码与名称；异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-OVERVIEW` 错误，并补充完整总览、缺失状态、返回码主键和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端配置总览的展示事实，不替代配置审核、版本发布、回滚审批、渠道可用性或生产支付链路验证。
+
+### 9.453 2026-09-27 管理端支付配置版本历史身份与状态校验
+
+管理端渠道、网关、路由规则、支付协议和控制策略版本查询此前只过滤空行，版本业务编码不匹配、版本号为零或状态缺失时仍可能展示并允许回滚。本轮统一要求版本历史条目返回匹配请求对象的业务编码、正整数 `versionNo` 与非空 `status`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-CONFIG-VERSIONS` 错误，并补充身份、版本号和状态回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端版本历史的回滚前展示事实，不替代版本不可变存储、审批状态机、回滚执行、配置发布或生产渠道验证。
+
+### 9.454 2026-09-27 管理端支付死信动作状态计数事实校验
+
+管理端死信任务标记待重放、人工结案和重放动作此前只校验任务号，动作成功后若返回状态或重放次数缺失仍可能继续使用不完整任务快照。本轮要求三个动作返回非空 `taskStatus` 与非负整数 `replayCount`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-DEAD-LETTER-ACTION` 错误，并补充完整响应和负数计数回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端死信动作后的状态展示事实，不替代消息发布确认、目标系统消费、幂等校验、重放结果或生产补偿审计证据。
+
+### 9.455 2026-09-27 管理端告警确认状态回执事实校验
+
+管理端异常告警确认动作此前只校验告警编号，返回告警状态或确认状态缺失时仍可能被视为成功。本轮要求确认动作返回非空 `alertStatus` 与 `ackStatus`，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-ISSUE-ACTION` 错误，并补充完整响应与缺失回执状态回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端告警确认后的展示事实，不替代告警持久化、供应商回执、通知可靠性、人工责任确认或生产审计证据。
+
+### 9.456 2026-09-27 管理端单条告警回执回查执行计数校验
+
+管理端单条异常告警回执回查接口实际返回任务动作结果，但此前仅校验对象形状，缺少处理、成功、告警和失败计数时仍可能被视为回查成功。本轮统一复用任务动作结果门禁，要求四项计数为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-TASK-ACTION` 错误，并补充单条回查响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端单条回查的执行统计事实，不替代供应商回执内容、回查调度、重试退避、告警状态更新或生产通知可靠性证据。
+
+### 9.457 2026-09-27 管理端支付监控总览结构与统计值校验
+
+管理端支付监控总览此前通过对象降级将空响应转为空对象，摘要或趋势、渠道、告警、指标口径集合缺失时仍可能以默认零值渲染。本轮要求总览返回摘要和四个明确集合，并对已返回的摘要计数校验为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-MONITOR-OVERVIEW` 错误，并补充完整、负数统计和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端监控页面的结构化展示事实，不替代指标计算口径、数据库聚合、实时性、告警触发或生产运营决策证据。
+
+### 9.458 2026-09-27 管理端支付任务中心总览结构与计数校验
+
+管理端支付任务中心总览此前通过对象降级将空响应转为空对象，任务趋势、重点告警、最近执行日志集合缺失或可执行计数为负数时仍可能驱动运营页面和批量任务按钮。本轮要求总览返回三个明确集合，并对全部已返回的任务计数与阈值校验为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-TASK-CENTER-OVERVIEW` 错误，并补充完整、负数计数、缺失集合和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端任务中心的结构化展示事实，不替代任务调度、锁竞争、幂等执行、补偿结果或生产运行审计证据。
+
+### 9.459 2026-09-27 管理端支付日终总览结构与批次计数校验
+
+管理端支付日终总览此前通过对象降级将空响应转为空对象，差异告警、最近批次集合缺失或批次与收口计数为负数时仍可能进入日终运营视图。本轮要求总览返回告警和最近批次两个明确集合，并对已返回的批次与收口计数校验为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-DAY-END-OVERVIEW` 错误，并补充完整、负数计数、缺失集合和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端日终页面的结构化展示事实，不替代日终核算、事实快照、对账准入、财务关账或生产资金确认。
+
+### 9.460 2026-09-27 管理端日终触发响应复用总览契约
+
+管理端日终触发接口实际返回完整日终总览，但前端此前只校验 `latestBatchStatus`，跑批成功后仍可能把缺少告警/最近批次集合或非法计数的响应写入页面。本轮让日终触发响应复用 `PAYMENT-CLIENT-INVALID-DAY-END-OVERVIEW` 总览门禁，并同步更新空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只修正管理端日终触发响应的前端契约映射，不替代跑批租约、核算快照、对账准入或财务关账事实。
+
+### 9.461 2026-09-27 管理端工作台支付指标摘要计数校验
+
+管理端工作台支付健康度此前直接透传支付指标摘要，负数计数或成功率/成功金额缺失时仍可能渲染为有效健康度。本轮要求支付指标摘要返回四项非负整数计数、非空成功金额和成功率，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-METRICS` 错误，并补充完整、负数计数和缺失成功率回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端工作台统计展示事实，不替代指标聚合口径、数据库一致性、实时性或生产运营决策证据。
+
+### 9.462 2026-09-27 管理端工作台总览卡片结构校验
+
+管理端工作台总览此前直接透传响应，空响应或卡片展示字段缺失时仍可能进入首页并显示不完整运营卡片。本轮要求总览返回 `cards` 数组，卡片返回非空 `key`、`title`、`value`、`badgeType` 和 `badgeText`，同时保留空卡片列表的合法状态；异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-DASHBOARD-SUMMARY` 错误，并补充空响应、空列表和坏卡片回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`npm run build`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端工作台卡片展示事实，不替代首页指标聚合、权限过滤、实时性或生产运营决策证据。
+
+### 9.463 2026-09-27 跨系统 happy-path 支付业务订单身份连续性校验
+
+跨系统 happy-path 此前在支付查询和渠道回调阶段只校验支付单号与预付单号，业务订单号发生串链时仍可能继续执行。本轮为支付身份断言增加可选业务订单号校验，并在提交后查询和回调成功两个阶段传入原始订单号，异常结果进入稳定的业务订单身份断言错误；同步补充业务订单号不一致回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`。
+
+该改动只强化本地跨系统 happy-path 的链路身份门禁，不替代真实服务可达性、渠道回调验签、消息投递、资金到账或生产环境联调证据。
+
+### 9.464 2026-09-27 跨系统 happy-path 预付金额连续性校验
+
+跨系统 happy-path 此前只在支付成功响应阶段校验金额，预付阶段返回金额漂移时仍可能继续提交。本轮为预付订单断言增加可选金额校验，并在金额为 88.00 的本地支付链路中启用该校验，补充预付金额不一致回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地跨系统 happy-path 的金额连续性门禁，不替代服务端金额校验、渠道扣款事实或生产资金确认。
+
+### 9.465 2026-09-27 跨系统 happy-path 清分账簿核验
+
+跨系统 happy-path 此前核对了账务 `CLEARING_GENERATED` 事件，但未直接查询该事件对应的 `CLEARING_GENERATED_EVENT` 贷方流水。本轮依据账务事件消费者契约新增清分单账簿查询，要求恰好一条贷方流水且金额为 88.00。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地 happy-path 的账务入账证据，不替代生产账务库、真实消息投递、会计科目配置或财务关账审批。
+
+### 9.466 2026-09-27 跨系统 happy-path 对账事实唯一成功校验
+
+跨系统 happy-path 此前先用 `some` 判断必需对账事实成功，再独立查找金额，重复事实或同身份非成功事实可能被金额校验掩盖。本轮要求每个必需事实恰好匹配一条且 `factStatus=SUCCESS`，并补充重复和非成功状态回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地对账收口断言，不替代对账系统幂等约束、事实存储一致性或生产财务关账证据。
+
+### 9.467 2026-09-27 管理端支付事件总览计数校验
+
+管理端支付事件总览此前直接透传接口响应，缺失或负数统计仍可能覆盖事件运营卡片。本轮新增事件总览响应门禁，要求十项事件统计均为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-EVENT-OVERVIEW` 错误，并补充完整、负数、缺失和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端事件运营总览的展示事实，不替代事件聚合、消息发布状态、重试调度或生产运营审计证据。
+
+### 9.468 2026-09-27 管理端支付请求总览计数校验
+
+管理端支付请求总览此前直接透传响应，缺失或负数统计仍可能覆盖请求运营卡片。本轮新增支付请求总览响应门禁，要求九项请求统计均为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-REQUEST-OVERVIEW` 错误，并补充完整、负数、缺失和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端请求运营总览的展示事实，不替代请求日志持久化、渠道响应真实性、重试策略或生产审计证据。
+
+### 9.469 2026-09-27 管理端支付日志总览计数校验
+
+管理端支付日志总览此前直接透传响应，缺失或负数统计仍可能驱动错误、告警和回调快捷入口。本轮新增支付日志总览响应门禁，要求九项日志统计均为非负整数，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-LOG-OVERVIEW` 错误，并补充完整、负数、缺失和空响应回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端日志运营总览的展示事实，不替代日志采集、等级口径、回调诊断或生产审计证据。
+
+### 9.470 2026-09-27 管理端支付路由总览统计与健康策略校验
+
+管理端支付路由总览此前直接透传响应，基础计数或健康熔断策略缺失、为负数或超出百分比范围时仍可能驱动路由排障页面。本轮新增路由总览响应门禁，要求七项计数为非负整数、健康开关为布尔值、四项策略阈值为正整数且失败率不超过 100%，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-ROUTE-OVERVIEW` 错误，并补充回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端路由运营总览的展示事实，不替代渠道健康探测、熔断执行、路由配置发布或生产运营决策证据。
+
+### 9.471 2026-09-27 管理端收银台会话总览统计与金额校验
+
+管理端收银台会话总览此前直接透传响应，缺失或负数计数以及不可解析金额仍可能驱动会话风险卡片。本轮新增会话总览响应门禁，要求七项计数为非负整数、会话金额合计为可解析非负金额字符串（允许 0.00），异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-CASHIER-OVERVIEW` 错误，并补充回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端收银台运营总览的展示事实，不替代会话过期判定、支付状态事实或生产资金确认。
+
+### 9.472 2026-09-27 管理端账单总览统计与金额校验
+
+管理端账单总览此前直接透传响应，缺失或负数计数以及不可解析金额仍可能驱动逾期风险和应收卡片。本轮新增账单总览响应门禁，要求五项账单计数为非负整数、三项金额合计为可解析非负金额字符串，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-BILL-OVERVIEW` 错误，并补充回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端账单运营总览的展示事实，不替代账单金额计算、支付状态收口、逾期规则或生产财务确认。
+
+### 9.479 2026-09-27 管理端服务者结算总览统计与金额校验
+
+管理端服务者结算总览此前直接透传响应，缺失或负数计数以及不可解析金额仍可能驱动待审核、出款和负净额风险卡片。本轮新增结算总览响应门禁，要求六项计数为非负整数、三项金额为可解析金额字符串，异常结果进入稳定的 `PAYMENT-CLIENT-INVALID-SETTLEMENT-OVERVIEW` 错误，并补充回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端结算运营总览的展示事实，不替代结算计算、保证金联动、出款执行或生产财务确认。
+
+### 9.480 2026-09-27 管理端任务动作嵌套总览契约校验
+
+管理端任务动作此前只校验顶层处理计数，任务中心页面随后会将响应中的 `overview` 原样合并回当前运营快照，非法集合仍可能污染任务卡片。本轮让任务动作复用完整任务中心总览门禁，异常嵌套结果进入稳定的 `PAYMENT-CLIENT-INVALID-TASK-ACTION` 错误，并补充合法与缺失集合回归测试。
+
+本轮自测：`node --test src/api/client.test.js`、`node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端任务动作后的前端快照合并，不替代任务执行幂等、调度锁、补偿结果或生产运行审计。
+
+### 9.473 2026-09-27 用户端收银台渠道列表契约校验
+
+用户端 app-web 与小程序收银台响应此前会将缺失的 `channels` 字段静默降级为空数组，后端契约异常可能被误显示为“暂无支付方式”。本轮依据 `CashierPageDTO.channels` 列表字段要求两端响应明确返回数组，异常结果进入既有收银台错误码，并补充缺失渠道列表回归测试。
+
+本轮自测：App `node --test src/api/client.test.js`、小程序 `node --test tests/request.test.js`、`node --check src/api/client.js`、`node --check utils/request.js`、`git diff --check`。
+
+该改动只强化用户端收银台响应事实，不替代渠道可用性、真实支付受理、渠道 SDK 或生产资金确认。
+
+### 9.474 2026-09-27 用户端支付快照业务订单身份校验
+
+App 收银台支付快照此前只绑定预付单号和支付单号，提交、查单或关闭响应即使业务订单号串联也可能继续使用。本轮将收银台 `orderNo` 纳入当前支付快照匹配，要求存在快照业务订单号时响应必须精确匹配，并补充错订单回归测试。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、App `node --test src/api/client.test.js`、`node --check src/constants/paymentEntity.js`、`git diff --check`。
+
+该改动只强化 App 用户端当前支付实体绑定，不替代服务端权限、订单归属校验、渠道受理或生产资金确认。
+
+### 9.475 2026-09-27 小程序支付提交业务订单身份校验
+
+小程序收银台提交响应此前只比较预付单号和支付单号，业务订单号串联时仍可能跳转到错误支付结果页。本轮新增 `matchesPaymentSubmission` 纯函数，要求提交响应同时匹配当前预付单号、业务订单号并包含支付单号，页面接入该门禁并补充回归测试。
+
+本轮自测：小程序 `node --test tests/payment.test.js`、小程序 `node --test tests/request.test.js`、`node --check utils/payment.js`、`node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只强化小程序提交后的实体连续性，不替代服务端订单归属、支付渠道受理或生产资金确认。
+
+### 9.476 2026-09-27 小程序支付结果页业务订单连续性校验
+
+小程序支付结果页此前在自动刷新、主动查单和关单响应中只比较支付单号与预付单号，后续响应业务订单号变化时仍可能覆盖当前结果快照。本轮为结果页保存并比较已加载的 `orderNo`，串订单响应失败闭合，并补充回归测试。
+
+本轮自测：小程序 `node --test tests/result-page.test.js`、小程序 `node --test tests/payment.test.js`、`node --check pages/result/index.js`、`git diff --check`。
+
+该改动只强化小程序结果页的实体连续性，不替代服务端订单归属、支付状态收口或生产资金确认。
+
+### 9.477 2026-09-27 App/H5/PC 共用结果页启用业务订单快照
+
+共用结果页此前虽已具备可选的 `orderNo` 快照匹配能力，但快照构造未传入当前详情的业务订单号，App、H5、PC 的自动刷新、查单和关单仍只实际绑定支付单号与预付单号。本轮补入 `paymentDetail.orderNo`，使业务订单串联响应在三种 Web 终端均能被拒绝。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、App `node --test src/api/client.test.js`、`node --check src/views/ResultView.vue` 不适用，改以 `npm run build`、`git diff --check` 验证。
+
+该改动只启用既有用户端实体匹配门禁，不替代服务端订单归属、支付状态收口或生产资金确认。
+
+### 9.478 2026-09-27 共用结果页初次加载预付单身份校验
+
+App/H5/PC 结果页此前虽然通过 URL 传递 `prepayOrderNo`，但初次详情加载只校验路径中的支付单号，串预付响应仍可能进入首屏。本轮在首次详情加载时绑定可用的 URL 预付单号，异常结果进入当前页面错误态，并通过共享构建验证。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、App `node --test src/api/client.test.js`、App `npm run build`、`git diff --check`。
+
+该改动只强化结果页首屏实体绑定，不替代服务端订单归属、支付状态收口或生产资金确认。
+
+### 9.481 2026-09-27 小程序结果页初次预付单身份校验
+
+小程序结果页此前初次加载详情时仅校验支付单号，并会用响应中的预付单号覆盖 URL 快照。本轮要求 URL 已提供预付单号时详情必须精确匹配，串预付响应进入错误态，并补充首屏错单回归测试。
+
+本轮自测：小程序 `node --test tests/result-page.test.js`、小程序 `node --check pages/result/index.js`、`git diff --check`。
+
+该改动只强化小程序结果页首屏实体绑定，不替代服务端订单归属、支付状态收口或生产资金确认。
+
+### 9.482 2026-09-27 App/H5/PC 支付金额快照连续性校验
+
+App/H5/PC 共用支付快照此前只绑定预付单号、支付单号和业务订单号，提交、查单或关单响应金额变化时仍可能覆盖当前页面。本轮将当前收银台/详情金额纳入快照匹配，按两位小数比较金额并拒绝错额响应，补充金额一致和漂移回归测试。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、App `node --test src/api/client.test.js`、App `npm run build`、`git diff --check`。
+
+该改动只强化用户端金额事实连续性，不替代服务端金额校验、渠道扣款事实或生产资金确认。
+
+### 9.483 2026-09-27 小程序支付结果金额连续性校验
+
+小程序结果页此前在自动刷新、主动查单和关单响应中只比较支付单号、预付单号和业务订单号，金额变化仍可能覆盖当前结果。本轮将已加载金额纳入结果快照，使用统一两位小数金额格式比较并拒绝错额响应，补充金额漂移回归测试。
+
+本轮自测：小程序 `node --test tests/result-page.test.js`、小程序 `node --check pages/result/index.js`、`git diff --check`。
+
+该改动只强化小程序结果页金额事实连续性，不替代服务端金额校验、渠道扣款事实或生产资金确认。
+
+### 9.484 2026-09-27 小程序结果页查单关单金额连续性校验
+
+小程序结果页此前虽然已在自动刷新中保存金额快照，但主动查单和关单构造的快照未包含金额，错额响应仍可能覆盖当前结果。本轮让查单、关单复用标准化金额快照，并补充两种动作的错额回归测试。
+
+本轮自测：小程序 `node --test tests/result-page.test.js`、小程序 `node --check pages/result/index.js`、`git diff --check`。
+
+该改动只强化小程序结果页动作响应的金额事实连续性，不替代服务端金额校验、渠道扣款事实或生产资金确认。
+
+### 9.485 2026-09-27 跨系统 happy-path 退款金额上限校验
+
+跨系统 happy-path 此前只验证退款金额在申请、审核、提交和成功回调阶段保持一致，未验证退款金额不超过已支付金额。本轮新增退款金额与支付成功金额的关系门禁，接入真实 happy-path，并补充超额及零金额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地跨系统验收脚本的资金关系断言，不替代退款中心服务端限额、并发幂等、渠道退款受理或生产资金确认。
+
+### 9.486 2026-09-27 App/H5/PC 退款进度实体快照连续性校验
+
+App/H5/PC 共用退款进度页此前刷新时只比较退款单号，支付单号、业务订单号或退款金额发生漂移仍可能覆盖当前页面。本轮保存并比较退款进度实体快照，拒绝跨支付单、跨订单和错额响应，并补充纯函数回归测试。
+
+本轮自测：App `node --test src/constants/refundProgress.test.js`、`npm run build`、`git diff --check`。
+
+该改动只强化用户端退款进度展示的事实连续性，不替代服务端退款归属、额度校验、渠道到账或生产资金确认。
+
+### 9.487 2026-09-27 小程序退款进度实体快照连续性校验
+
+小程序退款进度页此前刷新时只比较退款单号，支付单号、业务订单号或退款金额发生漂移仍可能覆盖当前页面。本轮在应用详情前复用当前实体快照校验，拒绝跨支付单、跨订单和错额响应，并补充刷新错事实回归测试。
+
+本轮自测：小程序 `node --test tests/refund-progress-page.test.js`、小程序 `node --check pages/refund-progress/index.js`、`git diff --check`。
+
+该改动只强化小程序退款进度展示的事实连续性，不替代服务端退款归属、额度校验、渠道到账或生产资金确认。
+
+### 9.488 2026-09-27 小程序收银台提交金额连续性校验
+
+小程序收银台提交此前只校验预付单号、业务订单号和支付单号，提交响应金额变化仍可能继续拉起原生支付并跳转结果页。本轮让提交门禁绑定收银台金额，按两位小数比较并拒绝错额响应，补充金额漂移回归测试。
+
+本轮自测：小程序 `node --test tests/payment.test.js`、小程序 `node --check utils/payment.js`、小程序 `node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只强化小程序提交前后的金额事实连续性，不替代服务端金额校验、渠道受理或生产资金确认。
+
+### 9.489 2026-09-27 小程序提交后收银台恢复快照校验
+
+小程序支付提交失败后的收银台恢复请求此前只比较预付单号，错支付单、错订单或错金额响应仍可能覆盖当前页面。本轮让恢复响应绑定原收银台的支付单号、业务订单号和金额快照，并补充错实体回归测试。
+
+本轮自测：小程序 `node --test tests/payment.test.js`、小程序 `node --check utils/payment.js`、小程序 `node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只强化小程序提交后收银台恢复的事实连续性，不替代服务端订单归属、金额校验、渠道受理或生产资金确认。
+
+### 9.490 2026-09-27 App/H5/PC 提交后收银台恢复快照校验
+
+App/H5/PC 共用收银台在支付提交异常后的恢复请求此前只比较预付单号和支付单号，错业务订单或错金额响应仍可能覆盖当前页面。本轮复用完整支付实体快照门禁，拒绝错订单和错额恢复响应，并完成共用构建验证。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、`npm run build`、`git diff --check`。
+
+该改动只强化用户端提交后收银台恢复的事实连续性，不替代服务端订单归属、金额校验、渠道受理或生产资金确认。
+
+### 9.491 2026-09-27 App/H5/PC 收银台主动刷新实体快照校验
+
+App/H5/PC 共用收银台的主动刷新及关单后重载此前只校验预付单号，错支付单、错订单或错金额响应仍可能覆盖当前页面。本轮让已有收银台上下文的 `loadCashier` 复用完整支付实体快照，初次加载继续保留预付单路由校验，并完成共用测试与构建验证。
+
+本轮自测：App `node --test src/constants/paymentEntity.test.js`、`npm run build`、`git diff --check`。
+
+该改动只强化用户端收银台刷新事实连续性，不替代服务端订单归属、金额校验、渠道受理或生产资金确认。
+
+### 9.493 2026-09-27 管理端支付动作订单金额连续性校验
+
+管理端支付单列表、支付详情和支付记录详情的人工查单/关单此前只要求响应支付单号一致，订单号或金额漂移仍可能污染运营快照。本轮扩展支付动作响应门禁，三类页面传入当前订单号与金额快照并拒绝错事实响应，补充订单和金额漂移回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付动作后的展示事实连续性，不替代服务端权限、订单归属、金额校验、渠道查单或生产运营审计。
+
+### 9.494 2026-09-27 用户端金额格式与快照归一化收紧
+
+App 与小程序支付响应门禁此前使用宽松数值解析，指数格式或三位小数可能被当作合法金额；App 实体快照比较还可能将三位小数四舍五入后误判一致。本轮统一要求正数、最多 16 位整数和最多 2 位小数，拒绝指数/超精度金额并补充两端回归测试。
+
+本轮自测：App `node --test src/api/client.test.js`、App `node --test src/constants/paymentEntity.test.js`、小程序 `node --test tests/request.test.js`、`git diff --check`。
+
+该改动只强化用户端金额响应与快照格式门禁，不替代服务端金额精度、订单金额校验、渠道扣款或生产资金确认。
+
+### 9.495 2026-09-27 用户端退款金额快照格式收紧
+
+App/H5/PC 与小程序退款进度页此前对已加载退款金额仍使用宽松数值解析，三位小数或指数格式可能在两位小数化后被误判为同一退款事实。本轮统一退款快照要求正数、最多 16 位整数和最多 2 位小数，拒绝超精度/指数金额并补充两端刷新回归测试。
+
+本轮自测：App `node --test src/constants/refundProgress.test.js`、小程序 `node --test tests/refund-progress-page.test.js`、小程序 `node --check pages/refund-progress/index.js`、`git diff --check`。
+
+该改动只强化用户端退款金额展示与刷新快照格式门禁，不替代服务端退款精度、额度校验、渠道到账或生产资金确认。
+
+### 9.496 2026-09-27 管理端退款动作支付单金额快照校验
+
+管理端退款列表与详情的审核、查单和失败重试动作此前只由退款单号门禁保护，支付单号或退款金额漂移仍可能覆盖运营快照。本轮新增退款动作实体快照匹配，两个页面在写入动作响应前校验退款单、原支付单和金额，并补充回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端退款动作后的展示事实连续性，不替代服务端退款归属、额度校验、权限、渠道处理或生产运营审计。
+
+### 9.497 2026-09-27 管理端退款详情刷新实体快照校验
+
+管理端退款详情页的手动刷新及动作后重载此前只校验退款单号，原支付单号或退款金额变化仍可能覆盖已加载运营快照。本轮让已有详情上下文的重载复用退款实体快照门禁，初次加载继续保留退款单路由校验，并完成 API 契约回归。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端退款详情刷新事实连续性，不替代服务端退款归属、额度校验、权限、渠道处理或生产运营审计。
+
+### 9.498 2026-09-27 管理端支付详情刷新实体快照校验
+
+管理端支付详情页的手动刷新及动作后重载此前只校验支付单号，业务订单号或支付金额变化仍可能覆盖已加载运营快照。本轮新增支付详情实体快照匹配，已有详情上下文刷新时同时校验订单号和金额，并补充回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付详情展示事实连续性，不替代服务端订单归属、金额校验、权限、渠道查单或生产运营审计。
+
+### 9.499 2026-09-27 管理端支付记录详情刷新实体快照校验
+
+管理端支付记录详情页的手动刷新及动作后重载此前只校验支付单号，业务订单号或支付金额变化仍可能覆盖已加载运营快照。本轮新增支付记录详情实体快照匹配，已有详情上下文刷新时同时校验订单号和支付金额，并补充合法、错订单、错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付记录详情展示事实连续性，不替代服务端订单归属、金额校验、权限、渠道查单或生产运营审计。
+
+### 9.500 2026-09-27 管理端收银台会话详情刷新实体快照校验
+
+管理端收银台会话详情页的手动刷新此前只校验会话号，预付单号、支付单号、业务订单号或会话金额变化仍可能覆盖已加载运营快照。本轮新增收银台会话实体快照匹配，已有详情上下文刷新时同时校验支付关联标识和金额，并补充合法、错支付单、错订单、错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端收银台会话详情展示事实连续性，不替代服务端会话归属、订单金额校验、权限、渠道受理或生产运营审计。
+
+### 9.501 2026-09-27 管理端支付路由详情刷新实体快照校验
+
+管理端支付路由详情页的手动刷新此前只校验路由记录号，支付单号、支付请求号、业务订单号或路由金额变化仍可能覆盖已加载运营快照。本轮新增支付路由详情实体快照匹配，已有详情上下文刷新时同时校验支付链路关联标识和金额，并补充合法、错支付单、错订单、错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付路由详情展示事实连续性，不替代服务端路由归属、订单金额校验、权限、渠道受理或生产运营审计。
+
+### 9.502 2026-09-27 管理端支付流水详情刷新关联快照校验
+
+管理端支付流水详情页的手动刷新此前只校验来源类型和来源编号，支付单、业务订单、预付单、支付请求或路由关联变化仍可能覆盖已加载运营快照。本轮新增支付流水关联实体快照匹配，已有详情上下文刷新时同时校验复合来源键及关联标识，并补充合法、错支付单、错订单、错路由回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付流水详情展示事实连续性，不替代服务端流水归属、订单校验、权限、渠道处理或生产运营审计。
+
+### 9.503 2026-09-27 管理端支付请求详情刷新关联快照校验
+
+管理端支付请求详情页的手动刷新此前只校验请求号，预付单、支付单、业务订单、标准订单、账单或路由关联变化仍可能覆盖已加载运营快照。本轮新增支付请求详情关联实体快照匹配，已有详情上下文刷新时校验稳定关联标识，保留请求状态等可正常变化字段，并补充合法、错支付单、错订单、错路由回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付请求详情展示事实连续性，不替代服务端请求归属、订单校验、权限、渠道处理或生产运营审计。
+
+### 9.504 2026-09-27 管理端支付事件详情刷新归属快照校验
+
+管理端支付事件详情页的手动刷新此前只校验事件号，支付单、业务单、标准订单、事件主题或下游系统变化仍可能覆盖已加载运营快照。本轮新增支付事件详情归属实体快照匹配，已有详情上下文刷新时校验稳定关联字段，保留发布状态、重试时间等可正常变化字段，并补充合法、错支付单、错业务单、错下游回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付事件详情展示事实连续性，不替代服务端事件归属、下游投递、权限、重试处理或生产运营审计。
+
+### 9.505 2026-09-27 管理端支付问题详情刷新归属快照校验
+
+管理端支付问题详情页的手动刷新此前只校验问题号，支付单号、业务订单号或异常类型变化仍可能覆盖已加载运营快照。本轮新增支付问题详情归属实体快照匹配，已有详情上下文刷新时校验稳定归属字段，保留处理状态、责任人和告警状态等可正常变化字段，并补充合法、错支付单、错订单、错异常类型回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付问题详情展示事实连续性，不替代服务端异常归属、运营处置、权限、告警或生产审计。
+
+### 9.506 2026-09-27 管理端支付异常告警详情刷新归属快照校验
+
+管理端支付异常告警详情页的手动刷新此前只校验告警号，来源告警、问题号、支付单号、异常类型或严重等级变化仍可能覆盖已加载运营快照。本轮新增告警详情归属实体快照匹配，已有详情上下文刷新时校验稳定归属字段，保留投递、回执、确认和重试等可正常变化字段，并补充合法、错支付单、错问题、错严重等级回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付异常告警详情展示事实连续性，不替代服务端告警归属、通知投递、权限、回执查询或生产运营审计。
+
+### 9.507 2026-09-27 管理端支付处理日志详情刷新关联快照校验
+
+管理端支付处理日志详情页的手动刷新此前只校验日志号，支付单、业务订单、标准订单、请求号或来源事实变化仍可能覆盖已加载运营快照。本轮新增处理日志详情复合关联快照匹配，已有详情上下文刷新时校验来源类型、来源编号、处理阶段及支付链路关联，并补充合法、错支付单、错订单、错来源回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付处理日志详情展示事实连续性，不替代服务端日志归属、权限、审计留痕或生产运营治理。
+
+### 9.508 2026-09-27 管理端订单详情刷新应收金额快照校验
+
+管理端订单详情页的手动刷新此前只校验订单号，订单应收金额变化仍可能覆盖已加载运营快照。本轮新增订单详情应收金额实体快照匹配，已有详情上下文刷新时校验订单号和应收金额，同时允许已付金额、剩余应付和支付状态等实时事实正常变化，并补充合法、错订单、错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端订单详情展示事实连续性，不替代服务端订单归属、金额校验、支付状态收敛或生产运营审计。
+
+### 9.509 2026-09-27 管理端账单详情刷新应收快照校验
+
+管理端账单详情页的手动刷新此前只校验账单号，业务订单、标准订单或账单应收金额变化仍可能覆盖已加载运营快照。本轮新增账单详情实体快照匹配，已有详情上下文刷新时校验订单归属和应收金额，同时允许已付、待付及最近支付事实正常变化，并补充合法、错订单、错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端账单详情展示事实连续性，不替代服务端账单归属、金额校验、支付状态收敛或生产运营审计。
+
+### 9.510 2026-09-27 管理端支付任务详情刷新执行上下文校验
+
+管理端支付任务执行详情页的手动刷新此前只校验任务日志号，任务编码、业务日期或业务关联号变化仍可能覆盖已加载运营快照。本轮新增任务详情执行上下文快照匹配，已有详情上下文刷新时校验稳定执行归属，保留任务状态、处理计数和告警结果等可正常变化字段，并补充合法、错任务类型、错业务日期、错关联号回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付任务详情展示事实连续性，不替代服务端任务幂等、租约、执行权限、重试治理或生产调度。
+
+### 9.511 2026-09-27 管理端死信任务详情刷新消息路由快照校验
+
+管理端死信补偿任务详情页的手动刷新此前只校验任务号，消息 ID、关联 ID、目标系统或原/重放路由变化仍可能覆盖已加载运营快照。本轮新增死信任务消息路由实体快照匹配，已有详情上下文刷新时校验稳定消息归属，保留任务状态、重放次数和处置时间等可正常变化字段，并补充合法、错消息、错目标系统、错重放路由回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端死信任务详情展示事实连续性，不替代服务端消息幂等、重放权限、消费者处理或生产消息治理。
+
+### 9.512 2026-09-27 管理端支付日终详情刷新业务日期校验
+
+管理端支付日终批次详情页的手动刷新此前只校验批次号，业务日期变化仍可能覆盖已加载运营快照。本轮新增日终详情批次与业务日期快照匹配，已有详情上下文刷新时校验稳定日期归属，保留批次状态、统计结果和完成时间等执行中事实，并补充合法、错批次、错日期回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端支付日终详情展示事实连续性，不替代服务端日终计算、差异核对、对账准入或财务放行。
+
+### 9.513 2026-09-27 管理端死信动作消息路由快照校验
+
+管理端死信任务复核、人工结案和重放动作此前只校验任务号、状态和重放次数，错消息或错重放路由响应仍可能驱动错误运营提示。本轮让动作 API 接收当前列表行快照，并在写入动作结果前校验消息 ID、关联 ID、目标系统及路由，补充错重放路由回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端死信动作后的消息事实连续性，不替代服务端重放幂等、权限、消息代理确认或消费者处理。
+
+### 9.514 2026-09-27 管理端任务中心动作总览快照保留
+
+管理端任务中心动作响应允许不携带新的 `overview`，但页面此前会在这种合法响应下将已加载的趋势、告警和最近任务数组清空，导致运营快照降级。本轮新增动作总览合并逻辑：无新总览时保留旧快照，有新总览时更新对应统计，并补充两种响应形态回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只修复管理端任务中心动作后的本地展示快照合并，不替代服务端任务执行、统计生成、权限或生产调度治理。
+
+### 9.492 2026-09-27 跨系统清分结算净额上限校验
+
+跨系统 happy-path 此前只要求清分订单金额等于预期、清分服务者金额等于结算净额，未阻止结算净额大于订单金额或金额字段不可解析。本轮增加数值化金额、非负和不超订单金额校验，并补充超额及非法金额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地跨系统验收脚本的清分结算资金关系断言，不替代清分/结算服务端限额、手续费计算、财务核对或生产资金确认。
+
+### 9.515 2026-09-27 小程序收银台提交支付实体快照校验
+
+小程序收银台支付提交响应此前只校验预付单号、业务订单号和金额，未校验是否仍绑定当前收银台支付单号，同一预付单下的错误支付单响应可能被继续带入原生支付和结果页。本轮补充当前 `paymentOrderId` 快照校验，并增加合法、错支付单、错订单、错金额回归测试。
+
+本轮自测：小程序 `node --test tests/payment.test.js`、小程序 `node --check utils/payment.js`、小程序 `node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只强化小程序提交响应的客户端实体连续性，不替代服务端支付单归属、幂等、渠道参数校验、原生支付安全校验或真实资金确认。
+
+### 9.516 2026-09-27 跨系统 happy-path 支付提交响应连续性校验
+
+跨系统 happy-path 此前只发送支付提交请求，随后直接查询支付详情，未验证提交接口返回的支付单、预付单、业务订单和金额是否与预付阶段连续。本轮新增支付提交响应实体与金额断言，并补充合法、错支付单、错金额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地跨系统验收脚本的阶段性响应断言，不替代支付服务端状态机、渠道受理、真实回调、清分结算、账务入账、退款或生产资金确认。
+
+### 9.517 2026-09-27 用户端预付响应金额连续性校验
+
+App/H5/PC 与小程序创建预付单时此前只校验响应金额格式，未要求响应金额等于用户刚提交的金额，金额被服务端或中间层改变时仍可能进入收银台。本轮让两套用户端 API 客户端携带请求金额校验预付响应，并补充合法格式化金额与错金额回归测试。
+
+本轮自测：App 用户端 `node --test src/api/client.test.js`、小程序 `node --test tests/request.test.js`、两端 `node --check`、`git diff --check`。
+
+该改动只强化用户端预付响应的展示与跳转门禁，不替代服务端订单金额校验、支付单状态机、幂等控制或生产资金确认。
+
+### 9.518 2026-09-27 管理端订单发起支付预付事实完整性校验
+
+管理端订单运营入口此前只要求预付响应包含预付单号和支付单号，缺少金额时仍可能继续生成收银台入口。本轮补充管理端预付响应金额必填且为正数的客户端门禁，并增加合法与缺失金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端订单发起支付的响应事实完整性，不替代服务端订单金额、支付单归属、权限、幂等或真实渠道校验。
+
+### 9.519 2026-09-27 管理端告警确认支付异常归属快照校验
+
+管理端告警确认动作此前只校验告警号、告警状态和回执状态，错误支付单、异常编号、来源告警或严重等级响应仍可能驱动运营提示。本轮让确认 API 接收当前告警关联快照并校验支付异常归属，补充合法、错支付单和错等级回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端告警确认响应的关联事实连续性，不替代服务端告警归属、权限、状态机、供应商回执或生产通知治理。
+
+### 9.520 2026-09-27 管理端订单发起支付绑定订单金额
+
+管理端订单列表发起支付此前只提交订单号，未将当前订单金额带入预付请求，客户端也无法阻止金额与订单快照不一致的响应。本轮把订单行 `orderAmount` 作为预付请求金额，并校验响应金额连续，补充合法格式化金额与错金额回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端订单入口的金额连续性，不替代服务端订单金额重算、支付单归属、权限、幂等或真实渠道校验。
+
+### 9.521 2026-09-27 管理端支付异常详情归属字段完整性校验
+
+管理端支付异常详情初始响应此前只校验异常号、类型、等级和处理状态，缺少支付单号或业务订单号时仍可能展示无法关联支付实体的异常快照。本轮补充支付单号与订单号必填校验，并增加缺失支付单号回归测试。
+
+本轮自测：管理端 `node --test src/api/client.test.js`、管理端 `node --check src/api/client.js`、`git diff --check`。
+
+该改动只强化管理端异常详情的事实完整性，不替代服务端异常归属、权限、状态机、支付事实或生产运营治理。
+
+### 9.522 2026-09-27 小程序收银台卸载竞态保护
+
+小程序收银台请求返回晚于页面卸载时，此前仍可能回写已离开的页面状态或重新启动倒计时。本轮增加收银台请求版本与页面活跃态门禁，覆盖初始加载和提交失败后的收银台刷新，并补充卸载期间响应不回写回归测试。
+
+本轮自测：小程序 `node --test tests/*.test.js`、小程序 `node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只防止小程序页面生命周期竞态污染本地展示，不替代支付单归属、原生支付回调、渠道状态收敛或真实资金确认。
+
+### 9.523 2026-09-27 小程序收银台提交卸载竞态保护
+
+小程序收银台支付提交请求或原生支付返回晚于页面卸载时，此前仍可能在提交错误处理和 finally 阶段回写页面状态。本轮补充提交响应、原生支付返回、错误处理和收尾阶段的页面活跃态门禁，并增加提交卸载竞态回归测试。
+
+本轮自测：小程序 `node --test tests/*.test.js`、小程序 `node --check pages/cashier/index.js`、`git diff --check`。
+
+该改动只防止提交链路生命周期竞态污染本地展示，不替代原生支付结果、渠道回调、支付状态收敛或真实资金确认。
+
+### 9.524 2026-09-27 独立 API client 预付响应金额校验
+
+独立 payment API client 的 `prepay` 命令此前只校验预付单号、支付单号和业务订单号，金额缺失或与请求金额不一致时仍可能被命令行调用方接受。本轮增加响应金额格式、正数和请求金额连续性校验，并补充合法格式化金额与错金额回归测试。
+
+本轮自测：API client `node --test tests/*.test.mjs`、API client `node --check payment-api.mjs`、`git diff --check`。
+
+该改动只强化独立 API client 的响应门禁，不替代支付服务端金额校验、支付单状态机、渠道鉴权、幂等或真实资金确认。
+
+### 9.525 2026-09-27 独立 API client 收银台与提交事实完整性校验
+
+独立 payment API client 的 `cashier` 和 `submit` 命令此前只校验预付单号或支付单号，缺少业务订单号和金额时仍可能被接受。本轮补充支付单号、业务订单号和正数金额事实校验，并增加合法、缺字段和非法金额回归测试。
+
+本轮自测：API client `node --test tests/*.test.mjs`、API client `node --check payment-api.mjs`、`git diff --check`。
+
+该改动只强化独立 API client 的支付实体完整性，不替代支付服务端实体归属、状态机、渠道鉴权、幂等或真实资金确认。
+
+### 9.526 2026-09-27 独立 API client 退款响应事实与金额连续性校验
+
+独立 payment API client 的退款申请、审核、查询和重试命令此前只校验退款单号，退款响应缺少支付单号、业务订单号或退款金额时仍可能被调用方接受，申请响应金额变化也未被拦截。本轮补充退款响应支付单号、业务订单号、退款金额完整性校验，并让退款申请金额必须与请求金额一致，增加合法、错金额和缺字段回归测试。
+
+本轮自测：API client `node --test tests/*.test.mjs`、API client `node --check payment-api.mjs`、`git diff --check`。
+
+该改动只强化独立 API client 的退款实体与金额连续性，不替代支付服务端退款金额校验、退款状态机、渠道受理、幂等或真实资金确认。
+
+### 9.527 2026-09-27 跨系统 happy-path 金额解析严格化
+
+跨系统 happy-path 的支付、退款、清分、账务和对账金额断言此前使用 `parseFloat`，带有合法数字前缀的异常字符串可能被误判为正确金额。本轮统一使用严格金额格式解析，拒绝超精度、科学计数法和数字后缀，同时补充支付、退款、账务、对账及清分金额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。
+
+该改动只强化本地跨系统验收脚本的金额断言，不替代支付服务端金额约束、跨系统事件一致性、真实渠道、生产账务或资金对账验证。
+
+### 9.528 2026-09-27 跨系统 happy-path 清分账务金额语义修正
+
+真实本地 HTTP happy-path 在账务校验阶段发现，`CLEARING_GENERATED_EVENT` 账务分录金额为清分后的 `workerAmount`（本批为 `¥71.16`），验收脚本却错误按支付订单总额 `¥88.00` 校验，导致真实链路被误判失败。本轮将清分账务和对账事实期望绑定到清分 worker 分成金额，并补充语义化断言测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后重新执行真实 HTTP happy-path。
+
+该改动只修正验收脚本对清分账务金额的业务语义，不改变清分、结算、账务服务实现，也不替代生产资金对账验证。
+
+### 9.529 2026-09-27 跨系统 happy-path 对账事实金额语义修正
+
+真实 HTTP happy-path 进一步确认：清分服务发给账务的 `CLEARING_GENERATED_EVENT` 分录使用 `workerAmount`，但清分服务写入对账链路的 `CLEARING_GENERATED` 业务事实使用订单总额。本轮保留账务分录与 worker 分成绑定，同时将对账事实期望恢复为支付订单总额，避免把两个不同下游契约错误合并。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后重新执行真实 HTTP happy-path。
+
+该改动只修正验收脚本对清分账务和对账事实的分别校验，不改变清分、账务、对账服务实现，也不替代生产资金对账验证。
+
+### 9.530 2026-09-27 payment-core 真实 happy-path 与交付矩阵回归
+
+修正清分账务和对账金额语义后，使用本地已运行的全套后端执行真实 HTTP happy-path，支付、渠道回调、清分、结算、账务、退款和对账链路全部通过；对账链路为 `COMPLETED`，阶段 `4/4`，`financialCloseable=true`。同时完成 payment-core 管理端、App、H5、PC 生产构建，以及 payment-core 后端 Maven 全量测试。
+
+本轮自测：跨系统真实 HTTP happy-path 通过；后端 `/Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Pdemo test`，`1352/1352`；管理端、App、H5、PC `npm run build` 全部成功；小程序无 Web 构建脚本，使用既有 `40/40` Node 测试和语法检查；`git diff --check` 通过。
+
+本轮结果证明本地 demo/HTTP 环境的跨系统流程和代码回归，不替代真实 RabbitMQ、生产 MySQL 并发、真实渠道签名、资金到账、正式鉴权和发布治理验收。
+
+### 9.531 2026-09-27 payment-core 全栈运行态冒烟与 verify 闭环
+
+单独启动前端后，运行器会在命令会话结束时回收 Vite 子进程，因此本轮改用 `tools/dev/local-stack.sh verify all` 在同一受控会话完成启动、检查、冒烟、happy-path 和清理。全部后端健康接口、15 个前端页面根路径及对应 API 代理均通过，随后真实支付退款对账 happy-path 再次通过并自动停止前端进程。
+
+本轮自测：`bash tools/dev/local-stack.sh verify all`；前端页面与代理冒烟通过，跨系统结果为 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`。
+
+该结果证明当前本地运行器会话中的页面和代理可访问，不替代浏览器真实交互、生产域名/TLS、真实渠道、正式鉴权和发布环境验证。
+
+### 9.532 2026-09-27 跨系统 happy-path 支付提交幂等回归
+
+跨系统 happy-path 此前只提交一次支付请求，未证明客户端重试或用户重复点击在相同幂等键下仍返回原支付实体。本轮复用同一提交请求体和幂等键发起第二次支付提交，新增支付单、预付单、订单号和金额连续性断言，并补充重复响应漂移回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本对支付提交幂等响应的验证，不替代服务端唯一约束、并发提交、渠道幂等、真实回调或生产数据库验证。
+
+### 9.533 2026-09-27 跨系统 happy-path 退款申请幂等回归
+
+跨系统 happy-path 此前只提交一次退款申请，未证明客户端重试或重复点击在相同退款幂等键下仍返回原退款实体。本轮复用同一退款申请请求体和幂等键发起第二次申请，新增退款单号、支付单号和退款金额连续性断言，并补充重复响应漂移回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本对退款申请幂等响应的验证，不替代服务端唯一约束、并发申请、渠道幂等、真实退款到账或生产数据库验证。
+
+### 9.534 2026-09-27 跨系统 happy-path 支付成功回调幂等回归
+
+payment-core 服务端已对成功支付单的重复回调提供原事实返回，但跨系统 happy-path 此前只发送一次成功回调。本轮复用同一渠道交易号和回调请求重复发送成功回调，新增支付单、预付单、订单号、渠道交易号和成功状态连续性断言，并补充回调实体漂移回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本对重复成功回调的验证，不替代真实渠道签名 nonce 防重放、并发回调、生产数据库锁竞争或资金确认。
+
+### 9.535 2026-09-27 跨系统 happy-path 退款成功回调幂等回归
+
+退款中心 happy-path 此前只发送一次成功退款回调，未证明渠道重复通知仍返回原退款实体。本轮复用同一渠道退款单号和成功回调请求重复发送退款回调，新增退款单号、支付单号、金额和成功状态连续性断言，并补充重复回调实体漂移回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本对退款重复成功回调的验证，不替代真实渠道签名、回调防重放、并发回调、生产数据库锁竞争或资金到账确认。
+
+### 9.536 2026-09-27 跨系统 happy-path 支付成功事件副作用幂等校验
+
+重复成功回调此前已验证返回同一支付实体，但未严格断言支付成功事件只产生一条已完成派发记录。本轮新增 `PAYMENT_SUCCESS` 事件唯一性断言，要求支付单对应的成功事件、派发状态和 HTTP 完成阶段恰好一条，并补充重复事件回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本对支付成功事件副作用幂等的验证，不替代生产消息中间件去重、并发回调、真实渠道或账务最终一致性验证。
+
+### 9.537 2026-09-27 跨系统 happy-path 重复支付回调金额连续性
+
+支付成功回调幂等断言此前只确认重复响应的支付身份和成功状态，金额字段漂移时仍可能被接受。本轮让首次和重复回调响应都必须保持与支付请求相同的金额，并补充重复响应错金额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本的支付回调金额连续性，不替代服务端金额校验、渠道签名、并发回调或生产资金确认。
+
+### 9.538 2026-09-27 跨系统 happy-path 支付回调渠道交易号完整性
+
+支付回调幂等断言此前只比较两次响应的渠道交易号是否相等，两个响应同时缺少渠道交易号时仍可能通过。本轮要求首次和重复成功回调都包含非空渠道交易号，并补充缺失渠道交易号回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本的渠道交易号完整性，不替代服务端回调绑定、签名验签、渠道真实流水或生产资金确认。
+
+### 9.539 2026-09-27 跨系统 happy-path 退款成功 outbox 归属校验
+
+退款成功 outbox 查询此前只按接口返回行数判断，未验证事件类型、事件编号和聚合编号。本轮要求 outbox 必须恰好是一条 `REFUND_SUCCESS` 事件，且 `aggregateId` 与当前退款单一致，并补充错归属回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`；随后执行真实本地 HTTP happy-path。
+
+该改动只强化本地验收脚本的退款成功事件归属，不替代退款中心持久化约束、消息派发幂等、真实渠道或资金到账验证。
+
+### 9.540 2026-09-27 管理端金额响应格式边界回归
+
+管理端支付、退款和详情响应共用金额解析器；此前该解析器会把科学计数法和三位小数转换为有效金额，存在错误接受非人民币两位小数金额事实的风险。本轮要求金额仅接受整数或最多两位小数，并保留人民币符号及千分位格式兼容；补充支付动作对科学计数法和超精度响应的拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只收紧管理端响应校验，不替代服务端金额精度约束、真实渠道金额校验或生产资金确认。
+
+### 9.541 2026-09-27 用户端金额格式边界回归
+
+App 和小程序金额解析此前会删除任意位置的人民币符号和逗号，导致 `6¥8`、`1,23` 这类格式异常值可能被还原成有效金额。本轮改为仅接受前置人民币符号、合法千分位分组及最多两位小数，并补充两端预付响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check`。该改动只收紧用户端响应格式校验，不替代服务端金额精度约束、真实渠道金额校验或生产资金确认。
+
+### 9.542 2026-09-27 小程序原生支付参数门禁回归
+
+小程序原生支付参数此前只检查字段非空，非法时间戳、非 `prepay_id=` 包参数或不支持的签名类型仍可能进入 `wx.requestPayment`。本轮要求时间戳为数字、包参数带有效 `prepay_id=` 前缀、签名类型为 `RSA` 或 `HMAC-SHA256`，并补充拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/payment.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/payment.js`、`git diff --check`。该改动只加强客户端参数门禁，不替代微信真实签名验签、渠道协议联调或资金到账验证。
+
+### 9.543 2026-09-27 管理端事件重发响应归属回归
+
+管理端支付事件重发响应继续校验返回分页结构。复核分页语义后确认，重发会改变事件状态，目标事件可能合法地离开当前筛选页，因此不能要求刷新页必须包含目标事件；动作成功与列表刷新结果保持分离。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端响应事实校验，不替代服务端事件重发幂等、消息投递确认或生产并发验收。
+
+### 9.547 2026-09-27 事件重发分页语义修正
+
+修正上一轮过严的事件重发客户端校验：重发成功后事件可能因状态筛选或排序变化离开当前页，客户端不再把合法的分页刷新结果误判为动作失败。保留分页结构校验，并由服务端 HTTP 成功结果作为重发动作事实。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。
+
+### 9.589 2026-09-27 管理端死信详情路由事实回归
+
+死信详情与列表此前只校验任务号、状态和重放次数，消息 ID、目标系统、原始死信路由及重放交换机/路由缺失时仍可能进入运营页面。本轮要求这些后端入库的关键路由事实非空，并补充完整路由响应测试，保持关联 ID 可选以兼容历史记录。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`117/117`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信路由事实校验，不替代服务端消息解析、代理确认和生产 replay/DLQ 验收。
+
+### 9.588 2026-09-27 管理端死信状态样式一致性回归
+
+死信详情与动作响应此前未校验状态样式类型，`REPLAY_FAILED` 可能返回普通告警样式，已重放或人工结案也可能返回非成功样式。本轮按服务端映射收口 `REPLAY_FAILED=danger`、`REPLAYED/MANUAL_RESOLVED=success`、其余进行中状态为 `warn`，并补充详情及动作矛盾样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`117/117`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信展示事实一致性，不替代服务端状态机、消息代理确认和生产 replay/DLQ 验收。
+
+### 9.587 2026-09-27 管理端死信状态集合回归
+
+死信任务详情此前只要求任务状态非空，未知状态仍可能进入运营详情和动作判断。本轮依据服务端状态机限制详情及列表状态为 `PENDING_REVIEW/READY_TO_REPLAY/REPLAYING/REPLAYED/REPLAY_FAILED/MANUAL_RESOLVED`，并补充未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`117/117`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信状态事实校验，不替代服务端状态机、消息代理确认和生产 replay/DLQ 验收。
+
+### 9.586 2026-09-27 管理端死信任务列表事实回归
+
+死信任务列表此前只做通用分页归一化，列表行未校验任务号、状态和重放次数，可能先展示无法进入可靠详情或动作链路的任务。本轮增加死信列表逐行基础事实校验，复用详情契约，并补充有效列表与缺失任务号拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`117/117`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信列表响应校验，不替代服务端死信状态机、消息代理确认和生产 replay/DLQ 验收。
+
+### 9.585 2026-09-27 管理端日终状态样式一致性回归
+
+日终详情和最近批次此前虽校验状态样式非空，但未确认 `WARNING` 对应 `warn`、`COMPLETED` 对应 `success`，可能出现批次状态与页面颜色提示相反。本轮增加状态与样式一致性校验，并补充详情及总览最近批次的矛盾样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终展示事实一致性，不替代服务端批次状态机、运营告警和生产对账验收。
+
+### 9.584 2026-09-27 管理端日终运行结果状态回归
+
+支付日终运行动作此前只要求 `latestBatchStatus` 非空，未知状态可能被当作合法批次结果继续刷新总览。本轮让通用日终动作结果和实际日终运行响应复用 `COMPLETED/WARNING` 状态集合，并补充未知运行状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终动作状态事实校验，不替代服务端批次状态机、日终幂等和生产对账验收。
+
+### 9.583 2026-09-27 管理端日终详情状态事实回归
+
+支付日终批次详情此前只要求 `batchStatus` 非空，未知状态仍可能进入详情页并影响运营判断。本轮让日终详情与最近批次共享 `COMPLETED/WARNING` 状态集合，并补充未知详情状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终详情状态事实校验，不替代服务端批次状态机、日终幂等和生产对账验收。
+
+### 9.582 2026-09-27 管理端日终最近批次身份状态回归
+
+支付日终总览此前只校验 `recentBatches` 为数组，首页批次钻取行可能缺少批次号、业务日期或携带未知状态，导致运营人员进入无法确认的批次详情。本轮增加最近批次的批次号、业务日期、状态和状态样式校验，仅接受已落库的 `COMPLETED/WARNING`，并补充有效及未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终总览批次事实校验，不替代服务端日终状态机、批次幂等和生产对账验收。
+
+### 9.581 2026-09-27 管理端任务中心最近任务总览事实回归
+
+任务中心总览此前只校验 `recentTaskRuns` 为数组，首页最近任务卡片可能绕过列表和详情校验展示状态计数矛盾。本轮让总览最近任务逐行复用任务执行详情契约，并补充有效任务与矛盾任务拒绝测试，统一总览、列表、详情三条入口的事实边界。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端任务总览响应校验，不替代服务端任务统计、日志写入和生产并发验收。
+
+### 9.580 2026-09-27 管理端任务中心列表事实回归
+
+任务中心执行列表此前只做通用分页归一化，列表行未复用详情页的状态与计数契约，可能展示 `SUCCESS` 携带告警或失败计数等矛盾事实。本轮为任务列表增加逐行状态计数校验，任一行不可信时整体拒绝，并补充有效分页与矛盾行测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`116/116`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端任务列表响应校验，不替代服务端任务查询、日志写入和生产并发验收。
+
+### 9.579 2026-09-27 用户端支付退款状态事实回归
+
+App 与小程序请求层此前只要求支付、退款响应的 `status` 非空，未知状态可能被页面按处理中或未知警示继续展示。本轮依据后端支付查单和退款状态机收口支付状态集合（含 `PAYING` 兼容值）及退款状态集合，并补充两端未知状态拒绝测试。
+
+本轮自测：App 请求层 `12/12`；小程序 request 请求层 `9/9`；两端相关 `node --check`、`git diff --check` 均通过。该改动只加强客户端状态事实边界，不替代服务端状态机、渠道回调和生产支付/退款验收。
+
+### 9.578 2026-09-27 管理端账单总览金额连续性精度回归
+
+账单总览此前使用 JavaScript `Number` 将总额、已付额和未付额相加并比较，超过安全整数范围时可能把不相等的分币金额误判为连续。本轮在保留金额格式边界的前提下改用精确分币字符串加法，并补充大额正确相加与少一分拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`115/115`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只修复管理端账单统计金额连续性精度，不替代服务端账单汇总、账务精度和生产数据质量验收。
+
+### 9.577 2026-09-27 管理端预付响应大额金额精度回归
+
+管理端预付单响应此前仍使用 JavaScript `Number` 比较请求金额，超过安全整数范围时可能把相邻分币金额误判为一致。本轮复用字符串十进制金额规范化校验预付响应与请求金额，并补充大额相邻分币拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`115/115`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只修复管理端预付金额事实比较精度，不替代服务端订单金额校验、账务精度和生产资金验收。
+
+### 9.576 2026-09-27 管理端详情快照大额分币精度回归
+
+管理端支付、退款、支付记录、路由、收银台、订单和账单快照此前使用 JavaScript `Number/toFixed` 比较金额，超过安全整数范围时可能把相邻分币金额误判为一致。本轮增加字符串十进制金额规范化用于动作响应和详情快照事实比对，并补充跨详情类型的大额相邻分币拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`115/115`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只修复管理端金额事实比较精度，不替代服务端金额校验、账务精度和生产资金验收。
+
+### 9.575 2026-09-27 管理端任务执行详情状态计数一致性回归
+
+任务执行详情此前允许 `SUCCESS` 携带告警/失败计数，也允许已处理任务以 `WARNING` 返回但告警和失败计数均为零，前端可能展示与服务端任务状态机矛盾的执行事实。本轮按服务端日志写入口径限制 `SUCCESS` 必须无告警和失败，`WARNING` 必须包含告警/失败，保留租约跳过时 `processedCount=0` 且三类计数为零的合法例外，并补充状态漂移、租约跳过和未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`114/114`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端任务详情状态计数响应校验，不替代服务端任务日志写入、租约并发和生产调度验收。
+
+### 9.551 2026-09-27 App 金额整数部分格式回归
+
+App 端金额校验此前允许 `.5` 这类缺少整数部分的格式，与小程序和管理端的金额契约不一致。本轮要求金额小数点前必须存在整数数字，并补充预付响应拒绝测试；合法人民币符号、千分位和最多两位小数仍保持支持。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`git diff --check`。该改动只统一前端金额格式门禁，不替代服务端金额精度、币种和支付渠道校验。
+
+### 9.552 2026-09-27 小程序请求层金额整数部分格式回归
+
+小程序请求层金额校验仍允许 `.5` 这类缺少整数部分的格式，导致与 App、管理端和小程序页面层规则不一致。本轮同步要求金额小数点前必须存在整数数字，并补充小程序预付响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check`。该改动只统一小程序请求层金额格式门禁，不替代服务端金额精度、币种和支付渠道校验。
+
+### 9.553 2026-09-27 跨系统金额连续性解析回归
+
+跨系统 happy-path 校验器此前允许 `.5` 作为金额，可能在跨服务金额连续性断言中放行与各端格式契约不一致的值。本轮要求金额解析必须包含整数部分，并补充 helper 对该格式的拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。该改动只加强本地联调断言，不替代真实渠道签名、生产资金到账和跨系统生产并发验收。
+
+### 9.554 2026-09-27 管理端运营总览金额格式回归
+
+管理端收银台、账单和服务者结算总览此前直接使用 `Number(...)` 解析金额，可能接受科学计数法等非约定金额格式。本轮统一使用严格的非负金额解析，保留人民币符号、千分位和最多两位小数支持，并补充三类总览拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端统计响应格式校验，不替代服务端金额精度、币种和权限验收。
+
+### 9.555 2026-09-27 管理端 dashboard 指标事实回归
+
+管理端 dashboard 指标此前只要求成功金额和成功率为非空字符串，科学计数法金额和超过 100% 的成功率仍可能进入展示。本轮要求成功金额为严格非负金额、成功率为 `0–100%` 的百分比，并补充异常响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端指标响应校验，不替代服务端统计口径、权限和生产数据质量验收。
+
+### 9.556 2026-09-27 管理端支付监控摘要事实回归
+
+支付监控总览的摘要 DTO 明确包含成功金额和成功率，但管理端此前只校验摘要计数，缺失或异常的金额、成功率仍可能进入监控页面。本轮要求摘要包含严格非负金额和 `0–100%` 成功率，并补充监控总览异常响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端监控响应校验，不替代服务端指标计算、告警口径和生产数据质量验收。
+
+### 9.557 2026-09-27 管理端支付监控渠道明细回归
+
+支付监控总览此前只校验渠道明细是数组，渠道身份、计数、金额、成功率和风险说明缺失或矛盾时仍可能进入页面。本轮补充渠道明细结构、金额、比例和计数关系校验，并增加异常渠道行拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端监控渠道响应校验，不替代服务端指标计算、告警口径、权限和生产数据质量验收。
+
+### 9.558 2026-09-27 管理端支付监控趋势点位回归
+
+支付监控趋势数组此前只校验容器类型，日期、总量、成功量和成功金额缺失或矛盾时仍可能进入图表。本轮补充趋势点位结构、金额和计数关系校验，并增加成功量超过总量的拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端趋势响应校验，不替代服务端指标计算、时间窗口和生产数据质量验收。
+
+### 9.559 2026-09-27 管理端支付监控告警事实回归
+
+支付监控告警数组此前只校验容器类型，告警身份、处置文案、影响数量或下钻路由缺失时仍可能进入运营页面。本轮补充告警项完整结构和非负影响数校验，并增加异常告警行拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端告警响应校验，不替代服务端告警计算、权限和生产处置流程验收。
+
+### 9.560 2026-09-27 管理端支付监控指标口径回归
+
+支付监控指标定义数组此前只校验容器类型，指标编码、阈值、责任方或下钻入口缺失时仍可能展示为可用运营口径。本轮补充指标定义字段完整性校验，并增加缺少下钻入口的拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端指标定义响应校验，不替代服务端指标口径治理、权限和生产运营流程验收。
+
+### 9.561 2026-09-27 管理端支付事件总览计数关系回归
+
+支付事件总览此前只校验各计数非负，状态分类总和超过事件总量、失败与死信汇总不一致等响应仍可能展示。本轮补充发布状态分类、失败死信汇总、成功事件和自动重试候选的计数关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端事件统计响应校验，不替代服务端事件状态机、重试策略和生产消息治理验收。
+
+### 9.562 2026-09-27 管理端支付请求总览计数关系回归
+
+支付请求总览此前只校验各计数非负，状态分类总和、去重终端/渠道、重复支付单或缺响应数量超过请求总量时仍可能展示。本轮补充请求总览计数上限关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端请求统计响应校验，不替代服务端请求状态机、重复支付判定和生产数据质量验收。
+
+### 9.563 2026-09-27 管理端支付日志总览计数关系回归
+
+支付日志总览此前只校验各计数非负，日志级别分类、阶段/来源去重和回调异常子集超过日志总量时仍可能展示。本轮补充日志总览计数上限关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端日志统计响应校验，不替代服务端日志写入、查询口径和生产数据质量验收。
+
+### 9.564 2026-09-27 管理端支付路由总览计数关系回归
+
+支付路由总览此前只校验各计数非负，成功/告警分类不平衡或渠道分布超过路由总量时仍可能展示。本轮依据服务端互斥 CASE 统计补充成功加告警等于总量、渠道计数不超过总量的校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端路由统计响应校验，不替代服务端路由执行、健康熔断和生产数据质量验收。
+
+### 9.565 2026-09-27 管理端收银台会话总览计数关系回归
+
+收银台会话总览此前只校验各计数非负，状态分类总和、终端去重或临近失效数量超过会话总量时仍可能展示。本轮补充会话总览计数上限关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端会话统计响应校验，不替代服务端收银台状态机、过期策略和生产数据质量验收。
+
+### 9.566 2026-09-27 管理端账单总览金额与计数连续性回归
+
+账单总览此前只校验计数非负和金额格式，账单状态分类超过总量或已付金额加待付金额不等于应收总额时仍可能展示。本轮补充账单分类上限和金额连续性校验，并增加矛盾响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端账单统计响应校验，不替代服务端账单状态机、金额计算和生产数据质量验收。
+
+### 9.567 2026-09-27 管理端服务者结算总览计数关系回归
+
+服务者结算总览此前只校验各计数非负，出款状态分类、待审核数量或负净额数量超过结算总量时仍可能展示。本轮补充结算总览计数上限关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端结算统计响应校验，不替代服务端结算状态机、出款流程和生产数据质量验收。
+
+### 9.568 2026-09-27 管理端支付日终批次计数关系回归
+
+支付日终总览此前只校验批次数为非负，完成批次与异常批次超过总批次时仍可能展示。本轮依据服务端批次状态统计补充完成/异常批次总量关系校验，并增加矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端日终统计响应校验，不替代服务端批次状态机、日终并发和生产数据质量验收。
+
+### 9.569 2026-09-27 管理端支付任务中心计数连续性回归
+
+支付任务中心此前只校验各计数非负，过期支付、主动查单、失败事件、失败退款和 SLA 子集之间的矛盾关系仍可能进入运营页面。本轮依据服务端查询口径补充子集上限、失败事件/退款分区及 SLA 候选总数校验，并增加多类矛盾计数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端任务统计响应校验，不替代服务端任务查询、状态机和生产并发验收。
+
+### 9.570 2026-09-27 当前工作树跨系统 happy-path 复核
+
+使用 `HSP_LOCAL_START_TIMEOUT_SECONDS=120 HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository bash tools/dev/local-stack.sh verify all` 完成受控本地全栈验证。12 个后端、15 个前端入口及代理全部 READY，HTTP 冒烟通过；支付、清分、结算、账务、退款和对账链路均形成成功事实，对账状态为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。验证后本轮启动的前端进程已由脚本停止。
+
+该证据仅证明当前工作树在本地 H2/demo/HTTP 栈上的正向跨系统闭环可运行，不替代真实渠道、生产 RabbitMQ/MySQL、失败重试/DLQ/replay、资金到账、正式鉴权和发布治理验收。
+
+### 9.571 2026-09-27 用户端大额金额精度连续性回归
+
+用户端预付响应金额与请求金额比对此前使用 JavaScript `Number` 和 `toFixed`，超过安全整数范围时可能丢失分币精度，把相邻大额金额误判为一致。本轮改为规范化十进制字符串比较，并同步修复 App 与小程序的金额正数判断；补充相邻大额分币金额拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（`12/12`）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（`9/9`）、两端 `node --check`、`git diff --check`。该改动只修复客户端金额事实比对精度，不替代服务端金额校验、账务精度和生产资金验收。
+
+### 9.572 2026-09-27 用户端退款与支付快照金额精度回归
+
+退款进度、支付实体快照和小程序支付工具此前仍使用 JavaScript `Number/toFixed`，超过安全整数范围时可能把相邻分币金额判为一致。本轮统一改为字符串十进制规范化比较，补充 App 退款/支付快照及小程序退款进度、大额支付金额回归测试。
+
+本轮自测：App 常量测试 `7/7`；小程序支付与退款进度测试 `23/23`；相关脚本 `node --check`、`git diff --check` 均通过。该改动只修复用户端金额事实比较精度，不替代服务端退款额度、账务精度和生产资金验收。
+
+### 9.573 2026-09-27 管理端返回码导入预检计数连续性回归
+
+返回码导入预检此前只校验计数为非负，新增、更新、 unchanged、invalid 之和与总数不一致，或 `valid`、`appliedCount` 与分类计数矛盾时仍可能进入配置治理页面。本轮依据服务端预检统计口径补充计数分区、有效性和已应用数量上限校验，并增加三类矛盾响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端返回码导入预检响应校验，不替代服务端 CSV 解析、基线指纹和复核事务验收。
+
+### 9.574 2026-09-27 管理端任务执行详情计数连续性回归
+
+任务执行详情此前只校验处理、成功、告警和失败计数非负，分类计数之和超过处理数时仍可能进入运营页面。本轮与任务动作保持一致，仅允许处理数包含跳过项，补充成功/告警/失败之和不得超过处理数的校验和回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端任务详情响应校验，不替代服务端任务日志统计和多实例并发验收。
+
+### 9.550 2026-09-27 管理端配置复核状态事实回归
+
+管理端配置复核动作此前只校验申请号，缺少复核状态的响应仍可能被当作可展示结果。本轮要求目标复核项同时包含非空 `reviewStatus`，并补充缺少状态响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端配置复核响应校验，不替代服务端审批状态机、正式权限和生产发布治理验收。
+
+### 9.544 2026-09-27 管理端日终批次日期归属回归
+
+管理端日终跑批动作此前只校验总览统计结构，未确认返回的最近业务日与请求业务日一致，可能把其他日期的批次结果展示为本次跑批结果。本轮增加 `latestBizDate` 归属校验，并补充错日期响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端批次响应校验，不替代服务端日终幂等、租约并发和正式生产批次验收。
+
+### 9.545 2026-09-27 管理端死信动作状态归属回归
+
+管理端死信动作此前只校验任务号、重放次数和消息路由事实，复核、人工结案与重放均可能接受任意非空状态。本轮按动作限制 `READY_TO_REPLAY`、`MANUAL_RESOLVED`、`REPLAYED/REPLAY_FAILED` 合法结果，并补充状态漂移拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端动作响应校验，不替代服务端状态机、消息代理确认或生产并发验收。
+
+### 9.546 2026-09-27 用户端多小数点金额回归
+
+复核用户端金额格式校验时发现字符串拆分会忽略第三个小数点，`1.2.3` 可能被误判为 `1.2`。本轮显式拒绝多个小数点，并补充 App 与小程序预付响应回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check`。
+
+### 9.548 2026-09-27 任务中心执行计数一致性回归
+
+任务中心动作允许处理数包含跳过项，因此结果计数不要求与处理数相等；但成功、告警和失败计数之和不能超过处理数。本轮增加该不变量校验，并补充矛盾计数响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。该改动只加强管理端任务结果校验，不替代服务端任务统计和生产并发验收。
+
+### 9.549 2026-09-27 管理端分页总数一致性回归
+
+管理端分页归一化此前会接受小于当前返回行数的 `total`，可能导致页面少显示后续页。本轮将总数下限校正为当前返回行数，并补充分页元数据矛盾测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check`。
+
+### 9.590 2026-09-27 管理端支付事件列表路由状态回归
+
+管理端支付事件列表此前直接透传分页结果，事件号、事件主题、下游系统、发布状态、状态样式和重试次数缺失或矛盾时仍可能进入运营页面。本轮补充列表逐行事实校验，限制 `PENDING/SUCCESS/FAILED/DEAD_LETTER/UNKNOWN` 五种发布状态，并校验状态样式与状态一致，同时接入 `paymentEventApi.getList` 和未知状态、缺失事件号、错误样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件列表响应校验，不替代服务端事件状态机、消息投递确认、重发幂等和生产消息治理验收。
+
+### 9.591 2026-09-27 管理端支付事件详情路由状态回归
+
+管理端支付事件详情此前只校验事件号、事件类型和非空发布状态，主题、下游系统、重试次数缺失或发布状态样式矛盾时仍可能进入详情页。本轮与列表统一校验事件路由事实、五种合法发布状态、状态样式和非负重试次数，并补充详情缺失字段、空状态和错误样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件详情响应校验，不替代服务端事件状态机、消息投递确认、重发幂等和生产消息治理验收。
+
+### 9.592 2026-09-27 管理端支付流水列表来源状态回归
+
+管理端支付流水列表此前直接透传多来源联合查询结果，来源与流水类型标签不一致、业务状态样式缺失，或业务事件的发布状态/重试次数异常时仍可能进入排障页面。本轮按 `PAYMENT_ATTEMPT/CHANNEL_NOTIFY/ROUTE_RECORD/BUSINESS_EVENT` 四类后端来源补充逐行校验，对业务事件单独校验发布状态、下游系统、事件主题和重试次数，并接入 `paymentFlowApi.getList` 和来源标签、未知发布状态、非事件重试次数异常拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付流水列表响应校验，不替代服务端流水联合查询、状态机、敏感数据脱敏和生产数据质量验收。
+
+### 9.593 2026-09-27 管理端支付流水详情来源状态回归
+
+管理端支付流水详情此前只校验来源编号、流水类型和业务状态，来源类型标签、业务状态样式以及业务事件的发布状态和重试次数缺失或矛盾时仍可能进入详情页。本轮按后端四类来源统一校验来源与类型标签、状态样式，并区分业务事件与其他流水的发布字段，补充详情来源标签漂移拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付流水详情响应校验，不替代服务端流水来源查询、状态机、敏感数据脱敏和生产数据质量验收。
+
+### 9.594 2026-09-27 管理端支付路由列表结果事实回归
+
+管理端支付路由列表此前直接透传分页结果，路由号、支付单号、金额、渠道、规则、路由结果或结果样式缺失/矛盾时仍可能进入运营页面。本轮补充逐行路由事实校验，按后端映射限制兜底结果为 `warn`、线下结果为 `info`、其他结果为 `success`，并接入 `paymentRouteApi.getList` 和金额、路由号、结果样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付路由列表响应校验，不替代服务端路由执行、运营配置快照、金额精度和生产数据质量验收。
+
+### 9.595 2026-09-27 管理端支付路由详情结果事实回归
+
+管理端支付路由详情此前只校验路由号、金额和路由结果，支付单号、渠道、路由规则、结果样式或创建时间缺失/矛盾时仍可能进入详情页。本轮与列表统一校验路由关联事实、金额、结果样式和时间字段，并补充详情错误样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付路由详情响应校验，不替代服务端路由执行、运营配置快照、金额精度和生产数据质量验收。
+
+### 9.596 2026-09-27 管理端账单列表金额连续性回归
+
+管理端账单列表此前直接透传分页结果，账单应收、已支付和待支付金额不连续，或账单状态与状态样式矛盾时仍可能进入运营页面。本轮补充字符串分币金额校验，要求已支付金额加待支付金额等于应收金额，并限制已支付/已结清、待支付/部分支付、已关闭的状态样式映射，接入 `billApi.getList` 和金额、状态、零应收拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端账单列表响应校验，不替代服务端账单汇总、金额精度、账务状态机和生产资金验收。
+
+### 9.597 2026-09-27 管理端账单详情金额连续性回归
+
+管理端账单详情此前只校验账单号、应收金额和状态，订单关联、已支付/待支付金额连续性、状态样式及时间字段缺失或矛盾时仍可能进入详情页。本轮与账单列表统一校验分币金额关系和状态映射，补充详情金额不连续、空状态和零应收拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端账单详情响应校验，不替代服务端账单汇总、金额精度、账务状态机和生产资金验收。
+
+### 9.598 2026-09-27 管理端订单列表金额状态回归
+
+管理端订单列表此前直接透传分页结果，已支付金额超过订单金额、订单/履约状态样式矛盾，或最新支付/收银台状态缺少配套样式时仍可能进入运营页面。本轮补充订单金额非负与上限校验、订单和履约状态样式校验、关联状态成对校验，并接入 `orderApi.getList` 和金额、样式、关联状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端订单列表响应校验，不替代服务端订单状态机、账单汇总、支付关联和生产数据质量验收。
+
+### 9.599 2026-09-27 管理端订单详情金额状态回归
+
+管理端订单详情此前只校验订单号、应收金额和订单状态，客户/服务关联、已付与剩余应付金额连续性、履约状态样式及最新支付/收银台状态配套关系缺失或矛盾时仍可能进入详情页。本轮与订单列表统一校验订单金额分币关系、订单和履约状态样式、关联状态成对事实，并补充详情金额不连续和空状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端订单详情响应校验，不替代服务端订单状态机、账单汇总、支付关联和生产数据质量验收。
+
+### 9.600 2026-09-27 管理端支付单列表状态事实回归
+
+管理端支付单列表此前直接透传分页结果，支付单金额、订单关联、渠道或状态样式缺失/矛盾时仍可能进入运营页面。本轮按后端状态机限制 `PREPAY_CREATED/WAIT_CALLBACK/RISK_REVIEW/SUCCESS/CLOSED` 五种支付状态，校验状态样式、正金额、支付方式、渠道和最近支付尝试事实，并接入 `paymentApi.getList` 和状态、金额、订单号拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付单列表响应校验，不替代服务端支付状态机、渠道回调、金额精度和生产资金验收。
+
+### 9.601 2026-09-27 管理端支付单详情关联状态回归
+
+管理端支付单详情此前只校验支付单号、预付单号、订单号、金额和非空状态，业务链路号、客户、支付方式、渠道、状态样式或最近支付尝试样式缺失/矛盾时仍可能进入详情页。本轮与支付单列表统一校验五种支付状态及样式，并补充支付关联、金额和状态样式事实校验。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付单详情响应校验，不替代服务端支付状态机、渠道回调、脱敏处理、金额精度和生产资金验收。
+
+### 9.602 2026-09-27 管理端退款列表金额状态回归
+
+管理端退款列表此前直接透传分页结果，退款单关联号、退款金额、退款方式、申请时间或成功时间缺失，或退款状态与状态样式矛盾时仍可能进入运营页面。本轮按后端退款状态机限制 `REVIEWING/PROCESSING/SUCCESS/FAIL` 四种状态，校验正金额、退款关联事实、成功时间占位值，并接入 `refundApi.getList` 和未知状态、错误样式、零金额、缺失支付单号拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端退款列表响应校验，不替代服务端退款状态机、渠道查询、金额精度和生产资金验收。
+
+### 9.603 2026-09-27 管理端收银台会话列表金额状态回归
+
+管理端收银台会话列表此前直接透传分页结果，会话/预付单/支付单/订单关联、终端、金额、失效时间缺失，或动态会话状态与状态样式矛盾时仍可能进入运营页面。本轮按后端动态投影限制 `待支付/支付中/支付成功/已完成/已失效` 五种状态，校验正金额、会话关联事实和时间字段，并接入 `cashierSessionApi.getList` 以及未知状态、错误样式、零金额、缺失终端拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端收银台会话列表响应校验，不替代服务端会话失效投影、支付关联、金额精度和生产数据质量验收。
+
+### 9.604 2026-09-27 管理端支付请求列表关联状态回归
+
+管理端支付请求列表此前直接透传分页结果，请求号、支付/预付/订单关联、支付方式、渠道或创建时间缺失，或请求状态与状态样式矛盾时仍可能进入排障页面。本轮按后端请求状态限制 `成功/失败/处理中/等待回调` 四种状态，校验状态样式和核心关联字段，同时保留未回调场景允许为空的路由结果、终端及响应报文，并接入 `paymentRequestApi.getList`、未知状态、错误样式、缺失支付单号和缺失渠道拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付请求列表响应校验，不替代服务端支付尝试状态机、渠道请求报文脱敏、路由事实和生产排障数据质量验收。
+
+### 9.605 2026-09-27 管理端支付处理日志列表来源级别回归
+
+管理端支付处理日志列表此前直接透传分页结果，日志编号、支付/订单关联、处理阶段、消息、来源或创建时间缺失，或 `INFO/WARN/ERROR` 级别与 `info/warn/danger` 样式矛盾时仍可能进入排障页面。本轮补充日志列表逐行事实校验，接入 `paymentLogApi.getList`，并覆盖未知级别、错误样式、缺失支付单号和缺失消息拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付处理日志列表响应校验，不替代服务端日志写入、敏感报文脱敏、链路事实和生产排障数据质量验收。
+
+### 9.606 2026-09-27 管理端支付记录列表金额状态回归
+
+管理端支付记录列表此前直接透传分页结果，支付/订单/请求关联、支付通道、状态样式、金额或退款汇总缺失/矛盾时仍可能进入收款记录页面。本轮按后端投影限制 `支付成功/支付中/已关闭/支付失败` 四种状态，校验正支付金额、非负退款次数、已退款金额不超过支付金额及核心展示字段，并接入 `paymentRecordApi.getList`、状态样式、超额退款、负退款次数和缺失支付单号拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付记录列表响应校验，不替代服务端支付状态机、退款汇总、金额精度、敏感字段脱敏和生产资金验收。
+
+### 9.607 2026-09-27 管理端支付交易异常列表风险状态回归
+
+管理端支付交易异常列表此前直接透传分页结果，异常关联、异常类型、严重等级、支付状态、处理状态、告警状态、SLA 或升级状态样式缺失/矛盾时仍可能进入运营处置页面。本轮按后端异常 union 限制六类异常及 `P1/P2` 等级，统一校验支付状态、处理状态、告警回执状态、SLA 和升级状态样式，并接入 `paymentIssueApi.getList`、未知异常、错误等级样式、支付状态样式和处理状态样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付异常列表响应校验，不替代服务端异常 union、告警派发、SLA 计算、批量处置和生产运营治理验收。
+
+### 9.608 2026-09-27 管理端支付异常告警列表派发回执回归
+
+管理端支付异常告警列表此前直接透传分页结果，告警/异常关联、告警通道、告警内容、派发状态、回执状态或回查队列状态缺失/矛盾时仍可能进入告警处置页面。本轮限制告警状态 `已生成/已派发/部分失败/派发失败`、回执状态 `无需回执/待确认/已确认` 及五种回查状态，校验非负回查次数，并接入 `paymentIssueApi.getAlertLogs` 和状态样式、未知回查状态、负回查次数拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付异常告警列表响应校验，不替代服务端告警派发、供应商回执、回查租约、幂等确认和生产告警治理验收。
+
+### 9.609 2026-09-27 管理端服务者结算列表金额状态回归
+
+管理端服务者结算列表此前直接透传分页结果，结算单号、服务者、结算周期、结算状态或出款状态缺失/样式矛盾，或应结、扣减、实结金额不连续时仍可能进入运营页面。本轮按后端状态限制结算状态 `待审核/待出款/已完成`、出款状态 `待出款/出款中/出款成功`，支持后端负实结金额格式，并校验 `应结金额 - 扣减金额 = 实结金额`，接入 `settlementApi.getWorkerList` 和金额、状态样式拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端服务者结算列表响应校验，不替代服务端结算状态机、出款执行、保证金影响、金额精度和生产资金验收。
+
+### 9.610 2026-09-27 当前工作树跨系统支付退款对账 happy-path
+
+本轮启动检查确认 12 个后端均为 READY，并执行 `tools/dev/local-stack.sh happy-path`。当前工作树真实跑通支付成功、清分、结算、账务、退款及对账闭环：生成支付单 `PAY179050801316685c562c8`、清分单 `CLO20042`、结算单 `SLT20044`、退款单 `REF20260927192013882`；账务事实包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账状态为 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。
+
+本轮自测：`tools/dev/local-stack.sh happy-path` 返回 `[PASS] cross-system local happy path`。该证据覆盖受控本地服务的正向联动，不替代真实渠道、生产消息与数据库、失败重试/DLQ/replay、资金到账、正式鉴权或发布治理验收。
+
+### 9.611 2026-09-27 用户端收银台状态与渠道事实回归
+
+用户端收银台响应此前只确认 `channels` 是数组，未知收银台状态或错误状态样式仍可能进入可提交判断；渠道数组中非字符串或未知渠道也可能被页面过滤后静默展示为空。本轮按后端收银台状态及样式映射校验 `待支付/支付中/结果待确认/待回调/支付成功/已关闭/已失效/待风控复核/风控拦截/风控拒绝`，并限制渠道为 `微信支付/支付宝/银行卡`，覆盖未知状态、错误样式、未知渠道、空渠道值和非字符串渠道拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户端收银台响应事实校验，不替代服务端支付状态机、渠道路由、风控决策和真实渠道验收。
+
+### 9.612 2026-09-27 小程序收银台状态与渠道事实回归
+
+小程序请求层此前与 Web 端不同，只确认收银台 `channels` 为数组，未知状态、错误样式或非法渠道仍可能进入小程序提交判断。本轮同步后端收银台状态及样式映射，限制渠道为 `微信支付/支付宝/银行卡`，并覆盖未知状态、错误样式、未知渠道、空渠道值和非字符串渠道拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/*.test.js`（41/41）、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`node --check systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check`。该改动只加强小程序收银台响应事实校验，不替代服务端支付状态机、渠道路由、风控决策和真实微信支付验收。
+
+### 9.613 2026-09-27 通用支付 API 客户端收银台事实回归
+
+通用 `frontend/api-client` 的 `cashier` 命令此前只校验预付单、支付单、订单号和金额，未知收银台状态或非法渠道仍可能被命令行集成方视为成功响应。本轮同步后端收银台状态及样式映射，限制渠道为 `微信支付/支付宝/银行卡`，覆盖未知状态、错误样式、未知渠道和非字符串渠道拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check`。该改动只加强通用 API 客户端响应事实校验，不替代服务端支付状态机、渠道路由和真实渠道验收。
+
+### 9.614 2026-09-27 通用支付 API 客户端结果状态回归
+
+通用 `frontend/api-client` 的 `detail/query/close` 命令此前只确认支付单号，缺少预付单、订单、金额和支付状态事实校验，不完整响应可能被集成方视为操作成功。本轮要求三类命令返回完整支付关联事实，并限制支付状态为后端已定义的支付状态集合，覆盖缺失关联、缺失金额和未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check`。该改动只加强通用 API 客户端结果响应事实校验，不替代服务端状态机、幂等收口和真实渠道验收。
+
+### 9.615 2026-09-27 通用支付 API 客户端大额分币精度回归
+
+通用 `frontend/api-client` 的金额响应校验此前使用 JavaScript `Number` 与 `toFixed(2)`，在超过安全整数范围的大额支付或退款金额上可能把相差一分钱的值判断为一致。本轮改为分币 `BigInt` 比较，保留两位小数和正金额约束，并新增大额精确值通过及一分钱差异拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check`。该改动只修复客户端金额比较精度，不替代服务端 BigDecimal 校验、幂等约束和生产资金验收。
+
+### 9.616 2026-09-27 通用支付 API 客户端数值金额安全边界
+
+在分币 `BigInt` 比较之外，本轮补充处理 JSON 数值类型金额：当数值金额的分币结果超出 JavaScript 安全整数范围时直接拒绝，避免上游已经丢失小数精度的数字进入支付事实校验；新增超安全范围数值金额拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check`。该改动只加强客户端数值金额边界，不替代服务端 BigDecimal 校验和生产资金验收。
+
+### 9.617 2026-09-27 跨系统 happy-path 金额断言精度回归
+
+跨系统 happy-path 验证器原先对支付、退款、账务、清分和结算金额使用浮点数比较。本轮改为分币 `BigInt` 比较，确保大额支付金额相差一分钱时验证失败，并保持正常金额流转、退款上限和结算连续性断言。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（28/28）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。该改动只加强联调验证器金额断言，不替代服务端金额精度、生产账务和资金验收。
+
+### 9.618 2026-09-27 修复后跨系统 happy-path 实跑
+
+本轮执行 `tools/dev/local-stack.sh happy-path` 返回 `[PASS] cross-system local happy path`，当前工作树真实完成支付、清分、结算、账务、退款和对账收口：支付单 `PAY1790509430233fbf5e340`、清分单 `CLO20043`、结算单 `SLT20045`、退款单 `REF20260927194350897`；账务包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账为 `COMPLETED`、完成阶段 `4/4`、`financialCloseable=true`。
+
+该证据仅覆盖受控本地服务正向闭环，不替代真实渠道、生产消息与数据库、失败重试/DLQ/replay、资金到账、正式鉴权或发布治理验收。
+
+### 9.619 2026-09-27 跨系统 happy-path 非 JSON 错误诊断回归
+
+跨系统联调验证器现在会将非 JSON 服务响应包装为包含失败 URL 和恢复提示的稳定错误，并保留底层解析异常；避免运营或研发只看到无上下文的 JSON 解析错误。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（29/29）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check`。该改动只改善联调工具错误诊断，不替代服务端错误治理和生产监控。
+
+### 9.620 2026-09-27 错误诊断修复后跨系统 happy-path 实跑
+
+本轮执行 `tools/dev/local-stack.sh happy-path` 返回 `[PASS] cross-system local happy path`，当前工作树完成支付、清分、结算、账务、退款和对账收口：支付单 `PAY1790509644934ea0322db`、清分单 `CLO20044`、结算单 `SLT20046`、退款单 `REF20260927194725463`；对账状态 `COMPLETED`，完成阶段 `4/4`，`financialCloseable=true`。
+
+### 9.621 2026-09-27 管理端支付配置复核动作批量响应回归
+
+管理端支付配置复核动作此前只要求响应数组中存在目标 `requestNo`，同批返回的其他记录即使缺少 `reviewStatus` 也会被页面接收并替换当前复核列表，可能造成不可确认的运营状态。本轮改为逐条校验复核记录的 `requestNo` 与 `reviewStatus`，同时继续要求目标申请存在，并补充 malformed sibling records 拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（140/140）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付配置复核响应校验，不替代服务端审批状态机、权限、并发版本和生产配置发布治理验收。
+
+### 9.622 2026-09-27 管理端支付配置动作集合响应回归
+
+渠道、网关、协议、控制策略、值班路由、告警供应商、返回码和路由规则的申请/回滚动作此前均只要求集合中存在目标业务键，同批 malformed 记录仍可能被页面整体接收。本轮抽取共享集合校验，逐条确认业务键非空并要求目标事实存在，覆盖九类配置动作的 malformed sibling 拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（141/141）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付配置动作响应校验，不替代服务端审批状态机、权限、并发版本和生产配置发布治理验收。
+
+### 9.623 2026-09-27 管理端控制策略自检总览契约回归
+
+控制策略自检接口实际返回完整支付配置总览，但客户端此前只校验 `controlPolicies`，缺失其他配置集合时页面会通过 `|| []` 静默清空已有运营配置。本轮复用完整支付配置总览校验，再确认请求的 `sourceAppId` 存在，避免自检结果覆盖页面状态时丢失其他配置事实。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（141/141）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端控制策略自检响应校验，不替代服务端自检逻辑、配置权限和生产发布治理验收。
+
+### 9.624 2026-09-27 管理端返回码导入预检明细契约回归
+
+返回码导入预检此前只校验汇总计数，`items` 可为空或缺少候选映射、动作、行号和提示，页面随后直接读取 `candidate.*`，可能展示不可确认的导入结果。本轮逐行校验导入动作、有效性、行号、提示、变更字段和候选映射字段，并要求明细行数量及各动作计数与汇总一致，补充空明细、空候选和动作矛盾拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（141/141）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端返回码导入预检响应校验，不替代服务端 CSV 解析、基线并发控制、审批和生产配置发布治理验收。
+
+### 9.625 2026-09-27 管理端支付配置复核列表响应回归
+
+支付渠道、网关、协议、控制策略、值班路由、告警供应商和返回码等复核列表此前直接透传数组，缺少 `requestNo` 或 `reviewStatus` 的记录仍可能进入运营复核页面。本轮为全部配置复核列表接入统一校验，允许合法空列表，拒绝 malformed 复核行并补充 API 层回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（142/142）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付配置复核列表响应校验，不替代服务端审批状态机、权限、并发版本和生产配置发布治理验收。
+
+### 9.626 2026-09-27 管理端全矩阵构建回归
+
+本轮执行 `node tools/dev/frontend-admin-regression.mjs`，12 个管理端应用的声明测试和生产构建全部通过，结果为 `12/12 admin apps passed test and build`；payment-core 管理端包含当前配置复核列表、控制策略自检和返回码预检契约测试。本证据验证前端管理端矩阵在当前工作树可构建，不替代真实后端栈、权限系统、生产数据或发布后现场核验。
+
+### 9.627 2026-09-27 管理端支付异常责任组汇总回归
+
+支付异常责任组汇总此前仅将 `null` 归一为空数组，责任组、样式、建议动作、负数计数及超出总数的 SLA/P1/P2 统计仍可能进入运营总览。本轮校验汇总行的展示字段、非负计数和计数关系，并接入 `paymentIssueApi.getResponsibilitySummary`，补充 malformed 行拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端异常责任组汇总响应校验，不替代服务端异常统计、SLA 计算和生产运营治理验收。
+
+### 9.628 2026-09-27 管理端异常批量处置结果回归
+
+异常批量处置接口此前只要求返回对象包含 `items`，未复用支付异常分页行校验；通用分页归一化还会将 `null` 响应转换为空页，掩盖服务端未返回可确认结果。本轮先要求动作响应为明确分页，再复用异常列表校验，拒绝 malformed 异常行并保留动作专属错误码。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端异常批量处置响应校验，不替代服务端批量事务、权限、状态机和生产运营治理验收。
+
+### 9.629 2026-09-27 管理端支付事件重发结果回归
+
+支付事件重发接口此前只校验分页外壳，页面会直接用响应替换事件列表，事件号、事件类型、下游系统、发布状态或重试次数缺失/矛盾时仍可能被展示。本轮复用支付事件列表行校验，并保留重发专属错误码，补充 malformed 事件行拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件重发响应校验，不替代服务端消息代理投递、下游消费、幂等收口和生产事件治理验收。
+
+### 9.630 2026-09-27 管理端支付事件列表关联事实回归
+
+支付事件列表此前只校验事件号、类型、主题、下游系统、发布状态和重试次数，页面实际展示的支付单号、业务单号、事件摘要和创建时间缺失时仍会进入详情与重发操作。本轮补齐这些关联字段的非空校验，重发结果同步受保护，并补充缺失支付单号和事件摘要拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件列表事实校验，不替代服务端事件关联、消息投递、下游消费和生产事件治理验收。
+
+### 9.631 2026-09-27 管理端支付事件总览统计回归
+
+支付事件总览此前校验计数非负及部分汇总关系，但未确认成功支付事件数不超过成功事件总数，也未确认最近发布时间的类型。本轮补充这两项统计事实边界，避免运营卡片展示矛盾计数或非时间文本。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件总览响应校验，不替代服务端事件统计、消息投递、下游消费和生产事件治理验收。
+
+### 9.632 2026-09-27 管理端支付日终总览契约回归
+
+支付日终总览此前对首屏计数、最近批次状态、金额和对账准入字段大量使用可选校验，缺失事实可能被页面的兜底展示静默当作零值或空值。本轮要求页面必用的批次与收口计数、最近批次状态、准入结论和非历史金额字段明确返回，保留后端 DTO 注释中允许历史未采集的 `null` 字段；同时校验金额格式、准入样式、告警结构与告警严重级别关系，并保持日终动作错误码边界。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终总览响应事实校验，不替代服务端日终批处理、对账准入计算、渠道收口、资金到账或生产运行治理验收。
+
+### 9.633 2026-09-27 管理端支付监控总览摘要契约回归
+
+支付监控总览摘要此前允许待收口支付、关闭支付、退款、停用渠道和告警等卡片计数缺失，页面的 `?? 0` 会把不完整响应伪装成正常零值。本轮要求摘要卡片实际使用的计数字段全部为非负整数，校验成功数、待收口数和关闭数不超过支付总量，并要求摘要告警数与告警明细数量一致，补充缺失字段和计数矛盾拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付监控总览响应事实校验，不替代服务端监控统计、告警计算、渠道健康判断和生产运营治理验收。
+
+### 9.634 2026-09-27 管理端支付任务中心总览契约回归
+
+支付任务中心总览此前对页面直接展示的任务计数、查单失败率、运营阈值、小时趋势和重点告警行大量使用可选校验，缺失字段可能被操作按钮与卡片当作零值继续执行。本轮要求全部摘要计数和正数阈值明确返回，校验失败率、趋势行、重点告警行结构及失败/待处理计数关系，补充缺失字段、非法趋势和 malformed 告警拒绝测试；保留后端零影响告警仍可返回 `P2/warn` 的既有语义。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端任务中心总览响应事实校验，不替代服务端任务执行、租约并发、重试/DLQ、告警派发和生产运营治理验收。
+
+### 9.635 2026-09-27 管理端支付日终最近批次事实回归
+
+支付日终最近批次列表此前只校验批次号、业务日和批次状态，页面直接展示的支付成功、渠道收口、内部事件、退款金额、执行元数据和对账准入字段缺失时仍可能进入运营页面。本轮要求数据库核心统计和金额、执行元数据及准入结论明确返回，保留历史迁移字段允许的 `null`，并校验非负计数、成功量与总量关系、金额格式和状态样式，补充核心金额缺失测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终批次列表响应事实校验，不替代服务端批次生成、历史迁移数据补采、对账准入计算、资金到账或生产运行治理验收。
+
+### 9.636 2026-09-27 管理端支付日终批次详情事实回归
+
+支付日终批次详情接口此前只校验批次号、业务日期和状态，详情页直接展示的核心统计、金额、执行元数据和对账准入字段缺失时仍可能被接受。本轮让详情接口复用最近批次完整事实校验，并在边界处保留详情专属错误码，补齐完整详情夹具和缺失字段回归。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端日终批次详情响应事实校验，不替代服务端批次查询、历史迁移数据补采、对账准入计算或生产运行治理验收。
+
+### 9.637 2026-09-27 用户支付主流程支付详情状态样式回归
+
+用户支付结果页会直接使用支付单当前状态样式和最近一次支付尝试样式；客户端此前只校验支付状态，缺失样式会静默降级为通用 `info`，最近尝试有状态但无样式时也可能展示错误颜色。本轮要求支付详情返回合法当前状态样式，并要求最近尝试状态与样式成对出现，补充缺失当前样式和缺失尝试样式测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户支付详情客户端响应校验，不替代服务端支付状态机、渠道查单、回调收口、资金到账或生产运行治理验收。
+
+### 9.638 2026-09-27 用户退款进度主流程退款状态样式回归
+
+用户退款进度页会直接使用退款状态样式渲染状态条；客户端此前只校验退款状态，缺失 `statusType` 时页面会依赖状态元数据兜底，无法确认服务端返回的状态样式事实。本轮要求退款详情返回合法状态样式，补充缺失样式测试，并保持退款金额、原支付单关联和尝试日志集合校验不变。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户退款详情客户端响应校验，不替代服务端退款状态机、渠道受理、到账确认、失败重试或生产运行治理验收。
+
+### 9.639 2026-09-27 用户收银台查单/关单状态样式回归
+
+收银台主动查单和本地关单接口均返回 `PaymentDetailDTO`；客户端此前只校验支付状态，缺少 `statusType` 或最近一次支付尝试的状态样式时，收银台与结果页可能静默降级展示。本轮让 `normalizePaymentActionResult` 复用支付详情的当前状态样式和最近尝试状态样式成对校验，并补充缺失样式回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户查单/关单客户端响应校验，不替代服务端支付状态机、渠道查单、回调收口、资金到账、失败重试/DLQ/replay 或生产运行治理验收。
+
+### 9.640 2026-09-27 小程序支付与退款状态样式事实回归
+
+小程序请求层此前只校验支付/退款 `status`，支付详情及查单/关单响应缺少 `statusType` 或最近一次支付尝试样式时，结果页可能按默认样式继续展示；退款详情缺少 `statusType` 时也可能进入进度页。本轮同步 App 端状态样式门禁，要求支付当前状态样式合法、最近尝试状态与样式成对出现，并要求退款返回合法状态样式，补充缺失、非法和不成对响应测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/*.test.js`（41/41）、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check`。该改动只加强小程序客户端响应事实校验，不替代服务端状态机、微信真实签名验签、渠道回调、资金到账、退款受理或生产运行治理验收。
+
+### 9.641 2026-09-27 通用支付 API 客户端状态样式事实回归
+
+通用 `frontend/api-client` 此前对支付 `detail/query/close` 只校验状态枚举，对退款申请、详情、审核、查单和重试只校验关联号与金额；缺少 `statusType` 或最近支付尝试样式时，CLI 调用方仍可能把不可确认响应当作成功。本轮要求支付动作返回合法当前状态样式并校验最近尝试样式成对出现，要求全部退款实体命令返回合法退款状态与样式，补充成功、缺失和非法样式回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check`。该改动只加强通用 API 客户端响应门禁，不替代服务端状态机、渠道协议、回调收口、资金到账、退款受理或生产运行治理验收。
+
+### 9.642 2026-09-27 跨系统 happy-path 账务消费状态回归
+
+跨系统 happy-path 验证器此前只按账务事件类型和业务号匹配事件，`待消费` 或其他未收口状态的事件仍可能被当作 `ACCOUNTING_POSTED` 前置事实继续验证。本轮要求支付成功、清分生成和退款成功对应账务事件明确为 `已消费`，并补充未消费事件拒绝测试，避免跨系统演示误报账务已入账。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（29/29）、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 验证器的账务消费状态断言，不替代真实消息代理、生产数据库、财务入账、资金到账或发布治理证据。
+
+### 9.643 2026-09-27 管理端支付退款动作状态样式回归
+
+管理端支付查单/关单和退款审核、申请、查单、重试动作此前只校验状态非空，退款详情也未统一确认状态样式；缺失或非法样式可能覆盖运营当前快照并以默认颜色展示。本轮要求支付动作返回合法状态样式且最近尝试状态与样式成对出现，要求退款动作返回合法样式，退款详情复用状态与样式映射校验，同时保留既有状态枚举和金额/关联快照约束。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端响应事实门禁，不替代服务端权限、状态机、渠道处理、退款到账或生产运营审计证据。
+
+### 9.644 2026-09-27 管理端支付记录详情状态样式回归
+
+管理端支付记录列表此前已校验支付状态与样式，但支付记录详情只校验 `paymentStatus` 和金额；详情页直接使用 `statusType` 及最近一次尝试样式，缺失、错误或不成对事实可能以默认样式展示。本轮让详情复用支付记录状态样式映射，并要求最近尝试状态与样式成对出现，补充缺失、错误和不成对响应测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付记录详情响应校验，不替代服务端支付状态机、退款汇总、渠道查单或生产资金审计。
+
+### 9.645 2026-09-27 管理端支付请求详情状态样式回归
+
+管理端支付请求列表此前已按请求状态与样式映射校验，但详情接口只校验请求号和非空状态；详情页直接使用 `requestStatusType`，未知状态、错误样式或缺失样式可能继续展示。本轮让支付请求详情复用列表的状态映射，补充合法中文状态、缺失样式、错误样式和未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付请求详情响应校验，不替代服务端支付尝试状态机、渠道请求、回调收口或生产运营审计。
+
+### 9.646 2026-09-27 管理端收银台会话详情状态样式回归
+
+管理端收银台会话列表此前已校验会话状态与样式映射，但详情接口只校验金额和非空状态；详情页直接使用 `sessionStatusType`，缺失或错误样式可能以默认样式展示。本轮让会话详情复用列表状态映射，补充合法状态、缺失样式、错误样式和未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端收银台会话详情响应校验，不替代服务端会话状态机、失效策略、支付关联或生产数据质量验收。
+
+### 9.647 2026-09-27 管理端支付日志详情级别样式回归
+
+管理端支付日志列表此前已校验 `logLevel` 与 `logLevelType` 映射，但详情接口只校验日志级别文本；详情页直接使用级别样式，缺失、错误或未知级别可能以默认样式展示。本轮让支付日志详情复用列表级别映射，补充缺失样式、错误映射和未知级别拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付日志详情响应校验，不替代服务端日志采集、处理阶段、告警派发或生产审计证据。
+
+### 9.648 2026-09-27 管理端支付异常详情状态样式回归
+
+管理端支付异常列表此前已校验异常类型、等级、支付状态、处理状态、责任组、告警、回执、SLA 和升级状态的样式映射，但详情接口只校验文本非空；详情页直接使用对应的 `*Type` 字段，缺失、错误或不成对事实可能以默认样式展示。本轮让支付异常详情复用列表状态样式映射，补充合法映射、缺失样式、错误映射和未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付异常详情响应事实门禁，不替代服务端异常状态机、SLA、告警派发、责任组治理或生产运营审计证据。
+
+### 9.649 2026-09-27 管理端支付异常告警详情状态样式回归
+
+管理端支付异常告警列表此前已校验派发状态、回执状态及其样式映射，但告警详情只校验状态文本非空；详情页及后续运营刷新可能继续使用缺失或错误的 `alertStatusType`、`ackStatusType`。本轮让告警详情复用列表状态映射，补充合法映射、缺失状态、错误样式和空响应拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端告警详情响应事实门禁，不替代服务端告警派发、供应商回执、回查队列、人工确认或生产运营审计证据。
+
+### 9.650 2026-09-27 管理端死信任务详情状态样式回归
+
+管理端死信任务列表和详情页均直接使用 `taskStatusType` 展示状态样式，但详情规范此前允许该字段缺失并回退为默认样式，导致状态事实与视觉提示可能脱节。本轮要求死信任务详情及其列表行返回合法的状态样式映射，补充详情缺失样式拒绝测试，并保留重放次数、路由和状态枚举校验。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信响应事实门禁，不替代服务端死信状态机、消息代理、目标系统消费、业务入账或生产补偿治理证据。
+
+### 9.651 2026-09-27 管理端支付任务执行详情状态样式回归
+
+管理端任务中心和任务执行详情页直接使用 `taskStatusType` 展示任务状态，但任务执行详情规范此前只校验 `SUCCESS/WARNING` 状态及计数关系，缺失或错误样式可能继续以默认样式展示。本轮要求任务执行详情、列表行及任务中心内嵌最近执行记录返回一致的 `SUCCESS/success` 或 `WARNING/warn` 映射，补充错误样式拒绝测试，并同步共享总览夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端任务执行响应事实门禁，不替代服务端任务调度、租约、实际处理结果、告警升级或生产运营审计证据。
+
+### 9.652 2026-09-27 管理端死信任务动作回执状态样式回归
+
+管理端死信任务动作回执此前只在 `taskStatusType` 存在时校验映射，允许允许重放、人工结案或重放动作返回缺失样式；操作结果与列表状态可能因此出现事实不一致。本轮要求动作回执同样返回合法死信状态样式映射，补充缺失样式拒绝测试，并保留任务号、路由快照、重放次数和预期状态约束。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端死信动作响应事实门禁，不替代服务端权限、消息代理发布确认、目标系统消费、业务入账或生产补偿治理证据。
+
+### 9.653 2026-09-27 管理端支付配置版本历史状态样式回归
+
+支付配置中心的渠道、路由、协议、网关和控制策略版本历史表格直接使用 `version.statusType` 展示状态样式，但版本历史客户端规范此前只校验身份、版本号和状态文本。后端响应已提供样式字段，本轮要求版本历史行返回合法状态样式，补充缺失样式拒绝测试，避免运营回滚和审计页面出现无样式状态。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端配置版本响应事实门禁，不替代服务端配置审批、版本基线、并发回滚、生产迁移或权限治理证据。
+
+### 9.654 2026-09-27 管理端支付配置复核列表状态样式回归
+
+支付配置中心多个复核列表直接使用 `reviewStatusType` 展示复核状态，但复核列表客户端规范此前只校验请求号和状态文本。后端响应已提供样式字段，本轮要求复核列表行返回合法状态样式，补充缺失和非法样式拒绝测试，避免运营审批列表出现无样式或伪造样式状态。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端复核列表响应事实门禁，不替代服务端审批权限、候选基线、并发审批、配置发布或生产变更审计证据。
+
+### 9.655 2026-09-27 管理端支付配置复核动作状态样式回归
+
+支付配置中心的批准/拒绝动作会返回复核记录，页面后续刷新和列表展示直接使用 `reviewStatusType`；动作客户端规范此前只校验请求号和状态文本，缺失或非法样式可能让审批结果无法可靠呈现。本轮要求所有配置复核动作回执返回合法状态样式，补充缺失、非法及兄弟记录异常拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端审批动作响应事实门禁，不替代服务端审批权限、候选快照、并发裁决、配置发布或生产审计证据。
+
+### 9.656 2026-09-27 管理端支付配置总览状态样式回归
+
+支付配置中心渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由等总览表格直接使用各行 `statusType` 展示状态样式，但总览客户端规范此前只校验身份和状态文本。本轮要求所有带状态的配置集合返回合法状态样式，补充缺失和非法样式拒绝测试，并同步控制策略自检共享夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端配置总览响应事实门禁，不替代服务端配置审批、状态机、版本基线、生产迁移或权限治理证据。
+
+### 9.657 2026-09-27 跨系统 happy-path 退款 outbox 待派发状态门禁
+
+跨系统 happy-path 此前只按事件类型、退款聚合号和事件号选择 `REFUND_SUCCESS` outbox 记录，未校验记录仍处于可首次派发的 `PENDING` 状态，可能误选已发送或状态缺失的记录并把 dispatch 结果误判为主流程证据。本轮依据退款中心 mapper 的状态机约束，要求新退款成功 outbox 候选必须为 `PENDING`，补充已发送和缺失状态拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的 outbox 候选状态断言，不替代真实消息代理、生产数据库、实际消费、资金到账和发布治理证据。
+
+### 9.658 2026-09-27 跨系统 happy-path 退款 outbox 派发回执身份门禁
+
+跨系统 happy-path 此前只校验退款成功 outbox 派发回执为 `SENT`，未确认回执仍对应原事件号、`REFUND_SUCCESS` 类型和当前退款聚合号，重复派发也存在同样的身份误判风险。本轮新增派发回执身份断言，并补充事件号、事件类型、聚合号和终态错误拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的 outbox 派发回执事实门禁，不替代真实消息代理、生产数据库、实际消费、资金到账和发布治理证据。
+
+### 9.659 2026-09-27 跨系统 happy-path 账务事件编号完整性门禁
+
+跨系统 happy-path 此前只校验账务事件类型、业务号和已消费状态，但后续对账链会使用账务事件的 `eventNo` 作为 `factNo`；事件编号缺失时仍可能继续构造不完整的对账事实。本轮要求消费成功的账务事件返回非空 `eventNo`，补充编号缺失拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的账务事件身份门禁，不替代真实消息代理、账务消费、会计入账、对账落库或生产审计证据。
+
+### 9.660 2026-09-27 跨系统 happy-path 支付成功事件编号门禁
+
+跨系统 happy-path 此前校验支付成功事件的支付单号、发布成功和 HTTP 下游阶段，但未校验事件号；主流程输出的支付事件追踪号因此可能为空，后续运营排查无法可靠定位同一事件。本轮要求唯一的 `PAYMENT_SUCCESS` 事件返回非空 `eventNo`，并补充缺失编号拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的支付事件身份门禁，不替代真实消息代理、事件发布确认、下游消费、账务入账或生产审计证据。
+
+### 9.661 2026-09-27 跨系统 happy-path 退款渠道流水号幂等门禁
+
+跨系统 happy-path 此前验证重复成功退款回调的退款单号、支付单号、金额和状态，但未验证渠道退款流水号保持不变；重复回调若覆盖该字段仍可能被误判为幂等成功。本轮要求首次和重复成功回调都返回非空且一致的 `channelRefundId`，补充流水号变更和缺失拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的退款回调身份门禁，不替代真实渠道回调签名、渠道退款查询、资金到账、账务入账或生产审计证据。
+
+### 9.662 2026-09-27 跨系统 happy-path 退款申请审核状态门禁
+
+退款中心申请接口及幂等命中均以 `REVIEWING` 作为审核前状态，但跨系统 happy-path 此前只校验申请身份和金额，可能把已审批或其他状态的记录继续送入审核步骤。本轮要求首次和重复退款申请都保持 `REVIEWING`，补充错误状态拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的退款状态机门禁，不替代服务端审批权限、退款渠道处理、资金到账、账务入账或生产审计证据。
+
+### 9.663 2026-09-27 跨系统 happy-path 退款 outbox 重复事件门禁
+
+退款成功 outbox 候选此前直接按 `PENDING` 状态过滤；同一退款聚合若同时存在一条待派发和一条已发送的重复事件，过滤结果仍可能只有一条并被误判为幂等正确。本轮先对事件类型、聚合号和事件号做全量唯一性校验，再要求唯一事件为 `PENDING`，补充重复 outbox 事件拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的退款 outbox 唯一性门禁，不替代真实消息代理、生产数据库、实际消费、资金到账或发布治理证据。
+
+### 9.664 2026-09-27 跨系统 happy-path 支付成功事件全量唯一性门禁
+
+支付成功事件 helper 此前先按成功发布和完成阶段过滤，同一支付单若同时存在一条成功事件和一条失败或重复事件，仍可能被误判为唯一成功事件。本轮先按支付单号收集全部 `PAYMENT_SUCCESS` 事件，要求全量恰好一条，再校验事件号、发布成功和 HTTP 完成阶段，补充重复事件拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的支付事件唯一性门禁，不替代真实消息代理、发布重试、下游消费、账务入账或生产审计证据。
+
+### 9.665 2026-09-27 管理端支付流水详情支付单身份门禁
+
+管理端支付流水详情后端模型包含关联支付单号，但客户端详情归一化此前只校验流水来源、流水号和状态，缺失 `paymentOrderId` 的详情仍可进入运营页面。本轮要求支付流水详情返回非空支付单号，补充缺失身份拒绝测试，并保持列表已有身份校验。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付流水详情的关联事实门禁，不替代服务端查询权限、数据库关联完整性、运营操作审计或生产数据治理证据。
+
+### 9.666 2026-09-27 管理端支付请求详情支付单身份门禁
+
+管理端支付请求详情后端模型和查询均返回关联支付单号，但客户端详情归一化此前只校验请求号和请求状态，缺失 `paymentOrderId` 的请求详情仍可进入运营页面。本轮要求支付请求详情返回非空支付单号，补充缺失身份拒绝测试，并保留支付请求列表已有身份校验。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付请求详情的关联事实门禁，不替代服务端查询权限、支付尝试落库、运营操作审计或生产数据治理证据。
+
+### 9.667 2026-09-27 管理端收银台会话详情支付单身份门禁
+
+管理端收银台会话详情后端模型和查询均返回关联支付单号，但客户端详情归一化此前只校验会话号、金额和状态，缺失 `paymentOrderId` 的会话详情仍可进入运营页面。本轮要求收银台会话详情返回非空支付单号，补充缺失身份拒绝测试，并保留列表已有身份校验。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端收银台会话详情的关联事实门禁，不替代服务端查询权限、预付单关联完整性、运营操作审计或生产数据治理证据。
+
+### 9.668 2026-09-27 管理端支付路由详情请求与订单身份门禁
+
+管理端支付路由详情后端模型和查询包含请求号、支付单号及业务订单号，但客户端详情归一化此前只校验路由号、支付单号、金额和路由结果；缺失请求或订单关联时，运营人员无法可靠回溯路由来源。本轮要求路由详情返回非空 `requestNo` 与 `orderNo`，补充两类缺失身份拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付路由详情的关联事实门禁，不替代服务端路由查询权限、数据库关联完整性、运营操作审计或生产数据治理证据。
+
+### 9.669 2026-09-27 管理端支付路由详情预付单身份门禁
+
+管理端支付路由详情后端查询包含预付单号，但客户端详情归一化此前未校验该关联，路由记录可能无法回到收银台会话。本轮要求路由详情返回非空 `prepayOrderNo`，补充缺失预付单身份拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付路由详情的预付单关联门禁，不替代服务端路由查询权限、预付单关联完整性、运营操作审计或生产数据治理证据。
+
+### 9.670 2026-09-27 管理端支付事件详情业务关联身份门禁
+
+管理端支付事件详情后端查询包含支付单号和业务订单号，但客户端详情归一化此前只校验事件号、事件类型和发布状态，缺失关联的事件仍可进入运营页面。本轮要求支付事件详情返回非空 `paymentOrderId` 与 `bizNo`，补充两类缺失身份拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件详情的业务关联门禁，不替代服务端事件查询权限、消息发布确认、下游消费、账务入账或生产数据治理证据。
+
+### 9.671 2026-09-27 管理端支付事件详情标准订单关联门禁
+
+管理端支付事件详情后端查询提供标准订单号，用于确认业务事件关联的是标准订单；客户端详情归一化此前未校验该字段，可能展示无法回溯的事件记录。本轮要求非空 `standardOrderNo`，补充缺失标准订单关联拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件详情的标准订单关联门禁，不替代服务端事件查询权限、消息发布确认、下游消费、账务入账或生产数据治理证据。
+
+### 9.672 2026-09-27 管理端支付成功事件 HTTP 阶段状态门禁
+
+管理端支付事件列表和详情直接展示 `PAYMENT_SUCCESS` 的 HTTP 投递阶段，但客户端此前未校验阶段值，缺失或伪造阶段可能以默认文案进入运营页面。本轮按支付事件状态机要求 `PAYMENT_SUCCESS` 只能返回 `PENDING`、`CLEARING_ACCEPTED` 或 `COMPLETED`，同步校验列表与详情并补充非法、缺失阶段拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付事件 HTTP 阶段事实门禁，不替代服务端消息发布、下游 HTTP 调用、清分受理、账务消费或生产运营审计证据。
+
+### 9.673 2026-09-27 管理端预付单业务订单身份门禁
+
+预付单归一化此前仅在调用方传入预期订单号时比较 `orderNo`，未传预期值的调用路径可能接受缺失业务订单号的响应，导致用户支付记录无法回溯原订单。本轮要求所有预付单响应返回非空 `orderNo`，补充无预期快照时缺失订单号拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强预付单客户端身份事实门禁，不替代服务端订单存在性校验、支付单创建、收银台关联或生产数据治理证据。
+
+### 9.674 2026-09-27 用户端收银台支付资格事实门禁
+
+用户端收银台页面直接使用 `paymentStatus` 判断是否允许提交支付，并使用 `expiresAt` 驱动倒计时和失效保护；客户端此前允许这两个字段缺失，可能静默禁用支付或无法展示有效期。本轮要求收银台响应返回合法支付单状态和非空失效时间，补充状态非法、失效时间缺失拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户端收银台响应事实门禁，不替代服务端支付状态机、订单过期校验、真实渠道调用或生产资金安全证据。
+
+### 9.675 2026-09-27 用户端退款详情原订单身份门禁
+
+用户端退款进度页面使用退款详情中的 `orderNo` 关联当前原订单快照并展示原订单号；退款中心详情查询已返回 `order_no`，但客户端此前未校验该字段，缺失或空值可能导致退款进度与订单无法可靠关联。本轮要求退款详情返回非空原订单号，补充缺失和空值拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.test.js`、`git diff --check`。该改动只加强用户端退款详情的订单关联事实门禁，不替代服务端退款权限、退款状态机、真实渠道退款或生产资金安全证据。
+
+### 9.676 2026-09-27 小程序收银台支付资格事实门禁
+
+小程序收银台页面使用 `paymentStatus` 判断支付资格，并使用 `expiresAt` 驱动倒计时和过期保护；小程序请求归一化此前未校验这两个字段，可能接受无法安全提交或无法计时的收银台快照。本轮要求返回合法支付单状态和非空失效时间，补充非法状态、缺失失效时间及共享详情夹具测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`node --check systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check`。该改动只加强小程序收银台响应事实门禁，不替代服务端支付状态机、订单过期校验、微信原生支付参数或生产资金安全证据。
+
+### 9.677 2026-09-27 小程序退款详情原订单身份门禁
+
+小程序退款进度页展示原订单号，并在刷新时用原订单号参与当前退款快照一致性判断；退款详情查询已返回该字段，但小程序请求归一化此前未校验，缺失或空值可能让页面接受无法回溯原订单的详情。本轮要求返回非空 `orderNo`，补充缺失和空值拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`node --check systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check`。该改动只加强小程序退款详情的订单关联事实门禁，不替代服务端退款权限、退款状态机、真实渠道退款或生产资金安全证据。
+
+### 9.678 2026-09-27 服务到服务收银台支付资格事实门禁
+
+服务到服务客户端的收银台响应同样被调用方用于判断支付状态和有效期，但此前仅校验展示状态与渠道列表，可能接受缺失支付状态或失效时间的快照。本轮要求返回合法 `paymentStatus` 和非空 `expiresAt`，补充非法状态、缺失失效时间拒绝测试，并与用户端收银台契约保持一致。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check`。该改动只加强服务到服务收银台响应事实门禁，不替代服务端支付状态机、渠道调用、真实资金结果或生产发布治理证据。
+
+### 9.679 2026-09-27 跨系统 happy-path 退款业务订单连续性门禁
+
+跨系统 happy-path 退款身份断言此前只校验退款单号和支付单号，申请、审核、提交及回调阶段若返回其他业务订单号仍可能被误判为同一支付链路。本轮要求退款身份断言贯穿并匹配原业务订单号，补充错单拒绝测试，且将该事实传入退款幂等申请与回调断言。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的业务订单连续性门禁，不替代真实退款服务、渠道退款、资金到账、账务入账或生产审计证据。
+
+### 9.680 2026-09-27 跨系统 happy-path 收银台主流程门禁
+
+跨系统 happy-path 此前创建预付单后直接提交支付，未实际验证收银台接口返回的预付单、支付单、业务订单、支付状态、有效期和可用渠道。本轮在提交前调用 H5 收银台接口并要求快照处于 `PREPAY_CREATED/待支付`，补充身份、状态、有效期和渠道缺失拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只扩大本地 happy-path 对收银台主流程的覆盖，不替代真实渠道支付、生产有效期校验、资金到账或正式发布治理证据。
+
+### 9.681 2026-09-27 跨系统 happy-path 退款详情读取门禁
+
+跨系统 happy-path 此前完成退款成功回调后直接读取 outbox，未验证退款详情查询接口是否仍返回同一退款单、支付单、业务订单、金额和成功状态。本轮在回调幂等校验后补充退款详情读取与身份、金额、成功状态门禁。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只扩大本地 happy-path 对退款详情读模型的覆盖，不替代真实渠道退款、资金到账、账务入账或生产审计证据。
+
+### 9.682 2026-09-27 多端收银台失效时间可解析性门禁
+
+App、H5、PC、小程序及服务到服务客户端此前只要求收银台 `expiresAt` 非空，非法日期字符串仍可能进入页面并使倒计时变为无效值。本轮统一要求失效时间可被运行时解析，补充非法日期拒绝测试；允许已过期但格式合法的时间继续由支付状态和倒计时逻辑处理。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强客户端时间事实门禁，不替代服务端订单过期校验、真实渠道调用或生产资金安全证据。
+
+### 9.683 2026-09-27 管理端退款详情原订单快照门禁
+
+管理端退款详情页展示原订单号，并在退款动作后用快照校验刷新结果；此前详情归一化和刷新快照均未强制携带 `orderNo`，可能接受无法回溯或错订单的详情。本轮要求详情返回非空原订单号，并将其纳入动作后快照一致性比较，补充错订单快照拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端退款详情的订单关联事实门禁，不替代服务端退款权限、状态机、渠道处理或生产运营审计证据。
+
+### 9.684 2026-09-27 管理端退款动作原订单身份门禁
+
+管理端审核、主动查单和重试动作的响应会直接更新退款列表或详情快照，但动作归一化此前只校验退款单号、支付单号、金额和状态，缺失原订单号的响应仍可能进入动作结果处理。本轮要求退款动作响应返回非空 `orderNo`，与详情快照订单身份门禁保持一致。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端退款动作的订单关联事实门禁，不替代服务端审批权限、退款状态机、渠道处理或生产运营审计证据。
+
+### 9.685 2026-09-27 跨系统 happy-path 支付成功事件业务订单门禁
+
+支付成功事件断言此前只按支付单号筛选，事件 `bizNo` 若错配其他业务订单仍可能被视为链路成功；支付核心实际将该字段写入原业务订单号。本轮要求支付成功事件同时匹配预期业务订单号，补充错配事件拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check`。该改动只加强本地 happy-path 的支付事件业务关联门禁，不替代真实消息代理、下游消费、账务入账或生产审计证据。
+
+### 9.686 2026-09-27 管理端退款动作状态样式一致性门禁
+
+管理端退款动作响应此前只校验 `statusType` 属于已知样式，`SUCCESS + warn` 等状态与样式矛盾的响应仍可能进入列表或详情更新；后端退款实体状态机实际使用 `REVIEWING/PROCESSING/SUCCESS/FAIL`，审核动作成功后返回 `PROCESSING`，不存在 `APPROVED` 退款实体状态。本轮要求动作响应复用退款状态与样式映射校验，并补充错配和真实处理中状态测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端退款动作的状态展示事实门禁，不替代服务端退款状态机、渠道处理或生产运营审计证据。
+
+### 9.687 2026-09-27 多端退款详情状态样式一致性门禁
+
+App、小程序和服务到服务客户端此前只校验退款状态和值域样式分别合法，`SUCCESS + warn` 等矛盾组合仍可能进入退款进度展示。本轮统一复用后端退款状态映射：`REVIEWING/PROCESSING` 对应 `warn`、`SUCCESS` 对应 `success`、`FAIL` 对应 `danger`，同步补充三端错配拒绝测试并修正处理中夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强客户端退款展示事实门禁，不替代服务端退款状态机、渠道退款、资金到账或生产审计证据。
+
+### 9.688 2026-09-27 多端支付详情状态样式一致性门禁
+
+App、小程序和服务到服务客户端此前只分别校验支付状态和值域样式合法，`WAIT_CALLBACK + success` 等矛盾组合仍可能被页面或命令行工具接受。本轮统一按支付核心状态机校验主支付状态样式：预付信息、风控复核、风控拦截/拒绝、待回调、支付中、成功、关闭和失败分别映射为 `info/warn/danger/danger/warn/info/success/danger/danger`，并补充三端动作及详情错配拒绝测试；最新尝试状态仍保持独立展示契约。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强客户端支付状态展示事实门禁，不替代服务端支付状态机、真实渠道调用、资金到账或生产审计证据。
+
+### 9.689 2026-09-27 多端支付提交主状态门禁
+
+支付提交接口返回 `PrepayOrderDTO` 时会携带当前 `paymentStatus`，用户端提交成功后会据此继续收银台/原生支付流程；此前 App、小程序和服务到服务客户端只校验支付单、业务订单和金额，缺失或未知支付状态仍可能被接受。本轮要求提交响应返回合法主支付状态，并补充三端缺失/未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强支付提交响应事实门禁，不替代服务端支付状态机、真实渠道调用、原生支付参数或生产资金安全证据。
+
+### 9.690 2026-09-27 管理端支付动作状态样式一致性门禁
+
+管理端支付查单和关单动作此前只校验 `statusType` 属于已知样式，`WAIT_CALLBACK + success` 等矛盾响应仍可能进入运营页面；同时详情映射未覆盖风控拦截、风控拒绝、支付中和失败状态。本轮让支付动作复用主支付状态与样式一致性校验，并补全状态机映射及错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端支付状态展示事实门禁，不替代服务端支付状态机、渠道调用或生产运营审计证据。
+
+### 9.691 2026-09-27 管理端告警确认状态回执门禁
+
+管理端告警确认动作此前只校验告警号、告警状态和回执状态非空，未校验状态与样式是否一致；测试夹具还使用了后端不返回的 `SENT/ACKED` 状态。本轮让动作响应复用告警详情/列表的状态映射，要求 `已生成/已派发/部分失败/派发失败` 与 `info/success/warn/danger`、`无需回执/待确认/已确认` 与 `info/warn/success` 一致，并补充错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端告警确认的状态回执事实门禁，不替代服务端告警幂等、外部通知渠道或生产运营审计证据。
+
+### 9.692 2026-09-27 管理端支付配置复核状态样式门禁
+
+管理端支付配置复核列表和动作此前只校验 `reviewStatusType` 属于通用样式集合，`APPROVED + warn` 等矛盾组合仍可能进入运营复核页面。本轮按后端复核状态机统一校验 `PENDING_REVIEW/APPROVED/REJECTED` 对应 `warn/success/danger`，并补充动作与列表错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check`。该改动只加强管理端配置复核展示事实门禁，不替代服务端复核权限、配置版本生效或生产变更审计证据。
+
+### 9.693 2026-09-27 多端预付响应支付状态门禁
+
+预付接口返回的 `PrepayOrderDTO` 已包含当前 `paymentStatus`，但 App、小程序和服务到服务客户端此前只校验预付单、支付单、业务订单和金额，缺失或未知支付状态仍可能进入收银台跳转。本轮要求预付响应返回合法支付主状态，并补充三端未知状态拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强预付响应事实门禁，不替代服务端订单创建、支付状态机、收银台查询或生产资金安全证据。
+
+### 9.694 2026-09-27 多端预付响应失效时间门禁
+
+预付接口返回的 `PrepayOrderDTO` 同时携带 `expiresAt`，但客户端此前只校验支付状态，不校验失效时间格式；非法时间可能进入后续收银台跳转并造成过期判断失真。本轮要求预付响应返回可解析的失效时间，并补充 App、小程序和服务到服务客户端的非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强预付响应时间事实门禁，不替代服务端订单过期校验、收银台查询或生产资金安全证据。
+
+### 9.695 2026-09-27 多端预付响应收银台状态门禁
+
+预付接口返回的 `PrepayOrderDTO` 还携带 `cashierStatus/cashierStatusType`，但客户端此前未校验收银台状态样式是否匹配，可能把矛盾的待支付或风控状态带入后续流程。本轮要求预付响应复用收银台状态映射，并补充三端错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、相关 `node --check`、`git diff --check`。该改动只加强预付响应收银台展示事实门禁，不替代服务端支付状态机、订单过期校验或生产资金安全证据。
+
+### 9.696 2026-09-27 多端支付提交响应收银台状态门禁
+
+支付提交接口同样返回 `PrepayOrderDTO`，但 App、小程序和服务到服务客户端此前只校验支付状态，缺失或错配的 `cashierStatus/cashierStatusType` 仍可能进入用户支付结果处理。本轮要求支付提交响应复用收银台状态映射，并补充三端错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、相关 `node --check`、`git diff --check` 均通过。该改动只加强支付提交响应的收银台展示事实门禁，不替代服务端支付状态机、渠道调用、原生支付参数或生产资金安全证据。
+
+### 9.697 2026-09-27 多端支付提交响应失效时间门禁
+
+支付提交接口返回的 `PrepayOrderDTO` 同样携带 `expiresAt`，但 App、小程序和服务到服务客户端此前未校验该字段，非法时间可能进入支付结果处理并造成过期判断失真。本轮要求支付提交响应返回可解析的失效时间，并补充三端非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、相关 `node --check`、`git diff --check` 均通过。该改动只加强支付提交响应时间事实门禁，不替代服务端订单过期校验、支付状态机、渠道调用或生产资金安全证据。
+
+### 9.698 2026-09-27 跨系统 happy-path 支付提交状态事实门禁
+
+跨系统 happy-path 此前对支付提交响应只校验支付单、预付单、业务订单和金额，缺失支付状态、收银台状态或失效时间仍可能被当作链路成功。本轮要求本地演练提交响应保持 `WAIT_CALLBACK`、`待回调/warn` 和非空失效时间，并补充错配拒绝测试。
+
+本轮自测：首次运行发现重复提交测试夹具缺少新增状态事实，已补齐；随后 `node --test tools/dev/cross-system-happy-path.test.mjs`（31/31）、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 的支付提交状态事实门禁，不替代真实支付渠道、消息代理、下游账务入账或生产审计证据。
+
+### 9.699 2026-09-27 管理端订单最新支付状态事实门禁
+
+管理端订单列表和详情的 `latestPaymentStatus/latestCashierStatus` 此前只校验状态样式非空或属于通用样式集合，未知状态或 `支付中 + warn` 等矛盾组合仍可能进入运营页面。本轮按支付核心状态映射校验可选的最新支付和收银台状态对，并补充列表、详情错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端订单聚合状态展示事实门禁，不替代服务端订单状态机、支付状态机或生产运营审计证据。
+
+### 9.700 2026-09-27 管理端账单最新支付状态事实门禁
+
+管理端账单列表和详情同样返回 `latestPaymentStatus/latestCashierStatus`，但此前完全忽略这些可选状态对，未知状态或样式错配仍可能进入账单运营页面。本轮复用订单聚合状态映射校验账单列表、详情的最新支付和收银台状态，并补充错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端账单聚合状态展示事实门禁，不替代服务端账单金额、订单状态机或生产运营审计证据。
+
+### 9.701 2026-09-28 管理端支付配置实体状态样式门禁
+
+管理端支付配置总览和版本历史此前只校验状态样式属于通用集合，未知状态或 `DISABLED + success` 等矛盾组合仍可能进入配置运营页面。本轮按后端配置状态词汇校验 `ENABLED/DISABLED` 及 `ACTIVE/INACTIVE` 与 `success/danger` 的对应关系，并补充总览、版本历史拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置状态展示事实门禁，不替代服务端配置复核、版本生效或生产变更审计证据。
+
+### 9.702 2026-09-28 管理端配置动作复核状态门禁
+
+管理端支付配置回滚、启停和申请动作的通用响应归一化此前只校验目标配置身份；当响应包含 `reviewStatus/reviewStatusType` 时，矛盾的 `APPROVED + warn` 仍可能进入操作结果处理。本轮对动作响应中已提供的复核状态对复用复核状态机校验，并补充错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置动作的复核展示事实门禁，不替代服务端复核权限、版本生效或生产变更审计证据。
+
+### 9.703 2026-09-28 管理端配置动作候选状态门禁
+
+管理端支付配置动作响应中的 `candidateStatus/candidateStatusType` 此前未校验；当响应包含 `DISABLED + success` 等矛盾候选状态时仍可能进入运营处理。本轮对动作响应中已提供的候选状态对复用配置状态映射校验，并补充错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置动作的候选状态事实门禁，不替代服务端复核权限、版本生效或生产变更审计证据。
+
+### 9.704 2026-09-28 管理端返回码导入状态样式门禁
+
+管理端返回码导入预检此前只校验候选状态字段非空，`archiveStatus/status` 与样式错配仍可能进入导入确认页面。本轮按配置状态映射校验候选归档状态和启用状态，并补充两类错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端返回码导入预检的状态事实门禁，不替代服务端导入基线、审批流程或生产变更审计证据。
+
+### 9.705 2026-09-28 管理端返回码导入应用计数门禁
+
+返回码导入预检/应用响应此前只校验 `appliedCount` 不超过 CREATE/UPDATE 数量，`applied=false` 但计数非零的矛盾结果仍可能进入导入页面。本轮要求未应用结果的 `appliedCount` 必须为零，并补充计数错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端返回码导入应用计数事实门禁，不替代服务端并发基线、配置写入或生产变更审计证据。
+
+### 9.706 2026-09-28 管理端返回码导入有效性与应用状态一致性门禁
+
+返回码导入预检/应用响应此前已校验 `valid` 与无效项数量的一致性，但 `applied=true` 且 `valid=false` 的矛盾结果仍可能通过管理端归一化。本轮要求已应用结果必须同时有效，并补充该状态错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端返回码导入有效性与应用状态一致性门禁，不替代服务端导入校验、配置写入或生产变更审计证据。
+
+### 9.710 2026-09-28 管理端退款成功与终态时间事实门禁
+
+管理端退款详情此前只校验金额、状态和样式，成功退款可缺少 `successAt`/`terminalAt`；退款列表也只要求 `successAt` 非空，`SUCCESS` 携带 `-` 或非法时间仍可能进入运营页面。本轮按服务端退款详情和列表查询口径补充成功时间、终态时间解析及状态关系校验，并增加详情与列表错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端退款时间事实门禁，不替代服务端退款状态收口、差错核对或生产资金证据。
+
+### 9.711 2026-09-28 管理端支付成功时间事实门禁
+
+管理端支付详情此前只校验支付状态和样式，`SUCCESS` 响应缺少 `successAt` 或携带非法时间仍可能进入运营详情页。本轮依据支付详情查询的 `success_at` 字段补充成功状态与成功时间一致性校验，并增加缺失及非法时间拒绝测试；非成功状态继续允许无成功时间。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付成功时间事实门禁，不替代服务端支付状态收口、回调验签或生产资金证据。
+
+### 9.712 2026-09-28 管理端支付记录完成时间事实门禁
+
+管理端收款记录详情和列表此前校验支付状态及样式，但“支付成功”记录未要求 `paidAt` 与服务端 `p.success_at` 一致，缺失或非法完成时间仍可能进入运营页面。本轮补充支付成功状态与 `paidAt` 的时间解析门禁，并增加详情、列表错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付记录完成时间事实门禁，不替代服务端支付状态收口、账务核对或生产资金证据。
+
+### 9.713 2026-09-28 管理端支付尝试完成时间事实门禁
+
+管理端支付详情此前只校验最新尝试状态和样式，最新尝试为“成功”时缺少或伪造 `latestAttemptCompletedAt` 仍可能通过。依据服务端成功收口时写入 `t_payment_attempt.completed_at` 的逻辑，本轮补充成功尝试与完成时间一致性校验，并增加缺失及非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付尝试事实门禁，不替代服务端支付收口、渠道回调验签或生产资金证据。
+
+### 9.714 2026-09-28 管理端支付流程完成时间事实门禁
+
+管理端支付流程详情此前只校验流程来源、类型和业务状态，支付尝试成功时缺少或伪造 `completedAt` 仍可能进入运营详情页，非支付尝试来源也可能携带不适用的完成时间。本轮依据服务端流程映射口径补充 `PAYMENT_ATTEMPT` 成功状态与 `completedAt` 的一致性校验，并要求其他流程来源及未成功尝试不携带该字段。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付流程完成时间事实门禁，不替代服务端支付状态收口、渠道回调验签或生产资金证据。
+
+### 9.715 2026-09-28 管理端支付请求完成时间事实门禁
+
+管理端支付请求详情此前只校验请求身份、支付单关联和状态样式，成功请求缺少或伪造 `completedAt` 仍可能进入排障详情页。本轮依据支付请求查询从 `t_payment_attempt.completed_at` 返回的口径，要求“成功”请求携带可解析的完成时间，处理中、失败和等待回调请求不携带该字段，并补充缺失、非法及状态错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付请求完成时间事实门禁，不替代服务端支付状态收口、渠道回调验签、报文脱敏或生产资金证据。
+
+### 9.716 2026-09-28 管理端支付任务执行时间事实门禁
+
+管理端支付任务执行详情此前只校验状态和处理计数，服务端任务日志必填的 `startedAt/completedAt` 缺失、非法或逆序仍可能进入运营详情和列表。本轮依据任务日志表及写入逻辑补充开始时间、完成时间的有效性与先后关系校验，并增加列表逆序时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付任务时间事实门禁，不替代服务端任务执行、数据库时间、调度租约或生产运营证据。
+
+### 9.717 2026-09-28 管理端支付日终批次时间事实门禁
+
+管理端支付日终最近批次和详情此前只要求 `completedAt` 非空，服务端批次表必填的 `createdAt/completedAt` 缺失、非法或逆序仍可能进入日终运营页面。本轮依据日终批次表和写入查询补充两项时间有效性及先后关系校验，并增加详情、最近批次逆序时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端日终批次时间事实门禁，不替代服务端日终聚合、对账核验、数据库时间或生产运营证据。
+
+### 9.718 2026-09-28 用户支付详情成功时间事实门禁
+
+用户端 Web 和小程序支付详情此前只校验支付状态及样式，`SUCCESS` 响应缺少或伪造 `successAt` 仍可能进入结果页；非成功状态携带成功时间也会造成终态误导。本轮依据支付详情查询返回的 `p.success_at` 补充成功状态与成功时间一致性校验，并同步增加两端缺失、非法及状态错配拒绝测试。
+
+本轮自测：App Web API `node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、小程序请求 `node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、相关 JS `node --check`、`git diff --check` 均通过。该改动只加强用户端支付详情事实门禁，不替代服务端支付状态收口、渠道回调验签或真实资金证据。
+
+### 9.719 2026-09-28 用户支付详情尝试完成时间事实门禁
+
+用户端 Web 和小程序支付详情此前校验最近一次支付尝试的状态样式，但“成功”尝试缺少或伪造 `latestAttemptCompletedAt` 仍可能进入结果页，非成功尝试携带完成时间也会造成排障误导。本轮依据支付详情查询从 `t_payment_attempt.completed_at` 返回的口径，补充最近尝试状态与完成时间一致性校验，并同步增加两端成功、缺失、非法及状态错配测试。
+
+本轮自测：App Web API `node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、小程序请求 `node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、相关 JS `node --check`、`git diff --check` 均通过。该改动只加强用户端支付尝试事实门禁，不替代服务端支付收口、渠道回调验签或真实资金证据。
+
+### 9.720 2026-09-28 管理端支付事件发布时间事实门禁
+
+管理端支付事件详情和列表此前只校验发布状态、样式和重试次数，事件状态与 `lastPublishedAt/nextRetryAt` 的生命周期关系及成功重发操作人/时间配对未被校验。本轮依据支付事件 Mapper 的状态更新语义补充发布时间、下次重试时间和重发审计字段一致性门禁，并增加成功、失败及审计字段错配测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付事件事实门禁，不替代事件派发、消息队列、下游收口或生产运营证据。
+
+### 9.721 2026-09-28 管理端支付处理日志时间事实门禁
+
+管理端支付处理日志详情和列表此前只要求 `createdAt` 非空或完全不校验，非法创建时间仍可能进入排障页面。本轮依据 `t_payment_process_log.created_at NOT NULL` 及查询映射补充详情、列表的可解析时间校验，并增加两类非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付处理日志时间事实门禁，不替代服务端日志写入、链路追踪或生产运营证据。
+
+### 9.722 2026-09-28 管理端支付路由时间事实门禁
+
+管理端支付路由详情和列表此前只要求 `createdAt` 非空，路由记录表必填时间字段的非法值仍可能进入运营排障页面。本轮依据 `t_payment_route_record.created_at NOT NULL` 及路由查询映射补充详情、列表的可解析时间校验，并增加两类非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付路由时间事实门禁，不替代服务端路由决策、渠道选择或生产运营证据。
+
+### 9.723 2026-09-28 管理端收银台会话时间事实门禁
+
+管理端收银台会话详情和列表此前只要求 `createdAt/expiresAt` 非空或完全不校验，预付单时间字段非法或过期时间早于创建时间仍可能进入运营页面。本轮依据收银台会话查询映射补充两项时间有效性及先后关系校验，并增加详情逆序、列表非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端收银台会话时间事实门禁，不替代服务端预付单状态收口、过期任务或生产运营证据。
+
+### 9.724 2026-09-28 管理端账单时间事实门禁
+
+管理端账单详情和列表此前只要求 `createdAt/dueAt` 非空，账单表必填时间字段的非法值或到期时间早于创建时间仍可能进入运营页面。本轮依据账单查询映射补充两项时间有效性及先后关系校验，并增加详情逆序、列表非法时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（143/143）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端账单时间事实门禁，不替代服务端账单状态收口、应收核对或生产运营证据。
+
+### 9.725 2026-09-28 管理端订单创建时间事实门禁
+
+管理端订单列表与订单详情此前只要求 `createdAt` 非空，后端订单映射必填创建时间的非法日期仍可能进入运营页面。本轮依据 `OrderMapper` 的日期格式化契约，要求订单列表与详情的 `createdAt` 必须是可解析日期时间，并增加非法日期与非法日期时间拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端订单创建时间事实门禁，不替代服务端订单数据质量、支付状态收口或生产运营证据。
+
+### 9.726 2026-09-28 管理端支付记录生命周期时间门禁
+
+管理端支付记录列表此前只要求 `expireTime/createdAt/updatedAt` 非空，支付记录查询映射返回的非法时间或早于创建时间的过期、更新时间仍可能进入运营页面。本轮依据 `PaymentRecordMapper` 的时间字段契约，要求三项时间均可解析，且过期时间与更新时间不早于创建时间，并增加非法及逆序时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付记录列表时间事实门禁，不替代服务端支付状态、渠道回调或真实资金链路证据。
+
+### 9.727 2026-09-28 管理端支付事件总览发布时间门禁
+
+管理端支付事件总览此前仅要求 `latestPublishedAt` 非空字符串，事件总览映射返回的非法发布时间仍可能进入运营页面。本轮依据 `PaymentEventMapper` 的 `MAX(last_published_at)` 日期格式化契约，要求该可选时间存在时必须是可解析日期时间，并增加非法发布时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端事件总览时间事实门禁，不替代服务端事件发布、重试或下游消费证据。
+
+### 9.728 2026-09-28 管理端请求日志路由总览时间门禁
+
+管理端支付请求、支付日志与支付路由总览此前未校验 `latestRequestAt/latestLogAt/latestRouteAt`，而对应映射均由最新记录时间聚合并格式化返回，非法时间可能进入运营看板。本轮统一要求这些可选时间存在时必须是可解析日期时间，并增加三类总览的非法时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端总览时间事实门禁，不替代服务端请求、日志、路由数据统计或生产运营证据。
+
+### 9.729 2026-09-28 管理端支付异常处理时间门禁
+
+管理端支付异常列表此前仅要求 `createdAt` 非空，并未校验可选 `latestActionAt`；异常映射已将异常创建时间和最新处理动作时间格式化返回，非法时间仍可能进入运营闭环。本轮要求 `createdAt` 必须可解析，且 `latestActionAt` 存在时也必须可解析，同时保留无处理动作时的空值语义，并增加两项回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端异常处理时间事实门禁，不替代服务端异常识别、SLA计算或告警派发证据。
+
+### 9.730 2026-09-28 管理端事件请求流水创建时间门禁
+
+管理端支付事件、支付请求与支付流水列表此前只要求 `createdAt` 非空；对应查询映射均已将数据库创建时间格式化返回，非法时间仍可能进入运营明细与联查页面。本轮统一要求三类列表的 `createdAt` 必须可解析，并分别增加非法创建时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端事件、请求、流水列表时间事实门禁，不替代服务端支付状态、事件发布或下游联动证据。
+
+### 9.731 2026-09-28 管理端支付异常告警创建时间门禁
+
+管理端支付异常告警列表此前只要求 `createdAt` 非空，告警查询映射已经格式化的创建时间若非法仍可能进入告警运营页面。本轮要求告警列表的 `createdAt` 必须可解析，并增加非法创建时间回归用例；回执查询状态的可选语义保持不变。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端告警时间事实门禁，不替代服务端告警派发、回执查询或通知渠道证据。
+
+### 9.732 2026-09-28 管理端退款申请时间门禁
+
+管理端退款列表此前只要求 `appliedAt` 非空，退款查询映射已经格式化的申请时间若非法仍可能进入退款运营页面。本轮依据 `RefundMapper` 的日期格式化契约，要求退款列表 `appliedAt` 必须可解析，并增加非法申请时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端退款申请时间事实门禁，不替代服务端退款状态、渠道处理或真实资金证据。
+
+### 9.733 2026-09-28 管理端支付配置版本创建时间门禁
+
+管理端支付配置版本历史此前只校验配置身份、版本号与状态，`PaymentConfigMapper` 返回的版本创建时间即使非法也可能进入配置运营页面。本轮要求版本历史的 `createdAt` 必须是可解析日期时间，并增加非法创建时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置版本时间事实门禁，不替代服务端配置审批、回滚或发布治理证据。
+
+### 9.734 2026-09-28 管理端支付配置复核创建时间门禁
+
+管理端支付配置复核列表此前只校验复核单号和复核状态，复核查询映射返回的 `createdAt` 非法时仍可能进入审批运营页面。本轮要求复核列表行的 `createdAt` 必须是可解析日期时间，并增加非法创建时间回归用例；配置动作响应的轻量事实契约保持不变。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置复核时间事实门禁，不替代服务端审批、并发控制或发布治理证据。
+
+### 9.735 2026-09-28 管理端支付死信任务生命周期时间门禁
+
+管理端支付死信任务详情与列表此前未校验 `createdAt/updatedAt` 及存在时的重放、解决时间；死信任务查询映射已返回这些时间字段，非法值可能进入人工补偿页面。本轮要求创建、更新时间有效，且可选 `lastReplayAt/resolvedAt` 存在时必须可解析，并增加非法时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端死信时间事实门禁，不替代服务端重放幂等、人工处置或下游消息证据。
+
+### 9.736 2026-09-28 管理端支付配置总览更新时间门禁
+
+管理端支付配置总览此前只校验各集合身份与状态，渠道、路由、协议、返回码、网关、控制策略、告警供应商和责任班次的映射更新时间非法时仍可能进入运营页面。本轮依据配置 DTO 与查询映射契约，要求这些运营配置行的 `updatedAt` 必须可解析；协议类型选项无该生命周期字段，保持原有校验，并增加非法更新时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置总览时间事实门禁，不替代服务端配置审批、回滚或发布治理证据。
+
+### 9.737 2026-09-28 管理端支付配置复核终态时间门禁
+
+管理端支付配置复核列表此前已校验 `createdAt`，但未校验 `reviewedAt` 与复核状态的关系；复核映射规定待复核不应有复核时间，批准或拒绝必须有有效复核时间。本轮补充该状态时间一致性门禁，并增加待复核带时间、终态缺时间及终态非法时间回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端配置复核终态时间事实门禁，不替代服务端审批写入、并发控制或发布治理证据。
+
+### 9.707 2026-09-28 用户支付终态与收银台状态一致性门禁
+
+用户端 Web 和小程序此前分别校验支付状态、收银台状态及样式，但 `SUCCESS/已支付成功`、`CLOSED/已关闭或已失效`、风控终态与收银台展示状态之间的矛盾组合仍可能通过，导致终态事实和用户展示不一致。本轮同步补充预付、支付提交和收银台响应的终态状态映射校验，并增加 Web 与小程序错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、四个相关 JS 文件 `node --check`、`git diff --check` 均通过。此前跨系统 verifier `node --test tools/dev/cross-system-happy-path.test.mjs`（31/31）亦通过。该改动只加强客户端终态展示事实门禁，不替代服务端支付状态收口、渠道回调验签或真实资金链路证据。
+
+### 9.708 2026-09-28 用户退款成功时间事实门禁
+
+用户端 Web 和小程序此前只校验退款金额、状态及状态样式，退款详情在 `SUCCESS` 状态下缺少成功时间或携带 `-`、非法时间仍可能进入结果页。依据服务端详情查询对成功时间的返回口径，本轮要求成功退款必须携带可解析的 `successAt`，处理中或失败退款仅允许缺省或 `-`，并补充两端拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、四个相关 JS 文件 `node --check`、`git diff --check` 均通过。该改动只加强客户端退款终态时间事实门禁，不替代服务端退款渠道收口、到账核对或真实资金链路证据。
+
+### 9.709 2026-09-28 用户退款终态时间事实门禁
+
+退款详情此前已要求 `SUCCESS` 携带有效 `successAt`，但 `SUCCESS/FAIL` 仍可缺少终态 `terminalAt` 或返回 `-`，结果页无法确认退款是否真正完成终态收口。本轮依据服务端终态更新逻辑，要求成功和失败退款均携带可解析的 `terminalAt`，处理中退款继续允许缺省或 `-`，并补充两端拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、四个相关 JS 文件 `node --check`、`git diff --check` 均通过。该改动只加强客户端退款终态时间事实门禁，不替代服务端退款渠道收口、到账核对或真实资金链路证据。
+
+### 9.738 2026-09-28 用户支付时间格式与日历有效性门禁
+
+用户端 Web 和小程序此前使用 `Date.parse` 校验支付过期、成功及终态时间，浏览器可能将 `2026-02-30 12:00:00` 规范化为可解析日期，导致不存在的日历日期进入支付页面。本轮统一要求客户端时间采用 `yyyy-MM-dd HH:mm:ss` 格式，并通过 UTC 日历字段回读拒绝非法日期，补充两端回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、四个相关 JS 文件 `node --check`、`git diff --check` 均通过。该改动只加强客户端时间格式与日历事实门禁，不替代服务端时间生成、支付状态收口或真实资金链路证据。
+
+### 9.739 2026-09-28 管理端时间格式与日历有效性门禁
+
+管理端共享时间校验此前使用 `Date.parse`，可能将 `2026-02-30 10:01:00` 规范化为可解析日期，导致支付、退款、请求、事件及运营配置等页面接收不存在的日历时间。本轮统一要求管理端时间采用 `yyyy-MM-dd HH:mm:ss` 格式，并通过 UTC 日历字段回读拒绝非法日期，补充支付详情回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端时间格式与日历事实门禁，不替代服务端时间生成、状态收口或运营治理证据。
+
+### 9.740 2026-09-28 服务到服务支付客户端时间日历门禁
+
+服务到服务支付客户端此前使用 `Date.parse` 校验预付和收银台响应的 `expiresAt`，可能将 `2026-02-30 12:00:00` 规范化为可解析日期。本轮新增严格的 `yyyy-MM-dd HH:mm:ss` 日历校验，并在预付、收银台响应测试中补充非法日期回归用例。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check` 均通过。该改动只加强服务到服务响应事实门禁，不替代服务端支付状态机、真实渠道调用或资金结果证据。
+
+### 9.741 2026-09-28 服务到服务支付终态与收银台状态一致性门禁
+
+服务到服务支付客户端此前独立校验支付状态和收银台状态，`SUCCESS/待支付` 等矛盾组合仍可能通过预付、提交或收银台响应校验。本轮同步终态支付状态与收银台展示状态映射，并补充三类命令的错配拒绝测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check` 均通过。该改动只加强服务到服务客户端状态事实门禁，不替代服务端状态机、渠道回调验签或真实资金结果证据。
+
+### 9.742 2026-09-28 服务到服务退款生命周期时间门禁
+
+服务到服务支付客户端此前只校验退款身份、金额和状态样式，退款申请时间缺失或终态响应缺少成功、终态时间仍可能通过校验。本轮依据退款列表与详情 DTO，要求所有退款响应携带有效 `appliedAt`，成功状态携带 `successAt`，详情中的成功或失败状态携带 `terminalAt`，并保留处理中状态的可空时间语义。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check` 均通过。该改动只加强服务到服务退款时间事实门禁，不替代服务端退款状态收口、渠道处理或真实资金到账证据。
+
+### 9.743 2026-09-28 服务到服务支付详情生命周期时间门禁
+
+服务到服务支付客户端此前只校验支付详情身份、金额和状态样式，`PaymentDetailDTO` 的 `createdAt` 以及成功、支付尝试完成时间缺失或非法时仍可能通过校验。本轮要求详情、查单和关闭响应携带有效创建时间，成功状态携带 `successAt`，成功支付尝试携带完成时间，并拒绝矛盾时间组合。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`node --check systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`git diff --check` 均通过。该改动只加强服务到服务支付详情时间事实门禁，不替代服务端支付状态收口、渠道回调验签或真实资金结果证据。
+
+### 9.744 2026-09-28 跨系统 happy-path 收银台展示样式门禁
+
+跨系统 happy-path 此前只校验收银台处于待支付状态和存在可用渠道，缺少 `statusType=warn` 展示事实校验，错误样式仍可能进入支付提交主流程。本轮补充收银台状态样式断言，并增加缺失及错配样式回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 收银台展示契约，不替代服务端状态机、真实渠道支付或生产资金证据。
+
+### 9.745 2026-09-28 跨系统 happy-path 支付有效期日历门禁
+
+跨系统 happy-path 此前只要求收银台和提交响应带有非空 `expiresAt`，不存在的日期或非规范时间仍可能进入支付主流程。本轮统一要求收银台与支付提交有效期采用 `yyyy-MM-dd HH:mm:ss` 且日历字段回读一致，并补充非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 有效期事实门禁，不替代服务端过期校验、真实渠道支付或生产资金证据。
+
+### 9.746 2026-09-28 跨系统 happy-path 退款生命周期时间门禁
+
+跨系统 happy-path 此前只校验退款身份、金额和状态，未确认退款申请时间及成功时间事实。本轮依据 refund-center DTO，要求申请、审核、渠道提交、回调和详情响应携带有效 `appliedAt`，成功退款携带有效 `successAt`，并补充处理中与终态时间矛盾回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 退款时间事实门禁，不替代真实退款渠道、资金到账或生产对账证据。
+
+### 9.747 2026-09-28 跨系统 happy-path 支付成功时间门禁
+
+跨系统 happy-path 此前对支付回调只校验成功状态、支付金额和渠道流水号，缺少支付成功时间事实校验，回调响应可能在时间缺失或非法时仍被视为成功。本轮要求首次及幂等重复成功回调均携带有效 `successAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 支付终态事实门禁，不替代服务端回调验签、状态收口或真实资金证据。
+
+### 9.748 2026-09-28 跨系统 happy-path 清分成功状态门禁
+
+跨系统 happy-path 的清分断言此前只校验清分单号和支付单号，清分状态错误时仍可能继续进入结算与账务校验。本轮要求清分响应明确处于 `清分成功`，并补充清分中状态拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 清分状态事实门禁，不替代真实清分服务、数据库一致性或生产账务证据。
+
+### 9.749 2026-09-28 跨系统 happy-path 结算待处理样式门禁
+
+跨系统 happy-path 此前只校验结算单、审核和出款状态文本，未校验对应的 `statusType` 展示事实，错误样式仍可能进入结算链路验证。本轮要求待审核、待出款三类结算状态均为 `warn`，并补充错配样式拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 结算展示契约，不替代真实结算审批、出款或生产运营证据。
+
+### 9.750 2026-09-28 跨系统 happy-path 清分成功样式门禁
+
+清分 DTO 的状态映射规定 `清分成功` 对应 `statusType=success`，但跨系统 happy-path 此前只校验状态文本，错误展示样式仍可能继续进入结算校验。本轮补充清分成功样式断言，并增加样式错配拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 清分展示契约，不替代真实清分服务、数据库一致性或生产账务证据。
+
+### 9.751 2026-09-28 跨系统 happy-path 账务事件链路门禁
+
+跨系统 happy-path 此前只按业务单号和事件类型确认账务事件，错误业务链路的同号事件仍可能通过校验。本轮要求支付成功、清分生成和退款成功账务事件均匹配 `CHAIN-{paymentOrderId}`，并补充链路错配拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 账务事件链路事实门禁，不替代真实账务入账、对账或生产资金证据。
+
+### 9.752 2026-09-28 跨系统 happy-path 支付事件成功样式门禁
+
+支付成功事件列表 DTO 同时返回发布状态和状态样式，跨系统 happy-path 此前只校验 `publishStatus=SUCCESS` 与 HTTP 投递完成，错误样式仍可能被视为成功事件。本轮要求完成的支付成功事件同时具备 `publishStatusType=success`，并补充样式错配拒绝测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 支付事件展示事实门禁，不替代真实消息投递、下游消费或生产运营证据。
+
+### 9.753 2026-09-28 跨系统 happy-path 退款出站生命周期门禁
+
+退款中心出站 DTO 同时返回创建、更新时间及最近派发时间，跨系统 happy-path 此前只校验事件身份和状态，缺失或非法生命周期时间仍可能被视为可派发退款事件。本轮要求待派发事件携带有效 `createdAt/updatedAt` 且不带 `lastRelayAt`，派发成功事件携带有效的三类生命周期时间，并补充缺失、非法及状态矛盾回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 退款出站事实门禁，不替代真实消息投递、下游消费或生产退款资金证据。
+
+### 9.754 2026-09-28 跨系统 happy-path 账务流水入账门禁
+
+账务流水 DTO 同时返回流水状态、状态样式和创建时间，跨系统 happy-path 此前只校验业务号、业务类型、方向和金额，待记账或时间缺失的流水仍可能被视为已完成账务事实。本轮要求支付、清分和退款账务流水均为 `ledgerStatus=已记账`、`statusType=success` 且携带有效 `createdAt`，并补充状态、样式及非法时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 账务流水事实门禁，不替代真实会计入账、对账落库或生产财务证据。
+
+### 9.755 2026-09-28 跨系统 happy-path 账务事件生命周期门禁
+
+账务事件 DTO 同时返回消费状态、状态样式和创建时间，跨系统 happy-path 此前只校验事件已消费、编号和业务链路，样式错误或时间缺失仍可能被视为已完成账务事件。本轮要求支付成功、清分生成和退款成功事件均为 `eventStatus=已消费`、`statusType=success` 且携带有效 `createdAt`，并补充样式、缺失及非法时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 账务事件事实门禁，不替代真实消息消费、会计入账、对账落库或生产财务证据。
+
+### 9.756 2026-09-28 跨系统 happy-path 支付事件发布时间门禁
+
+支付事件 DTO 同时返回创建时间和最近发布时间，跨系统 happy-path 此前只校验发布状态、状态样式及 HTTP 投递完成，发布时间缺失或非法仍可能被视为已完成支付成功事件。本轮要求完成的 `PAYMENT_SUCCESS` 事件携带有效 `createdAt/lastPublishedAt`，并补充缺失及非法时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 支付事件生命周期事实门禁，不替代真实消息代理、下游消费或生产资金证据。
+
+### 9.757 2026-09-28 跨系统 happy-path 清分 DTO 状态字段与生命周期门禁
+
+清分结果 DTO 的权威字段为 `clearingStatus`，但 happy-path 断言此前读取不存在的 `status` 字段，真实清分成功响应无法通过正确契约；同时未校验清分记录创建时间。本轮改为校验 `clearingStatus=清分成功`，保留 `clearingStatusType=success`，并要求有效 `createdAt`，补充旧字段、缺失及非法时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只修正本地 happy-path 清分响应契约，不替代真实清分数据库、消息投递或生产资金证据。
+
+### 9.758 2026-09-28 跨系统 happy-path 结算创建时间门禁
+
+结算单 DTO 返回创建时间，但跨系统 happy-path 此前只校验待审核、待出款状态及展示样式，创建时间缺失或非法仍可能进入清算链路校验。本轮要求新建结算单携带有效 `createdAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 结算时间事实门禁，不替代真实审批、出款或生产结算证据。
+
+### 9.759 2026-09-28 跨系统 happy-path 清分业务链路门禁
+
+清分 DTO 返回 `businessChainId`，服务端按 `CHAIN-{paymentOrderId}` 生成或透传该链路标识，但 happy-path 此前只校验清分单号和支付单号，串链路清分事实仍可能继续进入结算校验。本轮要求清分响应的业务链路严格匹配当前支付单，并补充缺失及错配链路回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 清分链路事实门禁，不替代真实清分、结算或对账生产数据证据。
+
+### 9.760 2026-09-28 跨系统 happy-path 结算业务链路门禁
+
+结算 DTO 保留清分事件传入的 `businessChainId`，但 happy-path 此前只校验结算单号和清分单号，串链路结算事实仍可能进入金额与账务校验。本轮要求结算响应的业务链路严格匹配清分响应，并补充缺失及错配链路回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 结算链路事实门禁，不替代真实审批、出款或生产对账证据。
+
+### 9.761 2026-09-28 跨系统 happy-path 清分业务订单门禁
+
+清分结果 DTO 返回原始业务订单号 `orderNo`，但 happy-path 此前只校验支付单号和链路 ID，串订单的清分事实仍可能进入后续结算校验。本轮要求主流程清分响应的 `orderNo` 严格匹配发起支付时的业务订单号，并补充错配订单回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 清分业务身份门禁，不替代真实清分、结算或生产订单数据证据。
+
+### 9.762 2026-09-28 跨系统 happy-path 结算目标身份门禁
+
+清分成功事件的结算载荷明确要求按服务者目标创建结算单，但 happy-path 此前只校验结算单号、清分单号和链路 ID，商家目标或缺失目标编号仍可能进入金额与账务校验。本轮要求结算响应为 `targetType=WORKER` 且携带有效 `targetNo`，并补充目标类型和目标编号回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 结算目标事实门禁，不替代真实服务者身份、结算审批或生产出款证据。
+
+### 9.763 2026-09-28 跨系统 happy-path 结算金额拆分门禁
+
+结算服务按 `shouldSettleAmount - deductAmount` 计算 `netSettleAmount`，但 happy-path 此前只比较清分服务者金额与结算净额，拆分金额缺失或不一致仍可能通过。本轮要求结算金额满足非负、未超过订单金额且拆分结果严格等于净结算额，并补充不一致及缺失字段回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 结算金额事实门禁，不替代真实结算计算、财务入账或生产资金证据。
+
+### 9.764 2026-09-28 跨系统 happy-path 对账事实生命周期门禁
+
+对账事实 DTO 的 `occurredAt` 和 `createdAt` 在数据库中均为非空时间字段，但 happy-path 此前只校验事实链路、状态和金额，缺失或非法生命周期时间仍可能进入完成链路判断。本轮要求每条 `SUCCESS` 对账事实携带有效发生时间和记录时间，兼容 `LocalDateTime` 的空格及 ISO `T` 序列化形式，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 对账事实时间门禁，不替代真实对账落库、财务收口或生产资金证据。
+
+### 9.765 2026-09-28 跨系统 happy-path 对账链路最新事实时间门禁
+
+对账链路快照 DTO 返回 `lastFactAt`，但 happy-path 此前只校验完成阶段数、链路状态和财务可收口标志，最新事实时间缺失或非法仍可能被视为完整链路。本轮要求完成链路携带有效 `lastFactAt`，兼容 `LocalDateTime` 的空格及 ISO `T` 序列化形式，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 对账快照时间事实门禁，不替代真实对账收口或生产财务证据。
+
+### 9.766 2026-09-28 跨系统 happy-path 账务余额变动门禁
+
+账务流水 DTO 同时返回变更前余额、变更后余额和借贷方向，happy-path 此前只校验流水身份、状态、时间和金额，余额变动方向错误仍可能被视为已入账事实。本轮要求贷方满足 `afterBalance=beforeBalance+amount`、借方满足 `afterBalance=beforeBalance-amount`，并补充余额错配回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 账务余额事实门禁，不替代真实账户数据库、财务入账或生产资金证据。
+
+### 9.767 2026-09-28 跨系统 happy-path 预付单创建时间门禁
+
+预付单 DTO 返回创建时间，但跨系统 happy-path 此前只校验预付单号、支付单号和金额，缺失或非法的预付单生命周期事实仍可能进入收银台校验。本轮要求预付单响应携带有效 `createdAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 预付单生命周期事实门禁，不替代真实支付创建、数据库时间或生产资金证据。
+
+### 9.768 2026-09-28 跨系统 happy-path 支付提交创建时间门禁
+
+支付提交接口复用预付单 DTO 并返回创建时间，但 happy-path 此前只校验提交状态和过期时间，缺失或非法的支付提交生命周期事实仍可能进入回调链路。本轮要求支付提交及幂等提交响应携带有效 `createdAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 支付提交生命周期事实门禁，不替代真实支付渠道、数据库时间或生产资金证据。
+
+### 9.769 2026-09-28 跨系统 happy-path 支付回调创建时间门禁
+
+支付回调接口返回支付详情 DTO，但 happy-path 此前只校验成功时间和渠道流水号，缺失或非法的订单创建时间仍可能被视为幂等回调成功。本轮要求首次及重复成功回调均携带有效 `createdAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。该改动只加强本地 happy-path 支付回调生命周期事实门禁，不替代真实渠道回调、数据库时间或生产资金证据。
+
+### 9.770 2026-09-28 用户端支付详情创建时间门禁
+
+用户端 `app-web` 与微信小程序均消费 `PaymentDetailDTO`，但此前只校验支付状态和成功时间，未校验订单创建时间，缺失或非法详情仍可能进入结果页展示。本轮统一要求两端详情响应携带有效 `createdAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check` 均通过。该改动只加强用户端支付详情事实门禁，不替代真实接口、生产数据库或渠道支付证据。
+
+### 9.771 2026-09-28 管理端支付动作创建时间门禁
+
+管理端查询和关闭动作均返回支付详情 DTO，但动作响应此前只校验订单身份、金额和状态，缺失或非法的 `createdAt` 仍可能进入运营页面。本轮要求动作响应携带有效创建时间，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付动作事实门禁，不替代真实运营操作、生产数据库或渠道状态证据。
+
+### 9.772 2026-09-28 用户端支付动作生命周期门禁
+
+用户端查询和关闭动作也返回支付详情 DTO，但此前只校验支付状态样式及最近尝试字段，成功时间、创建时间缺失或错配仍可能进入结果页状态展示。本轮要求 `app-web` 与微信小程序动作响应同时满足支付状态与成功时间一致、创建时间有效，并补充缺失及非法时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check` 均通过。该改动只加强用户端支付动作生命周期事实门禁，不替代真实支付渠道、生产数据库或资金证据。
+
+### 9.773 2026-09-28 API 客户端预付与提交创建时间门禁
+
+命令行/API 客户端的 `prepay` 与 `submit` 命令同样返回预付单 DTO，但此前只校验过期时间，缺失或非法的创建时间仍可能被输出为可用支付事实。本轮要求两类命令响应携带有效 `createdAt`，并补充提交响应非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端响应门禁，不替代真实接口、生产数据库或渠道支付证据。
+
+### 9.774 2026-09-28 用户端退款详情申请时间门禁
+
+退款详情 DTO 返回申请时间 `appliedAt`，但用户端网页和微信小程序此前只校验退款状态、成功时间及终态时间，缺失或非法申请时间仍可能进入退款进度展示。本轮要求两端退款详情携带有效 `appliedAt`，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check` 均通过。该改动只加强用户端退款详情事实门禁，不替代真实退款渠道、生产数据库或资金证据。
+
+### 9.775 2026-09-28 用户端预付与支付提交创建时间门禁
+
+用户端网页和微信小程序的预付、支付提交响应均返回预付单 DTO，但此前只校验过期时间，缺失或非法的 `createdAt` 仍可能进入后续支付操作。本轮统一要求两端预付及提交响应携带有效创建时间，并补充非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`、`git diff --check` 均通过。该改动只加强用户端支付主流程事实门禁，不替代真实支付渠道、生产数据库或资金证据。
+
+### 9.776 2026-09-28 PAYING 状态主动查单入口修复
+
+支付服务对已有渠道提交事实的非成功支付单均支持主动查单，但三端查询按钮此前只放行 `WAIT_CALLBACK`，`PAYING` 状态会被错误阻断。本轮统一放行带有最近渠道尝试事实的 `PAYING` 支付单，并保留缺少尝试事实时的关闭策略，补充网页、小程序和管理端回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/constants/payment.test.js systems/payment-core/frontend/mini-program/tests/payment.test.js systems/payment-core/frontend/admin-web/src/utils/paymentAction.test.js`、`git diff --check` 均通过。该改动只修复客户端查单入口与后端状态契约的偏差，不替代真实渠道查单或生产支付结果证据。
+
+### 9.777 2026-09-28 管理端支付动作成功时间门禁
+
+管理端查询和关闭动作返回支付详情 DTO，但此前仅校验创建时间；成功状态缺失 `successAt` 或非成功状态携带成功时间仍可能进入运营页面。本轮补齐动作响应的成功时间与状态一致性校验，并补充缺失及错配时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端支付动作生命周期事实门禁，不替代真实渠道结果或生产数据库证据。
+
+### 9.778 2026-09-28 管理端退款详情申请时间门禁
+
+管理端退款详情返回退款详情 DTO，但此前只校验退款状态及成功/终态时间，申请时间 `appliedAt` 缺失或非法仍可能进入运营页面。本轮要求退款详情携带有效申请时间，并补充缺失及非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端退款详情事实门禁，不替代真实退款渠道、生产数据库或资金证据。
+
+### 9.779 2026-09-28 管理端退款动作生命周期门禁
+
+管理端退款申请、审批、查单和重试动作均返回退款列表 DTO，但此前仅校验订单身份、金额和状态，申请时间 `appliedAt` 缺失或成功时间与状态错配仍可能进入运营流程。本轮要求动作响应携带有效申请时间，并校验成功时间与退款状态一致，补充缺失、非法及错配时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`git diff --check` 均通过。该改动只加强管理端退款动作生命周期事实门禁，不替代真实退款渠道、生产数据库或资金证据。
+
+### 9.780 2026-09-28 用户与管理端支付动作最近尝试完成时间门禁
+
+支付查询和关单动作返回支付详情 DTO，但管理端、用户网页和微信小程序此前只校验最近尝试状态及展示样式，未校验 `latestAttemptCompletedAt` 与尝试状态的一致性，可能接受“等待回调却已完成”或“成功却无完成时间”的矛盾快照。本轮三端统一复用最近尝试完成时间规则，并补充缺失及错配时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`（`22/22`）、`git diff --check` 均通过。该改动只加强支付动作生命周期事实门禁，不替代真实渠道查单、生产数据库或资金证据。
+
+### 9.781 2026-09-28 跨系统退款终态时间门禁
+
+跨系统 happy-path 的退款申请、审批、渠道提交、回调和详情断言此前只校验 `appliedAt` 与成功状态下的 `successAt`，成功或失败退款缺失/非法 `terminalAt` 仍可能被视为完整退款事实。本轮要求 `SUCCESS/FAIL` 退款携带有效终态时间，非终态不得提前携带终态时间，并补充对应回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`33/33`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强 happy-path 事实门禁，不替代真实渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.782 2026-09-28 跨系统对账事实业务号门禁
+
+跨系统 happy-path 对账快照此前按来源系统、事实类型、事实编号和金额校验事实，但未校验 `businessNo`，同一链路中串入其他业务单的事实仍可能被视为完整链路。本轮为支付成功、清分、结算、账务和退款事实补充业务号映射校验，并增加错配业务号回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`33/33`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强对账事实门禁，不替代真实数据库、消息投递或正式发布治理证据。
+
+### 9.783 2026-09-28 跨系统对账事实时间顺序门禁
+
+跨系统对账事实此前只校验 `occurredAt` 与 `createdAt` 的格式，发生时间晚于记录时间的倒序事实仍可能进入链路完成判断。本轮要求每条事实满足 `occurredAt <= createdAt`，并补充倒序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`33/33`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强对账事实时间门禁，不替代真实数据库、消息投递或正式发布治理证据。
+
+### 9.784 2026-09-28 跨系统对账异常事实收口门禁
+
+跨系统 happy-path 此前虽校验链路状态、阶段数和财务可收口标志，但未明确要求 `hasAbnormalFact=false` 且 `abnormalFactCount=0`，带异常事实的快照可能继续进入收口断言。本轮新增完成态异常事实门禁，并补充异常标记、异常数量及缺失字段回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强 happy-path 收口事实门禁，不替代真实数据库、消息投递或正式发布治理证据。
+
+### 9.785 2026-09-28 跨系统账务分录正金额门禁
+
+账务账簿断言此前只验证借贷方向对应的余额算式，零金额或负金额分录仍可能通过。结合账务金额正数约束，本轮要求每条 happy-path 账簿金额严格大于零，并补充零额、负额分录回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强账务事实门禁，不替代真实数据库、资金或正式发布治理证据。
+
+### 9.786 2026-09-28 跨系统账务非负余额门禁
+
+账务分录断言此前只验证余额变动算式，负的变更前或变更后可用余额仍可能通过。结合余额不足必须拒绝并保持余额不变的账务约束，本轮要求账簿 `beforeBalance` 与 `afterBalance` 均为非负金额，并补充负前余额、负后余额回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统运行成功结论；该改动只加强账务余额事实门禁，不替代真实数据库、资金或正式发布治理证据。
+
+### 9.787 2026-09-28 三端退款详情生命周期顺序门禁
+
+管理端、用户网页和微信小程序退款详情此前只校验 `appliedAt`、`successAt`、`terminalAt` 的格式及状态一致性，成功时间早于申请时间或终态时间早于成功时间仍可能进入退款进度展示。本轮三端统一要求 `appliedAt <= successAt <= terminalAt`（失败退款跳过成功时间），并补充倒序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`（`22/22`）、`git diff --check` 均通过。该改动只加强退款详情事实门禁，不替代真实退款渠道、生产数据库或资金证据。
+
+### 9.788 2026-09-28 三端支付详情生命周期顺序门禁
+
+管理端、用户网页和微信小程序的支付预付/提交、查单/关单及详情响应此前只校验 `createdAt` 与 `successAt` 的格式和状态一致性，成功时间早于支付单创建时间仍可能进入结果或运营页面。本轮三端统一要求支付生命周期满足 `createdAt <= successAt`，并补充查单/详情倒序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`（`22/22`）、`git diff --check` 均通过。该改动只加强支付生命周期事实门禁，不替代真实支付渠道、生产数据库或资金证据。
+
+### 9.789 2026-09-28 预支付与支付提交失效时间顺序门禁
+
+管理端、用户网页、微信小程序和 API 客户端此前对预支付/支付提交响应的 `createdAt`、`expiresAt` 主要校验字段格式，失效时间早于创建时间的逆序事实仍可能进入收银台或提交结果。本轮统一要求支付有效期满足 `createdAt <= expiresAt`，并补充三端及 API 客户端逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --test systems/payment-core/frontend/app-web/src/api/client.test.js systems/payment-core/frontend/mini-program/tests/request.test.js`（`22/22`）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（`11/11`）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强预支付和支付提交时间事实门禁，不替代真实支付渠道、生产数据库、资金或正式发布证据。
+
+### 9.790 2026-09-28 跨系统预支付提交有效期顺序门禁
+
+跨系统 happy-path 的预付和支付提交断言此前只校验 `createdAt`、`expiresAt` 的格式，失效时间早于创建时间的逆序支付事实仍可能通过跨系统链路检查。本轮补齐 `createdAt <= expiresAt` 顺序断言，并增加预付缺失/逆序及支付提交逆序回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 时间事实门禁，不替代真实支付渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.791 2026-09-28 跨系统退款生命周期顺序门禁
+
+跨系统 happy-path 的退款申请、回调和终态断言此前只校验 `appliedAt`、`successAt`、`terminalAt` 的格式及状态关系，成功时间早于申请时间、终态时间早于成功时间或失败终态早于申请时间仍可能通过。本轮补齐成功退款的 `appliedAt <= successAt <= terminalAt` 及失败退款的 `appliedAt <= terminalAt` 顺序断言，并增加对应回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 退款时间事实门禁，不替代真实退款渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.792 2026-09-28 跨系统支付回调生命周期顺序门禁
+
+跨系统 happy-path 的首次及重复支付回调此前只校验 `createdAt`、`successAt` 的格式和成功状态，成功时间早于支付单创建时间的回调事实仍可能通过幂等回调检查。本轮要求首次和重复回调均满足 `createdAt <= successAt`，并增加两类逆序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 支付回调时间事实门禁，不替代真实支付渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.795 2026-09-28 跨系统支付成功事件发布时间顺序门禁
+
+跨系统 happy-path 的 `PAYMENT_SUCCESS` 事件此前只校验 `createdAt`、`lastPublishedAt` 的格式和发布完成状态，发布时间早于事件创建时间仍可能通过收口检查。本轮要求事件满足 `createdAt <= lastPublishedAt`，并补充发布时间逆序回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 事件时间事实门禁，不替代真实支付渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.796 2026-09-28 跨系统退款 outbox 生命周期顺序门禁
+
+跨系统 happy-path 的退款成功 outbox 此前只校验 `createdAt`、`updatedAt`、`lastRelayAt` 的格式和状态，更新时间早于创建时间或投递时间早于更新时间仍可能通过待发送/已发送断言。本轮要求待发送 outbox 满足 `createdAt <= updatedAt`，已发送 outbox 满足 `createdAt <= updatedAt <= lastRelayAt`，并补充两阶段逆序回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path outbox 时间事实门禁，不替代真实退款渠道、数据库、消息投递或正式发布治理证据。
+
+### 9.797 2026-09-28 跨系统对账最近事实时间覆盖门禁
+
+跨系统对账收口此前只校验 `lastFactAt` 格式，最近事实时间早于快照内某条事实的 `occurredAt` 仍可能被视为完整收口事实。本轮要求 `lastFactAt` 不早于快照内每条事实的发生时间，并补充事实超出最近时间及事实时间非法的回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强对账时间事实门禁，不替代真实数据库、消息投递或正式发布治理证据。
+
+### 9.798 2026-09-28 跨系统对账事实集合完整性门禁
+
+跨系统对账断言此前只逐项确认必需事实，额外成功事实混入时仍可能通过金额和业务号检查。本轮要求对账事实集合数量与预期事实数量一致，拒绝未声明的额外事实，并补充额外事实回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（`34/34`）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强对账事实集合门禁，不替代真实数据库、消息投递或正式发布治理证据。
+
+### 9.799 2026-09-28 管理端支付事件发布时间顺序门禁
+
+管理端支付事件列表此前只校验事件 `createdAt` 与 `lastPublishedAt` 的格式，发布时间早于事件创建时间仍可能进入事件运营页面。本轮要求非待发布事件满足 `createdAt <= lastPublishedAt`，并补充发布时间逆序回归测试；详情接口保持原有字段契约不变。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`git diff --check` 均通过。该改动只加强管理端支付事件时间事实门禁，不替代真实消息投递、生产数据库或正式发布治理证据。
+
+### 9.800 2026-09-28 管理端支付事件重试时间顺序门禁
+
+管理端失败支付事件此前只校验 `lastPublishedAt` 与 `nextRetryAt` 的格式，下一次重试时间早于最近发布失败时间仍可能进入运营页面。本轮要求失败事件满足 `lastPublishedAt <= nextRetryAt`，并补充重试时间逆序回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`git diff --check` 均通过。该改动只加强管理端支付事件重试时间事实门禁，不替代真实消息投递、生产数据库或正式发布治理证据。
+
+### 9.801 2026-09-28 管理端死信任务更新时间顺序门禁
+
+管理端死信任务详情和列表此前只校验 `createdAt`、`updatedAt` 的格式，更新时间早于创建时间仍可能进入人工重放或结案流程。本轮要求死信任务满足 `createdAt <= updatedAt`，可选重放与解决时间字段契约保持不变，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端死信任务时间事实门禁，不替代服务端重放幂等、人工处置或下游消息证据。
+
+### 9.793 2026-09-28 API 客户端支付详情成功时间顺序门禁
+
+API 客户端的支付详情、查单和关单响应此前只校验 `createdAt`、`successAt` 的格式及成功状态，成功时间早于支付单创建时间仍可能被命令行调用方接受。本轮统一要求成功支付响应满足 `createdAt <= successAt`，并为 detail/query/close 共用回归夹具增加逆序时间场景。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（`11/11`）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端支付生命周期事实门禁，不替代真实支付渠道、生产数据库、资金或正式发布证据。
+
+### 9.794 2026-09-28 API 客户端退款生命周期顺序门禁
+
+API 客户端退款申请、审批、查单、重试和详情响应此前只校验 `appliedAt`、`successAt`、`terminalAt` 的格式及状态关系，成功时间早于申请时间或终态时间早于成功/申请时间仍可能被接受。本轮补齐成功退款的 `appliedAt <= successAt`、成功详情的 `successAt <= terminalAt` 及失败详情的 `appliedAt <= terminalAt` 顺序校验，并补充对应回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（`11/11`）、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端退款生命周期事实门禁，不替代真实退款渠道、生产数据库、资金或正式发布证据。
+
+### 9.802 2026-09-28 管理端支付问题最新动作时间顺序门禁
+
+管理端支付问题列表此前只校验 `createdAt`、`latestActionAt` 的格式，最新动作早于问题创建时间仍可能进入运营页面。本轮要求存在最新动作时满足 `createdAt <= latestActionAt`，`latestActionAt: null` 继续表示尚无动作并保持有效，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付问题时间事实门禁，不替代真实生产数据库、服务调用或正式发布治理证据。
+
+### 9.803 2026-09-28 管理端支付配置复核时间顺序门禁
+
+管理端支付配置复核列表此前只校验 `createdAt`、`reviewedAt` 的格式和复核状态关系，已复核时间早于复核申请创建时间仍可能进入运营页面。本轮要求已复核记录满足 `createdAt <= reviewedAt`，`PENDING_REVIEW` 的 `reviewedAt: null` 继续保持有效，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付配置复核时间事实门禁，不替代真实生产数据库、服务调用、配置发布或人工审批证据。
+
+### 9.804 2026-09-28 用户端最近支付尝试完成时间顺序门禁
+
+用户端支付详情及查单/关单响应此前只校验最近一次成功支付尝试的 `latestAttemptCompletedAt` 格式，完成时间早于支付单 `createdAt` 仍可能被收银台流程接受。本轮要求成功尝试满足 `createdAt <= latestAttemptCompletedAt`，并为支付详情与支付操作响应补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（`13/13`）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强用户端支付时间事实门禁，不替代真实支付渠道、生产数据库、资金或正式发布证据。
+
+### 9.805 2026-09-28 用户端退款尝试时间线完整性门禁
+
+用户端退款详情此前只校验退款单自身生命周期，退款尝试集合仅过滤 `null`，尝试创建、提交和完成时间逆序或缺失创建事实仍可能被退款进度页接受。本轮要求每条退款尝试具备 `refundAttemptNo`、有效 `createdAt`，并满足 `createdAt <= submittedAt <= completedAt`；未提交或未完成阶段继续允许使用 `-`，同时补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（`13/13`）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强用户端退款详情事实门禁，不替代真实退款渠道、生产数据库、资金或正式发布证据。
+
+### 9.806 2026-09-28 管理端支付流水详情完成时间顺序门禁
+
+管理端支付流水详情此前仅按支付尝试状态校验 `completedAt` 的格式，且未要求详情具备有效 `createdAt`，成功流水完成时间早于创建时间仍可能进入运营查看页面。本轮要求流水详情具备有效 `createdAt`，支付尝试成功时满足 `createdAt <= completedAt`，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付流水时间事实门禁，不替代真实生产数据库、服务调用、消息投递或正式发布治理证据。
+
+### 9.807 2026-09-28 管理端支付请求完成时间顺序门禁
+
+管理端支付请求详情此前只校验成功请求 `completedAt` 的格式和状态关系，且未要求详情具备有效 `createdAt`，成功完成时间早于请求创建时间仍可能被运营页面接受。本轮要求详情具备有效 `createdAt`，成功请求满足 `createdAt <= completedAt`，非成功请求继续要求 `completedAt` 为空，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付请求时间事实门禁，不替代真实生产数据库、服务调用、消息投递或正式发布治理证据。
+
+### 9.808 2026-09-28 管理端退款动作与列表生命周期顺序门禁
+
+管理端退款动作和退款列表此前只校验 `successAt` 的格式及状态关系，成功时间早于申请时间仍可能进入审核、查询或重试运营流程。本轮复用退款生命周期顺序校验，要求存在成功时间时满足 `appliedAt <= successAt`，处理中/审核中无成功时间的既有契约保持不变，并补充动作与列表逆序回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端退款时间事实门禁，不替代真实退款渠道、生产数据库、资金或正式发布证据。
+
+### 9.809 2026-09-28 管理端告警回执回查时间顺序门禁
+
+管理端支付异常告警列表此前仅校验创建时间和回查次数，最近回查时间、下次回查时间的格式与顺序均未校验，逆序回查计划仍可能进入运营页面。本轮要求有值时满足 `createdAt <= lastReceiptQueryAt <= nextReceiptQueryAt`，两个回查时间均为空的初始状态继续有效，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端告警回查时间事实门禁，不替代真实告警投递、生产数据库、人工处置或正式发布治理证据。
+
+### 9.810 2026-09-28 管理端支付记录详情时间事实门禁
+
+管理端支付记录列表此前已校验 `expireTime`、`createdAt`、`updatedAt` 顺序，但详情接口只校验金额、状态和支付完成时间，异常时间事实仍可能进入详情页。本轮要求支付记录详情同样满足有效 `createdAt`、`createdAt <= expireTime` 和 `createdAt <= updatedAt`，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付记录时间事实门禁，不替代真实生产数据库、服务调用、资金或正式发布治理证据。
+
+### 9.811 2026-09-28 管理端支付记录完成时间顺序门禁
+
+管理端支付记录详情和列表此前只校验成功记录 `paidAt` 的格式，支付完成时间早于记录创建时间仍可能被运营页面接受。本轮要求成功支付记录满足 `createdAt <= paidAt`，非成功记录继续要求 `paidAt` 为空，并补充详情与列表逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付记录时间事实门禁，不替代真实生产数据库、支付渠道、资金或正式发布治理证据。
+
+### 9.812 2026-09-28 管理端支付记录完成时间上界门禁
+
+管理端支付记录此前已要求成功记录 `createdAt <= paidAt`，但 `paidAt` 晚于 `updatedAt` 的矛盾事实仍可能被接受。本轮进一步要求成功记录满足 `createdAt <= paidAt <= updatedAt`，非成功记录的空 `paidAt` 契约保持不变，并补充详情与列表上界逆序回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付记录生命周期时间门禁，不替代真实生产数据库、支付渠道、资金或正式发布治理证据。
+
+### 9.813 2026-09-28 管理端支付事件详情发布时间顺序门禁
+
+管理端支付事件列表此前已校验创建与发布时间顺序，但详情接口未要求有效 `createdAt`，且发布时间校验未带入创建时间，逆序事件详情仍可能被运营页面接受。本轮要求事件详情具备有效 `createdAt`，已发布事件满足 `createdAt <= lastPublishedAt`，待发布事件的空发布时间契约保持不变，并补充逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付事件时间事实门禁，不替代真实消息投递、生产数据库或正式发布治理证据。
+
+### 9.814 2026-09-28 管理端支付事件重发时间顺序门禁
+
+管理端支付事件详情和列表此前只校验最近重发操作人的配对关系及时间格式，重发时间晚于最终发布时间仍可能被运营页面接受。本轮要求存在重发事实时满足 `createdAt <= lastRepublishedAt <= lastPublishedAt`，并补充详情与列表逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付事件重发时间事实门禁，不替代真实消息投递、生产数据库或正式发布治理证据。
+
+### 9.815 2026-09-28 管理端死信任务重放解决时间线门禁
+
+管理端死信任务此前只校验 `createdAt <= updatedAt`，可选的最近重放和人工解决时间虽校验格式，却可能早于创建时间或晚于更新时间。本轮要求存在可选时间时满足 `createdAt <= lastReplayAt/resolvedAt <= updatedAt`，未发生重放或解决时的空值契约保持不变，并补充两类逆序回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端死信任务时间事实门禁，不替代服务端重放幂等、人工处置或下游消息证据。
+
+### 9.816 2026-09-28 小程序收银台倒计时非法日期门禁
+
+小程序收银台倒计时此前直接交给运行时 `Date` 解析，`2026-02-30` 等不存在的日期可能被滚动为后续有效日期，进而错误展示剩余时间或开放支付提交。本轮要求倒计时过期时间严格满足 `YYYY-MM-DD HH:mm:ss` 及真实日历值，非法日期统一按不可支付处理，并补充非法日期回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/payment.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/payment.js`、`git diff --check` 均通过。该改动只加强小程序本地支付入口的时间事实门禁，不替代服务端过期校验、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.817 2026-09-28 小程序支付尝试完成时间顺序门禁
+
+小程序支付详情及查单/关单响应此前只校验最近一次支付尝试完成时间格式，完成时间早于支付单创建时间仍可能被结果页接受。本轮要求成功支付尝试满足 `createdAt <= latestAttemptCompletedAt`，并补充支付操作响应的逆序时间回归测试；未完成尝试的空值契约保持不变。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check` 均通过。该改动只加强小程序支付响应的时间事实门禁，不替代服务端状态收口、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.818 2026-09-28 小程序退款尝试时间线完整性门禁
+
+小程序退款详情此前仅过滤 `attempts` 中的空行，退款尝试缺少尝试号、创建时间，或提交/完成时间早于前一阶段时仍可能进入退款进度页。本轮要求每条退款尝试具备有效 `refundAttemptNo`、`createdAt`，并满足 `createdAt <= submittedAt <= completedAt`；未提交或未完成阶段继续允许使用 `-`，同时补充非法事实回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check` 均通过。该改动只加强小程序退款响应的时间事实门禁，不替代服务端退款状态收口、真实退款渠道、生产数据库或正式发布证据。
+
+### 9.819 2026-09-28 小程序收银台最近尝试类型门禁
+
+小程序收银台响应此前未校验可选的 `latestAttemptStatus` 类型，数值等异常事实会被支付提交判断按空尝试处理。本轮要求该字段为空时保持空值契约，有值时必须为非空字符串，非法类型和空字符串统一拒绝，并补充收银台响应回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/payment.test.js`、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check` 均通过。该改动只加强小程序支付提交前的响应事实门禁，不替代服务端幂等与状态校验、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.820 2026-09-28 API 客户端支付尝试完成时间顺序门禁
+
+API 客户端的支付详情、查单和关单响应此前只校验成功支付尝试完成时间格式，完成时间早于支付单创建时间仍可能被命令行调用方接受。本轮要求成功尝试满足 `createdAt <= latestAttemptCompletedAt`，并为三个支付查询命令补充有效及逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端响应事实门禁，不替代服务端状态收口、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.821 2026-09-28 API 客户端退款尝试时间线完整性门禁
+
+API 客户端退款详情此前只校验退款单自身状态时间，渠道尝试集合即使缺少尝试号、创建时间或出现提交/完成时间逆序，也可能被命令行调用方接受。本轮仅对返回尝试集合的 `refund-detail` 命令要求每条尝试满足 `createdAt <= submittedAt <= completedAt`，未发生阶段继续允许 `-`，并补充非法集合回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端退款详情事实门禁，不替代服务端退款状态收口、真实退款渠道、生产数据库或正式发布证据。
+
+### 9.822 2026-09-28 API 客户端收银台最近尝试类型门禁
+
+API 客户端收银台响应此前未校验可选的 `latestAttemptStatus` 类型，数值等异常事实可能被调用方按空尝试继续处理。本轮要求该字段为空时保持空值契约，有值时必须为非空字符串，并补充收银台异常类型与空字符串回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端支付提交前的响应事实门禁，不替代服务端状态校验、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.823 2026-09-28 App/H5 收银台最近尝试类型门禁
+
+App/H5 用户端收银台响应此前未校验可选的 `latestAttemptStatus` 类型，数值等异常事实可能被支付页面按空尝试继续处理。本轮要求该字段为空时保持空值契约，有值时必须为非空字符串，并补充 App/H5 客户端异常类型与空字符串回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强 App/H5 支付提交前的响应事实门禁，不替代服务端状态校验、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.824 2026-09-28 管理端退款尝试时间线完整性门禁
+
+管理端退款详情此前仅过滤 `attempts` 中的空行，退款尝试缺少尝试号、创建时间，或提交/完成时间早于前一阶段时仍可能进入运营详情页。本轮要求每条退款尝试具备有效 `refundAttemptNo`、`createdAt`，并满足 `createdAt <= submittedAt <= completedAt`；未提交或未完成阶段继续允许使用 `-`，并在现有管理端回归测试中补充非法事实覆盖。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（`144/144`）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端退款详情事实门禁，不替代服务端退款状态收口、人工审核、真实退款渠道或正式发布治理证据。
+
+### 9.825 2026-09-28 后端未提交预付单收银台状态事实门禁
+
+后端收银台组装此前仅在存在支付尝试记录时写入 `paymentStatus`，未提交预付单返回 `null`，与用户端收银台对 `PREPAY_CREATED` 的响应契约不一致，可能导致真实支付入口加载失败。本轮为收银台默认返回 `PREPAY_CREATED`，已有支付尝试仍以支付单实际状态覆盖，并补充未提交预付单回归测试。
+
+本轮自测：已尝试执行 `mvn -q -Dtest=PaymentServiceImplTest test`，但当前环境未安装 Maven（`mvn: command not found`）；`git diff --check` 通过。该改动只修复后端收银台状态组装事实，不替代真实支付渠道、生产数据库、消息系统或正式发布证据。
+
+### 9.826 2026-09-28 后端预付单创建支付状态事实门禁
+
+预付单查询此前未关联支付单状态，创建标准预付单和虚拟预付单返回的 `PrepayOrderDTO.paymentStatus` 可能为空，用户端预付响应校验因此无法进入收银台。本轮让 `findPrepay` 关联支付单返回实际状态，并对历史或异常缺失值兜底为 `PREPAY_CREATED`，补充标准与虚拟预付单回归断言。
+
+本轮自测：已尝试执行 `mvn -q -Dtest=PaymentServiceImplTest test`，但当前环境未安装 Maven（`mvn: command not found`）；`git diff --check` 通过。该改动只修复预付单响应的支付状态事实，不替代服务端事务、真实支付渠道、生产数据库或正式发布证据。
+
+### 9.827 2026-09-28 管理端收银台会话详情关联事实门禁
+
+管理端收银台会话详情此前只校验会话号、支付单号、金额和状态时间，预付单号、业务订单、账单、客户、收银台标题、支付场景或终端缺失时仍可能进入详情页，导致联查入口和运营展示建立在不完整快照上。本轮要求这些数据库保证且页面依赖的关联事实为非空字符串；支付单号继续按未提交会话的可选关联事实处理，标准订单号继续允许虚拟订单为空，并补充逐字段缺失回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端收银台详情响应事实门禁，不替代真实生产数据库、跨系统联查、支付渠道或正式发布治理证据。
+
+### 9.828 2026-09-28 管理端支付动作预付单关联事实门禁
+
+管理端查单和关闭接口返回完整支付详情，但动作响应归一化此前只校验支付单号、业务订单号、金额和状态时间，缺少 `prepayOrderNo` 仍可能被接受，详情页随后无法可靠打开对应用户收银台。本轮要求查单/关闭响应返回非空预付单号，并补充缺失和空字符串回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付动作关联事实门禁，不替代真实支付服务、生产数据库、渠道查单或正式发布治理证据。
+
+### 9.829 2026-09-28 管理端支付动作跨系统链路事实门禁
+
+管理端查单和关闭响应此前已返回预付单号，但仍可能缺少后端 `PaymentDetailDTO` 生成的 `businessChainId`，动作响应被页面短暂接受后无法打开对账链路。本轮要求支付动作响应包含非空跨系统链路 ID，并补充缺失链路事实回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付动作跨系统关联事实门禁，不替代真实对账服务、生产数据库、跨系统 HTTP 或正式发布治理证据。
+
+### 9.830 2026-09-28 支付详情轨迹集合类型门禁
+
+App/H5、小程序和管理端支付详情此前会把非数组的 `routeLogs`、`notifyLogs`、`eventLogs` 静默转换为空数组，损坏的审计轨迹响应可能被页面误当作“暂无轨迹”。依据后端 `PaymentServiceImpl.safeList` 的数组输出契约，本轮要求这些字段为空或数组，保留空值兼容行为，拒绝字符串、对象和数字等异常集合，并补充三端回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、三端 `node --check` 与 `git diff --check` 均通过。该改动只加强支付详情审计轨迹响应门禁，不替代真实数据库、消息轨迹或正式发布治理证据。
+
+### 9.831 2026-09-28 退款详情轨迹集合类型门禁
+
+App/H5、小程序和管理端退款详情此前会把非数组的 `attempts` 或 `operationLogs` 静默转换为空集合，可能将损坏的退款渠道轨迹误展示为“暂无尝试/暂无日志”。本轮要求这些字段为空或数组，保留空值兼容行为，拒绝字符串、对象等异常集合，并补充三端回归测试；API 客户端既有的 `attempts` 非数组拒绝契约保持一致。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、三端 `node --check` 与 `git diff --check` 均通过。该改动只加强退款详情审计轨迹响应门禁，不替代真实退款渠道、生产数据库或正式发布治理证据。
+
+### 9.832 2026-09-28 退款操作日志元素事实门禁
+
+退款详情此前虽然要求 `operationLogs` 为数组，但数组内的字符串或缺少日志号、动作和创建时间的对象仍可能进入用户进度页和管理端日志表，导致操作轨迹展示失真。依据后端 `RefundOperationLogItemDTO` 及退款操作日志表契约，本轮要求每条日志具备非空 `logNo`、动作名称或编码及合法 `createdAt`，保留空行过滤行为，并补充三端元素异常回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、三端 `node --check` 与 `git diff --check` 均通过。该改动只加强退款操作日志事实门禁，不替代真实退款渠道、生产数据库或正式发布治理证据。
+
+### 9.833 2026-09-28 API 客户端退款操作日志事实门禁
+
+API 客户端 `refund-detail` 命令此前只校验退款渠道尝试集合，`operationLogs` 缺失、非数组或日志元素缺少日志号、动作和创建时间时仍可能被命令行调用方接受。本轮仅对退款详情命令补齐后端 `RefundOperationLogItemDTO` 结构校验，退款动作命令继续保持原有响应范围，并补充有效及异常日志集合回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端退款详情审计事实门禁，不替代真实退款渠道、生产数据库或正式发布治理证据。
+
+### 9.834 2026-09-28 API 客户端支付轨迹集合门禁
+
+API 客户端 `detail`、`query` 和 `close` 命令此前只校验支付身份、金额、状态和时间，后端 `PaymentDetailDTO` 的 `routeLogs`、`notifyLogs`、`eventLogs` 即使为非数组或包含空/非字符串元素也可能被直接输出。本轮依据 `PaymentMapper` 的字符串轨迹查询契约，要求三类轨迹为空或由非空字符串组成，并补充三命令有效及异常集合回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。该改动只加强 API 客户端支付审计轨迹门禁，不替代真实数据库、消息系统或正式发布治理证据。
+
+### 9.835 2026-09-28 跨系统 happy-path 预付单支付状态门禁
+
+跨系统 happy-path 此前只校验预付单号、支付单号、金额和生命周期时间，预付单响应缺失或错误的 `paymentStatus` 仍可能进入收银台及支付提交链路。本轮要求新建预付单明确处于 `PREPAY_CREATED`，并补充缺失及错误状态回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 预付单响应事实门禁，不替代真实支付创建、数据库、渠道或正式发布治理证据。
+
+### 9.836 2026-09-28 跨系统 happy-path 收银台有效期连续性门禁
+
+跨系统 happy-path 此前只校验收银台 `expiresAt` 的格式，没有确认它与同一预付单返回的有效期一致，串用其他预付单有效期的收银台快照仍可能进入支付提交链路。本轮依据后端收银台由预付单直接复制有效期的组装契约，要求收银台有效期严格匹配预付单，并补充错配回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 收银台关联事实门禁，不替代真实支付创建、数据库、渠道或正式发布治理证据。
+
+### 9.837 2026-09-28 跨系统 happy-path 支付提交有效期连续性门禁
+
+跨系统 happy-path 此前只校验支付提交响应自身的有效期格式和内部时间顺序，未确认首次及重复提交仍引用原预付单有效期，串用其他预付单时间的提交响应仍可能进入回调链路。本轮要求支付提交及幂等提交响应的 `expiresAt` 严格匹配预付单，并补充错配回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 支付提交生命周期门禁，不替代真实支付渠道、数据库、回调验签或正式发布治理证据。
+
+### 9.838 2026-09-28 跨系统 happy-path 支付成功终态展示门禁
+
+跨系统 happy-path 此前只校验回调返回 `status=SUCCESS`，未确认支付状态样式及收银台终态文案同步为 `success/支付成功/success`，矛盾快照仍可能进入清分和结算链路。本轮要求首次及重复成功回调同时满足支付终态与收银台展示终态契约，并补充错配回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 支付成功展示事实门禁，不替代真实回调验签、渠道资金或正式发布治理证据。
+
+### 9.839 2026-09-28 跨系统 happy-path 清分结算时间顺序门禁
+
+跨系统 happy-path 此前只校验结算单与清分单的编号、链路和目标身份，结算响应创建时间早于清分订单的逆序事实仍可能进入结算金额和账务校验。本轮要求结算创建时间不早于对应清分创建时间，并补充逆序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 清分到结算的时序事实门禁，不替代真实消息延迟、生产数据库或正式发布治理证据。
+
+### 9.840 2026-09-28 跨系统 happy-path 支付事件清分时序门禁
+
+跨系统 happy-path 此前只校验清分单与支付单的身份和成功状态，清分单创建时间早于支付成功事件的逆序事实仍可能进入结算链路。本轮要求清分创建时间不早于对应 `PAYMENT_SUCCESS` 事件，并补充逆序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 支付事件到清分的时序事实门禁，不替代真实消息代理、生产数据库或正式发布治理证据。
+
+### 9.841 2026-09-29 跨系统 happy-path 账务事件来源时序门禁
+
+跨系统 happy-path 此前只校验账务事件已消费、业务链路和事件编号，账务事件创建时间早于支付成功事件或清分事实的逆序记录仍可能被视为已完成入账。本轮要求支付成功和清分账务事件不早于各自来源事实，并补充逆序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 账务事件时序事实门禁，不替代真实消息消费、生产账务数据库或正式发布治理证据。
+
+### 9.842 2026-09-29 跨系统 happy-path 账务流水来源时序门禁
+
+跨系统 happy-path 此前只校验账务流水金额、余额、方向和记账状态，账务流水创建时间早于已消费账务事件的逆序事实仍可能被视为有效入账。本轮要求支付、清分和退款账务流水不早于各自账务事件，并补充逆序时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 账务流水时序事实门禁，不替代真实会计入账、生产数据库或正式发布治理证据。
+
+### 9.843 2026-09-29 跨系统 happy-path 对账最新事实时间精确门禁
+
+对账服务将快照 `lastFactAt` 计算为全部事实 `occurredAt` 的最大值，但 happy-path 此前只要求该时间覆盖每条事实，更晚的虚假时间仍可能通过收口校验。本轮要求 `lastFactAt` 精确等于最新事实发生时间，并补充虚高时间回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 对账快照时间事实门禁，不替代真实对账数据库或正式发布治理证据。
+
+### 9.844 2026-09-29 管理端预付单支付状态事实门禁
+
+管理端预付单响应此前只校验订单编号、金额和生命周期时间，缺失或未知的 `paymentStatus`，以及与支付状态不一致的收银台文案/样式仍可能进入运营操作流程。本轮要求管理端预付单校验已知支付状态、收银台状态样式及终态文案映射，并补充异常状态回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端预付单响应事实门禁，不替代真实支付服务、生产数据库、渠道支付或正式发布治理证据。
+
+### 9.845 2026-09-29 管理端预付单成功时间顺序门禁
+
+管理端预付单此前已校验支付状态和收银台展示映射，但未校验 `paymentStatus` 与 `successAt` 的一致性，成功状态缺少成功时间或成功时间早于创建时间的快照仍可能进入运营流程。本轮补齐成功时间存在性及 `createdAt <= successAt` 校验，并增加对应回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端预付单生命周期事实门禁，不替代真实支付回调、生产数据库、渠道支付或正式发布治理证据。
+
+### 9.846 2026-09-29 管理端支付尝试完成事实门禁
+
+管理端支付列表此前只校验最近支付尝试状态是否为非空字符串，缺少状态样式、完成时间及其与支付单创建时间的连续性校验，缺字段或逆序时间的尝试快照仍可能进入运营列表。本轮要求支付列表、支付动作和支付详情统一校验最近尝试状态样式；成功尝试必须有完成时间，且完成时间不得早于支付单创建时间，并补充缺字段及逆序时间回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付尝试事实门禁，不替代真实支付渠道、生产数据库、回调通知或正式发布治理证据。
+
+### 9.847 2026-09-29 管理端支付列表尝试事实后端契约补齐
+
+管理端支付列表客户端新增了最近尝试状态样式、完成时间及创建时间顺序门禁，但后端 `PaymentListItemDTO` 与列表 SQL 尚未返回对应字段，真实列表响应会因缺少事实字段而被客户端拒绝。本轮补齐列表 DTO 与 `PaymentMapper.findAll` 的状态样式和完成时间投影，使管理端门禁与后端列表契约一致。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。当前环境未安装 Maven，未运行后端 Maven 测试；该改动只补齐支付列表响应契约，不替代真实数据库映射验证或正式发布治理证据。
+
+### 9.848 2026-09-29 跨系统 happy-path 预付单收银台展示门禁
+
+跨系统 happy-path 此前只校验预付单处于 `PREPAY_CREATED`，未确认同一预付单响应的收银台文案和样式为 `待支付/warn`，状态与展示矛盾的预付单仍可能进入后续收银台链路。本轮要求预付单同时满足支付状态和收银台初始展示事实，并补充文案、样式及缺失字段回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 预付单展示事实门禁，不替代真实支付服务、数据库、渠道或正式发布治理证据。
+
+### 9.849 2026-09-29 跨系统 happy-path 账务流水账户归属门禁
+
+跨系统 happy-path 此前校验账务流水的业务号、业务类型、方向、金额和余额，但缺少 `accountNo` 存在性校验，缺失账户归属的流水仍可能被视为已完成记账。本轮要求每条支付、清分和退款账务流水包含可确认的账户号，并补充缺失账户号回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 账务流水归属事实门禁，不替代真实账务数据库、账户配置或正式发布治理证据。
+
+### 9.850 2026-09-29 支付预付单复用状态默认化
+
+支付服务新建预付单路径会将缺失的支付状态默认收敛为 `PREPAY_CREATED`，但有效预付单复用路径此前直接返回旧快照，遗留记录缺失状态时可能被客户端拒绝。本轮统一复用路径与新建路径的默认化处理，并补充遗留复用快照回归测试。
+
+本轮自测：新增后端单测已补入 `PaymentServiceImplTest`；当前环境未安装 Maven，未运行后端 Maven 测试。已通过 `git diff --check`；该改动只收敛预付单响应状态，不替代真实数据库、支付状态迁移或正式发布治理证据。
+
+### 9.851 2026-09-29 用户端支付状态与收银台文案映射门禁
+
+用户端 App、小程序和 API 客户端此前只校验收银台文案与样式彼此匹配，未校验文案是否与 `paymentStatus` 对应，`PREPAY_CREATED` 携带“支付成功”仍可能被接受。本轮统一支付状态到收银台文案映射，覆盖待支付、待回调、结果待确认、风控、支付中、成功和关闭状态，并补充三端异常回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`、三端 `node --check` 与 `git diff --check` 均通过。该改动只加强用户端支付展示事实门禁，不替代真实支付渠道、数据库、回调或正式发布治理证据。
+
+### 9.852 2026-09-29 收银台支付状态与展示文案后端一致性
+
+收银台接口此前在预付单查询结果上保留原始收银台文案，但支付单状态会被提交事实覆盖；当支付单已进入 `WAIT_CALLBACK` 等状态时，接口可能返回 `paymentStatus=WAIT_CALLBACK` 与“待支付”文案，用户端状态映射门禁会拒绝该矛盾快照。本轮统一按实际支付状态派生收银台文案和样式，并补充有提交事实及缺失提交事实两条回归测试。
+
+本轮新增后端单测已补入 `PaymentServiceImplTest`；当前环境未安装 Maven，未运行后端 Maven 测试。已通过 `git diff --check`；该改动只收敛收银台响应状态与文案，不替代真实数据库、支付渠道或正式发布治理证据。
+
+### 9.853 2026-09-29 支付单 CSV 导出最近尝试事实补齐
+
+支付列表查询已返回最近尝试状态、状态样式和完成时间，但支付单 CSV 导出此前仍只输出支付单基础状态与创建时间，运营导出的排障快照因此缺少与列表相同的尝试事实。本轮补齐导出 SQL 的最近尝试投影，并在 CSV 增加支付状态样式、最近尝试状态、最近尝试状态样式和完成时间列，同时补充导出单测。
+
+本轮新增后端单测已补入 `PaymentServiceImplTest`；当前环境未安装 Maven，未运行后端 Maven 测试。已通过 `git diff --check`；该改动只补齐运营导出字段，不替代真实数据库映射或正式发布治理证据。
+
+### 9.854 2026-09-29 管理端预付单全生命周期收银台映射门禁
+
+管理端预付单客户端此前只约束风控和终态状态的收银台文案，`WAIT_CALLBACK` 或 `PAYING` 携带错误文案仍可能通过响应校验并进入运营流程。本轮将管理端预付单收银台映射扩展到完整支付生命周期，并补充待回调、支付中状态错配回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端预付单展示事实门禁，不替代真实支付服务、生产数据库、支付渠道或正式发布治理证据。
+
+### 9.855 2026-09-29 跨系统支付成功尝试收口事实门禁
+
+跨系统 happy-path 此前只验证支付单 `SUCCESS`、成功时间和渠道流水，最新支付尝试缺失“成功”状态、成功样式或完成时间的响应仍可能被视为幂等成功回调。本轮要求首次及重复成功回调同时包含最新尝试成功事实、完成时间以及不早于支付创建时间的时序，并补充缺失、错配和逆序回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，因此未新增真实跨系统 HTTP 成功结论；该改动只加强 happy-path 支付尝试收口事实门禁，不替代真实回调验签、渠道资金或正式发布治理证据。
+
+### 9.856 2026-09-29 管理端支付记录详情尝试完成时间补齐
+
+管理端支付记录详情此前只返回最近尝试状态和样式，成功尝试缺少完成时间时仍可能被展示为已收口，且详情 SQL 未投影支付尝试完成时间。本轮补齐 `PaymentRecordDetailDTO`、详情 SQL 与 H2 夹具字段，并要求成功尝试必须有不早于支付创建时间的完成时间，非成功尝试不得携带完成时间。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。当前环境未安装 Maven，未运行后端 Mapper 集成测试；该改动只补齐支付记录详情尝试事实，不替代真实数据库映射或正式发布治理证据。
+
+### 9.857 2026-09-29 管理端支付记录尝试终态样式一致性
+
+管理端支付记录详情此前只要求最近尝试样式属于合法枚举，`SUCCESS` 搭配 `warn` 或 `FAIL` 搭配 `success` 的矛盾终态仍可能通过校验。本轮补充成功/失败尝试与 `success/danger` 样式的对应关系，并增加终态样式错配回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付记录展示事实门禁，不替代真实支付数据库、渠道结果或正式发布治理证据。
+
+### 9.858 2026-09-29 管理端支付记录详情展示尝试完成时间
+
+管理端支付记录详情接口和客户端此前已补齐最近尝试完成时间事实，但详情页面的事实网格尚未展示该字段，运营人员仍需依赖接口或其他页面排查。本轮将 `latestAttemptCompletedAt` 接入支付记录详情页面，与支付成功时间、最近终端等事实并列展示；缺失值继续按页面统一规则显示占位符。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只补齐管理端支付记录详情展示，不替代真实数据库映射、后端 Maven 测试或正式发布治理证据。
+
+### 9.859 2026-09-29 收银台最近支付尝试事实契约补齐
+
+收银台接口此前只返回最近支付尝试状态，未返回状态样式和完成时间，用户端 API client 只能验证状态文本是否存在，无法识别成功尝试缺少完成时间或状态样式错配的响应。本轮补齐 `CashierPageDTO`、支付提交事实查询和服务映射的最近尝试状态样式/完成时间字段，并在 App 与 API client 收银台响应门禁中要求成功尝试具备 `success` 样式及合法完成时间、非成功尝试不得携带完成时间；新增异常回归夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/app-web/src/api/client.js`、`node --check systems/payment-core/frontend/api-client/payment-api.mjs`、`git diff --check` 均通过。当前环境未安装 Maven，未运行后端 Java/Maven 测试；该改动只补齐收银台支付尝试响应契约，不替代真实数据库映射、支付渠道或正式发布治理证据。
+
+### 9.860 2026-09-29 退款渠道尝试状态事实门禁
+
+退款详情客户端此前只校验渠道尝试的时间顺序，未校验 `attemptStatus` 与 `attemptStatusType` 的对应关系，也未要求 `SUCCESS/FAIL` 终态具备完成时间，矛盾或未收口的退款尝试仍可能进入用户端和管理端展示。本轮在 App、管理端和 API client 统一补充 `PENDING/FAILED/ACCEPTED/UNKNOWN/SUCCESS/FAIL` 状态样式映射，要求非终态不得携带完成时间、终态必须有合法且不早于提交时间的完成时间，并增加错配、缺失和正向快照回归夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、三端 `node --check` 与 `git diff --check` 均通过。当前环境未安装 Maven，未运行后端 Java/Maven 测试；该改动只加强退款尝试展示事实门禁，不替代真实退款数据库、渠道回调或正式发布治理证据。
+
+### 9.862 2026-09-29 管理端成功支付尝试排障建议修正
+
+管理端支付记录详情的排障建议此前用英文 `SUCCESS` 判断最近尝试是否成功，但支付尝试事实实际使用中文状态 `成功`；因此成功支付记录仍会错误显示“建议先主动查单再决定是否人工干预”。本轮按真实尝试状态值修正判断，避免已成功收口的记录被提示重复查单。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、`npm run build`（payment-core 管理端）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs`、`git diff --check` 均通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP 成功结论；该改动只修正管理端排障文案判断，不替代真实支付状态、数据库或正式发布治理证据。
+
+### 9.863 2026-09-29 小程序收银台最近尝试事实门禁补齐
+
+支付核心已为收银台响应补齐最近尝试状态样式和完成时间，但小程序客户端此前仍只校验最近尝试文本，成功尝试缺少完成时间或样式错配时可能绕过用户端门禁。本轮同步小程序收银台校验：成功尝试必须为 `成功/success` 且具备合法完成时间，非成功尝试不得携带完成时间，并补充正向与异常回归夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、`node --check systems/payment-core/frontend/mini-program/utils/request.js`、`git diff --check` 均通过。该改动只补齐小程序收银台响应事实门禁，不替代真实小程序运行环境、支付渠道或正式发布治理证据。
+
+### 9.864 2026-09-29 H5/PC 收银台共享实现构建回归
+
+H5 与 PC 收银台页面均通过 `shared` 包装复用 App 收银台视图及同一套 API 响应事实门禁。本轮完成两端路由测试与生产构建回归，确认最近尝试状态样式/完成时间校验不会因终端包装或构建入口分叉而遗漏；未发现 H5/PC 独立客户端校验逻辑，因此不重复引入第三套门禁。
+
+本轮自测：`node --test systems/payment-core/frontend/h5-web/src/*.test.js`（2/2）、`node --test systems/payment-core/frontend/pc-web/src/*.test.js`（2/2）、`npm run build`（H5 Web）、`npm run build`（PC Web）、`git diff --check` 均通过。该回归只验证共享收银台在 H5/PC 构建产物中的接入，不替代真实浏览器、支付渠道或正式发布治理证据。
+
+### 9.865 2026-09-29 支付尝试终态样式一致性门禁
+
+App、小程序和 API 客户端此前对支付详情、查单和关单响应中的最近尝试只校验样式值属于合法枚举，`成功 + danger` 或 `失败 + success` 等矛盾终态仍可能进入结果页或命令行流程。本轮统一要求成功尝试使用 `success`、失败尝试使用 `danger`，收银台、支付详情及查单/关单响应共同复用该规则，并补充三端异常回归夹具。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、三端 `node --check`、`git diff --check` 均通过。当前环境未安装 Maven，未运行后端 Java/Maven 测试；该改动只加强用户端支付尝试展示事实门禁，不替代真实支付渠道、数据库、回调或正式发布治理证据。
+
+### 9.866 2026-09-29 管理端支付尝试终态样式门禁
+
+管理端支付动作、支付详情和支付列表此前共用的最近尝试校验只要求状态样式属于合法枚举，成功尝试携带 `danger` 或失败尝试携带 `success` 仍可能进入运营页面。本轮扩展共享管理端状态对校验，要求成功/失败终态分别对应 `success/danger`，并补充动作、详情及列表异常回归测试；支付记录详情原有更严格规则保持不变。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、`node --check systems/payment-core/frontend/admin-web/src/api/client.js`、`git diff --check` 均通过。该改动只加强管理端支付尝试展示事实门禁，不替代真实支付数据库、渠道结果或正式发布治理证据。
+
+### 9.867 2026-09-29 后端渠道提交终态样式根因校验
+
+渠道提交结果 validator 此前只限制 `attemptStatusType` 属于合法枚举，适配器返回“成功/失败”与展示样式不一致时仍可能被持久化为矛盾的支付尝试事实。本轮在后端边界校验补充 `成功 -> success`、`失败/支付失败 -> danger` 映射，非终态状态仍保留渠道提供的合法样式，并新增 validator 单测覆盖正向、错配和非终态场景。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过；当前环境未安装 Maven 且无 Maven wrapper，未运行 `PaymentChannelSubmitResultValidatorTest` 或其他 Java/Maven 测试。该改动只收紧渠道提交结果边界，不替代真实渠道、数据库事务或正式发布治理证据。
+
+### 9.868 2026-09-29 跨系统退款终态样式事实补齐
+
+退款中心响应此前只返回退款状态文本，跨系统 happy-path 无法确认审核、处理中和成功状态对应的展示样式。本轮为退款列表/详情及动作响应补充派生 `statusType`（`REVIEWING/PROCESSING -> warn`、`APPROVED/SUCCESS -> success`、`FAIL -> danger`），并让 happy-path 对退款状态执行样式门禁，补充成功样式错配回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 均通过。当前环境未安装 Maven 且无 Maven wrapper，未运行退款中心 Java 测试；该改动只补齐退款跨系统展示事实，不替代真实退款数据库、渠道回调或正式发布治理证据。
+
+### 9.869 2026-09-29 退款中心管理端状态样式门禁
+
+退款中心管理端客户端此前只校验响应中的退款单号，后端新增 `statusType` 后仍可能接受 `SUCCESS + warn` 等矛盾状态并展示给运营人员。本轮统一校验 `REVIEWING/APPROVED/PROCESSING/SUCCESS/FAIL` 与 `warn/success/warn/success/danger` 的映射，覆盖单条、动作和列表响应，并补充错配回归测试。
+
+本轮自测：`node --test systems/refund-center/frontend/admin-web/src/api.test.js`（12/12）、`node --check systems/refund-center/frontend/admin-web/src/api.js`、`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、`git diff --check` 均通过。当前环境未安装 Maven且无 Maven wrapper，未运行退款中心 Java 测试；该改动只加强管理端退款展示事实门禁，不替代真实退款数据库、渠道回调或正式发布治理证据。
+
+### 9.870 2026-09-29 退款详情导出状态样式补齐
+
+退款中心详情接口和管理端页面已提供退款状态样式，但详情 CSV 快照此前只导出状态文本，财务复盘和运营留档无法确认导出时的展示事实。本轮在退款详情快照增加“状态样式”列，并补充 H2 集成测试的 CSV 表头断言，保持导出与详情响应事实一致。
+
+本轮自测：已补充 `RefundCenterIntegrationTest` 导出断言；当前环境未安装 Maven且无 Maven wrapper，未运行退款中心 Java 测试。`git diff --check` 通过；该改动只补齐退款运营导出字段，不替代真实文件下载、数据库迁移或正式发布治理证据。
+
+### 9.871 2026-09-29 退款中心管理页消费状态样式事实
+
+退款中心管理端客户端此前已校验后端 `statusType`，但列表和详情视图仍按状态文本自行拼接 CSS 类，新增状态样式事实没有真正进入页面渲染。本轮改为使用响应中的 `statusType` 绑定状态样式，并补充 `warn/danger` 样式别名，完成管理端测试和生产构建回归。
+
+本轮自测：`node --test systems/refund-center/frontend/admin-web/src/api.test.js`（12/12）、`node --check systems/refund-center/frontend/admin-web/src/api.js`、`npm run build`（退款中心管理端）、`git diff --check` 均通过。该改动只统一退款运营页面的状态展示事实，不替代真实浏览器、退款数据库或正式发布治理证据。
+
+### 9.872 2026-09-29 账务运营导出状态样式事实补齐
+
+账务列表和详情页面已提供账户、流水状态样式，但账户详情 CSV、流水 CSV 及账户详情中的最近流水导出此前只保留状态文本，财务留档无法确认导出时的展示事实。本轮复用账务 Mapper 的 `statusType` 派生结果，补齐账户状态、流水状态对应的“状态样式”列，并增加服务测试表头及 `正常/success`、`已记账/success` 数据断言。
+
+本轮自测：已补充账务账户详情与流水导出回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行账务 Java/Maven 测试。`git diff --check` 通过；该改动只补齐账务运营导出事实，不替代真实文件下载、数据库、总账凭证或正式财务审批治理证据。
+
+### 9.873 2026-09-29 结算出款导出状态样式事实补齐
+
+结算管理端出款批次和出款记录列表已提供 `payoutStatusType`，但两类 CSV 快照此前只导出出款状态文本，运营与财务留档无法确认状态对应的展示样式。本轮补齐批次和记录 CSV 的“状态样式”列，复用既有 DTO 派生结果，并增加 `待出款/warn` 表头与数据回归断言。
+
+本轮自测：已补充结算出款批次与记录导出回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行结算 Java/Maven 测试。`git diff --check` 通过；该改动只补齐结算运营导出事实，不替代真实文件下载、数据库出款、渠道资金或正式财务审批治理证据。
+
+### 9.874 2026-09-29 清分订单导出状态样式事实补齐
+
+清分订单列表和详情响应已提供清分、费用规则及分账明细的状态样式，但 CSV 快照此前只导出状态文本，运营与财务留档无法确认各层状态对应的展示事实。本轮补齐清分列表/详情、费用规则和分账明细的“状态样式”列，并增加 `已完成/success` 及表头回归断言。
+
+本轮自测：已补充清分订单列表与详情导出回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行清分 Java/Maven 测试。`git diff --check` 通过；该改动只补齐清分运营导出事实，不替代真实清分数据库、分账资金、消息链路或正式财务治理证据。
+
+### 9.875 2026-09-29 支付请求导出状态样式事实补齐
+
+支付请求列表 SQL 和 DTO 已提供 `requestStatusType`，但管理端支付请求 CSV 此前只导出请求状态文本，运营排查和留档无法确认状态对应的展示样式。本轮补齐支付请求 CSV 的“状态样式”列，并增加 `成功/success` 表头与数据回归断言，保持敏感字段脱敏逻辑不变。
+
+本轮自测：已补充支付请求 CSV 导出回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐支付请求运营导出事实，不替代真实数据库映射、支付渠道或正式发布治理证据。
+
+### 9.876 2026-09-29 订单运营导出状态样式事实补齐
+
+订单列表 DTO 已提供订单、履约、最近支付和最近收银台的状态样式，但订单中心 CSV 此前只导出四类状态文本，用户支付主流程的运营留档无法确认展示事实。本轮补齐四类状态样式列，并在保留客户/服务者脱敏与公式注入防护的同时，增加 `待支付/warn` 等完整状态组合回归断言。
+
+本轮自测：已补充订单 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐订单运营导出事实，不替代真实订单数据库、支付链路或正式发布治理证据。
+
+### 9.877 2026-09-29 服务者结算导出状态样式事实补齐
+
+服务者结算列表 DTO 已提供结算状态和出款状态样式，但结算中心 CSV 此前只导出两类状态文本，运营与财务留档无法确认待审核、待出款等状态的展示事实。本轮补齐结算状态样式和出款状态样式列，并在保留服务者姓名脱敏的同时增加 `待审核/warn`、`待出款/warn` 回归断言。
+
+本轮自测：已补充服务者结算 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐结算运营导出事实，不替代真实结算数据库、出款渠道或正式财务治理证据。
+
+### 9.878 2026-09-29 任务执行日志导出状态样式事实补齐
+
+任务执行日志 DTO 和列表接口已提供任务状态、严重等级、升级状态的样式字段，但运营 CSV 此前只导出文本值，日终与补偿任务留档无法确认成功、告警和升级状态的展示事实。本轮补齐三类状态样式列，并增加 `SUCCESS/success`、`P2/danger`、`纳入当班跟进/warn` 数据回归断言。
+
+本轮自测：已补充任务执行日志 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐任务运营导出事实，不替代真实调度执行、数据库任务日志或正式发布治理证据。
+
+### 9.879 2026-09-29 支付事件导出状态样式事实补齐
+
+支付事件列表 DTO 和管理端页面已提供发布状态样式，但事件 CSV 此前只导出发布状态文本，失败事件和死信事件留档无法确认运营展示事实。本轮补齐发布状态样式列，并在保留事件载荷脱敏断言的同时增加 `DEAD_LETTER/danger` 回归校验。
+
+本轮自测：已补充支付事件 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐事件运营导出事实，不替代真实消息投递、死信处置或正式发布治理证据。
+
+### 9.880 2026-09-29 日终批次导出准入状态样式补齐
+
+日终批次 DTO 已提供批次状态样式及对账准入状态样式，但日终 CSV 此前只导出 `WARNING`、`BLOCKED` 等文本，无法在财务留档中确认批次风险和对账准入展示事实。本轮补齐批次状态样式、对账准入样式两列，并增加 `WARNING/warn`、`BLOCKED/danger` 回归断言。
+
+本轮自测：已补充日终批次 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐日终运营导出事实，不替代真实日终采集、对账系统或财务准入审批治理证据。
+
+### 9.881 2026-09-29 路由执行导出结果样式事实补齐
+
+路由执行列表 DTO 和 SQL 已提供 `routeResultType`，但管理端路由执行 CSV 此前只导出路由结果文本，运营排查无法确认命中、失败等结果的展示样式。本轮补齐路由结果样式列，并在保留客户、IP、幂等键和报文脱敏断言的同时增加 `命中/success` 回归校验。
+
+本轮自测：已补充路由执行 CSV 导出结果样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐路由运营导出事实，不替代真实路由配置、渠道决策或正式发布治理证据。
+
+### 9.882 2026-09-29 支付日志导出级别样式事实补齐
+
+支付处理日志 DTO 已提供日志级别样式，但日志 CSV 此前只导出 `ERROR`、`WARN` 等文本，运营排障留档无法确认级别对应的展示事实。本轮补齐日志级别样式列，并在保留消息引号转义测试的同时增加 `ERROR/danger` 回归校验。
+
+本轮自测：已补充支付日志 CSV 导出级别样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐日志运营导出事实，不替代真实日志存储、告警链路或正式发布治理证据。
+
+### 9.883 2026-09-29 支付记录导出状态样式事实补齐
+
+支付记录行 DTO 已提供支付状态样式，但收款记录 CSV 此前只导出支付状态文本，运营留档无法确认成功或失败记录对应的展示事实。本轮补齐支付状态样式列，并在保留公式注入防护、用户标识脱敏和订单字段转义断言的同时增加 `成功/success` 回归校验。
+
+本轮自测：已补充支付记录 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐支付记录运营导出事实，不替代真实支付数据库、渠道结果或正式发布治理证据。
+
+### 9.884 2026-09-29 支付异常告警导出状态样式事实补齐
+
+支付异常告警行 DTO 已提供告警状态和回执状态样式，但告警 CSV 此前只导出两类状态文本，运营排障留档无法确认派发、待确认等事实对应的展示样式。本轮补齐告警状态样式、回执状态样式两列，并在保留公式注入防护和供应商回执脱敏的同时增加 `已派发/success`、`待确认/warn` 回归校验。
+
+本轮自测：已补充支付异常告警 CSV 导出状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐告警运营导出事实，不替代真实通知投递、回执回查或正式发布治理证据。
+
+### 9.885 2026-09-29 支付监控快照告警等级样式补齐
+
+支付监控告警 DTO 已提供告警等级样式，但监控快照 CSV 的告警 detail 此前只记录 `P1/P2` 文本，运营导出无法确认风险等级对应的展示事实。本轮将 `alertLevelType` 写入告警 detail，并增加 `P1/danger` 快照回归断言，同时保留公式值中和验证。
+
+本轮自测：已补充支付监控快照告警等级样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐监控导出事实，不替代真实监控计算、告警路由或正式发布治理证据。
+
+### 9.886 2026-09-29 支付监控渠道风险等级样式补齐
+
+支付渠道监控指标 DTO 已提供风险等级样式，但监控快照 CSV 的渠道 detail 此前只记录风险等级文本，运营导出无法确认渠道风险展示事实。本轮将 `riskLevelType` 写入渠道 detail，并增加 `P1/danger` 渠道快照回归断言，与告警等级样式保持一致。
+
+本轮自测：已补充支付监控渠道风险等级样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐监控渠道导出事实，不替代真实渠道监控计算、风控判断或正式发布治理证据。
+
+### 9.887 2026-09-29 支付渠道治理快照状态样式补齐
+
+支付渠道配置 DTO 已提供启停状态样式，但治理快照 CSV 的支付渠道分区此前只导出 `ENABLED/DISABLED` 文本，配置留档无法确认启停展示事实。本轮在支付渠道治理摘要中补充 `状态样式`，并增加 `ENABLED/success` 回归断言；其他配置分区的通用 CSV 列契约保持不变。
+
+本轮自测：已补充支付渠道治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐支付配置留档事实，不替代真实配置审批、数据库或正式发布治理证据。
+
+### 9.888 2026-09-29 支付网关治理快照证书样式补齐
+
+支付网关配置 DTO 已提供证书状态样式和启停状态样式，但治理快照的支付网关分区此前只导出证书/启停文本，无法在配置留档中确认证书风险和网关启停展示事实。本轮将两类样式写入网关治理摘要，并增加 `VALID/success` 回归断言。
+
+本轮自测：已补充支付网关治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐网关配置留档事实，不替代真实证书校验、配置审批、数据库或正式发布治理证据。
+
+### 9.889 2026-09-29 支付控制策略治理快照状态样式补齐
+
+支付控制策略 DTO 已提供自检状态样式和启停状态样式，但治理快照的支付控制策略分区此前只导出状态文本，无法在配置留档中确认自检风险与策略启停展示事实。本轮将两类样式写入控制策略治理摘要，并增加 `WARN/warn`、`ENABLED/success` 回归断言。
+
+本轮自测：已补充支付控制策略治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐控制策略配置留档事实，不替代真实自检执行、配置审批、数据库或正式发布治理证据。
+
+### 9.890 2026-09-29 支付路由规则治理快照状态样式补齐
+
+支付路由规则 DTO 已提供启停状态样式，但治理快照的路由规则分区此前只导出状态文本，运营留档无法确认规则启停展示事实。本轮将路由规则状态样式写入治理摘要，并增加 `ENABLED/success` 回归断言。
+
+本轮自测：已补充支付路由规则治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐路由配置留档事实，不替代真实路由命中、渠道决策、数据库或正式发布治理证据。
+
+### 9.891 2026-09-29 支付协议治理快照状态样式补齐
+
+支付协议 DTO 已提供启停状态样式，但治理快照的支付协议分区此前只导出状态文本，配置留档无法确认协议启停展示事实。本轮将支付协议状态样式写入治理摘要，并增加 `ENABLED/success` 回归断言。
+
+本轮自测：已补充支付协议治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐协议配置留档事实，不替代真实协议签署、数据库或正式发布治理证据。
+
+### 9.892 2026-09-29 渠道返回码治理快照状态样式补齐
+
+渠道返回码映射 DTO 已提供归档状态样式和映射状态样式，但治理快照的返回码分区此前只导出状态文本，运营留档无法确认归档与映射启停展示事实。本轮将两类状态样式写入治理摘要，并增加 `ACTIVE/success`、`ENABLED/success` 回归断言。
+
+本轮自测：已补充渠道返回码治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐返回码配置留档事实，不替代真实渠道返回、数据库或正式发布治理证据。
+
+### 9.893 2026-09-29 告警供应商治理快照状态样式补齐
+
+告警供应商配置 DTO 已提供启停状态样式，但治理快照的告警供应商分区此前只导出状态文本，运营留档无法确认通知供应商启停展示事实。本轮将告警供应商状态样式写入治理摘要，并增加 `ENABLED/success` 回归断言。
+
+本轮自测：已补充告警供应商治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐告警配置留档事实，不替代真实通知投递、供应商可用性或正式发布治理证据。
+
+### 9.894 2026-09-29 告警值班路由治理快照状态样式补齐
+
+告警值班路由 DTO 已提供启停状态样式，但治理快照的值班路由分区此前只导出状态文本，运营留档无法确认异常派发路由启停展示事实。本轮将值班路由状态样式写入治理摘要，并增加 `ENABLED/success` 回归断言。
+
+本轮自测：已补充告警值班路由治理快照状态样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只补齐值班路由配置留档事实，不替代真实告警派发、值班执行或正式发布治理证据。
+
+### 9.895 2026-09-29 支付主动查单终态失败日志样式收口
+
+支付主动查单允许返回 `FAIL`、`CLOSED`、`RISK_BLOCKED`、`RISK_REJECTED` 等终态失败，但查单审计日志此前将所有非成功结果统一写成 `info`，用户支付主流程和运营排障无法确认终态失败展示事实。本轮将上述终态失败映射为 `danger`，保留 `WAIT_CALLBACK` 等非终态结果的既有 `info` 事实，并增加 `FAIL/danger` 回归断言。
+
+本轮自测：已补充主动查单终态失败日志样式回归断言；当前环境未安装 Maven 且无 Maven wrapper，未运行 payment-core Java/Maven 测试。`git diff --check` 通过；该改动只收口查单审计展示事实，不替代真实渠道查单、数据库事务或正式发布治理证据。
+
+### 9.896 2026-09-29 跨系统支付提交状态事实门禁补齐
+
+跨系统 happy-path 的支付提交断言此前只校验 `paymentStatus` 和收银台状态，未校验支付单自身的 `status/statusType`，因此 `WAIT_CALLBACK` 搭配错误样式仍可能通过主流程门禁。本轮要求提交响应及随后支付单查询同时满足 `WAIT_CALLBACK/warn`，并增加状态样式错配回归断言。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实多服务 HTTP 栈，不能替代真实支付、清分、账务、结算或退款链路治理证据。
+
+### 9.897 2026-09-29 管理端支付配置专属状态样式门禁补齐
+
+管理端支付配置总览此前只校验通用启停状态，未校验页面实际展示的网关证书状态样式和控制策略自检状态样式，`VALID/danger` 或 `PASS/danger` 等矛盾事实可能进入运营配置页。本轮补充证书 `VALID/EXPIRING_SOON/EXPIRED/ARCHIVED` 与自检 `PASS/WARN/FAIL` 的样式映射校验，并增加错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端 HTTP 栈，不能替代真实配置数据库、审批流程或正式发布治理证据。
+
+### 9.898 2026-09-29 管理端网关历史版本证书样式门禁补齐
+
+管理端网关历史版本此前复用通用配置版本校验，只验证网关启停状态，未验证版本中的证书状态样式，错误证书事实可能进入历史版本回看页面。本轮对 `gatewayCode` 版本增加 `VALID/EXPIRING_SOON/EXPIRED/ARCHIVED` 样式映射校验，并增加证书样式错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置历史 HTTP 栈，不能替代真实配置数据库、审批流程或正式发布治理证据。
+
+### 9.899 2026-09-29 管理端网关复核证书样式门禁补齐
+
+管理端网关复核列表和复核动作此前复用通用复核状态校验，忽略复核 DTO 中的证书状态样式，`EXPIRED/success` 等矛盾事实仍可能进入审批视图。本轮在证书字段出现时强制校验证书状态样式，并增加复核列表与动作错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置复核 HTTP 栈，不能替代真实配置数据库、审批操作或正式发布治理证据。
+
+### 9.900 2026-09-29 管理端配置复核动作候选状态门禁补齐
+
+管理端配置复核动作结果此前只验证申请号与复核状态，未校验返回候选配置的启停状态样式，`DISABLED/success` 等矛盾候选事实可能进入审批完成结果。本轮在候选状态字段出现时强制校验 `ENABLED/ACTIVE -> success`、`DISABLED/INACTIVE -> danger`，并增加复核动作错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置审批 HTTP 栈，不能替代真实审批写入、数据库事务或正式发布治理证据。
+
+### 9.901 2026-09-29 管理端配置复核列表候选状态门禁补齐
+
+管理端配置复核动作已校验候选配置启停状态样式，但复核列表仍可能返回 `DISABLED/success` 等矛盾候选事实并进入运营页面。本轮复用候选状态映射门禁校验复核列表中的可选候选状态字段，并增加错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（144/144）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置复核 HTTP 栈，不能替代真实审批写入、数据库事务或正式发布治理证据。
+
+### 9.902 2026-09-29 管理端配置动作证书状态门禁补齐
+
+管理端网关复核列表和复核动作已校验证书状态样式，但网关提交、启停与回滚等专用动作共用的配置动作集合校验此前忽略可选证书字段，`EXPIRED/success` 等矛盾事实仍可能进入操作结果。本轮在通用配置动作集合中补充证书状态映射校验，并增加网关动作错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置动作 HTTP 栈，不能替代真实配置数据库、审批写入或正式发布治理证据。
+
+### 9.903 2026-09-29 管理端配置复核动作时间事实门禁补齐
+
+管理端配置复核列表已校验创建与复核时间，但复核动作响应此前只校验申请号和状态，携带逆序 `createdAt/reviewedAt` 的结果仍可能进入操作页面。本轮在动作响应中对已出现的时间字段复用复核时间顺序校验，并增加逆序时间回归断言；完全省略时间字段的兼容响应保持不变。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实配置复核 HTTP 栈，不能替代真实审批写入、数据库事务或正式发布治理证据。
+
+### 9.904 2026-09-29 用户端退款渠道受理时间事实门禁补齐
+
+用户端退款详情此前校验退款主状态时间和渠道尝试时间，但未校验首次渠道受理时间 `channelSubmittedAt`，畸形或晚于退款终态的时间可能进入退款进度页面。本轮补充其格式及与申请、终态时间的顺序校验，并增加畸形、申请前和终态后的回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实退款 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.905 2026-09-29 小程序退款尝试状态事实门禁补齐
+
+小程序退款详情此前仅校验渠道尝试时间，未校验 `attemptStatus/attemptStatusType` 映射，也未要求 `SUCCESS/FAIL` 具备完成时间，矛盾或未收口的尝试仍可能进入用户端退款进度。本轮同步退款尝试状态映射和终态时间规则，并增加错配、非终态带完成时间和终态缺少完成时间的回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实小程序 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.906 2026-09-29 小程序退款渠道受理时间事实门禁补齐
+
+小程序退款详情此前已校验退款主状态和渠道尝试时间，但未校验首次渠道受理时间 `channelSubmittedAt`，畸形、申请前或晚于终态的时间仍可能进入小程序退款进度。本轮同步 App 的渠道受理时间格式及顺序门禁，并增加对应回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实小程序退款 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.907 2026-09-29 API 客户端退款渠道受理时间事实门禁补齐
+
+命令行 API 客户端已校验退款申请、成功和终态时间，但未校验 `channelSubmittedAt`，异常或晚于终态的渠道受理事实仍可能被 CLI 接受。本轮补充与申请、终态的顺序校验，并增加格式、申请前和终态后的回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实支付 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.908 2026-09-29 管理端退款渠道受理时间事实门禁补齐
+
+管理端退款详情直接展示渠道受理时间，但详情归一化此前未校验 `channelSubmittedAt`，畸形、申请前或晚于终态的值仍可能进入运营排障页面。本轮补充格式及生命周期顺序校验，并增加三类错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端退款 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.909 2026-09-29 管理端退款动作渠道受理时间门禁补齐
+
+管理端退款详情已校验渠道受理时间，但退款申请、查询和重试动作响应仍未复用该门禁，异常 `channelSubmittedAt` 可能进入动作后的运营状态。本轮将同一生命周期校验接入退款动作归一化，并增加格式与申请前时间回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端退款动作 HTTP 栈，不能替代真实退款数据库、渠道回调或资金到账证据。
+
+### 9.910 2026-09-29 用户支付详情业务链路事实门禁补齐
+
+后端支付详情提供稳定的 `businessChainId`，但 App、小程序和 CLI 详情客户端此前只校验支付单号，已返回的错误链路 ID 仍可能进入跨系统支付结果。本轮在字段出现时要求其匹配 `CHAIN-{paymentOrderId}`，并补充三端错配回归断言，省略字段的兼容响应保持不变。
+
+本轮自测：App `node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、小程序 `node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、CLI `node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、三份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实跨系统 HTTP 栈，不能替代真实支付数据库、消息链路或发布治理证据。
+
+### 9.911 2026-09-29 管理端支付业务链路事实门禁补齐
+
+管理端支付动作和支付详情此前仅要求 `businessChainId` 非空，但详情页会基于该字段生成对账链路入口，错误链路可能将运营人员导向其他支付链路。本轮要求其精确匹配 `CHAIN-{paymentOrderId}`，并增加动作与详情错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端 HTTP 栈，不能替代真实支付数据库、跨系统查询或发布治理证据。
+
+### 9.912 2026-09-29 管理端支付记录退款汇总门禁补齐
+
+管理端支付记录详情页会展示退款次数和已退金额，但详情归一化此前未校验退款汇总，负数、非法金额或已退金额超过支付金额的矛盾事实仍可能进入运营排障页面。本轮补充退款次数非负、退款金额可解析且不超过支付金额的门禁，并增加三类错配回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端 HTTP 栈，不能替代真实支付记录数据库、退款汇总查询或发布治理证据。
+
+### 9.913 2026-09-29 管理端支付记录业务订单快照字段对齐
+
+支付记录详情 DTO 使用 `businessOrderNo`，但详情页刷新快照和主动查单此前读取不存在的 `orderNo`，导致订单归属快照无法实际校验，查单请求也可能丢失业务订单号。本轮统一使用 `businessOrderNo`，要求详情返回该字段，并增加业务订单漂移回归断言。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、API 客户端两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实管理端 HTTP 栈，不能替代真实支付记录数据库、查单接口或发布治理证据。
+
+### 9.914 2026-09-29 用户端支付动作业务链路门禁补齐
+
+支付详情 GET 已校验可选 `businessChainId`，但 App 和小程序的查单、关闭动作同样返回支付详情模型，动作归一化此前未校验已返回的链路字段，错误链路可能进入用户端结果流程。本轮在两端支付动作响应中要求链路 ID 精确匹配 `CHAIN-{paymentOrderId}`，并增加错配回归测试；预付单和提交响应保持原有 DTO 兼容范围。
+
+本轮自测：App `node --test systems/payment-core/frontend/app-web/src/api/client.test.js`（13/13）、小程序 `node --test systems/payment-core/frontend/mini-program/tests/request.test.js`（9/9）、相关 JS `node --check` 和 `git diff --check` 均通过。当前环境未运行真实用户端 HTTP 栈，不能替代真实支付数据库、渠道查单、关闭动作或发布治理证据。
+
+### 9.915 2026-09-29 跨系统 happy-path 支付链路断言补齐
+
+跨系统 happy-path 已校验清分、结算、账务和对账事实的 `businessChainId`，但支付核心详情与渠道回调阶段此前只校验支付单、预付单和业务订单号，串链路支付事实可能在进入下游前被接受。本轮为支付详情、首次回调及幂等回调增加 `CHAIN-{paymentOrderId}` 断言，并补充错配链路回归测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、脚本两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实多服务 HTTP、消息中间件或跨库 happy-path，不能替代真实渠道、Broker 消费和生产一致性证据。
+
+### 9.916 2026-09-29 跨系统 happy-path 支付提交 DTO 对齐
+
+后端 `/api/payments/submit` 返回 `PrepayOrderDTO`，提交响应没有 `status/statusType`，但 happy-path 断言此前按 `PaymentDetailDTO` 强制要求这两个字段，合法支付提交会在进入回调前被误判失败。本轮按真实 DTO 改为校验 `paymentStatus=WAIT_CALLBACK`、`cashierStatus=待回调` 及其样式，并移除对不存在字段的要求；补充无 `status/statusType` 的真实形状回归夹具。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、脚本两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实多服务 HTTP、消息中间件或跨库 happy-path，不能替代真实渠道、Broker 消费和生产一致性证据。
+
+### 9.917 2026-09-29 CLI 支付查单关闭业务链路门禁补齐
+
+CLI 已对支付详情命令校验可选 `businessChainId`，但查单和关闭命令共用同一 `PaymentDetailDTO` 响应，此前未执行该校验，串链路结果仍可能被 CLI 接受。本轮让 `detail/query/close` 三个命令统一要求已返回链路 ID 精确匹配 `CHAIN-{paymentOrderId}`，并补充查单、关闭错配回归测试。
+
+本轮自测：`node --test systems/payment-core/frontend/api-client/tests/payment-api.test.mjs`（11/11）、CLI 两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实 CLI HTTP 栈，不能替代真实支付数据库、渠道查单、关闭动作或发布治理证据。
+
+### 9.918 2026-09-29 跨系统 happy-path 支付回调 DTO 对齐
+
+后端渠道回调返回 `PaymentDetailDTO`，该模型只提供支付状态 `status/statusType`，不包含收银台 `cashierStatus/cashierStatusType`；happy-path 此前强制检查不存在的收银台字段，合法回调会被误判失败。本轮按真实详情 DTO 仅校验终态支付状态、尝试完成时间、支付链路和渠道流水一致性，并补充不含收银台字段的回归夹具。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（34/34）、脚本两份 `node --check` 和 `git diff --check` 均通过。当前环境未运行真实多服务 HTTP、消息中间件或跨库 happy-path，不能替代真实渠道回调、Broker 消费和生产一致性证据。
+
+### 9.919 2026-09-29 管理端支付记录更新时间字段对齐
+
+支付记录列表、导出和详情查询此前将 `updatedAt` 错误映射为支付单创建时间 `created_at`，且运行时 `schema.sql` 未声明对应持久化列，运营端无法识别支付状态或退款处理后的真实更新时间。本轮为支付单表补充带自动更新时间的 `updated_at` 字段，统一三个查询出口读取该字段，并补充 H2 Mapper 集成夹具与列表、导出、详情断言。
+
+本轮自测：管理端 `node --test systems/payment-core/frontend/admin-web/src/api/client.test.js`（145/145）、Mapper XML `xmllint --noout` 和 `git diff --check` 均通过；新增 Mapper 集成测试因当前环境未安装 Maven（`mvn: command not found`）未能运行。未运行真实支付数据库或管理端 HTTP 栈，不能替代真实运营查询与导出验证。
+
+### 9.920 2026-09-29 支付记录 Mapper 更新时间夹具验证补齐
+
+支付记录 Mapper 的更新时间字段修复已补充至集成测试夹具：支付尝试表 INSERT 纳入 `completed_at`，退款汇总详情夹具声明对应列；同时修复 `PaymentConfigServiceImplTest` 缺少 `PaymentProtocolConfigDTO` import 的测试编译阻断。本轮使用 JDK 8 和本地 Maven 仓库运行两个 Mapper 集成测试，共 `5/5` 通过。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`（3/3）、`PaymentRecordRefundAggregationMapperIntegrationTest`（2/2）、Mapper XML `xmllint --noout` 和 `git diff --check` 均通过。未运行真实支付数据库或管理端 HTTP 栈，不能替代真实运营查询与导出验证。
+
+### 9.921 2026-09-29 后端全量回归与跨系统修复收口
+
+本轮修复 payment-core `findPrepay` 联表字段歧义、状态夹具与导出断言，并修复 accounting 缺失 DTO import、clearing 导出状态断言及 refund-center Java 8 不兼容的 switch expression。退款中心补充配置集成测试后，统一后端回归覆盖 payment-core、gateway-access、settlement、accounting、clearing、refund-center、reconciliation、risk-control、ops-config、deposit、wallet-account、wallet-system 共 12 个模块。
+
+本轮自测：退款中心 `21/21` 通过；统一入口 `node tools/dev/backend-regression.mjs` 报告 `12/12 backend modules passed`；payment-core、accounting、clearing、refund-center 及其余模块均无失败、错误或跳过。测试使用 JDK 8、本地 Maven 仓库及 H2/demo/Mock 栈，未运行真实多服务 HTTP、Broker 或生产数据库。
+
+### 9.922 2026-09-29 用户端支付状态与跨系统退款终态契约收口
+
+本轮按实际提交响应补齐 App、小程序和 CLI 对 `WAIT_CALLBACK`/支付中信息的兼容映射；清分账务派发补传 `businessChainId`，避免账务按清分单号生成错误链路；退款中心补充 `terminalAt` 字段及成功、失败回调终态写入，详情和导出保持一致。跨系统 happy-path 同步覆盖三条账务事实（支付、清分、退款）和退款终态时间顺序。
+
+本轮自测：App `13/13`、小程序 `9/9`、CLI `11/11`；happy-path 契约 `34/34`；退款中心 Maven `21/21`；跨系统本地 happy-path 通过，对账链状态 `COMPLETED`、完成阶段 `4/4`、事实 `7` 条、`financialCloseable=true`。证据仅来自本地 H2/demo/HTTP 栈，不替代真实渠道、RabbitMQ/MySQL、资金到账或正式发布治理验证。
+
+### 9.923 2026-09-29 用户端退款终态时间可见性
+
+用户端退款详情客户端此前已要求成功或失败响应携带有效 `terminalAt`，但 App/H5/PC 退款进度摘要只展示申请时间和成功时间，用户无法确认退款是否完成最终终态收口。本轮新增统一时间格式化函数，在退款摘要展示申请、成功和终态时间，并让退款轨迹复用同一格式化口径。
+
+本轮自测：App 相关客户端与退款进度测试 `17/17` 通过，App Web Vite 生产构建通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实渠道到账、用户真机、生产域名或正式发布治理验证。
+
+### 9.924 2026-09-29 小程序退款终态时间可见性
+
+小程序退款详情接口此前已校验 `terminalAt`，但退款进度 WXML 只展示申请时间和成功时间，成功或失败终态的收口时间无法被用户核对。本轮补充终态展示字段，统一格式化申请、成功、终态及退款轨迹时间，并增加成功退款页面回归。
+
+本轮自测：小程序退款进度与请求契约测试 `16/16` 通过，页面脚本 `node --check` 通过，`git diff --check` 通过。当前小程序工程没有独立生产构建脚本，仍不替代微信真机、真实渠道到账或正式发布验证。
+
+### 9.925 2026-09-29 管理端退款列表终态时间可见性与事实门禁
+
+管理端退款详情已展示终态时间，但退款列表和右侧退款快照此前未展示该字段，列表及动作响应归一化也未要求成功或失败退款携带有效终态时间。本轮在退款列表、动作响应和快照中统一保留并展示 `terminalAt`，要求终态时间格式正确且不早于申请、成功时间，并补充成功/失败响应保留及非法时间拒绝回归。
+
+本轮自测：管理端全量前端测试 `207/207` 通过，Vite 生产构建通过，`git diff --check` 通过。该证据不替代真实管理端 HTTP、退款数据库、渠道回调、资金到账或正式发布治理验证。
+
+### 9.926 2026-09-29 管理端支付成功时间可见性
+
+管理端支付详情客户端此前已要求成功支付携带有效 `successAt`，但支付详情事实网格只展示创建时间，运营人员无法在同一详情页核对支付成功收口时间。本轮补充“支付成功时间”展示，非成功状态继续使用占位符，保持与客户端状态时间契约一致。
+
+本轮自测：管理端全量前端测试 `207/207` 通过，Vite 生产构建通过，`git diff --check` 通过。该证据不替代真实支付数据库、渠道回调、资金到账或正式发布治理验证。
+
+### 9.927 2026-09-29 用户端支付成功时间可见性
+
+用户端支付详情接口此前已校验成功状态携带有效 `successAt`，但 App/H5/PC 结果摘要和小程序结果详情未展示支付成功时间，用户无法在结果页核对真实成功收口时刻。本轮在两套结果页统一展示支付成功时间，非成功状态继续显示占位符，并补充小程序成功结果夹具字段。
+
+本轮自测：App Web Vite 生产构建通过，小程序结果页测试 `8/8` 通过，相关页面脚本 `node --check` 和 `git diff --check` 通过。该证据不替代真实渠道回调、资金到账、用户真机或正式发布治理验证。
+
+### 9.928 2026-09-29 管理端支付最近尝试完成时间可见性
+
+支付单列表 DTO、Mapper 和客户端此前已保留最近一次支付尝试的终态完成时间 `latestAttemptCompletedAt`，但管理端支付列表和右侧支付单快照未展示该字段，人工查单后更新快照也会丢失它。本轮补充列表列、快照字段及动作响应映射，保持待完成尝试按占位符展示。
+
+本轮自测：管理端全量前端测试 `207/207` 通过，Vite 生产构建通过，`git diff --check` 通过。该证据不替代真实支付数据库、渠道查单、渠道回调或正式发布治理验证。
+
+### 9.931 2026-09-29 管理端支付列表最近尝试状态可见性
+
+支付单列表此前已展示最近尝试完成时间，但未展示对应的最近尝试状态，运营无法区分成功、失败和等待回调；查单或关单后的快照更新也未保留尝试状态样式。本轮新增最近尝试状态列，并补齐动作更新映射，保持客户端已校验的状态与完成时间事实一致。
+
+本轮自测：管理端全量前端测试 `207/207` 通过，Vite 生产构建通过，`git diff --check` 通过。该证据不替代真实支付数据库、渠道查单、渠道回调或正式发布治理验证。
+
+### 9.930 2026-09-29 用户收银台最近尝试完成时间可见性
+
+收银台 DTO 及 App/小程序客户端此前已保留 `latestAttemptCompletedAt`，但 App 主动查单快照和小程序交易信息未展示最近一次渠道尝试的完成时间，用户在支付处理中无法核对最新尝试是否已经收口。本轮补充两端展示，并增加小程序收银台快照回归。
+
+本轮自测：App Web 全量测试 `42/42` 通过，App Web Vite 生产构建通过，小程序全量测试 `44/44` 通过，页面脚本 `node --check` 和 `git diff --check` 通过。该证据不替代真实渠道查询、用户真机或正式发布治理验证。
+
+### 9.929 2026-09-29 管理端支付详情最近尝试完成时间可见性
+
+管理端支付详情客户端已校验最近一次支付尝试的 `latestAttemptCompletedAt`，支付记录详情也已展示该字段，但支付单详情的“最近支付尝试”区块仍未显示，运营人员在主支付详情页无法核对渠道尝试收口时间。本轮补充该字段展示，缺失值继续使用占位符。
+
+本轮自测：管理端全量前端测试 `207/207` 通过，Vite 生产构建通过，`git diff --check` 通过。该证据不替代真实支付数据库、渠道查单、渠道回调或正式发布治理验证。
+
+### 9.932 2026-09-29 小程序动作后收银台刷新错误反馈
+
+小程序支付提交失败后的收银台刷新此前会静默丢弃不属于当前支付单的响应，页面仍保留旧快照且不给出刷新失败原因。本轮要求动作后刷新响应必须匹配当前预付单、支付单、业务订单和金额；不匹配或请求失败时保留旧快照但明确展示刷新错误，并继续禁用支付动作，避免在状态未确认时重复提交。
+
+本轮自测：小程序全量测试 `45/45` 通过，收银台页面脚本 `node --check` 和 `git diff --check` 通过。该证据不替代真实小程序 HTTP、渠道状态查询、用户真机或正式发布治理验证。
+
+### 9.933 2026-09-29 管理端集合响应非数组拒绝
+
+管理端集合接口此前会把对象、数字等非数组响应静默转换为空数组，运营页面可能将损坏的配置复核、版本或告警集合误显示为“暂无数据”。本轮保留 `null` 为空集合的兼容契约，对其他非数组响应统一返回稳定的 `PAYMENT-CLIENT-INVALID-COLLECTION` 错误，并补充集合接口回归。
+
+本轮自测：管理端全量前端测试 `208/208` 通过，Vite 生产构建通过，新增非数组集合响应断言，`git diff --check` 通过。该证据不替代真实管理端 HTTP、配置数据库、权限系统或正式发布治理验证。
+
+### 9.934 2026-09-29 渠道原生支付参数事实门禁补齐
+
+支付渠道提交结果此前只要求小程序原生支付参数非空，错误时间戳、缺少 `prepay_id=` 包装或不支持的签名算法仍可能被作为提交成功继续收口。本轮服务端统一校验 `timeStamp`、`package` 和 `signType` 的可执行事实，与小程序 `wx.requestPayment` 前置校验保持一致；非法参数在支付提交结果进入状态落库前拒绝。
+
+本轮自测：`PaymentChannelSubmitResultValidatorTest`（`5/5`）通过，小程序原生支付参数测试保持通过，`git diff --check` 通过。该证据不替代真实网关协议、微信支付渠道、用户真机或正式发布治理验证。
+
+### 9.935 2026-09-29 退款渠道受理状态样式一致性门禁
+
+退款网关提交适配器此前只校验 `PROCESSING`、`SUCCESS`、`FAIL` 状态及样式枚举，未校验二者映射；矛盾的 `SUCCESS + warn` 等结果可能进入退款受理收口。本轮要求 `PROCESSING=warn`、`SUCCESS=success`、`FAIL=danger`，异常结果按未知渠道结果处理并要求后续查单，补充三类错配回归。
+
+本轮自测：`GatewayAccessRefundChannelSubmitServiceImplTest`（`8/8`）通过，`git diff --check` 通过。该证据不替代真实退款网关、渠道回调、资金到账或正式发布治理验证。
+
+### 9.936 2026-09-29 退款提交主流程受理状态事实门禁
+
+退款渠道提交主流程此前只校验渠道退款单号，渠道返回 `SUCCESS` 或 `FAIL` 时仍会被错误绑定为 `PROCESSING` 受理事实并标记事件成功。本轮要求提交结果同时满足 `PROCESSING + warn`，其他状态统一按未知渠道结果收口，停止自动重试并进入人工核验路径；补充终态误报不落库回归，同时更新合法提交测试夹具。
+
+本轮自测：`PaymentEventDispatchServiceImplTest` 定向测试通过，`git diff --check` 通过。该证据不替代真实退款网关、渠道回调、资金到账或正式发布治理验证。
+
+### 9.937 2026-09-29 支付提交终态结果拒绝
+
+支付渠道提交主流程此前只校验渠道响应结构，若适配器返回“成功”或“失败”等终态尝试状态，仍可能被继续写成待回调提交事实。本轮在支付提交完成前拒绝终态尝试结果，统一返回渠道提交失败并要求先查单，避免无终态时间的提交响应越过异步回调状态机；补充终态结果不写入受理事实回归。
+
+本轮自测：`PaymentServiceImplTest` 定向回归通过，`git diff --check` 通过。该证据不替代真实支付渠道回调、资金到账或正式发布治理验证。
+
+### 9.938 2026-09-29 支付提交终态未知恢复链路回归
+
+补充真实 `submit` 调用链回归：渠道提交返回终态尝试状态时，支付单进入“结果待确认”、提交尝试记录“结果未知，待查单”，且不绑定渠道受理事实、返回码快照或提交事件，确保终态门禁覆盖主流程而非仅覆盖私有校验方法。
+
+本轮自测：`PaymentServiceImplTest` `127/127` 通过，`git diff --check` 通过。该证据不替代真实支付渠道回调、资金到账或正式发布治理验证。
+
+### 9.940 2026-09-29 跨系统支付提交业务链路门禁补齐
+
+跨系统 happy-path 此前在支付回调及下游事实阶段校验 `businessChainId`，但支付提交和幂等提交断言未校验该字段，串链路提交响应仍可能进入后续流程。本轮让首次提交、幂等提交统一要求 `CHAIN-{paymentOrderId}`，并补充错配业务链路回归。
+
+本轮自测：跨系统 happy-path 合同测试 `34/34` 通过，两个脚本 `node --check` 和 `git diff --check` 通过。该证据不替代真实多服务 HTTP、消息中间件、生产数据库或正式发布治理验证。
+
+### 9.939 2026-09-29 管理端分页响应非数组拒绝
+
+管理端分页客户端此前会把 `items` 为对象、数字或缺失的响应静默转换为空页，运营页面可能将接口损坏误显示为“暂无数据”。本轮保留空响应和显式 `items: null` 的兼容行为，对其他分页形状统一返回 `PAYMENT-CLIENT-INVALID-PAGE`，并补充通用分页入口回归。
+
+本轮自测：管理端分页响应回归通过，`git diff --check` 通过。该证据不替代真实管理端 HTTP、权限系统、分页数据库查询或正式发布治理验证。
+
+### 9.941 2026-09-29 支付回调状态枚举门禁
+
+支付回调此前只将 `SUCCESS` 特殊处理，任意其他非空字符串都可能被记录为待回调并推进通知、支付事件和尝试状态，未知渠道状态可能伪造有效处理中事实。本轮仅接受 `SUCCESS`、`PROCESSING`、`WAIT_CALLBACK` 和 `PAYING`，未知状态在验签和数据库写入前拒绝，并补充无副作用回归。
+
+本轮自测：`PaymentServiceImplTest` 定向回归覆盖已知处理中状态与未知状态拒绝，`git diff --check` 通过。该证据不替代真实渠道协议、生产回调报文、签名配置或资金到账验收。
+
+### 9.942 2026-09-29 用户端支付业务链路响应门禁
+
+App Web 与小程序此前对支付提交、查单和详情响应中的 `businessChainId` 采取可选兼容，缺失字段仍可能进入用户支付主流程。本轮要求三类主支付响应必须包含并匹配 `CHAIN-{paymentOrderId}`，两端均补充缺失链路字段拒绝回归。
+
+本轮自测：App Web 与小程序请求归一化测试覆盖通过，`git diff --check` 通过。该证据不替代真实 HTTP、渠道回调、生产数据库或用户真机验收。
+
+### 9.943 2026-09-29 CLI 联调支付业务链路响应门禁
+
+服务到服务 CLI 此前对支付提交未校验 `businessChainId`，对详情、查单和关单也允许缺失该字段；错误响应可能绕过用户端已建立的业务链路约束。本轮统一要求四类支付响应匹配 `CHAIN-{paymentOrderId}`，并补充提交、详情缺失字段及错配字段回归。
+
+本轮自测：payment API client 合同测试 `11/11` 通过，`git diff --check` 通过。该证据不替代真实 HTTP、渠道回调、生产数据库或正式联调验收。
+
+### 9.944 2026-09-29 跨系统退款业务链路字段补齐
+
+退款中心此前内部按支付单号派生业务链路，但退款 API 响应和跨系统 happy-path 断言未暴露或校验该字段，退款阶段可能脱离统一链路排障。本轮在退款 DTO 响应中稳定派生 `CHAIN-{paymentOrderId}`，并覆盖申请、动作、回调及幂等响应的链路校验。
+
+本轮自测：跨系统 happy-path 合同测试 `34/34` 通过，退款链路字段断言覆盖申请、动作、回调及幂等响应；两个脚本 `node --check` 和 `git diff --check` 通过。该证据不替代真实多服务 HTTP、生产数据库、消息中间件或资金到账验收。
+
+### 9.945 2026-09-29 预付单与收银台业务链路字段补齐
+
+预付单创建和收银台响应此前虽然携带支付单号，但未暴露统一 `businessChainId`，用户支付主流程从创建到收银台阶段存在链路字段断档。本轮在预付单、收银台 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，并让 App Web、小程序、CLI 及跨系统 happy-path 严格校验缺失或错配字段。
+
+本轮自测：payment-core `PaymentServiceImplTest` `128/128` 通过；App Web、小程序、CLI 与跨系统合同测试合计 `67/67` 通过；两个脚本 `node --check`、`git diff --check` 通过。该证据不替代真实 HTTP、生产数据库、渠道回调、用户真机或正式发布治理验证。
+
+### 9.946 2026-09-29 管理端支付列表业务链路字段补齐
+
+管理端支付详情与动作响应此前已校验 `businessChainId`，但支付列表、列表快照和 CSV 导出未携带该字段，运营列表可能接受脱离统一链路的支付事实。本轮在支付列表 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，管理端列表严格校验并展示该字段，查单/关单刷新快照及 CSV 导出同步保留链路事实。
+
+本轮自测：管理端 API 客户端测试 `148/148` 通过；`PaymentServiceImplTest` `128/128` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、生产数据库、可信身份、渠道回调或正式发布治理验证。
+
+### 9.947 2026-09-29 管理端退款业务链路字段补齐
+
+管理端退款列表、详情、动作响应和 CSV 导出此前未完整暴露统一 `businessChainId`，退款运营链路在列表到动作刷新之间存在字段断档。本轮在退款 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，管理端客户端严格校验并展示该字段，动作刷新快照和 CSV 导出同步保留链路事实。
+
+本轮自测：管理端完整测试 `209/209` 通过；`RefundServiceImplTest` 与 `PaymentServiceImplTest` 合计 `188/188` 通过；管理端生产构建通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、权限系统、可信身份、渠道回调、生产数据库或资金到账验收。
+
+### 9.948 2026-09-29 管理端支付记录业务链路字段补齐
+
+支付记录列表、详情和 CSV 导出此前只返回支付单号，运营人员无法从收款记录直接定位统一业务链路。本轮在支付记录 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，管理端客户端严格校验并展示该字段，导出结果同步保留链路事实。
+
+本轮自测：管理端完整测试 `209/209` 通过；支付记录服务与 Mapper 定向回归 `14/14` 通过；管理端生产构建、`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、权限系统、渠道回调、生产数据库或资金到账验收。
+
+### 9.949 2026-09-29 管理端支付事件业务链路字段补齐
+
+支付事件出站列表、详情和 CSV 导出此前未携带统一 `businessChainId`，下游投递失败或重发时无法从事件视图直接定位主链路。本轮在事件 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，CSV 导出同步保留链路事实。
+
+本轮自测：管理端完整测试 `209/209` 通过；`PaymentEventServiceImplTest` `18/18` 通过；管理端生产构建、`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、消息中间件、下游投递、生产数据库或正式发布治理验证。
+
+### 9.950 2026-09-29 管理端支付请求业务链路字段补齐
+
+支付请求列表、详情和 CSV 导出此前未携带统一 `businessChainId`，单次支付尝试的运营排障链路不完整。本轮在请求 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实。
+
+本轮自测：管理端完整测试 `209/209` 通过；`PaymentRequestServiceImplTest` `11/11` 通过；管理端生产构建、`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、渠道回调、生产数据库或正式发布治理验证。
+
+### 9.951 2026-09-30 管理端支付流水业务链路字段补齐
+
+支付流水列表、详情和 CSV 导出此前未携带统一 `businessChainId`，支付主链路中的尝试、回调、路由和事件事实无法从流水视图直接串联。本轮在流水 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实。
+
+本轮自测：管理端完整测试 `209/209` 通过；`PaymentFlowServiceImplTest` `8/8` 通过；管理端生产构建、`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、消息中间件、渠道回调、生产数据库或正式发布治理验证。
+
+### 9.952 2026-09-30 管理端支付处理日志业务链路字段补齐
+
+支付处理日志列表、详情和 CSV 导出此前未携带统一 `businessChainId`，日志处理阶段无法从运营视图直接串联支付主链路。本轮在日志 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实。
+
+本轮自测：支付处理日志客户端与服务定向回归、管理端完整测试及生产构建通过；缺失或错配链路字段拒绝回归已覆盖。该证据不替代真实管理端 HTTP、生产数据库、渠道回调或正式发布治理验证。
+
+### 9.953 2026-09-30 管理端收银台会话业务链路字段补齐
+
+收银台会话列表、详情和 CSV 导出此前未携带统一 `businessChainId`，预付单到支付单的运营排障链路存在断档。本轮在会话 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实；未产生支付单的会话详情保留空链路兼容。
+
+本轮自测：收银台会话客户端与服务定向回归、管理端完整测试及生产构建通过；缺失或错配链路字段拒绝回归已覆盖。该证据不替代真实 HTTP、渠道回调、生产数据库或用户真机验收。
+
+### 9.954 2026-09-30 管理端支付路由执行业务链路字段补齐
+
+支付路由执行列表、详情和 CSV 导出此前未携带统一 `businessChainId`，规则命中与渠道落点排障无法直接串联支付主链路。本轮在路由执行 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实。
+
+本轮自测：支付路由执行客户端与服务定向回归、管理端完整测试及生产构建通过；缺失或错配链路字段拒绝回归已覆盖。该证据不替代真实管理端 HTTP、生产数据库、渠道回调或正式发布治理验证。
+
+### 9.955 2026-09-30 管理端支付异常业务链路字段补齐
+
+支付异常列表和详情此前未携带统一 `businessChainId`，异常处置视图无法直接串联支付主链路。本轮在异常 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，补充缺失和错配链路拒绝回归。
+
+本轮自测：支付异常客户端与服务定向回归、管理端完整测试及生产构建通过；该证据不替代真实 HTTP、告警派发、渠道回调、生产数据库或正式发布治理验证。
+
+### 9.956 2026-09-30 管理端异常告警明细业务链路字段补齐
+
+异常告警列表、详情和 CSV 导出此前未携带统一 `businessChainId`，告警投递和回执回查无法直接串联支付主链路。本轮在告警明细 DTO 中稳定派生 `CHAIN-{paymentOrderId}`，客户端严格校验并展示，导出结果同步保留链路事实。
+
+本轮自测：异常告警客户端与服务定向回归、管理端完整测试及生产构建通过；缺失或错配链路字段拒绝回归已覆盖。该证据不替代真实 HTTP、告警供应商、生产数据库或正式发布治理验证。
+
+### 9.957 2026-09-30 管理端异常告警人工动作业务链路归属校验补齐
+
+异常告警人工确认响应此前未强制校验 `paymentOrderId` 和 `businessChainId`，已加载告警快照比较也未覆盖链路字段。本轮补充动作响应的缺失、错配链路拒绝校验，并将 `businessChainId` 纳入快照归属比较。
+
+本轮自测：管理端客户端测试 `148/148` 通过；管理端生产构建、`node --check` 与 `git diff --check` 通过。该证据不替代真实管理端 HTTP、告警供应商、生产数据库或正式发布治理验证。
+
+### 9.958 2026-09-30 管理端预付响应业务链路归属校验补齐
+
+管理端预付响应此前未强制校验 `businessChainId`，本轮补充缺失与错配链路字段拒绝校验，与用户端预付响应保持一致。
+
+本轮自测：管理端客户端测试、支付主流程客户端测试及管理端生产构建通过；该证据不替代真实 HTTP、支付渠道、生产数据库或正式发布治理验证。
+
+### 9.959 2026-09-30 App 支付页面快照业务链路归属校验补齐
+
+App 页面级支付快照此前未比较 `businessChainId`，本轮补充快照构造、响应匹配以及缺失和错配链路拒绝校验。
+
+本轮自测：App API、支付实体匹配与收银台页面回归共 `18/18` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实支付 HTTP、渠道回调、生产数据库或用户真机验收。
+
+### 9.960 2026-09-30 小程序支付页面快照业务链路归属校验补齐
+
+小程序支付提交与收银台刷新页面级匹配此前未比较 `businessChainId`，本轮补充缺失和错配链路拒绝校验，并同步更新页面测试夹具。
+
+本轮自测：小程序支付、请求与收银台页面测试 `30/30` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实微信环境、支付渠道、生产数据库或用户真机验收。
+
+### 9.961 2026-09-30 小程序支付结果页异步回查业务链路归属校验补齐
+
+小程序结果页的初次加载、自动刷新、主动查单和关单回查此前未比较 `businessChainId`，本轮补充结果页快照连续性及链路缺失/错配拒绝校验。
+
+本轮自测：小程序结果页测试 `8/8` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实微信环境、支付渠道、生产数据库或用户真机验收。
+
+### 9.962 2026-09-30 小程序退款进度页异步回查业务链路归属校验补齐
+
+小程序退款进度页首载与刷新匹配此前未比较 `businessChainId`，本轮补充首载、轮询刷新以及错配链路拒绝校验。
+
+本轮自测：小程序退款进度页测试 `8/8` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产数据库或用户真机验收。
+
+### 9.963 2026-09-30 App 退款进度页异步回查业务链路归属校验补齐
+
+App 退款进度页快照匹配此前未比较 `businessChainId`，本轮补充快照构造以及缺失/错配链路拒绝校验。
+
+本轮自测：App 退款进度匹配测试通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产数据库或用户真机验收。
+
+### 9.964 2026-09-30 支付核心响应 DTO 业务链路派生空白规范化
+
+支付列表、收银台、预付单和退款详情/列表 DTO 的 `businessChainId` 派生此前未裁剪有效支付单号，本轮补充统一规范化，避免后端响应与前端严格链路匹配规则不一致。
+
+本轮自测：相关 DTO 与 `BusinessChainIdNormalizationTest` 已通过本地 `javac` 编译；Maven 运行器在当前环境不可用，未执行 JUnit 运行；`git diff --check` 通过。该证据不替代真实支付/退款 HTTP、渠道回调、生产数据库或用户真机验收。
+
+### 9.965 2026-09-30 支付成功下游事件链路派生规范化
+
+支付成功事件下游载荷共用的链路派生方法此前未裁剪内部支付单号，本轮补充有效值规范化及空值保护，覆盖 AMQP、清分、账务和对账事实载荷的统一链路来源。
+
+本轮自测：支付事件定向源码与回归测试已更新；相关 Java 源码通过本地 `javac` 编译检查；Maven 运行器在当前环境不可用，未执行 JUnit 运行；`git diff --check` 通过。该证据不替代真实下游 HTTP、RabbitMQ、生产数据库或跨系统联调验收。
+
+### 9.950 2026-09-30 支付成功事件金额原始精度门禁
+
+支付成功事件出站此前使用 `stripTrailingZeros()` 判断小数位，导致 `100.000` 被当作两位以内金额并继续投递；清分入站已按原始金额 scale 拒绝该值，存在跨系统契约不一致。本轮改为直接校验原始 `BigDecimal.scale()`，补充 `100.000` 出站拒绝及不调用下游回归。
+
+本轮自测：支付事件派发主类与定向测试源码通过本地 `javac` 编译检查；`git diff --check` 通过。Maven 运行器在当前环境不可用，未执行 JUnit 运行；该证据不替代真实下游 HTTP、RabbitMQ、生产数据库或跨系统联调验收。
+
+### 9.951 2026-09-30 支付成功收口金额缺失拒绝
+
+支付主流程的金额解析此前将空金额静默转换为零，异常支付详情可能在成功回调或查单收口时继续进入订单、账单结算。本轮改为严格拒绝空值、非法值、非正数、超精度及超上限金额，并在成功状态推进前校验；新增无金额成功回调回归，确认不更新支付状态、订单、账单或支付成功事件。
+
+本轮自测：支付主服务与定向测试源码通过本地 `javac` 编译检查；`git diff --check` 通过。Maven 运行器在当前环境不可用，未执行 JUnit 运行；该证据不替代真实渠道回调、生产数据库、事务隔离或资金一致性验收。
+
+### 9.966 2026-09-30 支付渠道空提交结果边界拒绝
+
+支付核心提交收口此前对空的渠道提交结果直接放行，可能在绑定渠道流水号时产生空指针异常。本轮补充空结果边界回归，统一返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，并确认进入收口前不会触发渠道结果绑定。
+
+本轮自测：支付核心定向 Java 源码与空结果回归测试已通过本地 `javac` 编译检查；Maven 运行器不可用，未执行 JUnit 运行；`git diff --check` 通过。
+
+### 9.967 2026-09-30 未提交即关闭支付单查单短路
+
+支付核心此前对未提交即关闭的支付单继续调用渠道查单，本轮补充本地关闭终态短路，并保留已有提交尝试关闭单的渠道恢复查单路径。
+
+本轮自测：支付核心定向 Java 源码与关闭终态查单回归测试已通过本地 `javac` 编译检查；Maven 运行器不可用，未执行 JUnit 运行；`git diff --check` 通过。该证据不替代真实支付 HTTP、渠道查单、生产数据库或用户真机验收。
+
+### 9.968 2026-09-30 支付回调验签后事实规范化
+
+支付回调保持原始字段验签，验签成功后将支付单号、交易状态和渠道流水裁剪为统一业务事实，再执行查库、状态更新、事件和审计写入。
+
+本轮自测：支付核心回调空白规范化回归已更新，并通过本地 `javac` 编译检查；Maven 运行器不可用，未执行 JUnit 运行；`git diff --check` 通过。该证据不替代真实签名网关、渠道回调、生产数据库或用户真机验收。
+
+### 9.969 2026-09-30 预付金额原始精度门禁
+
+预付金额校验此前先去除尾随零再判断小数位，`99.000` 会通过支付核心入口，但风控入口按原始精度拒绝，且数据库金额列仅支持两位小数。本轮改为按原始 `BigDecimal.scale()` 校验，超过两位小数在获取订单创建锁前拒绝，并补充无 DAO 副作用回归。
+
+本轮自测：支付核心改动源码与定向测试通过本地 `javac` 编译检查；Maven 运行器不可用，未执行 JUnit 运行；`git diff --check` 通过。该证据不替代真实风控 HTTP、生产数据库或用户真机验收。
+
+### 9.970 2026-09-30 App 退款进度金额与链路事实门禁
+
+App 退款详情客户端此前只校验退款单号、支付单号、退款金额和状态，缺失或错配的 `businessChainId`、原支付金额，以及退款金额超过原支付金额的矛盾响应仍可能进入用户进度页。本轮补充链路归属、原支付金额和退款上限校验，并使用字符串金额比较避免浮点精度误判。
+
+本轮自测：App API client 与退款进度定向测试 `17/17` 通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产数据库、渠道到账或用户真机验收。
+
+### 9.971 2026-09-30 管理端退款动作原支付金额上限门禁
+
+管理端退款申请、审核、提交和重试动作此前校验退款金额与支付单归属，但未确认响应中的原支付金额，退款金额超过原支付金额的矛盾动作响应仍可能进入运营页面。本轮要求动作响应携带有效 `paidAmount`，并以精确分为单位拒绝超额退款。
+
+本轮自测：管理端 API client 全量定向测试 `148/148` 通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产权限、渠道到账或运营发布验收。
+
+### 9.972 2026-09-30 支付任务中心焦点告警严重级别门禁
+
+支付任务中心此前只校验焦点告警的级别枚举和影响数量，`affectedCount=0` 搭配 P1/P2 或 `affectedCount>0` 搭配 P3/success 的矛盾告警仍可能进入运营页面。本轮与日终告警契约统一，要求零影响仅允许 P3/success，有影响必须是 P1/P2 且不能使用 success，并补充三组异常回归。
+
+本轮自测：管理端 API client 定向测试通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实任务调度、告警生成、运营权限或生产发布验收。
+
+### 9.973 2026-09-30 支付监控告警严重级别门禁
+
+支付监控总览此前只校验告警级别枚举和影响数量，未阻止零影响 P1/P2 或有影响 P3/success 的矛盾告警进入运营页面。本轮与任务中心及日终告警契约统一，增加有效告警和三组异常响应回归。
+
+本轮自测：管理端 API client 定向测试通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实监控统计、告警生成、运营权限或生产发布验收。
+
+### 9.974 2026-09-30 支付核心指标计数关系门禁
+
+支付核心指标客户端此前只校验总数及各状态计数为非负整数，成功、处理中或已关闭计数超过支付单总数的矛盾统计仍可能进入运营健康卡片。本轮依据后端指标 SQL 的子集统计契约，要求三类状态计数均不超过总数，并补充三组异常回归。
+
+本轮自测：管理端 API client 定向测试通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实指标查询、数据库统计口径或生产运营验收。
+
+### 9.975 2026-09-30 支付核心成功率统计连续性门禁
+
+支付核心指标客户端此前只校验 `successRate` 的格式和范围，成功率与成功数/总数不一致的统计仍可能展示在运营健康卡片。本轮依据后端 SQL 的两位小数格式化口径，要求成功率与计数按四舍五入后的百分比基点一致，并补充错误成功率回归。
+
+本轮自测：管理端 API client 定向测试通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实指标 SQL、数据库统计口径或生产运营验收。
+
+### 9.976 2026-09-30 小程序退款详情金额与链路事实门禁
+
+小程序退款详情客户端此前未校验业务链路、原支付金额及退款金额上限，错配或超额退款响应仍可能进入用户进度页。本轮与 App 客户端对齐，要求 `businessChainId=CHAIN-{paymentOrderId}`，校验有效 `paidAmount`，并拒绝 `refundAmount` 大于原支付金额的响应。
+
+本轮自测：小程序 request 定向测试通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产数据库、渠道到账或用户真机验收。
+
+### 9.977 2026-09-30 App 与小程序预付/提交成功时间状态连续性门禁
+
+App 与小程序预付、支付提交响应此前只校验 `successAt` 与创建时间的先后关系，未校验支付状态是否允许携带成功时间；非成功状态携带成功时间仍可能进入收银台主流程。本轮在两端预付和提交响应统一要求 `SUCCESS` 必须有有效成功时间，其他支付状态不得携带成功时间，并补充非成功状态携带成功时间的回归。
+
+本轮自测：App API client 定向测试 `13/13` 通过，小程序 request 定向测试 `9/9` 通过；两端 `node --check` 与 `git diff --check` 通过。该证据不替代真实支付 HTTP、渠道回调、生产数据库、用户真机或跨系统 happy-path 验收。
+
+### 9.978 2026-09-30 App 收银台访问令牌提交门禁
+
+App 收银台此前仅显示访问令牌是否已注入，但 `canSubmit` 未将该条件纳入支付按钮门禁，令牌缺失时仍可发起支付提交并把配置错误交给后端。本轮要求访问令牌可用后才允许提交，并在未注入时给出明确运营配置提示；小程序已有对应保护，继续保持双端一致。
+
+本轮自测：App 收银台与支付实体定向测试 `6/6` 通过，App Web Vite 构建通过（`39` 个模块），测试脚本 `node --check` 与 `git diff --check` 通过。`node --check` 不适用于 `.vue` 文件，已由 Vite 编译验证替代；该证据不替代真实令牌注入、支付渠道、生产鉴权或用户真机验收。
+
+### 9.979 2026-09-30 App 与小程序支付详情轨迹类型门禁
+
+App 与小程序支付详情客户端此前只确认 `routeLogs`、`notifyLogs`、`eventLogs` 是数组，数组内的对象、数字或布尔值仍可能被当作轨迹文本渲染。本轮依据 `PaymentDetailDTO` 的 `List<String>` 契约增加数组元素类型校验，保留历史 `null` 元素过滤，并补充三类脏轨迹回归。
+
+本轮自测：App Web 全量测试 `44/44` 通过，小程序 request 测试 `9/9` 通过；两端 `node --check` 与 `git diff --check` 通过，App Web Vite 构建通过（`39` 个模块）。该证据不替代真实支付 HTTP、生产数据库、渠道回调或用户真机验收。
+
+### 9.980 2026-09-30 API 客户端退款申请金额与链路门禁
+
+服务调用 API 客户端此前对 `refund-apply` 响应只校验退款单号、支付单号、订单号和本次退款金额，缺失或错配的 `businessChainId`、缺失的原支付金额及超额退款仍可能被命令行调用方当作成功事实。本轮要求响应包含 `CHAIN-{paymentOrderId}`、有效 `paidAmount`，并用精确分比较拒绝 `refundAmount > paidAmount`；退款查询、审核和重试响应同步复用该事实校验。
+
+本轮自测：payment API client 测试 `11/11` 通过，`node --check` 与 `git diff --check` 通过。该证据不替代真实退款 HTTP、生产权限、渠道到账或跨系统资金验收。
+
+### 9.981 2026-09-30 共享退款契约与终端构建回归
+
+本轮补强共享 API 客户端退款申请响应的链路和原支付金额校验后，复核 PC/H5 用户入口及跨系统断言，确认共享收银台、结果页和退款进度入口未被破坏。
+
+本轮自测：PC 路由测试 `2/2`、H5 路由测试 `2/2`、跨系统 happy-path 契约测试 `35/35` 通过；PC/H5 Vite 构建均通过。构建与契约测试仍不替代真实服务栈、渠道回调、生产数据库或用户真机验收。
+
+### 9.982 2026-09-30 支付监控渠道成功率统计连续性门禁
+
+支付监控总览客户端此前只校验总览及渠道成功率的格式和范围，成功率与成功数/总数不一致的矛盾统计仍可能进入运营页面。本轮复用指标成功率连续性契约，要求 summary 和每个 channel metric 的成功率均与对应计数按两位小数四舍五入后的百分比基点一致，并补充总览及渠道错误成功率回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.983 2026-09-30 支付监控告警级别枚举门禁
+
+支付监控总览客户端此前只检查告警级别与影响数量的关系，未知的 `P4` 或非标准样式值仍可能被运营页面当作有效告警展示。本轮依据后端监控与任务中心的 `P1/P2/P3` 契约，要求告警级别仅允许 `P1/P2/P3`，样式仅允许 `danger/warn/success`，并补充未知级别及未知样式回归。
+
+本轮自测：payment-core 管理端定向监控测试 `1/1`、全量测试 `210/210` 通过，`npm run build` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控接口、生产数据库、告警生成或正式运营验收。
+
+### 9.984 2026-09-30 App 与小程序支付提交成功时间连续性门禁
+
+App 与小程序预付及支付查询响应此前校验成功时间不得早于创建时间，但支付提交响应遗漏该生命周期顺序，提交接口返回“成功时间早于创建时间”的矛盾事实仍可能进入用户结果页。本轮在双端提交响应统一要求 `createdAt <= successAt`，并补充成功状态逆序时间回归。
+
+本轮自测：App 全量测试 `44/44`、小程序全量测试 `46/46` 通过；App Web Vite 构建通过（`39` 个模块），两端 `node --check` 及 `git diff --check` 通过。该证据不替代真实支付 HTTP、渠道回调、生产数据库、用户真机或跨系统 happy-path 验收。
+
+### 9.985 2026-09-30 跨系统 happy-path 收银台渠道枚举门禁
+
+跨系统 happy-path 收银台断言此前只要求渠道列表非空，未知渠道名称仍可能被当作可支付渠道继续验证，和 payment-core 后端及用户端的渠道集合契约不一致。本轮要求收银台渠道仅允许 `微信支付`、`支付宝`、`银行卡`，并补充单个及混合未知渠道回归。
+
+本轮自测：跨系统 happy-path 合同测试 `35/35` 通过；两个脚本 `node --check` 与 `git diff --check` 通过。该证据不替代真实多服务 HTTP、渠道配置、消息中间件、生产数据库或用户真机验收。
+
+### 9.986 2026-09-30 API 客户端支付提交成功时间连续性门禁
+
+服务调用 CLI 此前对支付提交响应只校验创建时间和失效时间，成功状态携带的 `successAt` 早于创建时间仍可能被调用方当作有效结果。本轮与 App/小程序提交契约对齐：成功状态必须携带不早于 `createdAt` 的成功时间，其他状态不得携带成功时间，并补充逆序成功时间回归。
+
+本轮自测：payment API client 测试 `11/11` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实支付 HTTP、渠道回调、生产数据库或正式服务调用验收。
+
+### 9.987 2026-09-30 支付任务中心失败率统计连续性门禁
+
+支付任务中心客户端此前只校验近期查询失败率的格式和范围，总览失败率及查询趋势失败率与失败数/查询数不一致的矛盾统计仍可能进入运营页面。本轮复用成功率基点契约，要求总览和每个查询趋势的失败率均与对应计数按两位小数四舍五入后的百分比一致，并补充两类错误失败率回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实任务中心 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.988 2026-09-30 支付任务中心失败率阈值范围门禁
+
+支付任务中心客户端此前只要求查询失败率阈值为正整数，超过后端配置服务约束的 `100%` 仍可能被运营页面接受并影响告警判断。本轮要求 `queryFailureRateThresholdPercent` 位于 `1..100`，并补充 `101` 阈值拒绝回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实配置服务、生产数据库或正式运营验收。
+
+### 9.989 2026-09-30 支付任务中心查询趋势时间桶门禁
+
+支付任务中心客户端此前只要求查询趋势 `timeBucket` 非空，非法日期或非整点字符串仍可能进入趋势图表。本轮依据后端 SQL 的 `YYYY-MM-DD HH:00` 小时桶契约，要求时间桶为真实日期且分钟固定为 `00`，并补充非法日期和非整点回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过；`node --check` 与 `git diff --check` 通过。该证据不替代真实任务中心 SQL、生产数据库或正式运营验收。
+
+### 9.990 2026-09-30 支付任务执行计数分区一致性门禁
+
+支付任务动作、任务详情和任务列表此前仅拒绝成功/告警/失败数之和超过处理总数，少计的响应仍可能被运营页面当作完整执行事实。本轮依据后端任务日志各执行路径的计数分区契约，要求三类结果数之和必须恰好等于 `processedCount`，并补充动作、详情和列表少计回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实任务中心服务、生产数据库或正式运营验收。
+
+### 9.992 2026-09-30 支付监控趋势日期真实性门禁
+
+支付监控趋势客户端此前只要求 `statDate` 非空，非法日期或带时间的值仍可能进入趋势图。本轮依据后端监控 SQL 的 `DATE_FORMAT(..., '%Y-%m-%d')` 输出契约，要求趋势日期为真实 `YYYY-MM-DD` 日期，并补充非法日期、带时间和空字符串回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.993 2026-09-30 支付监控趋势顺序与唯一性门禁
+
+支付监控趋势客户端此前未校验趋势日期是否严格按后端 SQL 的 `ORDER BY statDate DESC` 返回，也未拒绝重复日期；页面取第一条作为最新趋势时可能展示错误日期。本轮要求趋势日期严格降序且唯一，并补充逆序、重复日期和有效双日趋势回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.994 2026-09-30 支付监控渠道风险样式映射门禁
+
+支付监控渠道指标客户端此前只检查风险等级和样式非空，未知等级或错配样式仍可能被运营页面展示。本轮依据后端 SQL 的固定映射，要求 `P1/danger`、`P2/warn`、`正常/success` 严格对应，并补充合法等级及错配回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.995 2026-09-30 支付监控渠道指标分组唯一性门禁
+
+支付监控渠道指标客户端此前未校验 `channelCode + paymentMethod` 分组组合唯一，重复或仅带空格差异的渠道行仍可能进入运营表并造成选择状态歧义。本轮依据后端 SQL 的 `GROUP BY channel_code, payment_method` 契约，要求去空格后的组合唯一，并补充重复组合回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实监控 SQL、生产数据库统计口径或正式运营验收。
+
+### 9.996 2026-09-30 小程序原生支付参数响应门禁
+
+小程序支付提交客户端此前允许响应携带任意结构的 `nativePaymentParams`，直到调用 `wx.requestPayment` 时才可能被视为无参数。本轮依据渠道提交 DTO 与微信原生支付字段契约，要求参数为对象并包含数字时间戳、`prepay_id` 包、受支持签名类型和非空签名，补充合法和五类非法参数回归。
+
+本轮自测：小程序 request `9/9`、payment `17/17` 定向测试通过，小程序全量 `46/46` 通过，失败 `0`；`node --check utils/request.js` 与 `git diff --check` 通过。该证据不替代真实微信 SDK、渠道签名、用户真机或生产支付验收。
+
+### 9.991 2026-09-30 支付任务日志业务日期真实性门禁
+
+支付任务日志客户端此前保留 `bizDate` 可空，但对非空值只要存在就接受，非法日期或带时间的字符串仍可能进入运营详情和列表。本轮依据后端 SQL 的 `DATE_FORMAT(..., '%Y-%m-%d')` 契约，要求非空业务日为真实 `YYYY-MM-DD` 日期，并补充非法日期、带时间和空字符串回归。
+
+本轮自测：payment-core 管理端全量测试 `210/210` 通过，`npm run build` 通过（Vite 转换 `115` 个模块）；`node --check` 与 `git diff --check` 通过。该证据不替代真实任务中心服务、生产数据库或正式运营验收。
+
+### 9.997 2026-09-30 支付渠道原生参数终端隔离门禁
+
+支付渠道提交结果校验器此前不接收终端信息，服务层二次标准化时，非小程序适配器理论上可以携带 `nativePaymentParams`。本轮让两次结果校验都绑定提交请求的 `terminal`，仅 `MINI_PROGRAM` 允许完整原生支付参数，并新增 `APP` 终端拒绝回归。
+
+本轮自测：`PaymentChannelSubmitResultValidatorTest` 与 `PaymentChannelSubmitServiceImplTest` 定向测试通过；使用 JDK 8/Maven 运行共 `29/29` 通过，失败 `0`、错误 `0`、跳过 `0`；补齐支付主流程非金额场景的合法金额事实后，payment-core 全量回归 `1403/1403` 通过；`git diff --check` 通过。本轮证据不替代真实渠道、生产数据库或真机验收。
+
+### 9.998 2026-09-30 收银台已提交支付过期状态连续性门禁
+
+收银台此前会对所有支付状态执行预付单过期覆盖，已进入 `WAIT_CALLBACK` 的支付在预付单时间超过后可能返回 `WAIT_CALLBACK + 已失效`，与客户端状态映射冲突并丢失“先查单”的操作语义。本轮仅允许 `PREPAY_CREATED` 查询预付单失效并覆盖为“已失效”，已提交支付继续保留渠道结果待确认状态，并补充回归测试。
+
+本轮自测：`PaymentServiceImplTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实渠道回调、生产数据库、消息总线或正式支付验收。
+
+### 9.999 2026-09-30 收银台渠道枚举唯一性门禁
+
+App 与小程序收银台客户端此前仅按去空格结果判断渠道是否属于允许集合，带前后空格或重复渠道仍可能进入页面，造成渠道展示和选择状态与后端事实不一致。本轮要求渠道名必须为规范枚举值且列表内唯一，并补充两端空格渠道和重复渠道拒绝回归。
+
+本轮自测：App API 测试与小程序 request 定向测试通过；两端 `node --check` 与 `git diff --check` 通过。本轮证据不替代真实支付 HTTP、渠道配置或用户真机验收。
+
+### 10.000 2026-09-30 支付日终业务日期真实性门禁
+
+支付日终总览和最近批次客户端此前只用日期正则校验 `latestBizDate`、`bizDate`，不存在的日期仍可能进入运营页面。本轮统一复用真实日期校验，拒绝 `2026-02-30` 等非法业务日，并补充总览及最近批次回归。
+
+本轮自测：payment-core 管理端日终归一化测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实日终 SQL、生产数据库或正式运营验收。
+
+### 10.001 2026-09-30 支付事件总览状态分区完整性门禁
+
+支付事件总览客户端此前仅拒绝五类发布状态合计超过总数，少计事件仍可能被运营页面当作完整统计。本轮依据事件表固定的 `PENDING/SUCCESS/FAILED/DEAD_LETTER/UNKNOWN` 状态集合，要求五类计数之和必须恰好等于总事件数，并补充少计回归。
+
+本轮自测：payment-core 管理端 API 全量测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实事件 SQL、生产数据库或消息发布验收。
+
+### 10.002 2026-09-30 支付事件空表总览零值门禁
+
+支付事件 Mapper 在事件表为空时，状态分区 `SUM(CASE...)` 会返回 `NULL`，直接 Mapper 使用者无法得到完整的零值总览。本轮为所有事件计数聚合补充 `COALESCE(..., 0)`，并新增空事件表集成测试；最近发布时间仍按无数据语义保留 `NULL`。
+
+本轮自测：`PaymentEventRepublishAuditMapperIntegrationTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实事件数据库、消息总线或生产运营验收。
+
+### 10.003 2026-09-30 支付指标空表总览零值门禁
+
+支付指标 Mapper 的成功、处理中和已关闭计数此前未使用空值聚合，支付订单表为空时直接 Mapper 结果可能不满足非负整数契约。本轮为三类状态计数补充 `COALESCE(..., 0)`，并新增 H2 Mapper 空表回归。
+
+本轮自测：`PaymentMetricsMapperIntegrationTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实支付数据库或正式监控验收。
+
+### 10.004 2026-09-30 账单空表总览零值门禁
+
+账单总览 Mapper 的支付状态计数此前未使用空值聚合，账单表为空时直接查询可能返回 `NULL` 计数。本轮为已付、待付、部分支付和逾期四类计数补充 `COALESCE(..., 0)`，并新增空账单表集成测试。
+
+本轮自测：`BillListMapperIntegrationTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实账单数据库或正式运营验收。
+
+### 10.005 2026-09-30 支付路由执行空表总览零值门禁
+
+支付路由执行总览 Mapper 的成功、需关注、线下、微信和支付宝计数此前未使用空值聚合，路由记录表为空时直接 Mapper 使用者可能得到 `NULL` 计数。本轮为五类计数补充 `COALESCE(..., 0)`，并新增空路由表集成测试；总数和渠道数继续返回零，最近路由时间保留 `NULL`。
+
+本轮自测：`PaymentRouteExecutionMapperIntegrationTest` 定向回归 `3/3` 通过；`git diff --check` 通过。本轮证据不替代真实路由数据库或正式运营验收。
+
+### 10.006 2026-09-30 服务者结算空表总览零值门禁
+
+服务者结算总览 Mapper 的待审核、待出款、出款中、出款成功和净额为负计数此前未使用空值聚合，结算表为空时直接 Mapper 使用者可能得到 `NULL` 计数。本轮为五类计数补充 `COALESCE(..., 0)`，并新增空结算表集成测试；金额合计继续返回 `¥0.00`。
+
+本轮自测：`WorkerSettlementListMapperIntegrationTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实结算数据库、银行出款或正式运营验收。
+
+### 10.007 2026-09-30 收银台会话空表总览零值门禁
+
+收银台会话总览 Mapper 的已失效、成功、支付中、待支付和即将失效计数此前未使用空值聚合，会话表为空时直接 Mapper 使用者可能得到 `NULL` 计数。本轮为六类状态计数补充 `COALESCE(..., 0)`，并新增空会话表集成测试；会话金额合计继续返回 `¥0.00`。
+
+本轮自测：`CashierSessionListMapperIntegrationTest` 定向回归通过；`git diff --check` 通过。本轮证据不替代真实支付数据库、渠道状态或正式运营验收。
+
+### 10.008 2026-09-30 收银台会话状态分区完整性门禁
+
+收银台会话总览客户端此前仅拒绝四类状态计数合计超过会话总数，少计会话仍可能被运营页面当作完整统计。本轮依据后端会话状态映射的固定集合，要求已失效、成功、支付中和待支付四类计数之和必须恰好等于总会话数，并补充少计回归。
+
+本轮自测：payment-core 管理端 API 定向归一化测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实收银台 SQL、生产数据库或正式运营验收。
+
+### 10.009 2026-09-30 账单状态分区完整性门禁
+
+账单总览客户端此前仅拒绝已支付、待支付和部分支付计数合计超过账单总数，少计账单仍可能被运营页面当作完整统计。本轮依据账单 Mapper 的固定状态分区，要求三类计数之和必须恰好等于总账单数，并补充少计回归。
+
+本轮自测：payment-core 管理端 API 全量测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实账单 SQL、生产数据库或正式运营验收。
+
+### 10.010 2026-09-30 服务者结算负净额总览金额门禁
+
+服务者结算总览客户端此前将净结算金额和保证金影响金额按非负金额校验，但后端和列表契约允许净结算及保证金影响为负，并单独提供净额为负计数。本轮按金额字段分别采用有符号/非负校验，允许合法负净额总览并补充回归。
+
+本轮自测：payment-core 管理端 API 全量测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实结算数据库、银行出款或正式运营验收。
+
+### 10.011 2026-09-30 支付日终批次状态分区完整性门禁
+
+支付日终总览客户端此前仅拒绝已完成和异常批次计数合计超过批次总数，少计批次仍可能被运营页面当作完整统计。本轮依据日终 Mapper 的 `COMPLETED/WARNING` 固定状态分区，要求两类计数之和必须恰好等于总批次数，并补充少计回归。
+
+本轮自测：payment-core 管理端 API 全量测试通过；`node --check` 与 `git diff --check` 通过。本轮证据不替代真实日终 SQL、生产数据库或正式运营验收。
+
+### 10.012
+
+- 修复支付请求总览漏计线下银行“待人工确认”请求的问题：该状态按处理中分区统计，处理中下钻筛选同时覆盖“处理中”和“待人工确认”。
+- 补充 `PaymentRequestListMapperIntegrationTest` 回归，验证总览计数与处理中筛选均包含人工确认请求。
+- 管理端支付请求总览归一化改为要求成功、失败、处理中、等待回调四类计数之和恰好等于请求总数，并补充不一致响应回归。
+
+### 10.013
+
+- 补齐支付请求管理状态下拉中的“处理中”“待人工确认”和“等待回调”选项，避免卡片下钻或 URL 筛选已生效但控件没有对应可见选项。
+- 本轮同时复核本地栈启动：`gateway-access`、`risk-control-system`、`deposit-system` 单独 Maven 启动均可就绪；`local-stack.sh` 托管启动仍在风险服务等待窗口内失败，未新增跨系统 HTTP happy-path 成功证据。
+
+### 10.014
+
+- 以提升权限重跑 `node tools/dev/payment-core-user-regression.mjs`，api-client、app-web、H5、PC、mini-program 共 `5/5` 用户端通过；用户端测试和生产构建均通过。
+- 首次普通权限执行仅因 `app-web/node_modules/.vite-temp` 写入受限退出，未发现代码测试失败；本轮结果以提升权限复跑为准。
+
+### 10.015
+
+- 修复 `local-stack.sh` 在 macOS 上将 `/usr/bin/java` 错误推导为 `JAVA_HOME=/usr` 的启动问题：优先选择已安装且同时包含 `java/javac` 的 JDK 8，再回退到 PATH 中的 Java。
+- 该问题会使本地后台 Maven 服务托管启动与直接使用真实 JDK 的结果不一致；补充 Java Home 解析顺序回归测试。
+### 10.016 2026-09-30 管理端收银台跳转预付单号空白归一化
+
+管理端从订单、支付单、预付单和收银台会话进入用户收银台时，预付单号此前只校验非空，未裁剪首尾空白；合法业务编号可能被编码为空格路径，导致打开错误收银台。本轮统一在收银台 URL 构造边界裁剪预付单号，并补充含首尾空白的跳转 URL 回归。
+
+验证结果：`externalUrls.test.js` 通过，收银台、退款进度和跨系统链路跳转的 URL 编码及危险协议拒绝回归保持通过；不改变支付状态机、真实渠道或生产发布治理结论。
+
+### 10.017 2026-09-30 App 收银台 API 预付单号空白归一化
+
+App 收银台从路由读取预付单号时，API 客户端此前原样编码并用未裁剪值匹配响应；带首尾空白的路由参数可能请求错误路径或被误判为跨订单响应。本轮在收银台 API 边界统一裁剪预付单号，并补充请求路径与响应身份回归。
+
+验证结果：App Web API client 定向回归通过；不改变支付状态机、真实渠道或生产发布治理结论。
+
+### 10.018 2026-09-30 App 退款进度 API 退款单号空白归一化
+
+App 退款进度页从路由读取退款单号时，API 客户端此前原样编码并用未裁剪值匹配响应；带首尾空白的路由参数可能请求错误路径或误判退款详情。本轮在退款详情 API 边界统一裁剪退款单号，并补充请求路径与响应身份回归。
+
+验证结果：App Web API client 定向回归通过；不改变退款状态机、真实渠道或生产发布治理结论。
+
+### 10.019 2026-09-30 App 支付动作业务编号空白归一化
+
+App 收银台提交、主动查单和关闭支付单此前会将调用方传入的预付单号或支付单号原样发送，并用未裁剪值校验响应；路由或快照带首尾空白时可能造成业务编号不一致。本轮统一规范化三个动作请求字段与响应匹配值，并补充请求体级回归。
+
+验证结果：App Web API client 定向回归通过；不改变支付状态机、真实渠道或生产发布治理结论。
+
+### 10.020 2026-09-30 REG-07 管理端链路诊断入口复核
+
+回归矩阵此前仍记录“暂无管理端链路诊断页”，与当前代码不一致。本轮复核 reconciliation admin 的手工查询和 `businessChainId` URL 直达链路诊断入口，并确认客户端对事实数量、状态、责任、阶段完成数和财务收口条件执行严格契约校验。
+
+验证结果：reconciliation admin API 测试 `12/12` 通过，Vite 生产构建通过；页面冻结截图、真实权限和生产环境证据仍保留为发布治理缺口。
+
+### 10.021 2026-09-30 App/H5/PC 用户支付路由参数空白归一化
+
+App、H5、PC 共用的收银台、支付结果和退款进度路由构造器此前原样保留业务编号；响应字段带首尾空白时可能生成带空格的用户端 URL。本轮在共享路由边界统一裁剪预付单号、支付单号和退款单号，并补充路由解析回归。
+
+验证结果：App、H5、PC 路由回归通过；不改变支付状态机、真实渠道或生产发布治理结论。
+
+### 10.022 2026-09-30 预付单创建 API 订单号空白归一化
+
+用户业务入口此前会裁剪订单号，但 `paymentApi.prepay` 直接调用时仍可能把带首尾空白的 `orderNo` 发送到 payment-core，并用未裁剪值匹配响应。本轮在预付单 API 边界统一裁剪订单号，并补充请求体回归。
+
+验证结果：App Web API client 定向回归通过；不改变预付单状态机、真实渠道或生产发布治理结论。
+
+### 10.023 2026-09-30 App 支付结果查询支付单号空白归一化
+
+App 支付结果页详情查询此前原样编码支付单号并用未裁剪值匹配响应；带首尾空白的路由参数可能请求错误路径或误判支付详情。本轮在支付详情 API 边界统一裁剪支付单号，并补充请求路径与响应身份回归。
+
+验证结果：App Web API client 定向回归通过；不改变支付状态机、真实渠道或生产发布治理结论。
+
+### 10.024 2026-09-30 管理端死信任务号空白归一化
+
+死信任务详情、准备重放、人工结案和重放 API 此前原样编码任务号，详情页路由也未裁剪任务号；带首尾空白的运营链接可能定位错误任务或造成响应归属误判。本轮统一四个 API 动作及详情页路由的任务号归一化，并补充详情请求回归。
+
+验证结果：管理端 API client 定向回归通过；不改变死信状态机、真实 RabbitMQ 或发布治理结论。
+
+### 10.025 2026-09-30 管理端运营业务编号边界归一化
+
+管理端多个运营详情入口此前只在死信任务上裁剪业务编号，支付问题、告警、日终批次、任务执行、订单、账单、支付流、路由、事件、收银台会话、支付请求、支付日志、支付记录、支付单和退款详情仍可能将带首尾空白的编号编码进路径；支付/退款动作及事件重发也可能把原始编号写入请求体。本轮新增统一业务编号归一化边界，详情路径和操作请求均使用裁剪后的编号，并保留响应归属校验。
+
+验证结果：`systems/payment-core/frontend/admin-web` 完整测试 `213/213` 通过，Vite 生产构建通过，`node --check systems/payment-core/frontend/admin-web/src/api/client.js` 与 `git diff --check` 通过；不改变支付、退款状态机、真实 RabbitMQ 或发布治理结论。
+
+### 10.026 2026-09-30 配置运营 API 业务编号边界归一化
+
+配置中心的渠道、网关、协议、路由规则、值班路由、告警供应商、返回码和控制策略审批/版本/回滚 API 此前仍可能将带首尾空白的审批号或配置编号编码进路径，并以未裁剪编号做响应归属校验。本轮统一这些配置运营 API 的编号边界，并补充多类配置请求路径回归。
+
+验证结果：管理端 API client 测试 `153/153` 通过，Vite 生产构建通过，`node --check systems/payment-core/frontend/admin-web/src/api/client.js` 与 `git diff --check` 通过；不改变配置审批状态机、真实鉴权、RabbitMQ 或发布治理结论。
+
+### 10.028 2026-09-30 控制策略自检编号请求体归一化
+
+控制策略自检 API 此前直接发送未裁剪的 `configCode`，本轮统一请求体和响应归属校验中的编号边界，并补充带首尾空白的请求体回归。
+
+验证结果：`systems/payment-core/frontend/admin-web` API client 测试 `153/153` 通过，Vite 生产构建通过，`node --check` 与 `git diff --check` 通过；不改变控制策略自检状态机、真实鉴权、RabbitMQ 或发布治理结论。
+
+### 10.029 2026-09-30 CLI 支付 API client 响应编号归一化
+
+CLI 支付请求的必填编号构建逻辑已经裁剪，但响应归属校验仍拿原始参数比较，导致合法的带空白命令行参数可能在请求成功后被误判失败。本轮统一 `validateCommandResponse` 的期望编号归一化，并补充支付详情请求路径与响应身份连续性测试。
+
+验证结果：API client 测试 `12/12` 通过，`node --check systems/payment-core/frontend/api-client/payment-api.mjs` 与 `git diff --check` 通过；不改变支付状态机、真实渠道、RabbitMQ 或发布治理结论。
+
+### 10.030 2026-09-30 CLI 支付请求可选字段归一化
+
+支付提交与退款申请 CLI 的可选渠道、来源应用、商户号、设备号、幂等键及退款描述此前可能携带首尾空白。本轮统一请求构建边界裁剪，并验证自定义字段仍保持原有契约语义。
+
+验证结果：API client 测试 `12/12` 通过，`node --check` 与 `git diff --check` 通过；不改变支付状态机、真实渠道、RabbitMQ 或发布治理结论。
+
+### 10.031 2026-09-30 CLI 支付服务地址归一化
+
+CLI 的 `--base-url` 与 `PAYMENT_API_BASE_URL` 现在统一裁剪首尾空白后再拼接请求路径，避免合法配置因空白导致连接失败。
+
+验证结果：API client 测试 `12/12` 通过，`node --check systems/payment-core/frontend/api-client/payment-api.mjs` 与 `git diff --check` 通过；不改变支付状态机、真实渠道、RabbitMQ 或发布治理结论。
+
+### 10.027 2026-09-30 配置运营归一化后完整管理端复核
+
+配置运营编号归一化修复后，重新执行 `npm test`，覆盖 API、常量、路由和工具测试共 `214/214`；Vite 生产构建通过，`node --check` 与 `git diff --check` 通过。该回归不改变配置审批状态机、真实鉴权、RabbitMQ 或发布治理结论。
+
+### 10.032 2026-09-30 跨系统预付单链路断言空白归一化
+
+跨系统验证器现在按裁剪后的支付单号校验预付单 `businessChainId`，避免合法的带空白响应被误判为链路漂移，并增加对应回归。
+
+验证结果：`tools/dev/cross-system-happy-path.test.mjs` `35/35` 通过，脚本语法检查与 `git diff --check` 通过；不替代真实 HTTP happy-path、消息总线或发布治理证据。
+
+### 10.033 2026-09-30 跨系统服务地址归一化
+
+跨系统 happy-path 验证器现在统一裁剪环境变量服务地址并移除末尾斜杠，避免配置空白污染支付、清分、结算、账务、退款和对账请求 URL。
+
+验证结果：`tools/dev/cross-system-happy-path.test.mjs` `36/36` 通过，脚本语法检查与 `git diff --check` 通过；不替代真实 HTTP happy-path、消息总线或发布治理证据。
+
+### 10.034 2026-09-30 payment-core 后端回归复核
+
+本轮使用 JDK 8、本地 Maven 仓库执行 `node tools/dev/backend-regression.mjs --only payment-core`，payment-core 后端模块 `1/1` 通过。测试日志中的任务租约释放告警和受控异常回滚属于既有异常路径覆盖输出，不影响回归进程退出码 `0`。
+
+本轮仅确认当前工作树 payment-core 后端测试通过；固定端口服务仍可能被外部 payment-core 实例接管，跨系统 HTTP happy-path 仍不新增成功结论。
+
+### 10.035 2026-09-30 本地栈子进程清理修复
+
+`local-stack.sh` 此前停止服务时只终止记录的 Maven 父进程，`spring-boot:run` 派生的应用 JVM 可能继续占用固定端口，下一轮验证会把残留实例识别为外部服务。本轮增加递归子进程清理，在终止父进程前回收 Spring Boot 子 JVM，并补充脚本契约测试。
+
+验证结果：`bash -n tools/dev/local-stack.sh`、`node --test tools/dev/local-infrastructure-defaults.test.mjs`（`4/4`）和 `git diff --check` 通过；该修复改善本地栈生命周期管理，但尚未新增真实跨系统 HTTP happy-path 成功证据。
+
+### 10.036 2026-09-30 本地栈运行目录可配置与受控复核
+
+本地栈运行目录此前固定写入工作树，在受限环境无法写入时会丢失 PID/日志管理。本轮新增 `HSP_LOCAL_RUNTIME_DIR` 覆盖入口，默认仍为 `.runtime/local-stack`，并用临时目录执行受控 `payment-chain` 复核。
+
+复核结果：risk-control 与 gateway-access 由当前脚本启动并通过 HTTP 冒烟，其他依赖（含 payment-core）仍由外部实例提供；预付响应缺少 `businessChainId`，happy-path 在首条业务链路断言处失败，脚本正确清理本轮启动的两个进程。本轮不新增跨系统成功结论。
+
+验证结果：本地基础设施契约测试 `5/5`、`bash -n tools/dev/local-stack.sh` 和 `git diff --check` 通过；提升权限的受控复核退出码为 `1`，原因是外部 payment-core 实例契约不完整，不是当前脚本启动的服务失败。
+
+### 10.037 2026-09-30 小程序支付请求标识归一化
+
+小程序 API client 此前未统一裁剪预付单、支付单、退款单和订单号，也只移除一个 base URL 尾斜杠；带首尾空白或多个斜杠的配置可能造成请求路径污染或响应归属误判。本轮统一归一化预付、提交、查单、关闭、收银台、支付详情和退款详情边界。
+
+验证结果：小程序全量测试 `47/47` 通过，`node --check systems/payment-core/frontend/mini-program/utils/request.js` 与 `git diff --check` 通过；不改变支付状态机、真实微信渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.038 2026-09-30 小程序收银台路由订单号归一化
+
+小程序收银台页面此前直接保存 URL 解码后的 `prepayOrderNo`，带首尾空白的合法路由会导致 API 请求虽已裁剪，但页面本地响应归属比较仍失败。本轮在收银台入口裁剪预付单号，并补充路由到请求再到页面状态的连续回归。
+
+验证结果：收银台页面定向测试 `5/5`、小程序全量测试 `48/48`，`node --check systems/payment-core/frontend/mini-program/pages/cashier/index.js` 与 `git diff --check` 通过；不改变真实微信支付或跨系统 HTTP happy-path 结论。
+
+### 10.039 2026-09-30 App 退款进度业务链路空白归一化
+
+App 退款进度快照此前用原始 `paymentOrderId` 派生 `businessChainId`，而 API 响应事实按裁剪后的支付单号校验；带首尾空白的合法响应可能在退款进度页被误判为链路漂移。本轮统一按裁剪后的支付单号派生链路并补回归。
+
+验证结果：退款进度定向测试 `5/5`、App Web 全量测试 `51/51`，`node --check` 与 `git diff --check` 通过；不改变退款状态机、渠道到账或跨系统 HTTP happy-path 结论。
+
+### 10.040 2026-09-30 小程序退款进度标识归一化
+
+小程序退款进度页此前直接保存 URL 解码后的退款单号，并用响应原始支付单号和业务链路比较，带首尾空白的合法退款详情可能被拒绝或污染页面状态。本轮统一裁剪路由和响应中的退款单号、支付单号及业务链路，并补连续刷新绑定回归。
+
+验证结果：退款进度页面定向测试 `9/9`、小程序全量测试 `49/49`，`node --check` 与 `git diff --check` 通过；不改变退款状态机、真实渠道到账或跨系统 HTTP happy-path 结论。
+
+### 10.041 2026-09-30 小程序支付提交与收银台快照标识归一化
+
+小程序支付提交和收银台刷新匹配器此前直接比较原始预付单号、支付单号、订单号及业务链路；API 层允许裁剪后的合法事实仍可能在页面匹配阶段被误判为归属漂移。本轮统一两个匹配器的标识和链路派生规则，并补带空白支付事实回归。
+
+验证结果：支付 utility 定向测试 `17/17`、小程序全量测试 `49/49`，`node --check` 与 `git diff --check` 通过；不改变真实微信渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.042 2026-09-30 小程序支付结果页标识归一化
+
+小程序支付结果页此前直接保存 URL 解码后的支付单号和预付单号，并在初次加载、自动刷新、主动查单及关闭动作中比较响应原始标识；带首尾空白的合法支付详情可能被误判为归属或业务链路漂移。本轮统一结果页路由、详情快照和响应标识归一化，并补连续操作回归。
+
+验证结果：结果页定向测试 `9/9`、小程序全量测试 `50/50`，`node --check` 与 `git diff --check` 通过；不改变真实微信渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.043 2026-09-30 CLI 服务地址多尾斜杠归一化
+
+CLI 支付 API client 此前只移除一个 base URL 尾斜杠，配置多个尾斜杠时会拼出错误请求路径。本轮改为移除连续尾斜杠，并同时覆盖命令行参数和 `PAYMENT_API_BASE_URL` 环境变量。
+
+验证结果：CLI API client 测试 `12/12`、`node --check` 与 `git diff --check` 通过；不改变支付状态机、真实渠道或跨系统 HTTP happy-path 结论。
+
+### 10.044 2026-09-30 小程序入口收银台路由标识归一化
+
+小程序入口页此前直接把预付单接口响应中的 `prepayOrderNo` 编码到收银台路由；响应虽已通过标识校验，首尾空白仍可能被带入下一页，造成路由与页面请求边界不一致。本轮在入口导航边界裁剪预付单号，并补充带空白响应的页面回归。
+
+验证结果：入口页面定向测试 `1/1`、小程序全量测试 `51/51`，`node --check` 与 `git diff --check` 通过；不改变真实微信渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.045 2026-09-30 CLI 响应业务标识空白归一化
+
+CLI 请求参数已裁剪，但响应身份校验此前直接比较后端原始字符串；后端返回带首尾空白的同一支付或退款标识时，客户端会错误拒绝合法响应。本轮统一响应身份比较的裁剪边界，并补支付详情响应带空白标识回归。
+
+验证结果：CLI API client 测试 `12/12`、`node --check` 与 `git diff --check` 通过；不改变支付状态机、真实渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.046 2026-09-30 App Web 响应业务标识空白归一化
+
+App Web 请求标识已裁剪，但 API client 对预付、提交、查单、关单、收银台、支付详情和退款详情的响应身份此前仍直接比较原始字符串；合法后端空白响应可能被用户支付主流程误判为订单漂移。本轮统一这些响应身份的裁剪比较边界，并补预付响应回归。
+
+验证结果：App Web 全量测试 `52/52`、`node --check` 与 `git diff --check` 通过；不改变真实渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.047 2026-09-30 管理端支付退款响应标识空白归一化
+
+管理端支付和退款动作、详情响应此前在请求编号已归一化的情况下仍直接比较原始业务标识，带首尾空白的合法响应可能被误判为归属漂移；动作后快照比较也存在同样边界。本轮统一支付/退款核心运营响应和快照的标识比较，并补带空白回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付退款状态机、真实 RabbitMQ、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.049 2026-09-30 App 退款进度页面响应绑定标识归一化
+
+App 退款 API client 已允许裁剪后的合法响应标识，但退款进度页面的首载路由校验和刷新快照仍直接比较退款单号、支付单号、业务链路及订单号原值，可能把同一退款事实误判为归属漂移。本轮统一退款进度匹配器和页面路由绑定边界，并补带空白快照回归。
+
+验证结果：退款进度定向测试 `5/5`、App Web 全量测试 `52/52`，`node --check` 与 `git diff --check` 通过；不改变退款状态机、渠道到账或跨系统 HTTP happy-path 结论。
+
+### 10.050 2026-09-30 管理端支付事件详情标识归一化
+
+管理端支付事件详情此前仅按结构事实校验事件号，预期事件号和详情刷新快照仍直接比较原始事件号、支付单号及订单号；合法空白响应可能被重发/详情页面误判为对象漂移。本轮统一事件详情期望标识和刷新快照比较边界，并补带空白事件事实回归。
+
+验证结果：支付事件 API/client 全量测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变事件重发状态机、RabbitMQ、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.051 2026-09-30 管理端支付请求详情标识归一化
+
+管理端支付请求详情此前对预期请求号及刷新快照中的请求号、支付单号、预付单号、订单号、账单号和路由号直接比较原始字符串，合法空白响应可能被误判为关联对象漂移。本轮统一支付请求详情的期望标识和快照比较边界，并补带空白请求事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付请求状态机、RabbitMQ、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.052 2026-09-30 管理端支付流水详情标识归一化
+
+管理端支付流水详情此前对预期流水来源/流水号及刷新快照中的来源、流水号、支付单号、订单号、预付单号、支付请求号和路由号直接比较原始字符串，合法空白响应可能被误判为流水关联漂移。本轮统一支付流水详情的期望标识和快照比较边界，并补带空白流水事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付流水状态事实、RabbitMQ、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.048 2026-09-30 跨系统 happy-path 核心标识空白归一化
+
+跨系统 happy-path 验证器的请求地址和部分业务链路已归一化，但支付、收银台、清分和退款核心身份断言仍直接比较响应原始编号；同一业务事实带首尾空白时可能被误判为链路漂移。本轮统一核心断言的标识比较边界，覆盖重复支付/退款实体连续性，并补带空白支付身份回归。
+
+验证结果：`tools/dev/cross-system-happy-path.test.mjs` `36/36`、脚本 `node --check` 与 `git diff --check` 通过；尚未新增真实多服务 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.053 2026-09-30 管理端支付路由详情标识归一化
+
+管理端支付路由详情此前对预期路由号及刷新快照中的路由号、支付单号、请求号和订单号直接比较原始字符串，合法空白响应可能被误判为路由关联漂移。本轮统一路由详情期望标识和刷新快照的比较边界，并补带空白路由事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付路由状态事实、真实渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.054 2026-09-30 管理端支付记录与收银台会话标识归一化
+
+管理端支付记录详情和收银台会话详情此前对预期业务编号及刷新快照直接比较原始字符串，合法空白响应可能被误判为支付记录、会话或关联订单漂移。本轮统一支付记录与收银台会话的期望标识和刷新快照比较边界，并补带空白支付记录、会话事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付记录、收银台会话状态事实、真实渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.055 2026-09-30 管理端支付详情刷新标识归一化
+
+管理端支付详情刷新快照此前直接比较支付单号和订单号原始字符串，合法空白响应可能被误判为支付对象或订单漂移。本轮统一支付详情刷新快照的标识比较边界，并补带空白支付详情事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付状态事实、真实渠道、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.056 2026-09-30 管理端订单详情标识归一化
+
+管理端订单详情此前对预期订单号和刷新快照中的订单号直接比较原始字符串，合法空白响应可能被误判为订单对象漂移。本轮统一订单详情的期望标识和刷新快照比较边界，并补带空白订单事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变订单金额状态、履约状态、真实渠道或跨系统 HTTP happy-path 结论。
+
+### 10.057 2026-09-30 管理端账单详情标识归一化
+
+管理端账单详情此前对预期账单号和刷新快照中的账单号、订单号及标准订单号直接比较原始字符串，合法空白响应可能被误判为账单关联漂移。本轮统一账单详情的期望标识和刷新快照比较边界，并补带空白账单事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变账单金额状态、支付状态、真实渠道或跨系统 HTTP happy-path 结论。
+
+### 10.058 2026-09-30 管理端支付异常详情标识归一化
+
+管理端支付异常详情此前对预期异常号和刷新快照中的异常号、支付单号及订单号直接比较原始字符串，合法空白响应可能被误判为异常归属漂移。本轮统一支付异常详情的期望标识和刷新快照比较边界，并补带空白异常事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变异常处理状态、告警状态、真实消息总线或跨系统 HTTP happy-path 结论。
+
+### 10.059 2026-09-30 管理端支付异常告警详情标识归一化
+
+管理端支付异常告警详情及确认动作此前对预期告警号、告警来源、异常号、支付单号、业务链路、异常类型和等级直接比较原始字符串，合法空白响应可能被误判为告警归属漂移。本轮统一告警详情、动作校验和刷新快照的标识比较边界，并补带空白告警事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变告警确认状态、真实消息总线、供应商回执或跨系统 HTTP happy-path 结论。
+
+### 10.060 2026-09-30 管理端支付处理日志详情标识归一化
+
+管理端支付处理日志详情此前对预期日志号和刷新快照中的日志号、支付单号、订单号、标准订单号、请求号、来源号及处理阶段直接比较原始字符串，合法空白响应可能被误判为日志关联漂移。本轮统一支付处理日志详情的期望标识和刷新快照比较边界，并补带空白日志事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变支付处理日志事实、真实消息总线、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.061 2026-09-30 管理端支付任务执行详情标识归一化
+
+管理端支付任务执行详情此前对预期任务日志号及刷新快照中的任务日志号、任务编码、业务日期和业务引用号直接比较原始字符串，合法空白响应可能被误判为任务执行上下文漂移。本轮统一支付任务执行详情的期望标识和刷新快照比较边界，并补带空白任务事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变任务执行计数、调度状态、真实消息总线或跨系统 HTTP happy-path 结论。
+
+### 10.062 2026-09-30 管理端支付死信任务详情标识归一化
+
+管理端支付死信任务详情此前对预期任务号及刷新快照中的任务号、消息号、关联号、目标系统、死信路由键、重放交换机和重放路由键直接比较原始字符串，合法空白响应可能被误判为消息路由漂移。本轮统一死信任务详情的期望标识和刷新快照比较边界，并补带空白死信路由事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变死信重放状态、真实消息总线、调度执行或跨系统 HTTP happy-path 结论。
+
+### 10.083 2026-10-01 跨系统退款业务链路标识归一化
+
+跨系统 happy-path 校验器此前对退款响应中的业务链路标识直接比较原始字符串，带首尾空白的合法退款事实可能被误判为退款对象漂移。本轮统一退款身份校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变退款状态、真实消息总线、生产数据库、真实退款资金或外部渠道 delivery 结论。
+
+### 10.064 2026-09-30 管理端支付日终详情标识归一化
+
+管理端支付日终详情此前对预期批次号及刷新快照中的批次号、业务日期直接比较原始字符串，合法空白响应可能被误判为日终批次或业务日期漂移。本轮统一支付日终详情的期望标识和刷新快照比较边界，并补带空白日终事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变日终批次状态、对账准备状态、真实任务调度或跨系统 HTTP happy-path 结论。
+
+### 10.065 2026-09-30 管理端支付配置复核动作标识归一化
+
+管理端支付配置复核动作此前只用原始字符串匹配请求号，带首尾空白的合法复核回执可能被误判为未确认目标请求。本轮统一复核动作的期望请求号比较边界，并补带空白请求回执回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变配置复核状态、真实配置发布或跨系统 HTTP happy-path 结论。
+
+### 10.066 2026-09-30 管理端支付事件刷新元数据归一化
+
+管理端支付事件刷新快照此前对事件类型、事件主题和下游系统直接比较原始字符串，合法空白响应可能被误判为事件路由或下游归属漂移。本轮统一支付事件刷新元数据的比较边界，并补带空白事件事实回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变事件重发状态、真实消息总线、资金到账或跨系统 HTTP happy-path 结论。
+
+### 10.067 2026-09-30 管理端支付配置动作集合标识归一化
+
+管理端渠道、网关、协议、路由规则及其他配置动作共用的结果集合此前以原始字符串匹配期望配置标识，带首尾空白的合法动作回执可能被误判为未确认目标配置。本轮统一共享配置动作集合的期望标识比较边界，并补带空白渠道动作回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变配置审批状态、真实配置发布或跨系统 HTTP happy-path 结论。
+
+### 10.068 2026-09-30 管理端支付配置版本历史标识归一化
+
+管理端支付配置版本历史此前对期望配置标识直接比较原始字符串，带首尾空白的合法版本记录可能被误判为不属于当前配置对象。本轮统一版本历史期望标识比较边界，并补带空白渠道版本记录回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变配置版本状态、真实配置发布或跨系统 HTTP happy-path 结论。
+
+### 10.069 2026-09-30 管理端预付单创建订单标识归一化
+
+管理端预付单创建响应此前对预期订单号直接比较原始字符串，带首尾空白的合法订单事实可能被误判为预付单归属漂移。本轮统一预付单创建的期望订单号比较边界，并补带空白订单响应回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变预付单创建、支付状态、真实渠道或跨系统 HTTP happy-path 结论。
+
+### 10.070 2026-09-30 管理端支付异常快照类型标识归一化
+
+管理端支付异常刷新快照此前对异常类型直接比较原始字符串，合法空白响应可能被误判为异常类型漂移。本轮统一异常详情快照的异常类型比较边界，并补带空白异常类型回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变异常处理状态、告警状态、真实消息总线或跨系统 HTTP happy-path 结论。
+
+### 10.071 2026-09-30 跨系统结算清分单号边界归一化
+
+跨系统 happy-path 校验器此前对结算响应中的清分单号直接比较原始字符串，带首尾空白的合法清分事实可能被误判为结算对象漂移。本轮统一结算身份校验中的清分单号比较边界，并补带空白清分单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.072 2026-09-30 跨系统结算业务链路标识归一化
+
+跨系统 happy-path 校验器此前对结算响应中的业务链路标识直接比较原始字符串，带首尾空白的合法链路事实可能被误判为结算对象漂移。本轮统一结算身份校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.073 2026-09-30 跨系统审核结算单号边界归一化
+
+跨系统 happy-path 校验器此前对审核通过响应中的结算单号直接比较原始字符串，带首尾空白的合法结算事实可能被误判为审核对象漂移。本轮统一审核结算身份校验中的结算单号比较边界，并补带空白结算单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.074 2026-09-30 跨系统审核清分单号边界归一化
+
+跨系统 happy-path 校验器此前对审核通过响应中的清分单号直接比较原始字符串，带首尾空白的合法清分事实可能被误判为审核对象漂移。本轮统一审核结算身份校验中的清分单号比较边界，并补带空白清分单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.075 2026-09-30 跨系统审核业务链路标识归一化
+
+跨系统 happy-path 校验器此前对审核通过响应中的业务链路标识直接比较原始字符串，带首尾空白的合法链路事实可能被误判为审核对象漂移。本轮统一审核结算身份校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.076 2026-09-30 跨系统出款批次标识归一化
+
+跨系统 happy-path 校验器此前对出款记录中的批次号直接比较原始字符串，带首尾空白的合法批次事实可能被误判为出款归属漂移。本轮统一出款记录批次号的比较边界，并补带空白批次号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.077 2026-09-30 跨系统出款结算单号边界归一化
+
+跨系统 happy-path 校验器此前对出款记录中的结算单号直接比较原始字符串，带首尾空白的合法结算事实可能被误判为出款归属漂移。本轮统一出款记录结算单号的比较边界，并补带空白结算单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.078 2026-09-30 跨系统已出款结算单号边界归一化
+
+跨系统 happy-path 校验器此前对已出款结算响应中的结算单号直接比较原始字符串，带首尾空白的合法终态事实可能被误判为结算对象漂移。本轮统一终态结算身份校验中的结算单号比较边界，并补带空白终态结算单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.079 2026-09-30 跨系统已出款清分单号边界归一化
+
+跨系统 happy-path 校验器此前对已出款结算响应中的清分单号直接比较原始字符串，带首尾空白的合法终态事实可能被误判为结算对象漂移。本轮统一终态结算身份校验中的清分单号比较边界，并补带空白终态清分单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.080 2026-09-30 跨系统已出款业务链路标识归一化
+
+跨系统 happy-path 校验器此前对已出款结算响应中的业务链路标识直接比较原始字符串，带首尾空白的合法终态事实可能被误判为结算对象漂移。本轮统一终态结算身份校验中的业务链路标识比较边界，并补带空白终态业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.081 2026-09-30 跨系统出款批次完成标识归一化
+
+跨系统 happy-path 校验器此前对已完成出款批次的批次号直接比较原始字符串，带首尾空白的合法完成事实可能被误判为批次对象漂移。本轮统一出款批次完成校验中的批次号比较边界，并补带空白完成批次号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变结算审核、出款、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.082 2026-09-30 跨系统清分业务链路标识归一化
+
+跨系统 happy-path 校验器此前对清分响应中的业务链路标识直接比较原始字符串，带首尾空白的合法清分事实可能被误判为清分对象漂移。本轮统一清分身份校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变清分状态、真实消息总线、生产数据库、真实资金或外部渠道 delivery 结论。
+
+### 10.084 2026-10-01 跨系统支付业务链路标识归一化
+
+跨系统 happy-path 校验器此前对支付响应中的业务链路标识直接比较原始字符串，带首尾空白的合法支付事实可能被误判为支付对象漂移。本轮统一支付身份校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变支付状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.085 2026-10-01 跨系统预付单业务链路标识归一化
+
+跨系统 happy-path 校验器此前对预付单响应中的业务链路标识直接比较原始字符串，带首尾空白的合法预付单事实可能被误判为支付对象漂移。本轮统一预付单校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变预付单创建、支付状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.086 2026-10-01 跨系统收银台业务链路标识归一化
+
+跨系统 happy-path 校验器此前对收银台响应中的业务链路标识直接比较原始字符串，带首尾空白的合法收银台事实可能被误判为支付对象漂移。本轮统一收银台校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变收银台状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.087 2026-10-01 跨系统账务事件业务链路标识归一化
+
+跨系统 happy-path 校验器此前对账务事件中的业务链路标识直接比较原始字符串，带首尾空白的合法账务事实可能被误判为事件归属漂移。本轮统一账务事件校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变账务事件状态、真实消息总线、生产数据库、真实账务资金或外部渠道 delivery 结论。
+
+### 10.088 2026-10-01 跨系统支付成功事件业务链路标识归一化
+
+跨系统 happy-path 校验器此前对支付成功事件中的业务链路标识直接比较原始字符串，带首尾空白的合法事件事实可能被误判为事件归属漂移。本轮统一支付成功事件校验中的业务链路标识比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变支付成功事件状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.089 2026-10-01 跨系统对账链路快照标识归一化
+
+跨系统 happy-path 校验器此前对对账链路快照头部的业务链路标识直接比较原始字符串，带首尾空白的合法快照可能被误判为链路对象漂移。本轮统一对账链路快照头部标识的比较边界，并补带空白业务链路回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.090 2026-10-01 跨系统对账事实业务链路标识归一化
+
+跨系统 happy-path 校验器此前对对账链路事实中的业务链路标识直接比较原始字符串，带首尾空白的合法事实可能被误判为跨链路数据。本轮统一对账事实业务链路标识的比较边界，并补带空白事实回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.091 2026-10-01 跨系统账务台账业务编号归一化
+
+跨系统 happy-path 校验器此前对账务台账中的业务编号直接比较原始字符串，带首尾空白的合法台账事实可能被误判为业务归属漂移。本轮统一账务台账业务编号的比较边界，并补带空白业务编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变账务台账状态、真实消息总线、生产数据库、真实账务资金或外部渠道 delivery 结论。
+
+### 10.092 2026-10-01 跨系统账务台账类型标识归一化
+
+跨系统 happy-path 校验器此前对账务台账中的业务类型直接比较原始字符串，带首尾空白的合法台账事实可能被误判为业务类型漂移。本轮统一账务台账业务类型的比较边界，并补带空白业务类型回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变账务台账状态、真实消息总线、生产数据库、真实账务资金或外部渠道 delivery 结论。
+
+### 10.093 2026-10-01 跨系统账务事件业务编号归一化
+
+跨系统 happy-path 校验器此前在筛选账务事件时对业务编号直接比较原始字符串，带首尾空白的合法事件可能未被选中并被误判为缺失。本轮统一账务事件筛选的业务编号比较边界，并补带空白业务编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变账务事件状态、真实消息总线、生产数据库、真实账务资金或外部渠道 delivery 结论。
+
+### 10.094 2026-10-01 跨系统支付成功事件支付单号归一化
+
+跨系统 happy-path 校验器此前在筛选支付成功事件时对支付单号直接比较原始字符串，带首尾空白的合法事件可能未被选中并被误判为事件缺失。本轮统一支付成功事件筛选的支付单号比较边界，并补带空白支付单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变支付成功事件状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.095 2026-10-01 跨系统支付成功事件业务订单号归一化
+
+跨系统 happy-path 校验器此前在筛选支付成功事件时对业务订单号直接比较原始字符串，带首尾空白的合法事件可能未被选中并被误判为事件缺失。本轮统一支付成功事件筛选的业务订单号比较边界，并补带空白业务订单号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变支付成功事件状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.096 2026-10-01 跨系统对账事实业务编号归一化
+
+跨系统 happy-path 校验器此前对对账事实中的业务编号直接比较原始字符串，带首尾空白的合法事实可能被误判为业务归属漂移。本轮统一对账事实业务编号的比较边界，并补带空白业务编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.097 2026-10-01 跨系统对账事实编号归一化
+
+跨系统 happy-path 校验器此前在筛选对账事实时对事实编号直接比较原始字符串，带首尾空白的合法事实可能未被选中并被误判为事实缺失。本轮统一对账事实筛选的事实编号比较边界，并补带空白事实编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.098 2026-10-01 跨系统对账事实类型标识归一化
+
+跨系统 happy-path 校验器此前在筛选对账事实时对事实类型直接比较原始字符串，带首尾空白的合法事实可能未被选中并被误判为事实缺失。本轮统一对账事实筛选的事实类型比较边界，并补带空白事实类型回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.099 2026-10-01 跨系统对账事实系统标识归一化
+
+跨系统 happy-path 校验器此前在筛选对账事实时对系统标识直接比较原始字符串，带首尾空白的合法事实可能未被选中并被误判为事实缺失。本轮统一对账事实筛选的系统标识比较边界，并补带空白系统标识回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变对账状态、真实消息总线、生产数据库、真实对账资金或外部渠道 delivery 结论。
+
+### 10.100 2026-10-01 跨系统退款成功出站事件聚合标识归一化
+
+跨系统 happy-path 校验器此前在筛选退款成功 outbox 事件时对聚合编号直接比较原始字符串，带首尾空白的合法事件可能未被选中并被误判为事件缺失。本轮统一退款成功 outbox 聚合编号的比较边界，并补带空白聚合编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变退款 outbox 状态、真实消息总线、生产数据库、真实退款资金或外部渠道 delivery 结论。
+
+### 10.101 2026-10-01 跨系统退款成功出站事件编号归一化
+
+跨系统 happy-path 校验器此前对退款成功 outbox 派发响应中的事件编号直接比较原始字符串，带首尾空白的合法派发回执可能被误判为事件漂移。本轮统一退款 outbox 派发事件编号的比较边界，并补带空白事件编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变退款 outbox 状态、真实消息总线、生产数据库、真实退款资金或外部渠道 delivery 结论。
+
+### 10.102 2026-10-01 跨系统退款成功出站事件聚合编号归一化
+
+跨系统 happy-path 校验器此前对退款成功 outbox 派发响应中的聚合编号直接比较原始字符串，带首尾空白的合法派发回执可能被误判为退款归属漂移。本轮统一退款 outbox 派发聚合编号的比较边界，并补带空白聚合编号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变退款 outbox 状态、真实消息总线、生产数据库、真实退款资金或外部渠道 delivery 结论。
+
+### 10.103 2026-10-01 跨系统退款成功出站事件类型归一化
+
+跨系统 happy-path 校验器此前对退款成功 outbox 派发响应中的事件类型直接比较原始字符串，带首尾空白的合法派发回执可能被误判为事件路由漂移。本轮统一退款 outbox 派发事件类型的比较边界，并补带空白事件类型回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变退款 outbox 状态、真实消息总线、生产数据库、真实退款资金或外部渠道 delivery 结论。
+
+### 10.104 2026-10-01 跨系统支付回调渠道交易号归一化
+
+跨系统 happy-path 校验器此前对重复支付回调中的渠道交易号直接比较原始字符串，带首尾空白的合法回调可能被误判为支付实体漂移。本轮统一重复支付回调渠道交易号的比较边界，并补带空白渠道交易号回归。
+
+验证结果：跨系统校验器测试 `36/36`、`node --check` 与 `git diff --check` 通过；不改变支付回调状态、真实消息总线、生产数据库、真实支付资金或外部渠道 delivery 结论。
+
+### 10.105 2026-10-01 跨系统重复支付提交支付单号归一化
+
+跨系统 happy-path 主流程此前对重复支付提交返回的支付单号直接比较原始字符串，带首尾空白的合法幂等响应可能被误判为支付单漂移。本轮统一主流程重复提交支付单号的比较边界，并补带空白支付单号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.106 2026-10-01 跨系统重复退款回调渠道退款号归一化
+
+跨系统 happy-path 校验器此前对重复退款回调中的渠道退款号直接比较原始字符串，带首尾空白的合法幂等响应可能被误判为退款实体漂移。本轮统一重复退款回调渠道退款号的比较边界，并补带空白渠道退款号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.107 2026-10-01 跨系统出款记录结算单号查找归一化
+
+跨系统 happy-path 主流程此前在出款批次记录中使用原始结算单号查找，带首尾空白的合法出款记录可能在身份断言前被误判为缺失。本轮统一待出款与已出款记录的结算单号查找边界，并补带空白结算单号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.108 2026-10-01 跨系统对账事实编号查找归一化
+
+跨系统 happy-path 主流程此前对账事实中的系统、类型和事实编号使用原始字符串查找，带首尾空白的合法事实可能在成功状态和退款事实唯一性校验前被误判为缺失。本轮统一对账事实查找边界，并补带空白事实编号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.109 2026-10-01 跨系统账务事件类型查找归一化
+
+跨系统 happy-path 校验器此前在账务事件校验中仅归一化业务编号，事件类型仍使用原始字符串比较，带首尾空白的合法账务事件可能被误判为缺失。本轮统一账务事件类型的比较边界，并补带空白事件类型回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.110 2026-10-01 跨系统支付成功事件类型查找归一化
+
+跨系统 happy-path 校验器此前在支付成功事件查找中对事件类型直接比较原始字符串，带首尾空白的合法事件可能在支付成功事件唯一性校验前被误判为缺失。本轮统一支付成功事件类型的比较边界，并补带空白事件类型回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.111 2026-10-01 跨系统退款成功出站事件类型查找归一化
+
+跨系统 happy-path 校验器此前在退款成功 outbox 事件查找中对事件类型直接比较原始字符串，带首尾空白的合法事件可能在退款事件唯一性校验前被误判为缺失。本轮统一退款成功 outbox 事件类型的比较边界，并补带空白事件类型回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.112 2026-10-01 跨系统支付成功事件等待条件归一化
+
+跨系统 happy-path 主流程此前等待支付成功事件时对事件类型直接比较原始字符串，带首尾空白的合法事件可能导致等待超时，尽管后续事件断言已支持归一化。本轮统一等待条件与事件断言的比较边界，并补等待条件回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.113 2026-10-01 跨系统出款批次目标标识查找归一化
+
+跨系统 happy-path 主流程此前等待出款批次时只筛选待出款状态，可能在返回多个批次时选中非目标批次。本轮统一待出款批次的批次号和状态查找，并补带空白目标批次号及非目标批次回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.114 2026-10-01 跨系统清分支付单目标标识查找归一化
+
+跨系统 happy-path 主流程此前等待清分成功时只检查结果数量和状态，未在选取清分记录前确认支付单号归属，可能误用其他支付单的清分事实。本轮统一清分记录的支付单号和成功状态查找，并补带空白支付单号及非目标支付单回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.115 2026-10-01 跨系统结算清分目标标识查找归一化
+
+跨系统 happy-path 主流程此前等待结算单时只检查返回数量，未在选取记录前确认清分单号和待审核状态，可能误用其他清分事实或非草稿结算单。本轮统一结算记录的清分单号和草稿状态查找，并补带空白清分单号及非目标清分单回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.116 2026-10-01 跨系统结算资源路径标识归一化
+
+跨系统 happy-path 主流程此前在构造结算审批资源路径时直接编码响应中的结算单号，带首尾空白的合法标识可能被作为不同路径发送，导致审批请求失败。本轮统一资源路径前的标识归一化，并补路径标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.117 2026-10-01 用户收银台资源路径标识归一化
+
+跨系统 happy-path 用户支付主流程此前在构造收银台资源路径时直接编码预付单号，带首尾空白的合法标识可能被作为不同路径发送，导致收银台查询失败。本轮统一收银台路径前的预付单号归一化，并补路径标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.118 2026-10-01 用户支付事件查询标识归一化
+
+跨系统 happy-path 用户支付主流程此前在查询支付成功事件时直接编码支付单号，带首尾空白的合法标识可能导致事件查询路径不一致，进而等待超时。本轮统一支付事件查询参数前的支付单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.119 2026-10-01 跨系统清分查询支付单标识归一化
+
+跨系统 happy-path 主流程此前在查询清分记录时直接编码支付单号，带首尾空白的合法标识可能导致清分查询路径不一致，进而等待超时。本轮统一清分查询参数前的支付单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.120 2026-10-01 跨系统结算查询清分单标识归一化
+
+跨系统 happy-path 主流程此前在查询结算记录时直接编码清分单号，带首尾空白的合法标识可能导致结算查询路径不一致，进而等待超时。本轮统一结算查询参数前的清分单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.121 2026-10-01 跨系统出款批次查询标识归一化
+
+跨系统 happy-path 主流程此前在查询出款批次时直接编码批次号，带首尾空白的合法标识可能导致批次查询路径不一致，进而等待超时。本轮统一出款批次查询参数前的批次号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.122 2026-10-01 跨系统待出款记录资源路径标识归一化
+
+跨系统 happy-path 主流程此前在查询待出款记录时直接编码出款批次号，带首尾空白的合法标识可能导致记录查询路径不一致，进而误判出款记录缺失。本轮统一待出款记录路径前的批次号归一化，并补查询路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.123 2026-10-01 跨系统出款执行资源路径标识归一化
+
+跨系统 happy-path 主流程此前在执行出款批次时直接编码批次号，带首尾空白的合法标识可能导致执行请求路径不一致，进而无法推进出款状态。本轮统一出款执行路径前的批次号归一化，并补执行路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.124 2026-10-01 跨系统已出款记录资源路径标识归一化
+
+跨系统 happy-path 主流程此前在查询已出款记录时直接编码执行结果中的批次号，带首尾空白的合法标识可能导致记录查询路径不一致，进而误判已出款记录缺失。本轮统一已出款记录路径前的批次号归一化，并补查询路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.125 2026-10-01 跨系统已出款结算详情路径标识归一化
+
+跨系统 happy-path 主流程此前在查询已出款结算详情时直接编码结算单号，带首尾空白的合法标识可能导致详情查询路径不一致，进而误判结算未完成。本轮统一已出款结算详情路径前的结算单号归一化，并补查询路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库或资金到账成功证据。
+
+### 10.126 2026-10-01 跨系统支付账务事件查询标识归一化
+
+跨系统 happy-path 主流程此前在查询支付账务事件时直接编码支付单号，带首尾空白的合法标识可能导致账务事件查询路径不一致，进而误判事件未消费。本轮统一支付账务事件查询参数前的支付单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实账务消费、生产账务数据库、消息总线或资金入账成功证据。
+
+### 10.127 2026-10-01 跨系统清分账务事件查询标识归一化
+
+跨系统 happy-path 主流程此前在查询清分账务事件时直接编码清分单号，带首尾空白的合法标识可能导致账务事件查询路径不一致，进而误判清分入账事件未消费。本轮统一清分账务事件查询参数前的清分单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实账务消费、生产账务数据库、消息总线或清分资金入账成功证据。
+
+### 10.128 2026-10-01 跨系统清分账务分录查询标识归一化
+
+跨系统 happy-path 主流程此前在查询清分账务分录时直接编码清分单号，带首尾空白的合法标识可能导致分录查询路径不一致，进而误判清分入账分录缺失。本轮统一清分账务分录查询参数前的清分单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实账务分录、生产账务数据库、消息总线或清分资金入账成功证据。
+
+### 10.129 2026-10-01 跨系统支付账务分录查询标识归一化
+
+跨系统 happy-path 主流程此前在查询支付账务分录时直接编码支付单号，带首尾空白的合法标识可能导致分录查询路径不一致，进而误判支付入账分录缺失。本轮统一支付账务分录查询参数前的支付单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实账务分录、生产账务数据库、消息总线或支付资金入账成功证据。
+
+### 10.130 2026-10-01 用户退款审批资源路径标识归一化
+
+跨系统 happy-path 用户退款主流程此前在构造退款审批资源路径时直接编码退款单号，带首尾空白的合法标识可能导致审批请求路径不一致，进而无法推进退款状态。本轮统一退款审批路径前的退款单号归一化，并补审批路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款审批、生产数据库、退款渠道或资金到账成功证据。
+
+### 10.131 2026-10-01 用户退款提交资源路径标识归一化
+
+跨系统 happy-path 用户退款主流程此前在构造退款提交资源路径时直接编码退款单号，带首尾空白的合法标识可能导致提交请求路径不一致，进而无法推进退款渠道状态。本轮统一退款提交路径前的退款单号归一化，并补提交路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款提交、生产数据库、退款渠道或资金到账成功证据。
+
+### 10.132 2026-10-01 用户退款回调资源路径标识归一化
+
+跨系统 happy-path 用户退款主流程此前在构造首次及重复退款回调资源路径时直接编码退款单号，带首尾空白的合法标识可能导致回调请求路径不一致，进而破坏退款状态闭环或幂等校验。本轮统一退款回调路径前的退款单号归一化，并补回调路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款回调、生产数据库、退款渠道或资金到账成功证据。
+
+### 10.133 2026-10-01 用户退款详情资源路径标识归一化
+
+跨系统 happy-path 用户退款主流程此前在查询退款详情时直接编码退款单号，带首尾空白的合法标识可能导致详情查询路径不一致，进而误判退款终态缺失。本轮统一退款详情路径前的退款单号归一化，并补详情路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款详情 HTTP、生产数据库、退款渠道或资金到账成功证据。
+
+### 10.134 2026-10-01 用户退款出站事件聚合查询标识归一化
+
+跨系统 happy-path 用户退款主流程此前在查询退款 outbox 聚合事件时直接编码退款单号，带首尾空白的合法标识可能导致事件查询路径不一致，进而误判退款成功事件缺失。本轮统一 outbox 聚合查询参数前的退款单号归一化，并补查询路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实 outbox 消费、生产数据库、消息总线或退款资金成功证据。
+
+### 10.135 2026-10-01 用户退款出站事件派发路径标识归一化
+
+跨系统 happy-path 用户退款主流程此前在首次及重复派发退款 outbox 事件时直接编码事件号，带首尾空白的合法标识可能导致派发请求路径不一致，进而破坏 outbox 幂等派发校验。本轮统一退款 outbox 派发路径前的事件号归一化，并补派发路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实 outbox 派发、消息总线、生产数据库或退款资金成功证据。
+
+### 10.136 2026-10-01 跨系统退款账务事件查询标识归一化
+
+跨系统 happy-path 主流程此前在查询退款账务事件时直接编码退款单号，带首尾空白的合法标识可能导致账务事件查询路径不一致，进而误判退款入账事件未消费。本轮统一退款账务事件查询参数前的退款单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款账务消费、生产账务数据库、消息总线或退款资金入账成功证据。
+
+### 10.137 2026-10-01 跨系统退款账务分录查询标识归一化
+
+跨系统 happy-path 主流程此前在查询退款账务分录时直接编码退款单号，带首尾空白的合法标识可能导致分录查询路径不一致，进而误判退款入账分录缺失。本轮统一退款账务分录查询参数前的退款单号归一化，并补查询标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款账务分录、生产账务数据库、消息总线或退款资金入账成功证据。
+
+### 10.138 2026-10-01 跨系统支付业务链路标识归一化
+
+跨系统 happy-path 主流程此前从原始支付单号直接拼接业务链路标识，支付单号带首尾空白时可能使支付、退款、账务和对账校验使用不一致的链路值。本轮统一在预付成功后生成归一化业务链路标识，并贯穿后续请求与断言，补业务链路回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统消息、生产数据库、渠道资金或财务收口成功证据。
+
+### 10.139 2026-10-01 跨系统支付成功投影请求标识归一化
+
+跨系统 happy-path 主流程此前在向退款中心提交支付成功投影时直接传递原始支付单号，带首尾空白的合法标识可能导致退款中心建立错误的支付归属。本轮统一支付成功投影请求体中的支付单号归一化，并补请求标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款投影、生产数据库、消息总线或资金到账成功证据。
+
+### 10.140 2026-10-01 用户退款申请请求标识归一化
+
+跨系统 happy-path 用户退款主流程此前在创建退款申请时直接传递原始支付单号，带首尾空白的合法标识可能导致退款中心建立错误的原支付归属。本轮统一退款申请请求体中的支付单号归一化，并补申请请求标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实退款申请、生产数据库、退款渠道或资金到账成功证据。
+
+### 10.141 2026-10-01 用户支付提交请求预付单号归一化
+
+跨系统 happy-path 用户支付主流程此前在支付提交请求体中直接传递原始预付单号，带首尾空白的合法标识可能导致支付服务无法关联预付单。本轮统一支付提交请求体中的预付单号归一化，并补提交请求标识回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实支付提交、生产数据库、真实渠道或资金到账成功证据。
+
+### 10.142 2026-10-01 用户支付详情资源路径标识归一化
+
+跨系统 happy-path 用户支付主流程此前在查询提交后的支付详情时直接拼接原始支付单号，带首尾空白或保留路径字符的合法标识可能导致资源路径不一致。本轮统一支付详情路径前的支付单号归一化并进行 URL 编码，补详情路径回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实支付详情 HTTP、生产数据库、真实渠道或资金到账成功证据。
+
+### 10.143 2026-10-01 跨系统支付链路断言输入归一化
+
+跨系统 happy-path 校验器此前仅归一化请求边界，部分 cashier、清分及幂等支付/退款断言仍用原始期望支付单号拼接业务链路或比较标识，带首尾空白的合法响应可能被误判为链路漂移。本轮统一标识双端比较和支付业务链路生成边界，并补带空白支付单号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`（37/37）、`node --check tools/dev/cross-system-happy-path.mjs`、`git diff --check` 通过。当前未启动本地多服务栈，未新增真实跨系统 HTTP、消息总线、生产数据库、渠道资金或财务收口成功证据。
+
+### 10.144 2026-10-01 手工异常 SLA 升级任务租约串行化
+
+payment-core 任务中心此前仅为自动异常 SLA 升级获取任务租约，管理端手工触发会直接查询并生成升级告警，可能与定时巡检并发处理同一批异常。本轮让手工异常 SLA 升级复用同一任务码租约，租约被占用时跳过候选查询，并补手工租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实告警派发、消息总线、生产数据库或正式发布放行证据。
+
+### 10.145 2026-10-01 手工异常告警派发入口租约串行化
+
+payment-core 任务中心此前仅由自动异常告警派发入口获取任务租约，管理端手工派发会直接调用派发服务，可能与自动派发并发处理同一批出站告警。本轮让手工派发入口复用 `PAYMENT_ISSUE_ALERT_DISPATCH` 租约，并修正租约跳过结果保留实际运行模式，补手工租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实通知通道、消息总线、生产数据库或告警送达成功证据。
+
+### 10.146 2026-10-01 手工异常告警回执回查入口租约串行化
+
+payment-core 任务中心此前仅由自动异常告警回执回查入口获取任务租约，管理端手工批量回查会直接调用回查服务，可能与自动回查并发处理同一批供应商回执。本轮让手工批量回查入口复用 `PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE` 租约，租约被占用时跳过服务调用，并补手工租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实供应商回执、通知通道、生产数据库或正式发布放行证据。
+
+### 10.147 2026-10-01 手工单条异常告警回执回查租约串行化
+
+payment-core 任务中心此前手工单条异常告警回执回查未获取回查任务租约，可能与批量或自动回查并发处理同一告警。本轮让单条回查入口复用 `PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE` 租约，租约被占用时跳过服务调用，并补单条租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实供应商回执、通知通道、生产数据库或正式发布放行证据。
+
+### 10.148 2026-10-01 手工支付超时关单入口租约串行化
+
+payment-core 任务中心此前仅由自动支付超时关单入口获取任务租约，管理端手工补跑会直接关闭超时支付，可能与调度任务并发处理同一批支付单。本轮让手工关单入口复用 `PAYMENT_EXPIRE_CLOSE` 租约，租约被占用时跳过关单服务，并补手工租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实支付状态变更、生产数据库或渠道资金成功证据。
+
+### 10.149 2026-10-01 手工控制策略自检入口租约串行化
+
+payment-core 任务中心此前仅由自动控制策略自检入口获取任务租约，管理端手工自检会直接执行全部启用策略，可能与自动巡检并发产生重复自检结果和告警。本轮让手工自检入口复用 `PAYMENT_CONTROL_SELF_CHECK` 租约，租约被占用时跳过策略服务调用，并补手工租约冲突回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动本地多服务栈，未新增真实配置发布、生产数据库或正式治理放行证据。
+
+### 10.063 2026-09-30 管理端支付死信任务动作标识归一化
+
+管理端死信任务动作此前对预期任务号直接比较原始字符串，带首尾空白的合法动作回执可能被误判为任务归属漂移。本轮统一死信动作的期望任务号比较边界，并补带空白动作回执回归。
+
+验证结果：管理端完整测试 `214/214`、`node --check` 与 `git diff --check` 通过；不改变死信重放状态、真实消息总线、调度执行或跨系统 HTTP happy-path 结论。
+
+### 10.150 2026-10-01 风控写入不覆盖支付成功终态
+
+本轮修复支付风控路径的状态竞态：`updatePaymentMethodAndChannel` 仅允许 `PREPAY_CREATED`、`CREATED`、`RISK_*` 等尚未提交状态，已成功或已关闭支付单不会再次绑定渠道；服务层在绑定未影响一行时不会继续更新风控状态、预付单或事件。补充 mapper 终态拒绝回归和服务层写入中止回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动真实多服务栈，未新增真实渠道回调、消息总线、生产数据库或正式发布放行证据。
+
+### 10.151 2026-10-01 异常告警回执写回竞争释放查询尝试
+
+本轮修复异常告警回执回查在供应商回执写回影响零行时遗留 `QUERYING` 状态的问题：写回竞争失败会补记 `WRITE_CONFLICT`，并按退避策略完成本次查询尝试；补充抢占成功、写回冲突、查询尝试完成和不确认来源告警的回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动真实多服务栈，未新增真实供应商回执、通知通道、生产数据库或正式发布放行证据。
+
+### 10.152 2026-10-01 用户支付结果页预付单路由切换刷新
+
+本轮修复用户结果页在同一支付单切换预付单号后沿用旧详情的问题：结果页路由监听同时绑定 `paymentOrderId` 与 `prepayOrderNo`，并补充视图源码回归，防止旧支付快照继续用于查单或关单。
+
+本轮自测：`node tools/dev/payment-core-user-regression.mjs` 通过（`5/5 user apps passed their declared checks`），其中 app-web `53/53`、H5 `2/2`、PC `2/2`、mini-program `51/51`，Web 端构建均通过。`git diff --check` 通过。
+
+### 10.153 2026-10-01 死信重放陈旧认领恢复
+
+本轮修复死信任务在进程于发布确认前退出后永久停留 `REPLAYING` 的问题：`markReplaying` 允许超过 10 分钟未更新的陈旧重放再次认领，避免仍在确认窗口内的正常任务被并发接管，并补充重放认领、消息发送和成功收口回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实消息总线，未新增真实死信重放、生产数据库或正式发布放行证据。
+
+### 10.154 2026-10-01 支付事件死信重放失败状态保持
+
+本轮修复支付成功事件人工重放再次失败时的状态回写缺口：已处于 `DEAD_LETTER` 的事件不再尝试写入不匹配的 `FAILED` 状态，而是继续记录死信状态并返回失败结果，补充重放失败状态回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实消息总线，未新增真实死信重放、生产数据库或正式发布放行证据。
+
+### 10.155 2026-10-01 支付成功收口保护尝试终态
+
+本轮修复支付回调与主动查单成功收口覆盖失败尝试的缺口：最新支付尝试只有在未完成且不是失败终态时才允许被标记为成功，已完成或失败尝试保持原状态，并补充 mapper 集成回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实渠道回调、生产数据库或渠道资金成功证据。
+
+### 10.156 2026-10-01 已关闭支付单兼容恢复保护尝试终态
+
+本轮修复已关闭支付单历史兼容成功恢复仍可覆盖失败尝试的问题：`PAYMENT_CLOSED` 分支现在要求最新尝试未完成且不是失败终态，并补充关闭支付单终态保护回归；过期关闭事件恢复行为保持不变。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实渠道回调、生产数据库或渠道资金成功证据。
+
+### 10.157 2026-10-01 待回调回写保护支付尝试终态
+
+本轮修复非成功回调将失败尝试回写为待回调的缺口：支付单待回调更新和最新尝试状态更新均要求目标仍未完成且不是失败终态，并补充回写拒绝回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实渠道回调、生产数据库或渠道资金成功证据。
+
+### 10.158 2026-10-01 提交未知恢复保护支付尝试终态
+
+本轮修复提交异常恢复覆盖失败支付尝试的问题：存在支付尝试时，未知待查写回要求最新尝试仍未完成且非失败终态；无尝试存量数据仍保留原兼容路径，并补充终态恢复拒绝回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实渠道回执、生产数据库或渠道资金成功证据。
+
+### 10.159 2026-10-01 通用支付状态更新保护终态
+
+本轮修复通用支付状态更新可回退成功或关闭支付单的问题：mapper 层拒绝对 `SUCCESS/CLOSED` 支付单写入中间态，并补充两类终态保护回归。
+
+本轮自测：payment-core 后端回归通过，`git diff --check` 通过。当前未启动真实渠道回调、生产数据库或渠道资金成功证据。
+
+### 10.160 2026-10-01 收银台提交异常终态恢复跳转
+
+本轮修复用户提交请求响应丢失但支付后台已完成终态时停留在收银台错误页的问题：恢复刷新发现 `SUCCESS/CLOSED` 后直接跳转结果页，并补充收银台源码回归。
+
+本轮自测：用户端回归通过，`git diff --check` 通过。当前未启动真实渠道回调、生产数据库或渠道资金成功证据。
+### 10.161 2026-10-01 管理端支付动作刷新失败保留详情快照
+
+本轮验证支付单详情页主动查单和人工关闭的动作回执仍按状态摘要处理，详情刷新失败时保留最近一次完整详情快照；客户端契约回归覆盖动作回执不包含路由、回调和事件轨迹字段。
+
+本轮自测：`npm test`、`npm run build`（`systems/payment-core/frontend/admin-web`）通过，`git diff --check` 通过。未进行真实渠道、消息总线、生产数据库或资金到账验收。
+### 10.162 2026-10-01 管理端退款动作刷新失败保留详情快照
+
+本轮验证退款详情页动作回执按退款状态摘要处理，详情刷新失败时保留最近一次完整详情快照；客户端契约回归覆盖动作回执不包含操作日志和退款尝试集合。
+
+本轮自测：`npm test`、`npm run build`（`systems/payment-core/frontend/admin-web`）通过，`git diff --check` 通过。未进行真实退款渠道、消息总线、生产数据库或资金到账验收。
+### 10.163 2026-10-01 用户结果页动作回执保留完整详情
+
+本轮验证结果页查单和关单回执只更新最新状态事实，不清空已有详情轨迹；新增源码回归覆盖两处动作回执合并，App/H5/PC共享结果页共同受益。
+
+本轮自测：`node tools/dev/payment-core-user-regression.mjs`、`git diff --check` 通过。未进行真实渠道、消息总线、生产数据库或资金到账验收。
+### 10.164 2026-10-01 小程序结果页动作摘要保留支付详情
+
+本轮验证小程序结果页在查单或关单摘要缺少支付方式、渠道字段时仍保留加载快照，同时更新最新状态；新增小程序结果页回归覆盖动作摘要字段缺失场景。
+
+本轮自测：`node tools/dev/payment-core-user-regression.mjs`、`git diff --check` 通过。未进行真实渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.165 2026-10-01 任务租约释放异常不覆盖业务失败
+
+本轮修复自动任务执行失败后的租约清理缺口：释放租约的数据库异常不再覆盖任务主体异常，改为记录脱敏告警并等待租约自然过期；新增 `PaymentTaskLeaseServiceTest` 覆盖释放异常隔离。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动真实多实例调度、生产数据库或消息总线，未新增正式发布放行证据。
+
+### 10.166 2026-10-01 跨系统执行器非法 JSON 信封错误收口
+
+本轮修复跨系统 happy-path 请求在服务返回 `null`、数组等非法 JSON 信封时的错误处理：先校验 envelope 类型，再读取统一响应码，错误信息保留失败端点；新增非法信封契约测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`git diff --check` 通过。当前未启动真实多服务栈，未新增跨系统 HTTP、生产数据库或正式发布放行证据。
+
+### 10.174 2026-10-01 H5/PC 共享用户支付状态机 wiring 门禁
+
+本轮为 H5、PC 入口补充 wiring 契约测试，验证收银台和结果页继续通过各端 wrapper 接入共享用户支付状态机，退款进度页继续携带对应终端身份；该门禁覆盖两端共享的支付响应归一化和状态保护代码不会因入口改动而绕过。
+
+本轮自测：H5 定向测试 `4/4`、PC 定向测试 `4/4` 通过，`node tools/dev/payment-core-user-regression.mjs` `5/5` 用户应用通过，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.175 2026-10-01 支付成功事件事实时间连续性
+
+本轮为跨系统 `PAYMENT_SUCCESS` 事件断言增加支付成功事实时间下界，要求事件创建时间不早于支付成功时间；新增事件早于支付收口的倒置回归，首次和重复回调主流程均复用该门禁。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.176 2026-10-01 退款成功 outbox 事实时间连续性
+
+本轮为跨系统 `REFUND_SUCCESS` outbox 增加退款终态时间下界，要求 outbox 创建时间不早于退款 `terminalAt`；新增 outbox 早于退款收口的倒置回归，重复回调和重复派发继续复用同一事件事实。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.177 2026-10-01 退款成功账务事件来源时间连续性
+
+本轮为退款成功账务事件校验补上传递退款成功 outbox 创建时间，要求账务事件创建时间不早于其退款成功出站来源事实；主 happy-path 的退款账务分录继续以该账务事件时间作为后续账务来源。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.178 2026-10-01 对账事实来源时间连续性
+
+本轮验证对账链七类必需事实的 `occurredAt` 不早于对应支付事件、清分单、结算单、账务事件或退款成功 outbox 来源时间，并补充来源时间倒置契约回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.179 2026-10-01 用户端退款详情来源时间连续性
+
+本轮验证 App 与小程序退款详情中的退款尝试、操作日志创建时间均不早于退款申请时间，并补充两端倒置时间回归。
+
+本轮自测：payment-core App 客户端测试与小程序请求层测试通过，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.180 2026-10-01 管理端退款详情来源时间连续性
+
+本轮验证管理端退款详情中的退款尝试、操作日志创建时间均不早于退款申请时间，并补充管理端倒置时间回归。
+
+本轮自测：payment-core 管理端客户端测试与 `git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.181 2026-10-01 管理端支付尝试成功时间连续性
+
+本轮验证管理端支付动作和详情中的成功尝试完成时间不晚于支付成功时间，并补充倒置时间契约回归。
+
+本轮自测：payment-core 管理端客户端测试、语法检查与 `git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.182 2026-10-01 退款终态申请时间连续性
+
+本轮为退款回调来源快照补充 `appliedAt`，验证退款尝试完成、成功和终态时间均不早于申请时间，并新增主动查单倒置时间回归。
+
+本轮自测：payment-core 退款服务定向测试通过，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.183 2026-10-01 出款批次完成时间连续性
+
+本轮验证已发放出款记录创建时间不晚于出款批次完成时间，并补充批次完成时间倒置契约回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.184 2026-10-01 出款批次记录完整性
+
+本轮验证出款批次返回的全部记录均属于当前批次、处于已发放成功状态且具备创建时间，并补充缺记录和非成功记录回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.185 2026-10-01 出款批次金额汇总连续性
+
+本轮验证出款批次全部已发放记录的金额合计与批次 `totalAmount` 一致，并补充金额不一致回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.186 2026-10-01 结算终态批次身份连续性
+
+本轮验证结算终态响应的 `batchNo` 与已审核结算批次一致，并补充错批次回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.187 2026-10-01 出款执行响应批次身份连续性
+
+本轮验证出款执行响应的 `batchNo` 与当前审核结算批次一致，并补充错批次回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.188 2026-10-01 账务流水号可追踪性
+
+本轮验证账务分录包含可用的 `ledgerNo`，并补充缺少流水号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.189 2026-10-01 出款明细正金额与结算身份完整性
+
+本轮验证已发放出款明细金额为正且包含结算单号，并补充零金额及缺少结算身份回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.190 2026-10-01 出款收款目标身份完整性
+
+本轮验证单条出款记录包含可用的收款目标 `targetNo`，并补充缺失目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.191 2026-10-01 出款批次全量收款目标完整性
+
+本轮验证出款批次全部记录均包含可用的 `targetNo`，并补充批次内缺失目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.192 2026-10-01 出款批次自身生命周期连续性
+
+本轮验证出款批次 `createdAt` 不晚于 `finishedAt`，并补充批次生命周期倒置回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.193 2026-10-01 出款批次渠道完整性
+
+本轮验证完成出款批次包含有效的 `payoutChannel`，并补充对应测试夹具。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.194 2026-10-01 审核响应批次身份连续性
+
+本轮验证审核响应的 `batchNo` 与草稿结算单一致，并补充错批次回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.195 2026-10-01 待出款批次查询身份连续性
+
+本轮验证待出款批次查询结果的 `batchNo` 与审核响应一致，并补充错批次回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.196 2026-10-01 结算草稿批次号完整性
+
+本轮验证结算草稿身份响应包含可用的 `batchNo`，并补充缺失批次号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.197 2026-10-01 出款批次全量记录完成时间连续性
+
+本轮验证出款批次全部记录创建时间不晚于批次 `finishedAt`，并补充晚于完成时间的明细回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.198 2026-10-01 出款记录与结算目标身份连续性
+
+本轮验证出款记录的 `targetNo` 与结算单目标一致，并补充错目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.199 2026-10-01 审核响应收款目标连续性
+
+本轮验证审核响应的 `targetNo` 与草稿结算单目标一致，并补充错目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.200 2026-10-01 结算终态收款目标连续性
+
+本轮验证结算终态的 `targetNo` 与审核目标一致，并补充错目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.201 2026-10-01 结算终态创建时间连续性
+
+本轮验证结算终态响应保留原结算单 `createdAt`，并补充创建时间变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.203 2026-10-01 出款明细流水号唯一性
+
+本轮验证出款批次内 `payoutNo` 唯一，并补充重复流水回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.204 2026-10-01 出款明细结算单号唯一性
+
+本轮验证出款批次内 `settlementNo` 唯一，并补充重复结算单号回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.205 2026-10-01 执行前出款批次明细完整性
+
+本轮验证执行前出款批次返回全部待出款明细，并补充缺记录和已发放记录回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.206 2026-10-01 审核响应目标类型连续性
+
+本轮验证审核响应的 `targetType` 保持为 `WORKER`，并补充目标类型变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.207 2026-10-01 结算终态目标类型连续性
+
+本轮验证结算终态的 `targetType` 保持为 `WORKER`，并补充目标类型变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.208 2026-10-01 退款原支付金额连续性
+
+本轮验证退款各阶段 `paidAmount` 与原支付金额一致，并补充金额快照变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.209 2026-10-01 退款方式连续性
+
+本轮验证退款各阶段 `refundMethod` 保持为 `ORIGINAL`，并补充退款方式变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.210 2026-10-01 退款原因连续性
+
+本轮验证退款申请、审核、提交、回调幂等和详情响应保持同一 `refundReason`，并补充退款原因变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.202 2026-10-01 审核响应创建时间连续性
+
+本轮验证审核响应保留草稿结算单 `createdAt`，并补充创建时间变更回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs`、`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.168 2026-10-01 退款终态时间线一致性门禁
+
+本轮验证退款终态快照不仅需要完整时间字段，还必须使用严格时间格式，并保证退款尝试完成时间、退款成功时间不晚于退款终态时间；新增主动查单回归覆盖两类时间倒置。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.169 2026-10-01 支付成功事实时间线一致性门禁
+
+本轮验证支付成功事实要求最新支付尝试完成时间和支付成功时间使用严格格式，且尝试完成时间不得晚于支付成功时间；新增成功支付主动查单回归覆盖时间倒置。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.170 2026-10-01 跨系统支付成功事实时间线断言
+
+本轮为跨系统 happy-path 增加支付尝试完成时间不晚于支付成功时间的断言，覆盖首次和重复回调，并补充时间倒置契约回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.172 2026-10-01 用户端支付成功时间线响应门禁
+
+本轮验证 app-web API client 在支付详情、查单和关单响应中拒绝支付尝试完成时间晚于支付成功时间的事实，新增客户端倒置时间回归。
+
+本轮自测：`npm test`（`systems/payment-core/frontend/app-web`）通过（`55/55`），`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.173 2026-10-01 小程序支付成功时间线响应门禁
+
+本轮验证小程序支付查单、关单和详情响应均拒绝支付尝试完成时间晚于支付成功时间的事实，补齐与 app-web 一致的客户端时间线门禁。
+
+本轮自测：`node --test tests/*.test.js`（`systems/payment-core/frontend/mini-program`）通过（`52/52`），`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.171 2026-10-01 出款记录与结算单时间连续性
+
+本轮为出款记录增加与结算单创建时间的先后校验，主流程在待出款和已发放两个阶段均传入结算单时间，新增倒置时间契约回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.167 2026-10-01 跨系统 happy-path 重复业务事实阻断
+
+本轮修复跨系统链路查找器只取第一条匹配记录的问题：清分单、结算单、出款批次和出款记录发现同标识重复事实时立即失败，不再把部分结果误判为当前链路唯一事实；新增重复结算单契约测试。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`38/38`），`git diff --check` 通过。当前未启动真实多服务栈，未新增跨系统 HTTP、生产数据库或正式发布放行证据。
+
+### 10.211 2026-10-01 用户端退款进度事实连续性
+
+本轮验证 app-web 和小程序退款详情必须包含 `refundMethod`、`refundReason` 等业务事实，且刷新时 `paidAmount`、退款方式和退款原因保持与初始快照一致；补充退款进度变更回归。
+
+本轮自测：`npm test`（`systems/payment-core/frontend/app-web`，`55/55`）与 `node --test tests/refund-progress-page.test.js tests/request.test.js`（`systems/payment-core/frontend/mini-program`，`20/20`）通过，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.212 2026-10-01 用户端支付方式快照连续性
+
+本轮验证支付结果页自动刷新、主动查单和关单响应保持初始 `paymentMethod`，并补充支付方式变更回归。
+
+本轮自测：`npm test`（`systems/payment-core/frontend/app-web`，`55/55`）与 `node --test tests/result-page.test.js tests/request.test.js`（`systems/payment-core/frontend/mini-program`，`20/20`）通过，`git diff --check` 与 JavaScript 语法检查通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.213 2026-10-01 管理端支付方式快照连续性
+
+本轮验证管理端支付详情动作后的刷新响应保持当前 `paymentMethod`，并补充支付方式变更回归。
+
+本轮自测：`npm test`（`systems/payment-core/frontend/admin-web`，`216/216`）与 `git diff --check` 通过，JavaScript 语法检查通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.214 2026-10-01 管理端退款业务快照连续性
+
+本轮验证退款管理动作响应及动作后详情保持 `paidAmount`、`refundMethod` 和 `refundReason`，并补充三类事实变更回归。
+
+本轮自测：`npm test`（`systems/payment-core/frontend/admin-web`，`216/216`）、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.215 2026-10-01 支付成功终态渠道绑定完整性
+
+本轮验证已成功支付在主动查单和重复回调路径中必须同时保留渠道编码、渠道交易号，并补充两类缺失渠道绑定回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过；首次 sandbox 写入限制后经授权完成，当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.216 2026-10-01 退款终态渠道绑定完整性
+
+本轮验证退款主动查单返回的 `SUCCESS/FAIL` 终态必须同时具备渠道编码和渠道退款号，并补充两类缺失渠道绑定回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过，`git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.217 2026-10-01 退款终态金额事实完整性
+
+本轮验证退款主动查单终态快照包含正的退款金额、原支付金额，且退款金额不超过原支付金额；补充金额缺失和超额退款回归。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过，`git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.218 2026-10-01 退款回调金额快照 Mapper 契约
+
+本轮补齐退款回调 Mapper H2 集成夹具中的支付金额字段，并验证普通查询、加锁查询及终态查询均返回退款金额 `10.00` 与原支付金额 `68.00`，避免 SQL 映射变更后测试夹具失真。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 与 `git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.219 2026-10-01 支付终态测试夹具与交易绑定一致
+
+本轮修正支付并发回调、主动查单和重复成功回调测试中的渠道交易号夹具，使其与终态交易绑定门禁一致，同时保留对缺失成功事实的拒绝验证。
+
+本轮自测：`PaymentServiceImplTest` 通过（`136` 项），`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.220 2026-10-01 三端支付成功渠道交易号门禁
+
+本轮在 app-web、管理端和小程序的支付提交、动作及详情响应归一化中增加成功状态渠道交易号必填校验，并补充缺失交易号回归。
+
+本轮自测：app-web `55/55`、admin-web `216/216`、小程序针对性测试 `20/20` 通过，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.221 2026-10-01 三端退款成功渠道退款号门禁
+
+本轮在 app-web、管理端和小程序的退款详情，以及管理端退款动作和列表响应归一化中增加成功状态渠道退款号必填校验；处理中、审核中和失败状态继续允许渠道退款号按现有可选语义返回，并补充缺失字段与合法成功终态回归。
+
+本轮自测：app-web `55/55`、admin-web `216/216`、小程序针对性测试 `20/20` 通过，`git diff --check` 通过。当前未启动真实退款渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.222 2026-10-01 管理端支付单列表成功渠道交易号门禁
+
+本轮为管理端支付单列表响应增加成功状态渠道交易号必填校验，补充合法成功行与缺失渠道交易号回归；支付记录列表继续遵循后端未暴露渠道交易号的独立字段契约。
+
+本轮自测：admin-web `216/216`，`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.223 2026-10-01 管理端支付记录成功外部流水号门禁
+
+本轮在管理端支付记录详情和列表响应归一化中增加“支付成功”外部流水号必填校验，补充合法流水号及缺失流水号回归；处理中、失败和关闭记录继续遵循原有可选语义。
+
+本轮自测：admin-web `216/216`、`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.224 2026-10-01 管理端预付成功渠道交易号门禁
+
+本轮为管理端预付响应增加成功状态渠道交易号必填校验，并补充缺失交易号拒绝和合法成功预付回归；非成功预付状态继续遵循现有可选语义。
+
+本轮自测：admin-web `216/216`、`git diff --check` 通过。当前未启动真实支付渠道、消息总线、生产数据库或资金到账验收。
+
+### 10.225 2026-10-01 跨系统支付成功事件金额连续性
+
+本轮为跨系统 `PAYMENT_SUCCESS` 事件断言增加金额连续性校验，主流程将支付成功响应金额传入事件核验，并补充事件金额漂移拒绝回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`41/41`），`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。当前未启动真实多服务栈、消息总线、生产数据库或资金到账验收。
+
+### 10.226 2026-10-01 管理端支付事件详情载荷完整性
+
+本轮为管理端支付事件详情补充事件载荷 JSON 完整性校验，要求载荷为非空且可解析的 JSON 对象或数组，并补充缺失、非法 JSON、JSON null 和标量载荷回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.245 2026-10-01 管理端任务动作身份与摘要门禁
+
+本轮为 admin-web 任务动作响应补充 `taskCode`、`taskName`、`summaryComment` 非空校验；计数一致性和可选任务中心总览校验保持不变，并补充三个字段缺失回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.227 2026-10-01 管理端支付事件列表载荷完整性
+
+本轮将管理端支付事件列表和重发结果的载荷校验与详情统一，要求载荷为非空且可解析的 JSON 对象或数组，并补充缺失、非法 JSON、JSON null 和标量载荷回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.228 2026-10-01 管理端支付流水业务事件载荷完整性
+
+本轮为管理端支付流水 `BUSINESS_EVENT` 详情和列表增加业务事件载荷 JSON 完整性校验，补充缺失、非法 JSON、JSON null 和标量载荷回归；支付尝试、渠道回调和路由记录继续遵循各自报文可空契约。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.229 2026-10-01 管理端路由执行报文完整性
+
+本轮为管理端路由执行详情和列表增加可空报文 JSON 完整性校验，覆盖请求报文和响应报文的非法 JSON、JSON null 及标量回归；未改变报文字段可空语义。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.230 2026-10-01 管理端支付请求报文完整性
+
+本轮为管理端支付请求详情和列表增加请求报文必填 JSON 校验，以及响应报文可空但存在时的 JSON 校验，覆盖缺失、非法 JSON、JSON null 和标量载荷回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.231 2026-10-01 管理端支付异常详情处置事实完整性
+
+本轮将管理端支付异常详情与列表的处置事实契约统一，要求客户、支付方式、渠道、责任组、责任人、告警接收人、SLA、建议处置摘要和处理时间完整且状态样式一致，并补充完整详情回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.232 2026-10-01 管理端支付异常告警详情事实完整性
+
+本轮为告警详情增加异常归属、责任组、通道、接收人、告警内容、触发来源、回查计数及回查时间完整性校验，供应商和回执字段继续遵循可空契约，并补充对应缺失/非法回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.233 2026-10-01 管理端告警确认动作事实完整性
+
+本轮让告警确认动作复用完整告警详情契约，要求动作响应保留异常归属、责任组、通道、接收人、告警内容、触发来源、回查计数和时间事实，并补充成功响应与快照漂移回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.234 2026-10-01 管理端告警确认回执审计完整性
+
+本轮统一告警详情、列表和确认动作的回执审计校验：`ackStatus=已确认` 时必须返回非空确认人 `ackOperator`、有效确认时间 `ackAt`，且确认时间不得早于 `createdAt`；确认人和确认时间只出现其一、时间非法或时间倒置均拒绝。`无需回执`、`待确认` 在两字段均为空时保持合法。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.280 2026-10-01 后端支付成功尝试状态类型门禁
+
+本轮为后端成功回调、主动查单及重复成功收口增加 `latestAttemptStatusType=success` 校验，缺失或错误样式不再被当作可信成功事实，并补充对应 service 回归。
+
+本轮自测：`PaymentServiceImplTest`（138/138）、`PaymentMapperStateTransitionIntegrationTest`（25/25）通过，合计 `163/163`；`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.281 2026-10-01 支付成功事件尝试事实传播门禁
+
+本轮为支付成功事件派发增加最新尝试状态、状态样式、完成时间和成功时间校验，缺失或错误尝试事实不再进入清分、账务或 AMQP 投递，并覆盖完成时间与成功时间的顺序校验。
+
+本轮自测：`PaymentEventDispatchServiceImplTest`（63/63）、`PaymentServiceImplTest`（138/138）通过，合计 `201/201`；`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.282 2026-10-01 支付成功状态样式事实门禁
+
+本轮在支付服务成功回调/查单收口和支付成功事件派发前统一要求支付主单 `status_type=success`，错误或缺失样式不再作为可信成功事实返回或传播，并补充服务与事件回归。
+
+本轮自测：`PaymentServiceImplTest`（138/138）、`PaymentEventDispatchServiceImplTest`（64/64）通过，合计 `202/202`；`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.275 2026-10-01 API client 收银台成功支付尝试事实门禁
+
+本轮为 API client 收银台响应增加成功支付尝试事实门禁，`paymentStatus=SUCCESS` 时必须返回 `latestAttemptStatus=成功`、`latestAttemptStatusType=success` 及有效 `latestAttemptCompletedAt`；处理中响应继续允许尝试事实为空，并补充缺失、失败状态、错误类型及非法时间拒绝回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.276 2026-10-01 管理端支付成功事实类型差异筛选
+
+本轮为 `SUCCESS_FACT_MISMATCH` 查询补充最新支付尝试 `attempt_status_type=success` 约束，防止 `成功/danger` 等状态类型错误的支付单逃逸运营差异队列；新增 mapper 集成回归覆盖列表、计数和导出结果。
+
+本轮自测：`PaymentMapperStateTransitionIntegrationTest`（25/25）通过，`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.278 2026-10-01 跨系统支付提交渠道与尝试事实连续性
+
+本轮为跨系统 happy-path 支付提交断言补充渠道编码、渠道交易号、尝试状态及尝试状态样式校验，并增加缺失渠道事实、缺失尝试事实和失败状态样式错误回归。
+
+本轮自测：`cross-system-happy-path.test.mjs`（42/42）、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.277 2026-10-01 管理端支付成功渠道事实差异筛选
+
+本轮将 `SUCCESS_FACT_MISMATCH` 查询扩展为同时识别成功支付缺少渠道编码或渠道交易号的情况，并新增独立缺失渠道事实回归，验证列表、计数和导出结果一致。
+
+本轮自测：`PaymentMapperStateTransitionIntegrationTest`（25/25）通过，`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.269 2026-10-01 API client 支付成功尝试事实绑定
+
+本轮为 API client 支付详情、主动查单和关单响应补充成功支付尝试事实绑定，要求 `SUCCESS` 同时返回 `latestAttemptStatus=成功`、`latestAttemptStatusType=success` 及不晚于支付成功时间的 `latestAttemptCompletedAt`；补充缺失、状态不一致和完成时间晚于成功时间的拒绝回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.270 2026-10-01 跨系统支付成功详情连续性
+
+本轮在支付成功回调及重复回调后增加支付详情回查，要求详情保留回调成功状态、最新成功尝试、金额、渠道、渠道交易号和成功时间，并补充详情渠道事实漂移拒绝回归。
+
+本轮自测：跨系统 happy-path 合同测试、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.271 2026-10-01 跨系统退款成功详情连续性
+
+本轮在退款成功回调后的详情查询增加连续性断言，要求详情保留回调身份、金额、状态、成功时间、终态时间和渠道退款号，并补充终态时间漂移拒绝回归。
+
+本轮自测：跨系统 happy-path 合同测试、`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.272 2026-10-01 管理端支付记录成功尝试事实门禁
+
+本轮为 admin-web 支付记录详情补充成功支付尝试事实门禁，要求 `支付成功` 记录具备成功尝试状态、success 样式和有效完成时间，且完成时间不晚于 `updatedAt`；补充缺失、非成功状态及时间倒序拒绝回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或正式发布治理验收。
+
+### 10.273 2026-10-01 用户端收银台成功尝试事实门禁
+
+本轮为 app-web 与小程序收银台补充成功状态的最新支付尝试事实校验，要求 `paymentStatus=SUCCESS` 时具备成功尝试状态、success 样式和有效完成时间；补充缺失、状态不一致和完成时间无效拒绝回归，非成功状态继续允许尝试字段为空。
+
+本轮自测：app-web `npm test`、小程序 `npm test`、两端 `node --check` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.274 2026-10-01 用户支付提交成功尝试事实回填
+
+本轮为 `/api/payments/submit` 成功响应补齐最近支付尝试状态、样式、完成时间和支付成功时间，服务端在成功重复提交复用路径回填这些字段；app-web 与小程序要求成功提交具备成功尝试元组，完成时间不晚于支付成功时间，并补充缺失、状态错配和时间倒序拒绝回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），`PaymentServiceImplTest` 通过（`137/137`），两端 `node --check` 与 `git diff --check` 通过。payment-core 全量后端测试 `1438/1438` 通过（失败 `0`、错误 `0`）；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.262 2026-10-01 管理端死信动作时间事实门禁
+
+本轮为 admin-web 死信任务动作响应补充创建时间、更新时间及重放/结案时间链校验，拒绝动作返回的重放时间晚于更新时间，并补充对应回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实消息总线、生产数据库或正式发布治理验收。
+
+### 10.263 2026-10-01 管理端死信状态时间事实门禁
+
+本轮按后端死信状态迁移约束补充 `lastReplayAt`、`resolvedAt` 的状态相关必填校验，拒绝终态缺少关键时间事实，并补充详情与动作响应回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实消息总线、生产数据库或正式发布治理验收。
+
+### 10.264 2026-10-01 管理端死信处置审计事实门禁
+
+本轮为 admin-web 死信任务详情与动作响应补充非待复核状态的 `operator`、`resolutionNote` 非空校验，拒绝缺少处置审计事实的结果，并补充动作响应回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实消息总线、生产数据库或正式发布治理验收。
+
+### 10.265 2026-10-01 用户端支付动作渠道连续性
+
+本轮为 app-web 与小程序支付查单、关单响应补充成功状态的 `channel` 非空校验，与渠道流水号共同作为用户端成功事实；补充缺失渠道编码拒绝回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.266 2026-10-01 用户端支付成功尝试事实门禁
+
+本轮为 app-web 与小程序支付查单、关单成功响应补充最近成功支付尝试状态、样式和完成时间校验，拒绝缺少尝试事实的成功结果，并补充回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.267 2026-10-01 用户端支付成功详情尝试事实门禁
+
+本轮将成功支付尝试事实校验扩展至 app-web 与小程序支付详情响应，拒绝结果页详情缺少成功尝试状态、样式或完成时间，并补充回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.268 2026-10-01 管理端支付成功尝试事实门禁
+
+本轮将支付成功尝试事实校验扩展至 admin-web 支付动作、详情和列表响应，拒绝运营端接收缺少成功尝试状态、样式或完成时间的成功事实，并补充回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.246 2026-10-01 用户支付提交渠道事实回填
+
+本轮修复 `/api/payments/submit` 与用户端成功提交契约之间的字段缺口：`PrepayOrderDTO` 增加临时响应字段 `channel`、`channelTransactionNo`，首次提交和重复提交复用路径均回填渠道事实，并补充服务测试断言。
+
+本轮自测：`node tools/dev/backend-regression.mjs --only payment-core` 通过（`1/1 backend modules passed`），`git diff --check` 通过。首次运行受 `target/classes/application-demo.yml` 工作区写入权限限制，授权后同一回归命令通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.247 2026-10-01 用户支付提交成功渠道编码门禁
+
+本轮为 app-web 与小程序支付提交响应补充成功状态的 `channel` 非空校验，并补充合法成功响应与缺少渠道编码拒绝回归；处理中响应的渠道字段语义保持兼容。
+
+本轮自测：app-web `npm test`、小程序 `node --test tests/*.test.js`、两端 `node --check` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.248 2026-10-01 API client 支付提交成功渠道事实门禁
+
+本轮为 API client `submit` 命令补充成功响应的 `channel`、`channelTransactionNo` 非空校验，并补充合法成功和缺失任一渠道字段拒绝回归；处理中响应语义保持兼容。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.250 2026-10-01 API client 退款尝试生命周期绑定
+
+本轮为 API client 退款详情尝试增加与退款 `terminalAt`、`successAt` 的生命周期顺序校验，拒绝终态后受理或完成的尝试事实，并补充异常回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.251 2026-10-01 API client 退款操作日志生命周期绑定
+
+本轮为 API client 退款详情操作日志增加退款生命周期顺序校验，要求日志时间不早于 `appliedAt`，终态退款不晚于 `terminalAt`（无终态时间时不晚于 `successAt`）；补充申请前和终态后的日志越界回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.252 2026-10-01 API client 退款操作日志顺序一致性
+
+本轮为 API client 退款详情操作日志增加响应顺序单调校验，要求日志时间按 payment-core 后端 `created_at DESC, id DESC` 查询结果不增加；补充非降序日志拒绝回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.253 2026-10-01 用户端与管理端退款操作日志一致性
+
+本轮统一 app-web、小程序和 admin-web 退款详情的操作日志生命周期与顺序校验，要求日志不晚于终态时间，且按 payment-core 后端 `created_at DESC, id DESC` 响应顺序时间不增加；补充三端终态越界和顺序异常日志拒绝回归。
+
+本轮自测：app-web `npm test`（55/55）、小程序 `npm test`（53/53）、admin-web `npm test`（216/216）、相关 `node --check` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.254 2026-10-01 用户端与管理端退款尝试终态时间绑定
+
+本轮统一 app-web、小程序和 admin-web 退款详情的尝试时间校验，要求尝试创建、受理和完成时间不晚于退款 `terminalAt`（无终态时间时使用 `successAt`）；补充三端终态后尝试拒绝回归。
+
+本轮自测：app-web `npm test`（55/55）、小程序 `npm test`（53/53）、admin-web `npm test`（216/216）、相关 `node --check` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.255 2026-10-01 退款尝试列表顺序一致性
+
+本轮统一 API client、app-web、小程序和 admin-web 退款详情的尝试列表顺序校验，要求尝试创建时间按 payment-core `created_at DESC, id DESC` 响应顺序不增加；补充多尝试乱序拒绝回归。
+
+本轮自测：API client `npm test`（12/12）、app-web `npm test`（55/55）、小程序 `npm test`（53/53）、admin-web `npm test`（216/216）、相关 `node --check` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.256 2026-10-01 跨系统退款成功渠道退款号连续性
+
+本轮为跨系统 happy-path 退款成功状态断言增加非空 `channelRefundId` 门禁，并覆盖回调与详情阶段；补充成功详情缺失渠道退款号拒绝回归。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.257 2026-10-01 跨系统退款出站事件创建时间连续性
+
+本轮为退款 outbox 派发响应增加源事件 `createdAt` 连续性校验，拒绝派发响应篡改原始创建时间，并补充漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.258 2026-10-01 跨系统退款详情渠道退款号连续性
+
+本轮为退款成功回调后的详情查询增加 `channelRefundId` 连续性校验，拒绝详情渠道退款号缺失或漂移，并补充对应回归。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.259 2026-10-01 跨系统退款出站到账务时间链绑定
+
+本轮将退款成功账务事件的来源时间从 outbox 创建时间提升为实际派发完成时间 `lastRelayAt`，确保账务入账不会早于出站派发；复用账务事件时间顺序回归。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.260 2026-10-01 跨系统退款账务事件载荷金额连续性
+
+本轮为 `REFUND_SUCCESS` accounting event 增加 payload 金额解析与退款金额绑定，拒绝金额漂移或非法 JSON 载荷，并补充对应回归。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.261 2026-10-01 跨系统支付与清分账务事件金额连续性
+
+本轮将支付成功 accounting event payload 绑定到支付金额，将清分 event payload 绑定到 worker 分账金额，确保账务事件载荷与主链金额一致。
+
+本轮自测：跨系统 happy-path 合同测试通过，`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.249 2026-10-01 API client 支付尝试时间事实门禁
+
+本轮为 API client 支付详情、主动查单和关单响应补充 `latestAttemptStatus` 类型保护，并要求成功支付的尝试完成时间不晚于支付成功时间；补充非字符串状态和时间倒序回归。
+
+本轮自测：API client `npm test`、`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.235 2026-10-01 管理端告警来源归属与通道一致性
+
+本轮统一告警详情和列表的来源归属校验：顶层 `IN_APP_OUTBOX` 的 `sourceAlertNo` 必须为空，外部派发通道的 `sourceAlertNo` 必须为非空字符串；补充站内告警误带来源号及外部告警缺少来源号的拒绝回归，并保持外部合法来源号和站内合法空值可展示。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.236 2026-10-01 管理端告警详情回查状态枚举一致性
+
+本轮将管理端告警详情的 `receiptQueryState` 校验与列表统一，允许服务端计算的 `QUERYING / EXHAUSTED / INITIAL_WAIT / BACKING_OFF / DUE` 及空值，拒绝未知状态，并补充 `DUE` 合法详情和未知状态拒绝回归。
+
+本轮自测：admin-web `npm test`、`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实供应商回执查询、生产数据库、消息总线或资金到账验收。
+
+### 10.237 2026-10-01 用户端支付提交成功渠道交易号门禁
+
+本轮为 app-web 与小程序支付提交响应补充成功状态渠道交易号校验，`paymentStatus=SUCCESS` 时必须返回非空 `channelTransactionNo`；处理中提交继续允许交易号为空，并补充合法成功和缺失交易号回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.279 2026-10-01 支付成功事实巡检口径对齐
+
+本轮将管理端成功事实筛选、监控汇总与告警、日终支付成功事实统计统一为同一口径：成功时间存在，渠道编码和渠道交易号非空，最新支付尝试为 `成功/success` 且已完成；成功时间缺失继续只进入独立缺失时间分类，并新增日终缺失渠道交易号回归。
+
+本轮自测：`PaymentMapperStateTransitionIntegrationTest`（25/25）、`PaymentDayEndPaymentSuccessFactsMapperIntegrationTest`（1/1）、`PaymentMonitorMapperIntegrationTest`（10/10）通过，合计 `36/36`；`git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.238 2026-10-01 用户端支付成功详情渠道绑定门禁
+
+本轮为 app-web 与小程序支付详情响应补充成功状态渠道编码校验，`status=SUCCESS` 时必须返回非空 `channel`，并继续要求非空渠道交易号；补充合法成功详情与缺失渠道编码拒绝回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.239 2026-10-01 用户端退款成功详情渠道绑定门禁
+
+本轮为 app-web 与小程序退款详情响应补充终态渠道编码校验，`status=SUCCESS/FAIL` 时必须返回非空 `channelCode`，并继续要求非空渠道退款单号；补充合法成功详情与缺失渠道编码拒绝回归。
+
+本轮自测：app-web `npm test` 通过（`55/55`），小程序 `npm test` 通过（`53/53`），两端 `node --check` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.240 2026-10-01 管理端退款终态渠道编码门禁
+
+本轮为 admin-web 退款详情和退款动作响应补充终态渠道编码校验，`status=SUCCESS/FAIL` 时必须返回非空 `channelCode`；补充合法终态与缺失渠道编码拒绝回归，退款列表保持其不含渠道编码字段的现有契约。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.241 2026-10-01 API client 退款终态渠道事实门禁
+
+本轮为 API client 的退款详情、审核、主动查单和失败重试响应补充终态渠道事实校验，`status=SUCCESS/FAIL` 时必须返回非空 `channelCode` 与 `channelRefundNo`；处理中响应继续允许渠道字段为空或为字符串，并补充终态缺失任一字段拒绝回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实退款渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.242 2026-10-01 API client 支付成功渠道事实门禁
+
+本轮为 API client 的支付详情、主动查单和关单响应补充成功渠道事实校验，`status=SUCCESS` 时必须返回非空 `channel` 与 `channelTransactionNo`；处理中响应继续允许渠道字段为空或为字符串，并补充三个命令缺失任一字段拒绝回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.243 2026-10-01 跨系统支付成功回调渠道连续性
+
+本轮扩展跨系统 happy-path 重复支付成功回调断言，要求首次和重复成功响应具备非空 `channel`，且重复回调保持渠道编码与渠道交易号不变；补充渠道缺失和渠道漂移拒绝回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`41/41`），`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过。当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.244 2026-10-01 管理端支付动作成功渠道绑定门禁
+
+本轮为 admin-web 支付查单与关单动作响应补充成功渠道编码校验，`status=SUCCESS` 时必须返回非空 `channel`，并补充合法成功与缺失渠道拒绝回归。
+
+本轮自测：admin-web `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过。当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+### 10.283 2026-10-01 支付成功事件业务订单绑定门禁
+
+本轮为支付成功事件派发增加 outbox 事件业务单号与支付详情订单号的一致性校验，拒绝事件 `bizNo` 缺失、错配或仅依赖支付单号通过校验后继续进入清分、账务和对账事实投递，并补充错配业务订单回归。
+
+本轮自测：`PaymentEventDispatchServiceImplTest` 通过（`65/65`），`git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.284 2026-10-01 跨系统重复支付回调原始渠道流水门禁
+
+本轮补强跨系统 happy-path 重复支付成功回调校验：首次响应与重复响应均必须返回非空渠道交易号，再比较重复响应是否保持原始渠道流水，避免首响应缺失时触发不稳定的原生类型错误。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.285 2026-10-01 API client 支付提交成功尝试事实门禁
+
+本轮为 API client `submit` 成功响应补充最近支付尝试事实校验，要求 `latestAttemptStatus=成功`、`latestAttemptStatusType=success`、完成时间有效且不晚于支付成功时间；补充缺失、状态样式错误和时间越界回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.286 2026-10-01 API client 支付提交尝试生命周期绑定
+
+本轮将 API client `submit` 成功响应的最近尝试完成时间同时绑定到支付创建时间和支付成功时间，拒绝尝试在支付单创建前完成的逆序事实，并补充时间回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.287 2026-10-01 跨系统支付成功事件等待身份绑定
+
+本轮将跨系统 happy-path 等待支付成功事件的条件绑定到预期支付单号和业务订单号，避免分页中出现其他已完成支付成功事件时提前结束等待并误报当前链路失败；补充支付单号和业务订单号错配回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.288 2026-10-01 跨系统清分单等待业务订单绑定
+
+本轮将跨系统 happy-path 清分单等待条件从仅匹配支付单号扩展为同时匹配业务订单号，避免同一支付单下订单身份漂移的清分结果提前结束等待；补充错配和带空白订单号回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.289 2026-10-01 跨系统结算单等待业务链路绑定
+
+本轮将跨系统 happy-path 结算单等待和最终查找条件绑定到清分单号及预期 `businessChainId`，避免链路标识错配的待审核结算单提前结束轮询；补充错配和带空白链路标识回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.290 2026-10-01 API client 支付提交处理中尝试状态门禁
+
+本轮为 API client `submit` 的非成功响应补充最近支付尝试状态、状态样式和完成时间一致性校验，拒绝未知样式、处理中状态携带完成时间以及支付处理中伪造成功尝试，并补充回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.291 2026-10-01 API client 预支付收银台成功尝试状态绑定
+
+本轮将 API client `prepay` 与收银台响应中的最近支付尝试事实绑定到支付状态，拒绝 `PREPAY_CREATED` 等非成功支付携带伪造的 `成功/success` 尝试，并补充处理中状态样式、完成时间和伪造成功尝试回归。
+
+本轮自测：API client `npm test` 通过（`12/12`），`node --check payment-api.mjs` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.292 2026-10-01 用户端 app-web 支付尝试事实门禁
+
+本轮为用户端 app-web 的预支付和支付提交响应补充最近支付尝试状态样式、完成时间和支付状态绑定，拒绝未知样式、处理中尝试携带完成时间以及非成功支付伪造成功尝试；查询、关闭、收银台和支付详情继续复用同一成功事实门禁。
+
+本轮自测：app-web `npm test` 通过（`55/55`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.293 2026-10-01 用户端 mini-program 支付尝试事实门禁
+
+本轮为小程序预支付和支付提交响应补充最近支付尝试状态样式、完成时间和支付状态绑定，拒绝未知样式、处理中尝试携带完成时间以及非成功支付伪造成功尝试，并保持收银台、查询、关闭和详情事实校验一致。
+
+本轮自测：mini-program `npm test` 通过（`53/53`），`node --check utils/request.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.294 2026-10-01 管理端预支付支付尝试事实门禁
+
+本轮为管理端预支付响应补充最近支付尝试状态样式、完成时间和支付状态绑定，拒绝未知样式、处理中尝试携带完成时间以及非成功支付伪造成功尝试；同时收紧管理端共享成功尝试校验，并补全成功预支付回归事实。
+
+本轮自测：管理端 `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.295 2026-10-01 管理端支付记录列表尝试事实门禁
+
+本轮将管理端支付记录列表与详情统一纳入最近支付尝试状态、成功绑定和完成时间校验，拒绝非成功支付携带 `SUCCESS` 尝试，避免列表展示与详情口径不一致，并补充错配回归。
+
+本轮自测：管理端 `npm test` 通过（`216/216`），`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.296 2026-10-01 跨系统支付提交尝试事实门禁
+
+跨系统 happy-path 支付提交校验此前允许 `WAIT_CALLBACK` 支付携带 `成功/success` 的最近支付尝试，或允许处理中、失败等非成功尝试携带完成时间，可能接受与支付状态矛盾的跨系统快照。本轮要求待回调支付不得携带成功尝试，所有非成功尝试的完成时间必须为空，并补充对应回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.297 2026-10-01 跨系统预支付收银台尝试事实门禁
+
+跨系统 happy-path 预支付和收银台校验此前未检查可选的最近支付尝试事实，`PREPAY_CREATED` 响应可能携带状态样式错配、伪造成功尝试或处理中完成时间。本轮保持尝试字段整体为空的兼容语义，并要求有值时状态、样式和完成时间一致，补充预支付及收银台回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.298 2026-10-01 跨系统退款渠道受理时间门禁
+
+跨系统 happy-path 退款生命周期校验此前只验证申请、成功和终态时间，未检查可选的 `channelSubmittedAt`，渠道受理时间缺失格式、早于申请或晚于终态仍可能通过。本轮补充渠道受理时间格式及生命周期顺序校验，并增加处理中、成功终态的有效和逆序回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.299 2026-10-01 跨系统退款幂等生命周期连续性门禁
+
+跨系统 happy-path 退款重复申请和重复回调此前只比较退款身份、金额及渠道退款号，未比较 `appliedAt / channelSubmittedAt / successAt / terminalAt`，重复响应可能返回不同生命周期事实。本轮要求幂等响应保留首次退款实体的生命周期时间，并补充重复申请和重复回调的渠道受理时间漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.300 2026-10-01 跨系统支付提交幂等事实连续性门禁
+
+跨系统 happy-path 支付重复提交此前只比较支付单、预支付单和业务订单身份，未比较渠道、渠道流水、最近支付尝试及创建/失效时间，重复响应可能返回不同支付实体事实。本轮要求重复提交保留首次响应的上述事实，并补充渠道、尝试状态和时间漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.301 2026-10-01 App 收银台初始渠道流水关单门禁
+
+App 收银台本地关单资格此前只读取最近主动查单详情的 `channelTransactionNo`，尚未查单时会忽略初始收银台快照中的渠道流水，可能把已提交渠道的支付单误判为可本地关闭。本轮在无查单详情时回退使用收银台渠道流水，并补充视图回归。
+
+本轮自测：app-web `npm test` 通过，`git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.302 2026-10-01 用户端预支付重复提交事实门禁
+
+App 与小程序收银台提交资格此前未统一拒绝已有渠道流水或最近支付尝试事实的 `PREPAY_CREATED` 快照，异常状态可能再次发起渠道提交。本轮两端要求收银台无有效尝试事实且无渠道流水才允许提交，并补充处理中尝试和已有渠道流水回归。
+
+本轮自测：app-web `npm test` 通过（`57/57`），mini-program `npm test` 通过（`53/53`），`git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.303 2026-10-01 App 主动查单状态提交门禁
+
+App 收银台主动查单后，提交资格此前仍主要读取旧收银台快照，最新查单已进入处理中或已产生渠道流水时可能再次提交。本轮提交资格优先使用最新查单的支付状态、最近尝试和渠道流水，仅允许最新状态仍为 `PREPAY_CREATED` 的快照继续提交，并补充状态漂移回归。
+
+本轮自测：app-web `npm test` 通过（`57/57`），`git diff --check` 通过；当前未启动真实支付渠道、生产数据库、消息总线或资金到账验收。
+
+### 10.304 2026-10-01 管理端支付动作预支付身份连续性门禁
+
+管理端支付查询和关闭此前只绑定支付单、业务订单和金额，未绑定已加载快照中的预支付单号，响应可能在同一支付单下漂移到另一笔收银台事实。本轮将预支付单号纳入查询、关闭响应校验，并在列表动作快照中保留该字段，补充匹配与错配回归。
+
+本轮自测：管理端 `npm test` 通过，`node --check src/api/client.js` 与 `git diff --check` 通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.305 2026-10-01 用户端支付动作快照身份连续性门禁
+
+App 与小程序支付查询、关闭的 API client 此前仅校验支付单号，虽视图层另有比较，底层仍可能接受同一支付单下漂移的预付单号、业务订单或金额事实。本轮为两端 query/close 增加可选活动快照绑定，现金台与结果页传入当前快照，并补充匹配与错配回归；请求体保持原有支付单号契约不变。
+
+本轮自测：app-web 与 mini-program `npm test` 通过，相关 `node --check` 与 `git diff --check` 通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.306 2026-10-01 payment-core 成功事实创建时间顺序门禁
+
+payment-core 后端成功支付事实此前只校验最近尝试完成时间不晚于成功时间，未要求创建时间存在，也未阻止成功或尝试完成早于创建时间。本轮补充 `createdAt <= latestAttemptCompletedAt <= successAt` 校验，并增加缺失及逆序服务回归。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；已完成 `git diff --check`，前端既有回归未因本轮 Java 改动重复执行；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.325 2026-10-01 用户端退款进度渠道受理时间展示对齐
+
+App、H5、PC 和小程序退款进度此前展示终态时间、渠道编码和渠道退款单号，但遗漏后端终态事实中的 `channelSubmittedAt`，用户无法核对渠道受理生命周期。本轮在 App/H5/PC 与小程序详情中补充渠道受理时间格式化展示，并增加两端页面契约回归。
+
+本轮自测：app-web `npm test` 通过（`58/58`），小程序 `npm test` 通过（`54/54`），相关 `node --check` 与 `git diff --check` 通过；Java 服务回归未执行（当前环境未安装 Maven），当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.326 2026-10-01 用户端支付结果最近尝试完成时间展示
+
+payment-core 已在支付详情和收银台返回 `latestAttemptCompletedAt`，但 App/H5/PC 与小程序支付结果页此前只展示最近尝试状态，处理中或结果未知时缺少最近一次尝试完成时间。本轮在两端结果页补充该时间事实展示，并增加页面契约回归。
+
+本轮自测：app-web `npm test` 通过（`59/59`），小程序 `npm test` 通过（`55/55`），相关 `node --check` 与 `git diff --check` 通过；Java 服务回归未执行（当前环境未安装 Maven），当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.327 2026-10-01 小程序支付结果渠道处理建议展示
+
+payment-core 支付详情已返回服务端标准化的 `handlingSuggestion`，App/H5/PC 结果页已有展示，但小程序结果页此前丢弃该字段，失败或结果未知时用户缺少可信的渠道处理建议。本轮补充小程序结果页条件展示并增加页面契约回归，不在前端自行推导处理策略。
+
+本轮自测：小程序 `npm test` 通过（`56/56`），`node --check` 与 `git diff --check` 通过；Java 服务回归未执行（当前环境未安装 Maven），当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.328 2026-10-01 小程序支付结果重试与人工介入决策展示
+
+payment-core 支付详情已返回服务端标准化的 `retryable` 与 `manualInterventionRequired`，App/H5/PC 结果页已有展示，但小程序结果页此前只显示渠道返回码和标准错误码，用户无法看到服务端是否允许重试及是否需要人工介入。本轮补充两项只读决策事实展示并增加页面契约回归，不在前端自行推导动作资格。
+
+本轮自测：小程序 `npm test` 通过（`57/57`），`node --check` 与 `git diff --check` 通过；Java 服务回归未执行（当前环境未安装 Maven），当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.324 2026-10-01 管理端退款列表动作快照渠道事实保留
+
+管理端退款列表动作返回的退款快照此前经过 `toRefundListItem` 重建时丢失 `channelCode`、`channelRefundNo`、`channelSubmittedAt`，且退款快照侧栏未展示渠道事实，导致动作后列表与详情对同一终态退款的展示不一致。本轮补齐列表项投影并在退款快照侧栏展示渠道编码、渠道退款号和渠道受理时间。
+
+本轮自测：管理端 `npm test` 通过（`217/217`），`node --check` 与 `git diff --check` 通过；项目无退款视图组件测试；Java 服务回归未执行（当前环境未安装 Maven），当前未启动真实管理端 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.319 2026-10-01 跨系统退款终态渠道事实门禁对齐
+
+跨系统 happy-path 合同辅助校验此前仅在 `SUCCESS` 终态要求渠道退款号，且未要求 `channelCode`，可能让 `FAIL` 终态或成功终态缺少完整渠道事实仍通过合同校验。本轮要求 `SUCCESS/FAIL` 终态均具备非空 `channelRefundId` 与 `channelCode`，并补充成功、失败终态通过及两类渠道事实缺失回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），`node --check` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.320 2026-10-01 三端退款失败终态渠道退款号门禁对齐
+
+管理端、App 和小程序客户端此前仅对 `SUCCESS` 退款强制要求渠道退款号，`FAIL` 终态缺少 `channelRefundNo` 仍可能被接受，与 payment-core 终态渠道事实及跨系统 happy-path 合同不一致。本轮统一要求 `SUCCESS/FAIL` 终态均具备非空渠道退款号，并补充失败终态缺失渠道退款号回归。
+
+本轮自测：管理端 `npm test` 通过（`217/217`），App `npm test` 通过（`57/57`），小程序 `npm test` 通过（`53/53`）；`node --check` 与 `git diff --check` 通过，当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.321 2026-10-01 管理端退款详情金额事实门禁对齐
+
+管理端退款详情此前只校验退款金额，未校验响应中的原支付金额，也未阻止退款金额超过原支付金额；App 和小程序已具备该门禁，导致运营详情可能展示无法确认的金额事实。本轮要求管理端详情具备非负 `paidAmount` 且 `refundAmount <= paidAmount`，并补充缺失原支付金额、原支付金额不足及现有详情夹具回归。
+
+本轮自测：管理端 `npm test` 通过（`217/217`），`node --check` 与 `git diff --check` 通过；当前未启动真实管理端 HTTP、生产数据库、消息总线、渠道受理或资金到账验收。
+
+### 10.322 2026-10-01 payment-core 退款详情终态事实门禁
+
+退款详情接口此前直接返回 `SUCCESS/FAIL` 终态快照，未复用 callback/query 已有的完整终态事实校验，可能向管理端和用户端暴露缺失渠道事实、尝试完成时间或金额越界的异常数据。本轮在终态详情读取时复查渠道回调源快照并复用 `validateTerminalFacts`，补充合法终态详情和成功时间缺失回归；非终态详情保持原有读取语义。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；已完成 `git diff --check`，退款服务测试夹具语法修正并完成静态检查；当前未启动真实管理端 HTTP、用户端 HTTP、生产数据库、消息总线、渠道受理或资金到账验收。
+
+### 10.323 2026-10-01 退款导出终态渠道事实补齐
+
+退款列表、详情及 SQL 投影已包含终态和渠道事实，但 `exportCsv` 仍只输出旧的申请、成功时间字段，运营导出会丢失 `terminalAt`、`channelCode`、`channelRefundNo`、`channelSubmittedAt`。本轮补齐 CSV 表头和数据列，并增加导出行事实回归。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；退款 Mapper XML 解析与 `git diff --check` 通过；当前未启动真实管理端 HTTP、生产数据库、消息总线、渠道受理或资金到账验收。
+
+### 10.309 2026-10-01 支付成功事实差异筛选生命周期对齐
+
+`SUCCESS_FACT_MISMATCH` 列表、计数和导出此前只覆盖渠道字段及最新尝试状态，可能漏掉支付状态样式错误、支付创建时间晚于成功时间或尝试完成时间越界的成功支付。本轮将筛选条件与 payment-core 成功事实门禁对齐，并扩展 mapper 集成回归覆盖三类新增异常。
+
+本轮自测：Java mapper 回归未执行（当前环境未安装 Maven）；已完成 mapper XML 检查与 `git diff --check`，当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.310 2026-10-01 支付成功事实运营计数统一门禁
+
+支付监控总览、P1 告警和日终成功事实不一致计数此前仍使用旧的渠道/尝试条件，可能与支付列表 `SUCCESS_FACT_MISMATCH` 集合不一致。本轮将 monitor、alert、day-end 三类 SQL 与列表条件统一，补充状态样式及支付/尝试时间逆序异常 fixture；`SUCCESS_TIME_MISSING` 继续保持独立分类。
+
+本轮自测：Java mapper 回归未执行（当前环境未安装 Maven）；三份 mapper XML 解析通过，`git diff --check` 通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.311 2026-10-01 payment-core 退款渠道受理时间终态事实门禁
+
+退款回调和主动查单的终态事实快照此前未读取或校验 `channelSubmittedAt`，可能接受缺失、畸形或早于申请、晚于当前退款尝试完成时间的渠道受理事实。本轮将渠道受理时间加入两条 callback-source 查询，并统一要求 `appliedAt <= channelSubmittedAt <= attemptCompletedAt <= terminalAt`，补充缺失、畸形和逆序服务回归。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；已完成 `git diff --check`，退款 mapper XML 解析通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.312 2026-10-01 终态退款渠道受理时间客户端门禁对齐
+
+管理端、App、小程序和命令行客户端此前允许 `SUCCESS/FAIL` 退款响应缺失 `channelSubmittedAt`，与 payment-core 终态事实要求不一致，可能继续展示无法确认的渠道受理生命周期。本轮仅对终态响应要求渠道受理时间，对 `PROCESSING` 保持可选语义，并补充四端缺失时间回归。
+
+本轮自测：管理端 `npm test` 通过（`217/217`），App `npm test` 通过（`57/57`），小程序 `npm test` 通过（`53/53`），命令行客户端 `npm test` 通过（`12/12`）；`node --check` 与 `git diff --check` 通过，当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.313 2026-10-01 跨系统退款终态渠道受理时间门禁对齐
+
+跨系统 happy-path 合同辅助校验此前允许 `FAIL` 终态缺失 `channelSubmittedAt`，与 payment-core 终态事实及四端客户端门禁不一致，可能让合同测试放过无法确认的退款生命周期。本轮要求 `SUCCESS/FAIL` 终态均具备合法渠道受理时间，并补充失败终态缺失时间和幂等回调 fixture。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`），两个脚本 `node --check` 通过，`git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.314 2026-10-01 退款终态事实运营筛选生命周期对齐
+
+退款列表、计数和导出此前仅按终态时间、失败成功时间及最新尝试状态筛选，可能漏掉渠道受理事实缺失、受理时间越界、成功时间逆序或状态样式错误的终态退款。本轮统一 `TERMINAL_FACT_MISMATCH` 条件并补充五类异常 fixture，覆盖渠道事实和申请、受理、尝试完成、成功、终态的可验证顺序。
+
+本轮自测：Java mapper 回归未执行（当前环境未安装 Maven）；退款 mapper XML 解析通过，`git diff --check` 通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.315 2026-10-01 退款终态事实运营计数统一门禁
+
+支付监控总览、退款终态告警和日终退款事实计数此前仍使用旧的终态条件，可能漏掉状态样式、渠道受理事实和申请、受理、尝试完成、成功、终态时间顺序异常。本轮将三类运营 SQL 与退款列表 `TERMINAL_FACT_MISMATCH` 条件对齐，并补充监控与日终 H2 回归 fixture。
+
+本轮自测：Java mapper 回归未执行（当前环境未安装 Maven）；两份 mapper XML 解析通过，`git diff --check` 通过；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.316 2026-10-01 管理端退款列表终态事实投影对齐
+
+管理端退款列表校验此前要求终态退款具备终态、渠道退款号和渠道受理时间，但 `RefundListItemDTO` 及退款列表、导出、单笔摘要查询未投影这些字段，终态列表和动作响应可能因事实缺失被拒绝或无法展示。本轮补齐 DTO 与三类 SQL 投影，收紧管理端列表渠道事实校验，并补充列表、导出、单笔查询和非法事实回归。
+
+本轮自测：管理端 `npm test` 通过（`217/217`），`node --check`、退款 mapper XML 解析和 `git diff --check` 通过；Java mapper 回归未执行（当前环境未安装 Maven）。
+
+### 10.317 2026-10-01 失败退款批量重试终态事实门禁对齐
+
+失败退款批量候选及任务中心的可重试/事实异常分区此前只检查终态、成功时间和最新尝试完成状态，可能把渠道事实、状态样式或生命周期时间越界的失败退款纳入自动重试。本轮要求两条候选 SQL 同时满足终态事实完整性，并补充渠道受理时间越界回归。
+
+本轮自测：两份 mapper XML 解析通过，`git diff --check` 通过；Java mapper 回归未执行（当前环境未安装 Maven）。
+
+### 10.318 2026-10-01 任务重试服务终态事实二次门禁
+
+任务中心批量候选查询已具备终态事实条件，但锁定后进入 `retryForTask` 的服务快照此前只有状态和额度字段，候选与执行之间发生事实漂移时仍可能重置失败终态。本轮扩展重试锁定快照并在任务路径二次校验状态样式、渠道事实和时间链；人工单笔重试语义保持不变，补充漂移拒绝回归。
+
+本轮自测：两份 mapper XML 解析通过，`git diff --check` 通过；Java 服务回归未执行（当前环境未安装 Maven）。
+
+### 10.308 2026-10-01 payment-core 支付详情成功事实门禁
+
+支付详情接口此前直接返回 `SUCCESS` 支付快照，未复用成功事实校验，可能暴露缺失或逆序的创建、尝试完成和成功时间。本轮将详情读取纳入统一成功事实门禁，并补充缺失创建时间回归。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；已完成 `git diff --check`，前端既有回归未因本轮 Java 改动重复执行；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.307 2026-10-01 payment-core 关闭动作成功事实复用门禁
+
+支付关闭动作此前在支付单已成功或并发关闭读回成功时直接返回详情，绕过成功事实校验，可能把缺失或逆序的成功时间快照继续暴露给用户端和管理端。本轮统一复用成功事实门禁，并补充已成功关闭路径的异常事实回归。
+
+本轮自测：Java 服务回归未执行（当前环境未安装 Maven）；已完成 `git diff --check`，前端既有回归未因本轮 Java 改动重复执行；当前未启动真实支付渠道、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.329 2026-10-01 管理端监控已关闭支付下钻入口补齐
+
+支付监控总览已展示 `closedPaymentCount`，但此前没有从该指标进入支付单列表的运营入口，关闭支付只能手工设置筛选条件。本轮新增受加载快照保护的“查看已关闭支付”入口，跳转支付单列表并固定 `status=CLOSED`，与监控摘要统计保持同一筛选口径。
+
+本轮自测：管理端 `npm test` 通过（`217/217`）；`node --check` 与 `git diff --check` 通过；项目无支付监控视图组件测试，Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.330 2026-10-01 任务中心未知退款提交异常下钻补齐
+
+任务中心已展示退款提交结果未知数量并明确禁止直接重发，但计数卡此前没有直接进入“退款提交结果待核查”异常队列的入口，运营仍需先进入异常中心再手工筛选。本轮新增受成功任务快照保护的异常队列下钻，复用既有 `issueType` 过滤，不改变未知结果禁止重试语义，并补充中文查询参数的路由契约回归。
+
+本轮自测：管理端 `npm test` 通过（`218/218`）；`node --check` 与 `git diff --check` 通过；项目无任务中心视图组件测试，Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.331 2026-10-01 任务中心失败退款事实异常下钻补齐
+
+任务中心已将失败退款拆分为可批量重试和终态事实异常两类，但此前事实异常数量只展示提示，没有直接进入退款列表 `TERMINAL_FACT_MISMATCH` 集合的入口。本轮新增受任务快照状态保护的事实异常退款下钻，继续禁止该集合进入无人值守重试，并补充退款状态路由契约回归。
+
+本轮自测：管理端 `npm test` 通过（`219/219`）；`node --check` 与 `git diff --check` 通过；项目无任务中心视图组件测试，Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.332 2026-10-01 用户支付结果标准错误说明展示补齐
+
+payment-core 支付详情已返回最近查单命中的 `standardizedMessage`，但 App/H5/PC 共享结果页和小程序结果页此前只展示标准错误码，用户无法看到可读的标准化错误解释。本轮在两套结果模板补充“标准错误说明”展示，并增加两端渲染契约回归。
+
+本轮自测：App/H5/PC 共享结果页测试通过（`60/60`）；小程序测试通过（`58/58`）；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.333 2026-10-01 用户支付结果映射命中状态展示补齐
+
+支付详情已返回 `returnCodeMappingMatched`，但用户结果页此前只显示映射版本，无法区分命中有效运营映射与未命中回退标准化。 本轮在 App/H5/PC 共享结果页和小程序结果页补充真假值安全的“映射命中”展示，并增加渲染契约回归。
+
+本轮自测：App/H5/PC 共享结果页测试通过（`61/61`）；小程序测试通过（`59/59`）；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.334 2026-10-01 小程序支付结果映射版本展示补齐
+
+App/H5/PC 结果页已展示渠道返回码、标准错误信息、映射版本和映射命中状态，但小程序此前缺少 `returnCodeMappingVersion`，跨端排障信息不完整。本轮补充小程序结果页映射版本展示，并增加页面渲染契约回归。
+
+本轮自测：小程序测试通过（`60/60`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.335 2026-10-01 小程序支付结果查单来源展示补齐
+
+App/H5/PC 支付结果页已展示最近查单来源，但小程序结果页此前只展示渠道返回码，无法区分主动查单、回调或其他结果来源。本轮补充 `querySource` 展示并增加页面渲染契约回归。
+
+本轮自测：小程序测试通过（`61/61`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.336 2026-10-01 小程序支付结果最近尝试运营快照补齐
+
+App/H5/PC 支付结果页已展示最近尝试的发起终端、客户端 IP 和幂等键，但小程序此前缺少这些只读排障事实，跨端定位同一支付尝试时信息不完整。本轮补充三项运营快照展示并增加渲染契约回归。
+
+本轮自测：小程序测试通过（`62/62`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.337 2026-10-01 跨系统支付回调支付方式连续性门禁
+
+跨系统 happy-path 重复支付成功回调此前校验支付单、渠道和渠道流水连续性，但未校验 `paymentMethod`，同一支付实体可能在幂等回调中返回不同支付方式。本轮要求首次与重复回调均具备非空支付方式且保持一致，并补充支付方式漂移拒绝回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.364 2026-10-01 跨系统结算全量详情金额与审核轨迹连续性门禁
+
+跨系统 happy-path 此前只校验结算单摘要、审核动作和出款状态，未读取结算全量详情，金额明细缺失或错配、业务链路漂移、审核通过日志缺失或操作人漂移仍可能通过主链路。本轮补充结算全量详情的结算单号、业务链路、应结/扣减/实结金额、两项金额明细及审核通过日志校验，并增加缺失明细、金额漂移和链路漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`44/44`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.352 2026-10-01 用户退款进度渠道事实连续性门禁
+
+App 与小程序退款进度此前已绑定退款单、支付单、业务链路、订单、金额、退款方式和原因，但终态刷新未绑定已建立的 `channelCode` 与 `channelRefundNo`，渠道退款事实漂移时仍可能覆盖当前进度。本轮补充两端退款进度快照的渠道编码和渠道退款单号连续性校验，处理中的未建立渠道事实继续兼容，并增加终态渠道漂移回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`），小程序 `npm test` 通过（`63/63`）；App 与小程序 JavaScript 检查、`git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.354 2026-10-01 管理端支付详情业务与渠道快照连续性门禁
+
+管理端支付详情刷新此前只绑定支付单、业务订单、金额和支付方式，未绑定业务链路、预付单、支付渠道及渠道交易号，刷新响应可能串入另一条支付事实。本轮补充 `businessChainId`、`prepayOrderNo`、`channel` 和 `channelTransactionNo` 连续性校验，尚未建立对应事实的 pending 快照继续兼容，并增加漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.363 2026-10-01 管理端支付处理日志业务链路快照连续性门禁
+
+管理端支付处理日志详情刷新此前绑定日志号、支付单、订单、请求、来源和处理阶段，但未绑定响应中的 `businessChainId`，日志记录可能串入另一条业务链路。本轮补充支付处理日志业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.362 2026-10-01 管理端支付异常业务链路与渠道归属连续性门禁
+
+管理端支付异常详情刷新此前绑定异常号、支付单、业务订单和异常类型，但未绑定响应中的 `businessChainId` 与 `channelCode`，异常记录可能串入另一条业务链路或渠道事实。本轮补充两项异常归属连续性校验，并增加漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.361 2026-10-01 管理端账单已付与待付金额快照连续性门禁
+
+管理端账单详情刷新此前只绑定账单总额，未绑定同时展示的 `paidAmount` 与 `unpaidAmount`，总额不变但已付/待付拆分漂移时仍可能覆盖当前账单事实。本轮补充两项金额连续性校验，并增加拆分金额漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.360 2026-10-01 管理端支付记录业务链路快照连续性门禁
+
+管理端支付记录详情刷新此前绑定支付单、业务订单和金额，但未绑定响应中的 `businessChainId`，支付记录可能串入另一条业务链路。本轮补充支付记录业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.359 2026-10-01 管理端收银台会话业务链路快照连续性门禁
+
+管理端收银台会话详情刷新此前绑定会话、预付单、支付单、订单和金额，但未绑定支付关联响应中的 `businessChainId`，会话记录可能串入另一条业务链路。本轮补充收银台会话业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.358 2026-10-01 管理端支付路由业务与渠道快照连续性门禁
+
+管理端支付路由详情刷新此前绑定路由号、支付单、请求、订单和金额，但未绑定响应中的 `businessChainId` 与 `channelCode`，路由记录可能串入另一条业务链路或渠道事实。本轮补充两项路由身份连续性校验，并增加漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.357 2026-10-01 管理端支付请求业务链路快照连续性门禁
+
+管理端支付请求详情刷新此前绑定请求号、支付单、预付单、订单、账单和路由关联事实，但未绑定响应中的 `businessChainId`，请求记录可能串入另一条业务链路。本轮补充支付请求业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.356 2026-10-01 管理端支付流水业务链路快照连续性门禁
+
+管理端支付流水详情刷新此前绑定流水号、支付单、订单及路由关联事实，但未绑定响应中的 `businessChainId`，流水记录可能串入另一条业务链路。本轮补充支付流水业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.355 2026-10-01 管理端支付事件业务链路快照连续性门禁
+
+管理端支付事件详情刷新此前绑定事件号、事件类型、支付单、业务号和事件主题，但未绑定响应中的 `businessChainId`，事件记录可能串入另一条业务链路。本轮补充支付事件业务链路连续性校验，并增加链路漂移拒绝回归。
+
+本轮自测：Admin Web `npm test` 通过（`220/220`）；Admin API JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.339 2026-10-01 跨系统退款回调渠道编码连续性门禁
+
+跨系统重复退款成功回调此前校验渠道退款号连续性，但未比较 `channelCode`，渠道退款号不变而渠道编码漂移时仍可能通过 happy-path 合同。本轮要求首次与重复回调均具备非空渠道编码且保持一致，并补充渠道编码漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.340 2026-10-01 跨系统支付成功事件渠道事实连续性门禁
+
+跨系统 happy-path 已校验支付成功事件的支付单、业务单、金额和投递状态，但未解析事件 `eventPayload` 校验渠道事实，事件载荷渠道缺失、非法或与支付成功回调漂移时仍可能通过主链路。本轮要求支付成功事件载荷携带非空 `channel`，并与支付成功详情渠道保持一致，补充渠道漂移和非法载荷回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.341 2026-10-01 跨系统退款成功 outbox 载荷事实连续性门禁
+
+跨系统 happy-path 此前仅校验退款成功 outbox 的事件身份、聚合编号和生命周期时间，未解析 `payloadJson`，载荷中的退款单号、支付单号或退款金额缺失、错配、漂移及非法 JSON 仍可能继续进入下游账务和对账验证。本轮要求待派发及派发响应的 outbox 载荷同时保持退款身份和金额连续，并补充对应回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.342 2026-10-01 跨系统退款账务事件支付单载荷连续性门禁
+
+跨系统 happy-path 此前只校验退款账务事件的退款单号、事件类型、链路、金额和时间，未验证事件载荷中的 `paymentOrderId`，账务事件可能把退款记到另一支付单仍被主链路接受。本轮要求退款账务事件载荷支付单号与当前支付成功事实一致，并补充支付单漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.343 2026-10-01 跨系统支付账务事件业务订单载荷连续性门禁
+
+跨系统 happy-path 此前只校验支付账务事件的支付单号、事件类型、链路、金额和时间，未验证事件 `payload` 中的 `orderNo`，支付单正确但账务载荷串业务订单时仍可能通过主链路。本轮要求支付成功账务事件载荷业务订单号与本次支付订单一致，并补充订单漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.344 2026-10-01 跨系统清分账务事件业务订单载荷连续性门禁
+
+跨系统 happy-path 此前只校验清分账务事件的清分单号、事件类型、链路、金额和时间，未验证事件 `payload.bizNo`，清分单正确但载荷串业务订单时仍可能通过后续账务和对账验证。本轮要求清分账务事件载荷业务订单号与本次支付订单一致，并补充订单漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.345 2026-10-01 跨系统清分对账事实载荷身份连续性门禁
+
+跨系统 happy-path 此前只校验清分对账事实的顶层事实编号、业务号、金额和时间，未解析 `payload.clearingNo`，清分事实载荷串事件时仍可能被视为完整链路。本轮要求清分对账事实载荷中的清分单号与事实编号一致，并补充错配及非法 JSON 回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`43/43`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.346 2026-10-01 跨系统结算对账事实载荷身份连续性门禁
+
+跨系统 happy-path 此前只校验结算对账事实的顶层事实编号、业务号、金额和时间，未解析 `payload.settlementNo`，结算事实载荷串结算单时仍可能被视为完整链路。本轮要求结算对账事实载荷中的结算单号与事实编号一致，并补充错配回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`43/43`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.347 2026-10-01 跨系统账务对账事实载荷事件号连续性门禁
+
+跨系统 happy-path 此前只校验账务对账事实的顶层事件号、业务号、金额和时间，未解析 `payload.eventNo`，账务事实载荷串事件时仍可能被视为已入账。本轮要求支付、清分和退款三类账务对账事实载荷事件号与事实编号一致，并补充事件号漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`43/43`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.348 2026-10-01 跨系统支付对账事实载荷身份连续性门禁
+
+跨系统 happy-path 此前只校验支付成功对账事实的顶层支付单号、业务号、金额和时间，未解析 `payload.paymentOrderId`，支付事实载荷串支付单时仍可能被视为有效。本轮要求支付成功对账事实载荷支付单号与事实编号一致，并补充支付单漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`43/43`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.349 2026-10-01 跨系统退款对账事实来源支付号连续性门禁
+
+跨系统 happy-path 此前只校验退款对账事实的顶层事件号、退款单号、金额和时间，未校验 refund-center 的文本载荷是否仍包含原支付单号，退款事实来源支付单漂移时仍可能通过主链路。本轮要求退款成功对账事实载荷保留当前原支付单号，并补充支付单漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`43/43`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.350 2026-10-01 用户支付结果动作渠道连续性门禁
+
+App/H5/PC 与小程序支付结果页此前在查单、关单和自动刷新响应中校验支付单、业务链路、订单、金额和支付方式，但未绑定已建立的 `channel`，渠道漂移响应仍可能覆盖当前结果快照。本轮补充两端动作快照的渠道连续性校验，允许尚未选定渠道的 pending 快照保持兼容，并增加渠道漂移回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`），小程序 `npm test` 通过（`62/62`）；App API/entity JavaScript 检查、小程序页面/request JavaScript 检查与 `git diff --check` 通过；Vue 单文件组件不使用 Node `--check`，其渲染契约由现有 App 测试覆盖；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.351 2026-10-01 用户支付结果动作渠道流水连续性门禁
+
+App/H5/PC 与小程序支付结果动作此前已绑定渠道编码，但查单、关单和自动刷新仍未绑定已建立的 `channelTransactionNo`，同一支付单可能被另一渠道流水响应覆盖。本轮补充两端动作快照的渠道流水连续性校验，尚未产生渠道流水的 pending 快照继续兼容，并增加流水漂移回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`），小程序 `npm test` 通过（`62/62`）；App API/entity JavaScript 检查、小程序页面/request JavaScript 检查通过，`git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.338 2026-10-01 跨系统支付提交支付方式连续性门禁
+
+跨系统 happy-path 初次支付提交和重复提交此前只校验支付单、渠道及最近尝试事实，未要求 `paymentMethod` 非空或在幂等响应中保持一致。本轮补齐支付提交支付方式门禁，并增加缺失和漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`42/42`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.365 2026-10-01 跨系统结算清分事件身份与载荷连续性门禁
+
+跨系统 happy-path 此前直接从清分结果进入结算单校验，未读取结算系统消费的 `CLEARING_GENERATED` 事件，事件状态未消费、业务链路漂移、清分单号载荷错配或事件时间早于清分来源时仍可能被后续结算和对账验证掩盖。本轮补充结算事件号、事件类型、清分单号、业务链路、消费状态、生命周期及 `payload.clearingNo` 校验，并增加错配、漂移、未消费和非法 JSON 回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`45/45`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.366 2026-10-01 跨系统清分出站事件发布状态与载荷连续性门禁
+
+跨系统 happy-path 已校验清分单和结算消费事件，但未直接读取清分系统的 `CLEARING_GENERATED` 出站事件，事件未成功发布、支付单/业务链路/服务者目标漂移或金额载荷错配时仍可能被下游结算结果掩盖。本轮补充清分事件发布状态、事件时间、事件号、清分单号、支付单号、业务链路、服务者目标及金额载荷校验，并增加发布状态、身份和金额漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`46/46`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.367 2026-10-01 跨系统清分出站事件目标类型与金额拆分连续性门禁
+
+清分出站事件此前已校验基本身份和总金额，但未绑定 `targetType`、`shouldSettleAmount`、`deductAmount`、`netSettleAmount`，服务者目标类型漂移或金额拆分不一致时仍可能由下游结算摘要掩盖。本轮要求事件载荷保持 `WORKER` 目标类型、应结金额/扣减金额/净结金额与清分服务者金额一致，并补充目标类型和净结金额漂移回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`46/46`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.368 2026-10-01 跨系统待出款批次聚合金额连续性门禁
+
+跨系统 happy-path 此前只校验待出款批次的记录数量、状态和单笔金额，未在执行出款前校验批次 `totalAmount` 与所有待出款记录金额之和一致，批次聚合金额漂移时仍可能进入执行动作。本轮补充待出款批次总金额与记录金额汇总校验，并增加批次金额错配回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`46/46`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.369 2026-10-01 用户退款进度生命周期时间连续性门禁
+
+App/H5/PC 与小程序退款进度此前已绑定退款身份、金额、原因和渠道事实，但刷新响应仍可能替换已建立的申请、渠道受理、成功或终态时间，导致用户看到的退款时间线发生事实漂移。本轮补充各用户端退款进度的生命周期时间快照校验，允许 pending 时间从缺省变为已知，但拒绝已建立时间漂移，并补充跨端回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`）；小程序 `npm test` 通过（`64/64`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.370 2026-10-01 用户支付结果生命周期时间连续性门禁
+
+App/H5/PC 与小程序支付结果动作此前已绑定支付身份、金额、渠道、渠道流水和支付方式，但查单、关单及自动刷新响应仍可能替换已建立的支付创建时间、成功时间或最近尝试完成时间。本轮补充跨端支付结果时间快照连续性校验，允许 pending 时间从缺省变为已知，但拒绝已建立时间漂移，并增加结果页回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`）；小程序 `npm test` 通过（`65/65`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.371 2026-10-01 用户支付结果退款关联单连续性门禁
+
+支付结果页此前已绑定支付单、业务链路、金额、渠道、渠道流水、支付方式和生命周期时间，但成功支付结果中的 `refundOrderId` 未纳入查单、关单及自动刷新快照，响应可能将用户引导至另一退款单。本轮补充 App/H5/PC 与小程序结果页的退款关联单连续性校验，并增加退款单漂移回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`）；小程序 `npm test` 通过（`66/66`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.372 2026-10-01 用户支付结果账单与客户连续性门禁
+
+支付结果页此前已绑定支付单、业务链路、订单、金额、渠道、渠道流水、支付方式、生命周期时间和退款关联单，但动作响应中的账单号或客户名称漂移仍可能覆盖当前结果事实。本轮补充 App/H5/PC 与小程序结果页的账单号、客户名称快照校验，允许状态摘要省略可选字段但拒绝返回不一致字段，并增加跨端漂移回归。
+
+本轮自测：App Web `npm test` 通过（`61/61`），小程序 `npm test` 通过（`67/67`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.373 2026-10-01 用户预付响应客户名称连续性门禁
+
+App Web 与小程序创建预付单时都会提交客户名称，但客户端此前只校验预付单、支付单、订单和金额，服务端响应客户名称漂移时仍可能继续进入收银台。本轮补充两端预付请求到响应的客户名称连续性校验，并增加客户名称漂移回归。
+
+本轮自测：App Web `npm test` 通过（`62/62`），小程序 `npm test` 通过（`68/68`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.384 2026-10-01 管理端支付详情账单与客户连续性门禁
+
+管理端支付详情 DTO 已提供账单号和客户名称，但支付详情动作后刷新快照此前未绑定两项业务展示事实，响应漂移时仍可能覆盖运营页面。本轮补充管理端支付详情刷新与动作匹配的账单号、客户名称连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.391 2026-10-01 管理端支付异常客户与支付方式连续性门禁
+
+管理端支付异常详情已展示客户名称和支付方式，但异常详情刷新快照此前只绑定支付、订单、渠道和异常类型，业务展示事实漂移时仍可能覆盖运营排障页面。本轮补充支付异常详情刷新客户名称、支付方式连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.390 2026-10-01 管理端支付流水账单与支付方式连续性门禁
+
+管理端支付流水详情已展示账单号和支付方式，但刷新快照此前只绑定流水来源及支付关联编号，账单或支付方式漂移时仍可能覆盖运营复盘页面。本轮补充支付流水详情刷新账单号、支付方式连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.389 2026-10-01 管理端支付路由客户与支付方式连续性门禁
+
+管理端支付路由详情已展示客户名称和支付方式，但路由详情刷新快照此前只绑定路由、支付、订单、金额及渠道事实，展示事实漂移时仍可能被运营接受。本轮补充支付路由详情刷新客户名称、支付方式连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.388 2026-10-01 管理端支付记录支付方式连续性门禁
+
+管理端支付记录详情已展示支付方式，但主动查单后的刷新快照此前只绑定支付单、业务订单和金额，支付方式漂移时仍可能覆盖运营复盘页面。本轮补充支付记录详情刷新支付方式连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.387 2026-10-01 管理端支付请求支付方式连续性门禁
+
+管理端支付请求详情已展示支付方式，但刷新快照此前只绑定请求、支付、订单、账单和路由关联，支付方式漂移时仍可能覆盖运营页面。本轮补充支付请求详情刷新支付方式连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.386 2026-10-01 管理端收银台会话账单与客户连续性门禁
+
+管理端收银台会话详情 DTO 已提供账单号和客户名称，但会话刷新快照此前只绑定会话、支付关联、订单和金额事实，运营页面可能接受业务展示事实漂移。本轮补充收银台会话详情刷新账单号、客户名称连续性校验，允许精简响应缺省可选字段，并增加错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.383 2026-10-01 管理端退款动作客户与支付方式连续性门禁
+
+管理端退款详情动作和动作后刷新此前只绑定退款、支付、订单、金额、退款原因及渠道事实，客户名称或原支付方式漂移时仍可能覆盖运营快照。本轮补充管理端退款动作匹配与刷新快照的客户名称、原支付方式连续性校验，允许精简动作响应省略可选字段但拒绝已返回的错配事实，并增加回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.382 2026-10-01 小程序收银台账单事实展示门禁
+
+小程序收银台接口和提交快照已携带账单号，但交易信息区域此前未展示该业务事实，用户无法在确认支付前核对账单归属。本轮补充小程序收银台账单号展示，并增加页面渲染契约回归。
+
+本轮自测：小程序 `npm test` 通过（`74/74`）；App Web `npm test` 通过（`65/65`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.381 2026-10-01 用户支付结果账单与客户展示事实门禁
+
+支付结果动作已保留账单号、客户名称连续性，但 App Web 结果摘要此前未展示账单号，小程序结果摘要未展示账单号和客户名称，用户无法直接核对支付对应的业务展示事实。本轮补齐 App/H5/PC 与小程序结果摘要字段，并增加跨端渲染契约回归。
+
+本轮自测：App Web `npm test` 通过（`65/65`）；小程序 `npm test` 通过（`73/73`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.380 2026-10-01 用户退款进度原支付金额展示事实门禁
+
+退款详情已校验原支付金额与退款金额的数值连续性，但 App/H5/PC 与小程序退款摘要此前只展示退款金额，用户无法直接核对退款相对于原支付金额的范围。本轮补充两端摘要展示原支付金额，并增加渲染契约回归。
+
+本轮自测：App Web `npm test` 通过（`64/64`）；小程序 `npm test` 通过（`72/72`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.379 2026-10-01 用户退款进度客户与支付方式展示事实门禁
+
+App/H5/PC 与小程序退款进度此前虽已保留客户名称和原支付方式快照，但详情摘要未向用户展示这两项可核对事实，用户无法确认退款对应的客户和支付方式。本轮补充两端退款详情摘要展示客户名称、支付方式，并增加渲染契约回归。
+
+本轮自测：App Web `npm test` 通过（`63/63`）；小程序 `npm test` 通过（`71/71`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.378 2026-10-01 用户退款进度支付方式连续性门禁
+
+退款详情接口提供支付方式，但 App/H5/PC 与小程序退款进度刷新快照此前未保留该事实，响应可将当前退款进度替换为另一支付方式展示事实。本轮补充两端退款进度支付方式连续性校验，允许历史摘要省略字段但拒绝返回错配支付方式，并增加漂移回归。
+
+本轮自测：App Web `npm test` 通过（`62/62`）；小程序 `npm test` 通过（`70/70`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.375 2026-10-01 管理端订单发起支付客户事实连续性门禁
+
+管理端订单列表已提供客户名称，但订单发起支付此前未把 `customerName` 传入预付单请求，可能导致后端拒绝创建或后续支付缺少客户事实；管理端预付响应也未校验客户名称。本轮补齐订单发起支付的客户名称请求字段，并要求响应客户名称与订单客户一致，增加管理端漂移回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`221/221`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.376 2026-10-01 跨系统支付业务展示事实连续性门禁
+
+跨系统 happy-path 此前已校验支付单、预付单、订单和金额，但未验证账单号、客户名称在预付、收银台、提交、回调和支付详情投影间保持一致，业务展示事实漂移仍可能被后续链路掩盖。本轮补充支付业务事实断言及账单号、客户名称漂移回归，并接入完整本地 happy-path。
+
+本轮自测：跨系统 happy-path 合同测试通过（`47/47`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.385 2026-10-01 跨系统退款客户事实连续性门禁
+
+跨系统 happy-path 退款闭环此前已校验退款身份、金额、方式、原因、渠道和生命周期，但未验证支付成功投影中的客户名称贯穿退款申请、幂等申请、审核、渠道提交、回调和退款详情。本轮补充退款客户名称端到端断言及错配/缺失回归。
+
+本轮自测：跨系统 happy-path 合同测试通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs`、`node --check tools/dev/cross-system-happy-path.test.mjs` 与 `git diff --check` 通过；当前未启动真实多服务 HTTP、消息总线、生产数据库、渠道受理或资金到账验收。
+
+### 10.377 2026-10-01 用户退款进度客户事实连续性门禁
+
+退款详情接口提供客户名称，但 App/H5/PC 与小程序退款进度刷新快照此前未保留该事实，响应可将当前退款进度替换为另一客户展示事实。本轮补充两端退款进度客户名称连续性校验，允许历史摘要省略字段但拒绝返回错配客户，并增加漂移回归。
+
+本轮自测：App Web `npm test` 通过（`62/62`），小程序 `npm test` 通过（`69/69`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.374 2026-10-01 用户收银台提交账单与客户连续性门禁
+
+收银台响应已提供账单号和客户名称，但 App Web 收银台提交快照及小程序提交/刷新校验此前只绑定支付单、业务链路、订单和金额，支付提交或收银台刷新返回另一业务展示事实时仍可能继续推进。本轮补充两端收银台到提交结果及刷新响应的账单号、客户名称连续性校验，并增加漂移回归。
+
+本轮自测：App Web `npm test` 通过（`62/62`），小程序 `npm test` 通过（`68/68`）；相关 JavaScript 检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.392 2026-10-01 管理端异常告警详情过期快照操作门禁
+
+管理端异常告警详情刷新失败后仍保留上次成功快照，但关联支付单、异常中心和处理日志入口此前只判断页面已加载，可能在快照已标记过期时继续发起联查。本轮补充告警详情过期快照状态和统一 `canUseSnapshot` 导航门禁，增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`222/222`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.393 2026-10-01 管理端支付记录列表过期快照操作门禁
+
+管理端支付记录列表在刷新失败后会保留上次成功快照并阻止翻页，但行内“查看快照”和“详情”此前仍可操作，可能基于过期列表事实继续联查。本轮补充 `canUseSnapshot`，统一约束行选择、详情跳转及按钮状态，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`223/223`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.394 2026-10-01 管理端死信任务过期快照读取门禁
+
+管理端死信任务列表此前已禁止过期快照上的重放、结案和翻页，但任务号选中及详情入口仍可在刷新失败后操作，可能继续使用陈旧消息路由事实。本轮补充 `canUseSnapshot`，统一约束任务选择、详情跳转及行内按钮，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`224/224`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.395 2026-10-01 管理端服务者结算过期快照读取门禁
+
+管理端服务者结算列表刷新失败后已禁止翻页和导出，但“查看快照”仍可切换到陈旧列表记录。本轮补充 `canUseSnapshot`，统一约束结算快照选择及行内按钮，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`225/225`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.396 2026-10-01 小程序支付操作业务展示事实连续性门禁
+
+小程序主动查单和关单 API 的动作响应校验此前只绑定支付身份、订单、金额和渠道事实，传入快照中的账单号、客户名称和支付方式未在请求层校验，存在非页面调用路径接受展示事实漂移的风险。本轮补充三项可选事实的保留校验，保留精简响应缺省容忍，并增加错配与缺省回归。
+
+本轮自测：payment-core mini-program `npm test` 通过（`74/74`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.397 2026-10-01 小程序收银台提交支付方式连续性门禁
+
+小程序收银台提交响应此前校验支付单、订单、账单、客户和金额事实，但未将响应支付方式绑定到实际提交的固定支付方式，支付方式漂移仍可能进入原生支付调用。本轮补充提交匹配器的支付方式连续性参数和错配回归。
+
+本轮自测：payment-core mini-program `npm test` 通过（`74/74`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+### 10.398 2026-10-01 App Web 支付结果初始支付方式连续性门禁
+
+App Web 收银台会把支付方式带入结果页路由，但结果页首次加载此前只校验支付单号和可选预付单号，服务端详情支付方式漂移时仍可能被展示。本轮补充首次详情加载的路由支付方式校验，并增加视图契约回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`66/66`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.399 2026-10-01 小程序支付结果初始支付方式连续性门禁
+
+小程序收银台提交成功后此前仅携带支付单号和预付单号跳转结果页，结果页首次加载未绑定当前支付方式，服务端详情支付方式漂移时仍可能被展示。本轮补充微信支付方式路由传递与初始详情校验，并增加支付方式错配回归。
+
+本轮自测：payment-core mini-program `npm test` 通过（`75/75`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.400 2026-10-01 App/H5/PC 收银台支付方式连续性门禁
+
+App/H5/PC 共用收银台此前虽把支付方式提交给后端并带入结果页路由，但收银台支付快照未绑定当前选中方式，且后端提交响应未回传支付方式，提交、查单和关单响应可能出现支付方式漂移。本轮补充前后端响应字段、共享快照、提交响应及查单/关单响应的支付方式连续性校验，并增加错配回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`67/67`）；H5/PC 共享终端契约测试通过（各 `4/4`）；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.401 2026-10-01 收银台历史响应支付方式缺省兼容门禁
+
+本轮支付方式快照绑定后发现历史 `CashierPageDTO` 可能不返回 `paymentMethod`，共享页面级身份校验会误拒绝正常收银台刷新和动作前快照。现调整为已返回支付方式必须一致、历史响应缺省仍兼容；提交、查单和关单 API 层继续严格校验动作响应支付方式，并增加缺省回归。
+
+本轮自测：payment-core app-web `npm test` 通过；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.403 2026-10-01 管理端任务中心局部刷新快照执行门禁
+
+管理端支付任务中心总览和任务执行日志并行刷新时，任务日志刷新失败但总览成功的局部失败场景此前仍可执行人工任务，可能基于过期任务快照操作。本轮将任务执行统一绑定 `canUseTaskRuns`，要求总览与任务日志快照同时有效，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.427 2026-10-02 管理端控制策略候选应用编码连续性门禁
+
+控制策略新增复核此前虽按 `candidate.sourceAppId` 校验响应归属，但请求层仍可能原样发送带边界空白的候选应用编码，造成请求事实与响应绑定口径不一致。本轮规范化嵌套候选应用编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.404 2026-10-01 管理端工作台过期快照导航门禁
+
+管理端工作台刷新失败后会继续展示上次成功的指标和待办，但重点事项与快捷入口此前仍可基于过期快照跳转排障页面。本轮补充统一 `canUseSnapshot` 导航门禁，阻止过期工作台事实继续下钻，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.405 2026-10-01 管理端支付监控过期快照选择门禁
+
+管理端支付监控刷新失败后，告警与渠道行此前仍可切换当前选中快照，虽然联查按钮已禁用，但页面仍可能展示陈旧运营上下文。本轮将告警、渠道选择统一绑定 `canDrillDown`，并增加过期快照回归。
+
+本轮自测：payment-core admin-web `npm test` 通过；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.406 2026-10-01 管理端支付流水过期快照联查门禁
+
+管理端支付流水列表刷新失败后，行内支付单、流水详情、快照、报文及右侧联查入口虽然由方法内部拦截，但按钮状态未统一反映当前快照不可用，仍可能造成过期事实可操作的误导。本轮将所有支付流水联查与读取动作统一绑定 `canUseSnapshot`，并增加视图契约回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`229/229`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.407 2026-10-02 跨系统 happy-path 事件、退款事实与状态样式闭环门禁
+
+本轮修正支付成功事件金额断言、结算已消费状态样式、账务清分事件业务号连续性，并补齐退款接口的业务链路、渠道及提交时间事实与联表查询；同时增加结算事件状态回归。
+
+本轮自测：跨系统合同测试通过（`48/48`）；结算事件服务测试通过（`5/5`）；受控 `payment-chain` HTTP 冒烟与 happy-path 全链路通过，对账状态为 `COMPLETED`、完成阶段 `4/4` 且可财务关账；`node --check` 与 `git diff --check` 通过。
+
+### 10.408 2026-10-02 退款渠道与提交时间事实集成回归
+
+退款中心接口新增的原支付渠道和渠道提交时间字段此前只有跨系统 HTTP 证据，缺少数据库/MyBatis 状态机集成回归。本轮在成功退款集成场景补充申请、提交、成功回调和详情查询的字段连续性断言。
+
+本轮自测：refund-center `RefundCenterIntegrationTest` 通过（`5/5`）；payment-core App Web 测试通过（`67/67`）。
+
+### 10.409 2026-10-02 小程序支付提交支付方式请求层连续性门禁
+
+小程序页面层此前已校验支付提交响应的支付方式，但底层 `paymentApi.submit` 规范化器未绑定请求中的 `paymentMethod`，其他调用方可能绕过页面校验接受支付方式漂移。本轮将已声明的支付方式绑定到请求层响应校验，并补充缺失、错配和匹配回归。
+
+本轮自测：小程序测试通过（`75/75`）；payment-core App Web 测试通过（`67/67`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.410 2026-10-02 管理端退款动作 API 快照连续性门禁
+
+管理端退款动作此前主要依赖页面层校验，API 层调用方仍可能接收客户、原支付方式或渠道事实漂移的动作响应。本轮为退款动作规范化器增加可选当前快照绑定，并让退款列表与详情动作统一传入已加载快照，补充客户名和支付方式错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`230/230`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.411 2026-10-02 管理端支付动作渠道快照连续性门禁
+
+管理端支付查单、关闭动作此前虽绑定支付单号、订单号、金额和预支付单号，但 API 层未使用当前渠道、渠道流水号和支付方式快照，调用方可能接收渠道事实漂移的动作响应。本轮将完整支付快照传入动作规范化器，并补充渠道、渠道流水号和支付方式错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`231/231`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.412 2026-10-02 用户支付提交渠道编码请求层连续性门禁
+
+App Web 与小程序支付提交请求此前已发送 `channelCode`，但客户端规范化器只绑定预支付单号和支付方式，其他调用方可能接受渠道编码漂移的提交响应。本轮将声明的渠道编码绑定到两套用户端请求层，并补充匹配与错配回归。
+
+本轮自测：payment-core App Web 测试通过（`67/67`）；payment-core 小程序全量测试通过（`75/75`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.413 2026-10-02 CLI 支付提交渠道编码响应连续性门禁
+
+支付 API CLI 已发送 `--channel-code`，但提交响应校验此前只检查渠道字段格式，未确认响应渠道与命令声明一致。本轮为非终态和成功终态提交响应补充渠道编码绑定，并增加匹配与错配回归。
+
+本轮自测：payment-core frontend/api-client 测试通过（`12/12`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.414 2026-10-02 管理端支付事件重发目标事件连续性门禁
+
+管理端支付事件重发 API 此前只校验返回分页结构，未确认分页仍包含被操作的事件号，响应切换到其他事件时页面可能误选结果。本轮将目标事件号绑定到重发结果校验，并补充缺失目标事件回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`231/231`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.415 2026-10-02 管理端支付异常批量动作归属连续性门禁
+
+支付异常批量处理 API 此前只校验返回分页结构，未确认返回分页包含本次提交的全部异常号，可能在结果漂移时仍提示批量处理成功。本轮将提交的 `issueNos` 绑定到响应分页校验，并补充缺失异常号回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`231/231`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.416 2026-10-02 管理端任务中心动作任务编码连续性门禁
+
+任务中心手工动作此前虽校验返回任务身份字段格式，但未确认响应任务编码与点击执行的任务一致，任务结果漂移时可能更新错误任务的运营总览。本轮为任务动作规范化器增加可选任务编码绑定，让全部任务中心动作 API 接收期望任务编码，并由页面将点击任务编码传入；同时补充任务编码错配回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`232/232`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.417 2026-10-02 管理端告警回执回查任务身份连续性门禁
+
+单条告警回执回查 API 此前只校验任务动作结果结构，未确认响应属于固定的告警回执回查任务，任务身份漂移时可能仍刷新当前告警结果。本轮将单条回查响应绑定到 `PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE`，并补充其他任务编码回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`233/233`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.418 2026-10-02 管理端日终跑批业务日连续性门禁
+
+日终跑批 API 此前直接转发调用方的业务日，并使用未规范化的原始值绑定响应，边界空白可能导致服务请求与返回业务日校验不一致。本轮先规范化 `bizDate` 再提交，并以同一规范化值校验响应；补充请求体与返回业务日回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.419 2026-10-02 管理端渠道启停申请编码连续性门禁
+
+渠道启停申请响应此前已校验渠道归属，但请求层仍可能原样发送带边界空白的 `channelCode`，造成请求事实与响应绑定口径不一致。本轮在渠道启停申请 API 边界统一规范化 `channelCode`，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.420 2026-10-02 管理端网关启停申请编码连续性门禁
+
+网关启停申请响应此前已校验网关归属，但请求层仍可能原样发送带边界空白的 `gatewayCode`，造成请求事实与响应绑定口径不一致。本轮在网关启停申请 API 边界统一规范化 `gatewayCode`，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.421 2026-10-02 跨系统支付提交渠道事实连续性门禁
+
+跨系统 happy-path 此前只确认支付提交响应包含支付方式与渠道字段，未确认它们与请求声明一致，渠道漂移仍可能进入后续回调、清分和结算验证。本轮为初次及幂等支付提交断言增加请求支付方式与渠道绑定，并补充渠道漂移回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.448 2026-10-02 账务清分事件业务链路连续性门禁
+
+账务清分事件此前会接受与原支付单号不匹配的 `businessChainId`，可能把清分入账投影到错误业务链路。本轮按清分事件 `bizNo`（原支付单号）校验并规范化业务链路，补充错误链路拒绝与缺省链路推导回归。
+
+本轮自测：跨系统 Node 回归通过（`48/48`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.449 2026-10-02 账务事件幂等事实一致性门禁
+
+账务事件此前按事件类型和业务单号幂等返回，但未校验重复请求的业务链路与金额，可能用漂移后的金额重复上报对账事实。本轮复用原事件载荷校验链路和金额一致性，并补充重复支付金额变更拒绝回归。
+
+本轮自测：跨系统 Node 回归通过（`48/48`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.450 2026-10-02 管理端支付问题查询标识连续性门禁
+
+管理端支付问题列表、责任汇总、告警日志和告警导出此前会将带边界空白的支付单号、订单号、问题号或告警号原样拼入查询参数，可能造成运营筛选事实漂移。本轮统一规范化四类查询入口的业务标识，并补充请求 URL 回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`235/235`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.451 2026-10-02 用户预付单支付场景连续性门禁
+
+用户业务入口此前虽按场景切换保护旧响应，但预付单响应校验未确认返回的 `payScene` 与请求一致，错误场景事实仍可能进入统一收银台。本轮规范化预付请求支付场景并绑定响应校验，补充场景漂移拒绝回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`72/72`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.452 2026-10-02 用户收银台支付场景连续性门禁
+
+用户收银台此前仅按预付单号校验接口响应，路由 `bizType` 与返回 `payScene` 不一致时仍可能展示错误业务收银台。本轮按终端和业务场景绑定初次加载及恢复刷新响应，补充场景漂移拒绝与视图 wiring 回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`73/73`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.453 2026-10-02 用户支付结果支付场景连续性门禁
+
+用户支付结果页此前仅校验支付单号、预付单号和支付方式，路由业务场景与返回支付详情的 `payScene` 不一致时仍可能展示错误结果上下文。本轮绑定初次详情加载及自动刷新响应的终端业务场景，补充场景漂移拒绝与视图 wiring 回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`74/74`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.454 2026-10-02 用户支付结果动作场景连续性门禁
+
+用户支付结果页此前虽已绑定详情加载场景，但主动查单和关单响应仍只按支付快照合并，未确认返回 `payScene` 与路由业务场景一致。本轮为两类支付动作复用场景校验，并补充动作响应漂移与视图 wiring 回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`75/75`）；`node --check` 与 `git diff --check` 通过。
+
+### 10.422 2026-10-02 跨系统支付回调渠道事实连续性门禁
+
+跨系统 happy-path 此前只确认重复回调保持彼此一致，未确认回调仍保持支付提交阶段声明的支付方式与渠道。本轮为初次及重复支付回调断言增加提交渠道绑定，并补充回调渠道替换回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.423 2026-10-02 跨系统清分目标事实拒绝臆造门禁
+
+跨系统 happy-path 此前在清分订单缺少人员或出款目标时回退使用固定的 `WRK1001`，可能把缺失的下游事实误判为已验证。本轮要求清分响应明确提供 `workerNo` 或 `targetNo`，缺失时立即失败，并补充目标解析回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.424 2026-10-02 跨系统清分目标解析单元门禁
+
+清分目标拒绝臆造逻辑此前只位于主流程。本轮将目标解析提取为可复用断言，并覆盖 `workerNo`、`targetNo` 与目标缺失三类单元回归，确保后续脚本改动不会重新引入固定目标回退。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.425 2026-10-02 管理端支付协议复核编码连续性门禁
+
+支付协议新增复核此前虽按 `candidate.protocolCode` 校验响应归属，但请求层仍可能原样发送带边界空白的协议编码，造成请求事实与响应绑定口径不一致。本轮规范化嵌套候选协议编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.426 2026-10-02 管理端支付网关复核编码连续性门禁
+
+支付网关新增复核此前虽按 `candidate.gatewayCode` 校验响应归属，但请求层仍可能原样发送带边界空白的网关编码，造成请求事实与响应绑定口径不一致。本轮规范化嵌套候选网关编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.428 2026-10-02 管理端支付渠道候选编码连续性门禁
+
+支付渠道新增复核此前虽按 `candidate.channelCode` 校验响应归属，但请求层仍可能原样发送带边界空白的候选渠道编码，造成请求事实与响应绑定口径不一致。本轮规范化嵌套候选渠道编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.429 2026-10-02 管理端路由规则状态编码连续性门禁
+
+路由规则状态复核此前虽按 `ruleCode` 校验响应归属，但请求层仍可能原样发送带边界空白的规则编码，造成请求事实与响应绑定口径不一致。本轮规范化状态复核顶层规则编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.430 2026-10-02 管理端路由规则候选编码连续性门禁
+
+路由规则新增复核此前虽按 `candidate.ruleCode` 校验响应归属，但请求层仍可能原样发送带边界空白的候选规则编码，造成请求事实与响应绑定口径不一致。本轮规范化嵌套候选规则编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.431 2026-10-02 管理端支付协议状态编码连续性门禁
+
+支付协议状态复核此前虽按 `protocolCode` 校验响应归属，但请求层仍可能原样发送带边界空白的协议编码，造成请求事实与响应绑定口径不一致。本轮规范化状态复核顶层协议编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.432 2026-10-02 管理端支付返回码状态编码连续性门禁
+
+支付返回码状态复核此前虽按 `channelCode` 与 `channelReturnCode` 校验响应归属，但请求层仍可能原样发送带边界空白的双重编码，造成请求事实与响应绑定口径不一致。本轮规范化两个状态复核编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.433 2026-10-02 管理端值班花名册创建编码连续性门禁
+
+值班花名册创建此前虽按 `rosterCode` 校验响应归属，但请求层仍可能原样发送带边界空白的花名册编码，造成请求事实与响应绑定口径不一致。本轮规范化创建请求编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.434 2026-10-02 管理端告警提供方创建编码连续性门禁
+
+告警提供方创建此前虽按 `providerCode` 校验响应归属，但请求层仍可能原样发送带边界空白的提供方编码，造成请求事实与响应绑定口径不一致。本轮规范化创建请求编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.435 2026-10-02 管理端告警提供方状态编码连续性门禁
+
+告警提供方状态复核此前虽按 `providerCode` 校验响应归属，但请求层仍可能原样发送带边界空白的提供方编码，造成请求事实与响应绑定口径不一致。本轮规范化状态复核请求编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.436 2026-10-02 管理端值班花名册状态编码连续性门禁
+
+值班花名册状态复核此前虽按 `rosterCode` 校验响应归属，但请求层仍可能原样发送带边界空白的花名册编码，造成请求事实与响应绑定口径不一致。本轮规范化状态复核请求编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.437 2026-10-02 管理端控制策略状态编码连续性门禁
+
+控制策略状态复核此前虽按 `sourceAppId` 校验响应归属，但请求层仍可能原样发送带边界空白的来源应用编码，造成请求事实与响应绑定口径不一致。本轮规范化状态复核请求编码，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.438 2026-10-02 管理端返回码导入基线连续性门禁
+
+返回码导入复核此前虽按 `baselineFingerprint` 校验响应归属，但请求层仍可能原样发送带边界空白的导入基线指纹，造成请求事实与响应绑定口径不一致。本轮规范化导入请求指纹，并补充请求体回归。
+
+本轮自测：payment-core admin-web `npm test` 通过（`234/234`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.439 2026-10-02 用户支付提交方式与渠道编码连续性门禁
+
+用户支付提交此前仅规范化 `prepayOrderNo`，但响应绑定同时依赖 `paymentMethod` 与 `channelCode`，边界空白可能导致请求事实与支付提交响应无法一致匹配。本轮统一规范化三个提交标识，并补充请求体回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`67/67`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.440 2026-10-02 用户收银台终端上下文连续性门禁
+
+用户收银台读取接口此前会将终端上下文原样拼入查询参数，边界空白可能导致后端终端识别与当前页面上下文不一致。本轮规范化 `terminal` 查询参数，并补充请求 URL 回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`67/67`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.441 2026-10-02 用户支付结果页访问令牌迁移连续性门禁
+
+用户支付结果页此前仅在组件首次挂载时迁移旧版 `accessToken` 查询参数，复用页面实例发生路由查询变更时可能无法及时持久化并清理令牌。本轮将令牌迁移绑定到查询参数 watcher，并补充路由变更回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`68/68`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.442 2026-10-02 用户退款进度跨单切换刷新状态门禁
+
+用户退款进度页在手工刷新请求尚未返回时切换到另一退款单，旧请求会因版本失效跳过清理，导致新退款页仍保持 `refreshing` 状态并禁用刷新按钮。本轮在新退款详情加载开始时重置刷新状态，并补充切换回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`69/69`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.443 2026-10-02 用户收银台访问令牌查询连续性门禁
+
+用户收银台此前仅在加载收银台时同步旧版 `accessToken` 查询参数，复用同一预付单页面发生查询变更时可能无法及时持久化并清理令牌。本轮将令牌同步绑定到收银台查询参数 watcher，并补充路由变更回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`70/70`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.444 2026-10-02 用户业务入口场景切换提交连续性门禁
+
+用户业务入口创建预付单请求尚未返回时切换业务场景，旧场景响应此前仍可能把用户路由到收银台，造成收银台业务类型与发起页面不一致。本轮捕获提交时场景并拒绝过期响应导航，并补充场景切换回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`71/71`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.445 2026-10-02 跨系统清分目标规范化连续性门禁
+
+跨系统 happy-path 此前会接受带边界空白的清分人员或出款目标并原样传递给后续结算断言，虽然校验通过但目标身份不 canonical。本轮让 `assertClearingTarget` 返回规范化后的目标编号，并补充清分目标回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.446 2026-10-02 跨系统清分至结算目标连续性门禁
+
+跨系统 happy-path 此前仅校验结算草稿包含有效服务者目标，未确认其与清分目标一致，错误目标可能继续进入审核与出款链路。本轮将清分目标传入结算身份断言并增加目标不一致回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.447 2026-10-02 跨系统结算出款目标连续性门禁
+
+跨系统 happy-path 此前仅校验待出款和已出款记录存在目标编号，未确认批次内每条出款记录都继承结算目标，错误目标可能混入批量出款。本轮为待出款和已完成批次断言增加目标匹配，并补充不一致回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check tools/dev/cross-system-happy-path.mjs` 与 `git diff --check` 通过。
+
+### 10.455 2026-10-02 管理端支付异常批量动作目标连续性门禁
+
+支付异常批量处理 API 此前只校验返回分页结构，未确认分页仍包含本次提交的全部异常号，且提交的异常号未在客户端统一规范化。本轮将全部提交异常号绑定到结果分页校验，并补充缺失目标异常回归。
+
+本轮自测：`node --test systems/payment-core/frontend/admin-web/src/api/client.test.js` 通过（`165/165`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.456 2026-10-02 用户收银台支付场景 API 绑定门禁
+
+用户收银台视图此前将路由业务场景传入 `getCashier`，但 API client 忽略该参数，收银台响应的 `payScene` 漂移时仍可能被页面接受。本轮让 API client 将预期场景绑定到收银台响应校验，并补充 API 层拒绝回归。
+
+本轮自测：`npm test`（payment-core app-web）通过（`76/76`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.457 2026-10-02 小程序支付场景与支付详情契约连续性门禁
+
+小程序支付 client 此前未把入口场景绑定到预付、收银台和结果详情/动作响应，且后端支付详情 DTO 与查询 SQL 未返回 `payScene`。本轮补齐 client/page 场景绑定、支付详情 `payScene` 字段和漂移回归。
+
+本轮自测：`npm test`（payment-core mini-program）通过（`77/77`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.458 2026-10-02 用户支付提交场景连续性门禁
+
+用户 App 与小程序支付提交响应此前未绑定当前收银台业务场景，提交结果可能携带其他 `payScene` 并继续跳转结果页。本轮为两端 submit API 和页面 wiring 增加场景校验，并补充漂移回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`76/76`），mini-program `npm test` 通过（`77/77`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.459 2026-10-02 管理端路由规则冲突事实门禁
+
+管理端路由规则冲突检测此前直接消费集合响应，未校验冲突类型、严重级别、规则身份、优先级和说明，异常响应可能被当作无阻断事实。本轮增加冲突集合归一化并补充 malformed 回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`237/237`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.460 2026-10-02 管理端路由冲突接口归一化门禁
+
+管理端路由冲突检测接口此前直接返回集合，页面可消费未经事实校验的冲突对象。本轮将 `getRouteRuleConflicts` 接入冲突归一化器，并补充 malformed 接口响应回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`237/237`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.461 2026-10-02 跨系统支付场景连续性门禁
+
+跨系统 happy-path 此前虽以 `HOME_CLEAN` 发起预付，但未校验预付、收银台和支付提交响应继承同一支付场景，场景漂移可能继续进入统一支付链路。本轮为三类响应断言增加可选场景绑定，并覆盖缺失、错误场景及重复提交响应回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.462 2026-10-02 跨系统支付回调与详情场景连续性门禁
+
+跨系统 happy-path 此前仅校验预付、收银台和支付提交响应的 `payScene`，支付回调及支付详情仍可能携带场景漂移并继续进入清分链路。本轮将支付身份断言、重复回调断言和成功详情断言绑定到 `HOME_CLEAN`，并覆盖缺失及错误场景回归。
+
+本轮自测：`node --test tools/dev/cross-system-happy-path.test.mjs` 通过（`48/48`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.463 2026-10-02 管理端预付支付场景连续性门禁
+
+管理端订单发起支付时虽提交了 `HOME_CLEAN`，但 `paymentApi.prepay` 未将响应 `payScene` 与请求场景绑定，错误场景仍可能生成收银台入口。本轮补齐预付响应场景校验，并覆盖缺失及错误场景回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`237/237`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.464 2026-10-02 管理端支付动作场景快照连续性门禁
+
+管理端支付详情查询和关单动作此前会校验支付单、订单、金额及渠道快照，但未比较已加载快照中的 `payScene`，场景漂移可能被当作同一支付事实接受。本轮补充场景快照比较并覆盖动作刷新漂移回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`237/237`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.465 2026-10-02 管理端支付动作快照场景保留门禁
+
+管理端支付列表执行查单或关单后重建选中支付快照时此前遗漏 `payScene`，后续动作可能失去场景连续性约束。本轮保留动作返回中的支付场景，并增加 `PaymentsView` wiring 回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`238/238`）；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.466 2026-10-02 管理端支付列表场景契约门禁
+
+管理端支付列表 SQL 已引用预付单 `pay_scene`，但此前未连接预付表，列表 DTO 也未声明该字段，导致场景无法可靠进入运营快照。本轮补齐预付表关联、列表/导出 DTO 字段及前端列表响应校验，并覆盖缺失场景回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`238/238`）；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.467 2026-10-02 管理端支付列表场景映射修复门禁
+
+支付列表此前在 SQL 中引用 `pr.pay_scene` 却缺少预付单关联，导致列表场景字段存在映射失败风险。本轮补齐列表和导出查询的预付单关联与 `payScene` 字段映射，并以前端列表契约回归确认缺失场景被拒绝。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`238/238`）；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.468 2026-10-02 管理端支付记录场景连续性门禁
+
+支付记录列表、导出和详情此前未映射预付单 `pay_scene`，运营记录无法继承支付场景，详情快照也无法识别场景漂移。本轮补齐支付记录 DTO、三类 SQL 查询、前端响应校验和快照比较，并覆盖缺失及漂移回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`238/238`）；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.469 2026-10-02 管理端支付记录场景可视化门禁
+
+支付记录接口已返回 `payScene`，但列表选中摘要和详情页此前未展示该事实，运营无法直接确认记录所属业务场景。本轮在记录列表摘要和详情信息区展示支付场景，并增加两个视图 wiring 回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`240/240`）；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.471 2026-10-02 管理端退款场景投影门禁
+
+退款列表、导出、单笔详情及动作响应此前未投影原支付单对应预付单的 `payScene`，退款运营快照无法确认所属业务场景，动作刷新也无法识别场景漂移。本轮补齐退款 DTO、查询映射、前端响应校验、列表/详情展示和退款动作快照绑定，并增加缺失及漂移回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`244/244`）；Node 语法检查、XML 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.472 2026-10-02 用户退款进度场景刷新门禁
+
+用户退款进度页首次加载能够展示退款事实，但自动轮询和手动刷新构造的快照此前遗漏 `payScene`，场景漂移可能在用户端被当作同一退款事实接受。本轮将共享 App/H5/PC 退款进度快照绑定支付场景并展示该事实，增加场景漂移回归。
+
+本轮自测：payment-core app-web 定向 `npm test` 通过；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.473 2026-10-02 小程序退款进度场景刷新门禁
+
+小程序退款进度页独立维护轮询快照，原先仅比较支付单、金额、客户、支付方式和渠道事实，未比较 `payScene`，场景漂移可能继续展示为同一退款进度。本轮补齐小程序退款进度场景比较和展示，并增加刷新漂移回归。
+
+本轮自测：payment-core mini-program 定向测试通过；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.474 2026-10-02 跨系统退款支付场景连续性门禁
+
+退款中心此前只接收支付成功金额、订单、客户和渠道事实，未接收或投影 `payScene`，跨系统退款申请、审核、提交、回调和详情无法验证与支付主链路的业务场景连续性。本轮补齐退款中心支付成功投影表、Mapper、DTO、幂等校验、管理端展示及 happy-path 全阶段场景断言。
+
+本轮自测：cross-system happy-path 定向测试 `49/49`、refund-center admin-web `13/13` 通过；Node/XML 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.475 2026-10-02 退款中心支付场景生产迁移门禁
+
+退款中心新增 `pay_scene` 后，随附 schema 只能覆盖新建实例，既有生产投影表若不执行增量 DDL 仍会在写入或查询时缺列。本轮补充 `systems/refund-center/database/migrations/2026-10-02-add-payment-scene.sql` 并更新数据库执行说明，明确历史记录保留为空、后续支付成功投影填充场景。
+
+本轮自测：迁移文件静态检查、XML/Node 语法检查与 `git diff --check` 通过；真实 MySQL DDL 未执行，Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.476 2026-10-02 小程序退款入口场景回返门禁
+
+小程序退款进度页返回业务入口此前硬编码为 `balance-pay`，充值、提现补款和转账补款退款会被带回错误业务入口。本轮保留退款进度路由中的场景参数并按场景回返，增加充值场景回返回归。
+
+本轮自测：payment-core mini-program 定向测试通过；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.477 2026-10-02 Web 退款入口场景回返门禁
+
+共享 App/H5/PC 退款进度页返回支付入口此前固定跳转 `/balance-pay`，充值、提现补款和转账补款退款会被带回错误业务入口。本轮依据退款详情中的 `payScene` 映射到对应入口，并增加 Web wiring 回归。
+
+本轮自测：payment-core app-web 定向测试通过；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.470 2026-10-02 管理端支付记录刷新场景快照门禁
+
+支付记录详情页虽然已比较 `payScene`，但刷新前构造的期望快照此前未携带该字段，实际动作刷新无法触发场景漂移保护。本轮将详情当前场景写入刷新快照，并增加视图 wiring 回归。
+
+本轮自测：`npm test`（payment-core admin-web）通过（`241/241`）；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.402 2026-10-01 用户支付结果路由支付方式变更刷新门禁
+
+App/H5/PC 支付结果页首次加载已校验路由支付方式，但同一页面实例内仅切换 `paymentMethod` 查询参数时，原 watcher 未触发重新加载，可能继续展示旧支付方式结果。本轮将支付方式纳入结果路由身份监听，并增加路由变更回归。
+
+本轮自测：payment-core app-web `npm test` 通过；`node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.478 2026-10-02 外部退款进度链接场景连续性门禁
+
+管理端打开用户退款进度页时此前只携带退款单号，用户端无法用外部入口场景约束退款详情，错误场景响应仍可能进入页面。本轮将管理端可用的 `payScene` 编码进外部退款进度 URL，并由用户端查询、首次加载及轮询刷新共同校验；兼容历史无场景链接及历史空场景退款记录。
+
+本轮自测：payment-core admin-web `245/245`、app-web `79/79`；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.479 2026-10-02 小程序退款详情场景请求门禁
+
+小程序退款进度页虽保存并展示业务场景，但退款详情请求此前未将该场景传入响应校验，首次加载和刷新可能接受其他场景的退款事实。本轮补齐小程序退款详情 API 的场景参数绑定，并覆盖初次加载、场景匹配及错误场景拒绝回归。
+
+本轮自测：payment-core mini-program `79/79`；Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.480 2026-10-02 退款成功出站场景连续性门禁
+
+退款中心退款详情已保留 `payScene`，但退款成功 outbox 及会计下游成功 payload 此前只携带退款单、支付单和金额，终态跨系统派发可能丢失业务场景。本轮补齐 DAO、Mapper、SQL outbox JSON、会计下游 payload 及 happy-path 校验，覆盖原始 outbox 与重复派发响应。
+
+本轮自测：cross-system happy-path 定向测试 `49/49`；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.481 2026-10-02 会计退款事件场景落库门禁
+
+退款中心已将 `payScene` 发送至会计下游，但会计退款成功事件请求此前没有该字段，事件 payload 仍会丢失场景。本轮补齐会计请求 DTO、退款成功事件 payload 序列化、服务单测及跨系统事件 payload 断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`；Node 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.485 2026-10-02 清分订单支付场景投影门禁
+
+清分支付成功事件已保存 `payScene`，但清分订单实体、持久化表和管理端响应此前未继续投影该字段，清分结果与支付主链路无法在运营侧核验业务场景。本轮补齐清分订单字段、Mapper/SQL、历史数据增量迁移、管理端展示及跨系统清分订单场景断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`、clearing admin-web API 定向测试 `14/14`、clearing admin-web `npm run build` 通过；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.486 2026-10-02 清分生成下游支付场景连续性门禁
+
+清分订单已保存 `payScene`，但清分生成事件向结算、账务和对账出站时此前仍会丢失场景，导致同一支付链路在下游事件中无法核验业务类型。本轮补齐清分 outbox、结算事件、账务事件及结算/清分对账事实 payload 的 `payScene`，并扩展 happy-path 断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`；Node 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.487 2026-10-02 结算订单支付场景投影与运营核验门禁
+
+清分生成事件虽已向结算系统传递 `payScene`，但结算订单此前只保留清分单号和业务链路，持久化查询、管理端响应及订单列表无法核验支付业务场景。本轮补齐结算订单实体/DTO/Mapper、MyBatis 查询与写入、H2/MySQL schema、增量迁移兼容的可空字段、种子数据、管理端响应校验与列表展示，并覆盖事件生成订单的场景连续性断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`、settlement admin-web API 定向测试 `14/14`、settlement admin-web `npm run build` 通过（Vite `42` 个模块）；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.488 2026-10-02 结算清分事件重复消费场景一致性门禁
+
+结算系统重复消费同一清分生成事件时此前只按清分单号返回原事件，未比较重放请求的业务链路、支付场景、金额和对象快照，场景或金额被篡改的消息可能被静默接受。本轮在既有订单幂等分支增加事实一致性校验，保持完全相同请求幂等返回，同时拒绝 `payScene` 等关键事实漂移，并补充回归测试。
+
+本轮自测：settlement Java 回归未执行（当前环境未安装 Maven）；Node/XML 静态检查与 `git diff --check` 通过。
+
+### 10.489 2026-10-02 账务流水支付场景投影与运营核验门禁
+
+账务事件 payload 已保留 `payScene`，但支付成功、清分和退款产生的账务流水此前只保留业务类型与业务号，财务运营无法直接从流水核验支付业务场景。本轮补齐账务流水实体/DTO/Mapper、写入与查询 SQL、H2/MySQL schema、历史数据可空迁移、事件到流水的场景传递、管理端响应校验与列表/详情展示，并扩展跨系统 happy-path 对三类账务流水场景的断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`、accounting admin-web API 定向测试 `16/16`、accounting admin-web `npm run build` 通过（Vite `44` 个模块）；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.490 2026-10-02 对账跨系统事实支付场景一等字段门禁
+
+对账跨系统事实此前只在 `payload` 文本中保留 `payScene`，链路查询无法直接按事实字段核验支付业务场景。本轮补齐事实请求/快照 DTO、MyBatis、H2/MySQL schema、历史数据迁移、五类下游事实写入、管理端链路展示及 happy-path 顶层场景断言。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`；reconciliation admin-web API 定向测试通过；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.491 2026-10-02 对账跨系统事实重复消费一致性门禁
+
+对账事实快照此前依赖数据库唯一键 upsert，重复事实的支付场景、金额、状态或业务号发生漂移时仍会静默覆盖原快照。本轮在写入前读取同一事实键并校验关键事实一致性，完全相同重试继续幂等，场景或金额漂移拒绝落库，并补充集成回归。
+
+本轮自测：reconciliation admin-web API 定向测试 `12/12`、cross-system helper `51/51`；reconciliation admin-web `npm run build` 通过；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.492 2026-10-02 账务事件重复消费支付场景一致性门禁
+
+账务事件幂等校验此前只比较业务链路和金额，重复支付成功、清分或退款事件携带不同 `payScene` 时仍可能复用原事件和流水。本轮解析既有事件 payload 并比较支付场景，完全相同请求继续幂等，场景漂移拒绝处理，并补充支付成功重放回归。
+
+本轮自测：accounting admin-web API `16/16`（前端契约未回归代码变更）；Node/XML 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.493 2026-10-02 支付提交幂等键归属一致性门禁
+
+支付提交此前只按全局幂等键是否存在判断重复请求，客户端将同一显式幂等键复用于另一预付单时可能错误复用当前支付上下文。本轮补齐幂等键对应的预付单/支付单归属查询，在提交入口和并发事务检查中拒绝跨支付单复用，同时保持同一支付单重试幂等，并补充回归测试。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；Node/XML 静态检查与 `git diff --check` 通过。
+
+### 10.482 2026-10-02 对账退款事实场景连续性门禁
+
+退款成功事件已进入会计事件 payload，但退款中心向对账系统上报的 `REFUND_SUCCESS` 事实此前只携带原支付单号文本，未保留支付场景。本轮补齐对账事实摘要中的 `payScene`、派发单测及 happy-path 对账事实断言。
+
+本轮自测：cross-system happy-path 定向测试 `49/49`；Node 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.483 2026-10-02 支付成功会计与对账场景连续性门禁
+
+退款成功链路已保留 `payScene`，但支付成功事件向会计 HTTP/AMQP 及对账事实此前未携带该字段，支付主链路与退款链路的场景契约不对称。本轮补齐 payment-core 事件 payload、会计支付成功 DTO/事件 payload、对账事实 payload 及 happy-path 断言。
+
+本轮自测：cross-system happy-path 定向测试 `49/49`；Node 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.484 2026-10-02 清分支付成功事件场景落库门禁
+
+payment-core 已在支付成功事件中发送 `payScene`，但清分 HTTP 出站 payload 此前未携带该字段，清分消费 DTO 也未声明该字段，清分事件落库时只保留支付单和订单身份，后续无法从 `PAYMENT_SUCCESS` 事件核验业务场景。本轮补齐 payment-core 清分 payload、清分请求 DTO、事件 payload 序列化及服务单测，防止支付成功场景在清分落库环节丢失。
+
+本轮自测：cross-system happy-path 定向测试 `50/50`；Node 静态检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.494 2026-10-02 用户收银台支付动作场景连续性门禁
+
+用户收银台初次加载和支付提交已绑定业务场景，但主动查单、关单及当前支付快照此前未继续携带 `payScene`，动作返回可能绕过场景连续性校验。本轮补齐 Web 收银台查询/关单场景参数、共享支付快照场景比较，并同步补强结果页与小程序结果动作快照，增加场景漂移回归。
+
+本轮自测：payment-core app-web `81/81`、小程序 `80/80`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.495 2026-10-02 小程序收银台支付场景快照门禁
+
+小程序收银台提交结果与失败后的收银台刷新此前只依赖支付单、订单、金额等事实，未在本地快照辅助校验中比较 `payScene`。本轮补齐提交结果和刷新快照的场景绑定，拒绝跨业务场景响应，并补充 utility 与页面回归。
+
+本轮自测：小程序定向回归 `80/80`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.496 2026-10-02 管理端支付场景运营核验门禁
+
+支付列表与支付详情接口此前已经返回 `payScene`，但管理端支付列表/详情未展示该事实，详情刷新快照也未比较场景，运营无法直接核验用户入口与支付链路是否一致。本轮补齐列表表格、选中快照、详情卡片和详情刷新快照的支付场景投影，并增加管理端视图契约测试。
+
+本轮自测：payment-core admin-web 定向回归 `247/247`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.497 2026-10-02 管理端收银台入口支付场景回传门禁
+
+管理端从支付单、收银台会话、订单和账单打开用户收银台时此前只携带预付单号，用户端会按默认业务入口推导场景，`HOME_CLEAN` 等历史场景可能被错误当作余额支付。本轮为管理端 cashier URL 传递原始 `payScene`，并让用户收银台/结果页优先使用该场景完成加载、提交、查单、关单和返回，补充 URL 与视图契约回归。
+
+本轮自测：payment-core admin-web `247/247`、app-web `83/83`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.498 2026-10-02 支付请求详情收银台支付场景连续性门禁
+
+支付请求列表与详情此前从预付单关联数据中未投影 `payScene`，管理端打开该请求对应收银台时会丢失原始业务场景。本轮补齐列表/详情 DTO、MyBatis 投影、前端响应校验、列表与详情展示、刷新快照和收银台 URL 传递，防止支付请求运营入口回落到默认场景。
+
+本轮自测：payment-core admin-web `248/248`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.499 2026-10-02 订单账单收银台支付场景连续性门禁
+
+订单和账单详情接口已经返回最近预付单的 `latestPayScene`，但管理端打开收银台仍硬编码 `HOME_CLEAN`，刷新快照也未比较场景。本轮改为使用后端返回的原始场景，并补齐订单/账单快照比较与视图契约测试，避免历史业务入口被错误重定向。
+
+本轮自测：payment-core admin-web `250/250`；相关 `node --check`、MyBatis XML 解析与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.500 2026-10-02 订单列表收银台支付场景回传门禁
+
+订单列表此前在新建预付单后和打开已有预付单收银台时均硬编码 `HOME_CLEAN`，且列表 DTO 未投影已有预付单的支付场景。本轮补齐列表/导出 SQL 与 DTO 投影，使用预付接口和列表返回的原始场景生成收银台 URL，并增加列表展示与视图契约测试。
+
+本轮自测：payment-core admin-web `250/250`；相关 `node --check`、MyBatis XML 解析与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.501 2026-10-02 支付成功事件 happy-path 场景核验门禁
+
+跨系统 happy-path 已校验清分、账务和对账事实的 `payScene`，但支付成功事件断言只核验渠道与金额，事件 payload 场景漂移可能被测试通过。本轮补齐支付成功事件 helper 的场景参数、主链路调用和漂移回归，确保支付成功事件本身也被场景门禁覆盖。
+
+本轮自测：cross-system happy-path helper `51/51`；相关 `node --check` 与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.502 2026-10-02 支付请求导出支付场景完整性门禁
+
+支付请求导出查询已经返回 `payScene`，但 CSV 序列化此前未写入表头和数据行，运营导出后无法追溯请求所属业务入口。本轮补齐 CSV 字段与服务单测，保持导出结果与列表/详情场景事实一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；Java 字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.503 2026-10-02 支付单导出支付场景完整性门禁
+
+支付单列表与导出查询已经返回 `payScene`，但支付单 CSV 序列化此前仍省略该字段。本轮补齐支付单导出表头、数据行和服务单测，确保运营导出保留支付入口事实。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；Java 字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.504 2026-10-02 订单导出支付场景完整性门禁
+
+订单导出查询已经返回最近预付单的 `latestPayScene`，但订单 CSV 序列化此前仍省略该字段，运营导出无法追溯订单最近支付入口。本轮补齐订单 CSV 字段、数据行和服务单测，确保订单导出与列表及收银台入口保持场景一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；Java 字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.505 2026-10-02 账单列表与导出支付场景完整性门禁
+
+账单详情已返回最近预付单的 `latestPayScene`，但账单列表和 CSV 导出此前未投影或序列化该字段，运营无法从账单中心核验支付入口。本轮补齐账单列表/导出 SQL、DTO、CSV、管理端展示及 H2 Mapper 回归，确保账单运营视图与详情、订单和收银台场景一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；账单 Mapper/服务测试静态核对、管理端场景契约测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.506 2026-10-02 支付记录导出支付场景完整性门禁
+
+支付记录列表与详情查询已经投影 `payScene`，但支付记录 CSV 导出此前仍省略该字段，运营导出无法按业务入口追溯支付事实。本轮补齐 CSV 表头、数据行、服务单测，并完善 Mapper H2 fixture 及场景投影回归，确保支付记录导出与列表/详情保持一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；支付记录字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.507 2026-10-02 退款导出支付场景完整性门禁
+
+退款列表与详情已经携带原支付单的 `payScene`，但退款 CSV 导出此前仍省略该字段，运营无法从退款导出追溯原支付业务入口。本轮补齐退款 CSV 表头、数据行、服务测试及 Mapper 导出投影断言，保持退款运营导出与列表/详情场景一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；退款字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.508 2026-10-02 收银台会话导出支付场景完整性门禁
+
+收银台会话列表、详情和 Mapper 导出查询已经保留 `payScene`，但会话 CSV 导出此前仍省略该字段，运营导出无法追溯用户进入的业务支付入口。本轮补齐会话 CSV 表头、数据行和服务单测，保持会话导出与列表/详情事实一致。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；收银台会话字段/测试静态核对、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.509 2026-10-02 用户业务入口收银台场景回传门禁
+
+用户业务入口此前虽校验预付响应中的 `payScene`，但跳转收银台时只携带 `bizType`，收银台仍需重新推导场景，无法完整保留服务端返回的支付事实。本轮将已验证的 `prepay.payScene` 一并写入收银台路由，并补充入口视图契约测试，确保用户支付主流程沿用服务端确认的业务场景。
+
+本轮自测：app-web 入口视图定向测试通过；相关 Node 语法检查与 `git diff --check` 通过；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.510 2026-10-02 支付流水中心支付场景投影门禁
+
+支付流水中心聚合支付尝试、渠道回调、路由记录和业务事件，但此前没有统一投影 `payScene`，列表、详情和导出无法直接核验同一支付链路的业务入口。本轮补齐四类流水 union、来源详情、DTO、CSV、管理端列表/快照及场景快照比较，并增加 H2 详情回归。
+
+本轮自测：Java/Maven 回归未执行（当前环境未安装 Maven）；支付流水字段/测试静态核对、管理端场景契约测试、MyBatis XML 解析与 `git diff --check` 通过。
+
+### 10.511 2026-10-02 用户支付页同单场景切换快照门禁
+
+App/H5/PC 共用的收银台和结果页此前仅在支付单标识等路由字段变化时重新加载。同一预付单或支付单切换 `payScene` 查询参数，旧场景的收银台/结果快照仍可能保留并允许操作。本轮将有效路由场景纳入两个页面的重载依赖，切换时清除旧快照、使未完成请求失效，并按新场景重新校验服务端事实；补充页面 wiring 回归。
+
+本轮自测：payment-core app-web `npm test` 通过（`86/86`）、`npm run build` 通过、`git diff --check` 通过。测试为页面 wiring/契约测试，尚未执行浏览器交互或真实渠道联调；Java/Maven 回归未执行（当前环境未安装 Maven）。
+
+### 10.512 2026-10-02 小程序收银台手动刷新支付身份门禁
+
+小程序收银台失败后的恢复刷新已校验旧支付快照，但用户手动刷新此前只比较预付单号。同一预付单下若刷新响应中的支付单、业务链路、订单、金额或场景漂移，旧快照会被替换并可能继续提交。本轮复用现有收银台快照校验；发现漂移时清空可操作快照，并补充拒绝漂移和同单正常刷新的页面回归。
+
+本轮自测：payment-core mini-program `npm test` 通过（`82/82`）、相关 `node --check` 和 `git diff --check` 通过。尚未执行微信真机或真实渠道联调，不将本地测试作为渠道支付成功证据。
+
+### 10.513 2026-10-02 支付详情场景投影 HTTP 门禁
+
+受控 payment-chain HTTP 验证在已提交支付单详情处发现 `payScene` 缺失。预付响应正常，根因是 `PaymentMapper.findDetail` 未选择预付单场景，导致详情和回调响应失去场景事实。本轮补齐 SQL 投影与 H2 Mapper 集成断言。复跑后已越过该断言，进入支付成功事件校验。
+
+本轮自测：`PaymentReturnCodeSnapshotMapperIntegrationTest` 定向 Maven 测试通过；九服务本地 HTTP 冒烟通过，第二轮 happy-path 停在支付成功事件 payload。payment-core 全量 `1454` 项回归仍有 `12` 失败、`13` 错误，涉及监控聚合、退款任务、其他测试夹具等既有未提交改动，不能宣称全量通过；不将本地 demo 视为真实渠道证据。
+
+### 10.514 2026-10-02 支付成功事件场景出站门禁
+
+跨系统 HTTP 复跑在支付成功事件 payload 中只看到 `channel`，未见 `payScene`；清分消费者和对账无法从事件事实连续核验支付场景。本轮在回调成功和主动查单成功两条路径的 `PAYMENT_SUCCESS` 出站记录中写入已加载的支付场景，保留非成功回调行为，并扩展服务单测。复跑后已越过该断言，进入清分事件核验。
+
+本轮自测：`PaymentServiceImplTest` 三个相关成功路径及 `PaymentReturnCodeSnapshotMapperIntegrationTest` 定向 Maven 测试通过，受控九服务 HTTP 冒烟通过；全量回归仍按上一节结果记录，未宣称 happy-path 完成。
+
+### 10.515 2026-10-02 本地 payment-chain HTTP happy-path 收口
+
+修复支付详情和支付成功事件支付场景连续性后，联同清分事件业务链路 payload、验证器清分目标来源修复，受控九服务本地 demo 链路通过。隔离支付单 `PAY17909059240671492bba6` 对应清分 `CLO20002`、结算 `SLT20003`、退款 `REF20261002095206915`；对账 `COMPLETED`、阶段 `4/4`、`financialCloseable=true`，脚本正常退出并清理服务。
+
+本轮自测：`local-stack.sh verify payment-chain` 退出码 `0`；支付详情 H2 Mapper、回调和主动查单成功事件相关定向 Maven 测试通过。此结论只证明本地 demo HTTP happy-path，不替代真实渠道、资金到账、生产数据库/MQ、审批和发布；全量后端回归仍有 `12` 失败、`13` 错误，不能宣称 payment-core 全量回归通过。
+
+### 10.516 2026-10-02 支付请求与支付记录 H2 夹具场景补齐
+
+全量后端回归显示支付请求列表测试的预付表夹具缺少 `pay_scene` 列，支付记录退款聚合测试缺少整张预付表，与已实现的列表/详情场景投影不一致。本轮补齐两份隔离 H2 夹具和支付记录场景断言，不修改业务响应。
+
+本轮自测：`PaymentRequestListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试通过；全量重跑 `1454` 项，余 `10` 失败、`4` 错误，未宣称全量通过。
+
+### 10.517 2026-10-02 退款列表支付场景联表列名门禁
+
+退款列表和导出增加预付单场景关联后，排序 `id`、支付单号与订单、客户字段继续使用未限定列名，在 H2 中报歧义，在具有同名列的 MySQL 表中亦有风险；终态事实筛选子查询仍引用被别名遮蔽的原表名。本轮统一限定退款表字段，保持原有筛选、排序和场景投影语义。
+
+本轮自测：`RefundListMapperIntegrationTest` 定向 Maven 测试通过；全量回归仍有 `10` 失败、`4` 错误（详见上一节），不视为整体放行。
+
+### 10.518 2026-10-02 payment-core 全量回归收口
+
+继续核对支付与退款终态门禁后，发现失败退款排序夹具的最早 `terminal_at` 早于后续插入的支付尝试完成时间，因而被正确的终态事实门禁排除；改为晚于尝试完成时间、保持预期先后顺序的确定时间。支付服务两处测试夹具补齐预付金额、支付金额和成功事实创建时间；退款并发 H2 夹具补齐场景投影需要的预付表、退款渠道列与重试来源需要的尝试表。不放宽业务校验或排序断言。
+
+本轮自测：`RefundSubmitOutboxMapperIntegrationTest`、`PaymentServiceImplTest`、`RefundApplicationConcurrencyIntegrationTest` 定向 Maven 测试通过；`node tools/dev/backend-regression.mjs --only payment-core` 退出码 `0`，Surefire XML 汇总 `1454` 项、`0` 失败、`0` 错误、`0` 跳过；`git diff --check` 通过。本地 H2/模拟协议回归不替代真实渠道、生产基础设施和正式发布验证。
+
+### 10.519 2026-10-02 支付单更新时间交付 schema 与迁移门禁
+
+支付记录列表、详情和导出读取 `t_payment_order.updated_at`，应用初始化 schema 已新增该列，但独立交付 schema 和存量库迁移仍缺列；新建独立库或升级旧库会在支付记录查询处失败。本轮补齐交付 schema、一次性增量迁移和结构契约测试。迁移先建立可空列，以历史 `created_at` 作为未知更新时间的下界回填，再收紧为非空且自动更新时间；既有历史值不宣称是真实末次更新时间。
+
+本轮自测：`PaymentSchemaBaselineContractTest` 定向 Maven 测试通过；真实 MySQL 迁移未执行。旧库执行前须停写、备份、确认列不存在并评估大表锁与回填成本；正式发布审批和生产验证另行完成。
+
+### 10.520 2026-10-02 支付记录预付关联去重门禁
+
+预付单表只保证预付单号唯一，不保证同一支付单号只对应一条预付记录。支付记录列表、导出和详情此前直接按支付单号联表；存量或异常重复关联会把一条支付记录扩成多行，与独立计数不一致，并可能投影错误场景。本轮复用支付详情的确定性选择规则（预付创建时间、主键倒序）只关联一条最新预付事实；H2 回归插入较晚写入但创建时间较早的重复关联，校验列表、导出、计数和详情的一致性。
+
+本轮自测：`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块通过；`git diff --check` 通过。未修改存量异常数据，也不把旧预付事实静默解释为真实业务场景。
+
+### 10.521 2026-10-02 支付单列表预付关联去重门禁
+
+支付单列表与导出同样直接按支付单号关联预付单，在重复关联存在时复制支付单行、破坏分页和列表/计数一致性；支付详情已有按预付创建时间及主键倒序选择唯一最新事实的规则。本轮让列表和导出沿用该规则，并在 H2 测试中增加较晚插入但较早创建的重复预付记录，要求列表、导出只出现一条支付单，场景与计数一致。
+
+本轮自测：`PaymentMapperStateTransitionIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块通过，`git diff --check` 通过。历史重复关联本身仍需独立审计，不据此自动删除或回写生产数据。
+
+### 10.522 2026-10-02 最新预付事实查询索引交付门禁
+
+支付记录与支付单详情、列表改为按支付单号选唯一最新预付事实后，原预付表只有以 `expires_at` 或 `order_no` 为首列的索引，无法为该支付单号关联提供合适的前导键。本轮在应用及交付 schema 对齐 `(payment_order_id, created_at, id)` 复合索引，补一次性旧库迁移与静态契约测试，保持查询排序和场景语义不变。
+
+本轮自测：`PaymentSchemaBaselineContractTest` 定向 Maven 测试通过，payment-core 全量 Maven 回归 `1/1` 模块通过；`git diff --check` 通过。未执行真实 MySQL DDL 或 `EXPLAIN`；大表索引构建、锁影响及执行计划须在受控环境评估后另行审批。
+
+### 10.523 2026-10-02 退款支付场景预付关联去重门禁
+
+退款列表、导出、单条摘要与详情此前按支付单号直接联预付单；同一支付单存在多条预付关联时，退款会重复展示、单条查询可能抛多结果异常，场景也可能取错。本轮四处统一按预付创建时间和主键倒序选择唯一最新事实；H2 注入较晚插入、较早创建的重复预付，验证退款列表、计数、导出及单条查询一致。并发退款隔离夹具按真实预付主键与创建时间补齐，不放宽退款并发保护。
+
+本轮自测：`RefundListMapperIntegrationTest`、`RefundApplicationConcurrencyIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块通过，`git diff --check` 通过。历史重复关联留待受控审计，不自动改写资金事实。
+
+### 10.524 2026-10-02 待查支付任务预付关联去重门禁
+
+任务中心手动和自动待查支付候选、积压计数与到期计数只需确认支付单有预付事实，此前用非唯一的预付联表参与 `ROW_NUMBER` 渠道配额计算；重复关联会重复派发同一支付单、挤占其他支付单配额并放大积压指标。本轮四处改为 `EXISTS` 存在性约束，保留原支付状态、尝试时间和退避规则；H2 注入同单额外预付记录，固定候选顺序、限额与两项计数。
+
+本轮自测：`PaymentTaskCenterMapperIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块通过，`git diff --check` 通过。真实多实例任务调度、生产库索引计划与渠道查单仍需外部验证。
+
+### 10.525 2026-10-02 最新预付到期事实关单与任务指标门禁
+
+支付单存在多条预付关联时，过期关单候选、原子状态更新及失败重试标记清理此前只要求任意一条预付已过期；旧预付过期但最新预付仍有效也会进入关单，任务中心总览、待执行与退避计数同样误计。本轮统一按创建时间与主键倒序取得唯一最新预付，以其 `expires_at` 判断关单资格；避免旧事实导致提前关闭或保留无效重试标记。两套 H2 回归分别覆盖关单 CAS/重试清理与任务中心三类指标。
+
+本轮自测：`PaymentMapperStateTransitionIntegrationTest`、`PaymentTaskCenterMapperIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块通过，`git diff --check` 通过。真实大表执行计划和生产多实例竞态仍需另行验证。
+
+### 10.526 2026-10-02 支付记录类型按最新支付场景分类门禁
+
+支付记录此前无论充值、提现补款、转账补款还是余额补款，列表、导出、详情均硬编码为“消费支付”，类型筛选也只识别消费支付。本轮按唯一最新预付事实的 `pay_scene` 前缀分类为充值支付、提现补款、转账补款、余额补款或消费支付，未知及缺失场景显示“未分类”，不再冒称消费支付；列表、计数、导出、详情复用同一分类表达式，管理端提供对应筛选选项。H2 覆盖分类、筛选、计数、导出、详情及重复预付关联的确定性选择。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试通过；payment-core 全量 Maven 回归 `1/1` 模块、管理端 `npm test`（`253/253`）及 `npm run build` 通过；`git diff --check` 通过。真实渠道场景数据与生产库查询计划仍需在受控环境验收。
+
+### 10.527 2026-10-02 支付记录分类跨系统 HTTP 门禁
+
+跨系统脚本此前校验支付、清分、结算、退款和对账，但未读取支付记录列表与详情，支付成功后运营记录的场景、类型或金额漂移不能在本地链路被发现。本轮在回调成功后按订单与“消费支付”过滤查询支付记录，并校验唯一记录及详情继承支付单、业务链路、场景、金额、成功状态和生命周期时间；合同测试覆盖错误类型、场景和重复记录。
+
+本轮自测：happy-path 合同测试 `53/53`、Node 语法检查和九服务 `local-stack.sh verify payment-chain` 通过，运行后受控服务均清理；`git diff --check` 通过。仅证明本地 demo HTTP 链路，不替代真实渠道、生产数据库/MQ、资金到账或发布审批。
+
+### 10.528 2026-10-02 支付记录原始渠道返回码事实门禁
+
+支付记录此前按支付单状态伪造 `200/100/400` 渠道返回码，导致运营人员把平台状态当作渠道原始响应。本轮列表、导出、详情统一读取支付单已持久化的 `last_channel_return_code`；历史无快照时返回 `NULL` 并在管理端显示“—”，不补造渠道事实。H2 验证成功支付仍可返回非 200 原始码、无快照支付保持空值；管理端列表和详情契约拒绝空白、缺失和非字符串码，并允许合法 `NULL`；跨系统 HTTP 将收款记录渠道码与支付详情绑定。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试、payment-core 全量 Maven 回归 `1/1`、管理端 `253/253` 测试及构建、happy-path 合同测试 `53/53` 与九服务 `local-stack.sh verify payment-chain` 均通过，服务已清理。真实渠道返回码正确性、历史空值分布和生产库迁移仍需受控验证。
+
+### 10.529 2026-10-02 支付记录银行与收款账号真实性门禁
+
+支付记录此前根据渠道编码把银行名固定显示为“招商银行”、卡号固定为 `54**54`，并把收款账号固定为 `123`；这些字段没有逐单持久化来源，尤其银行支付会产生虚假的账户事实。本轮列表、导出、详情统一返回 `NULL`，管理端以“—”展示，CSV 保持空单元格；客户端允许合法未知但拒绝字段缺失、空白或非字符串冒充有效事实。H2 将支付渠道切到 `offline_bank`，确认三处不会生成银行或账户信息。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试，payment-core 全量 Maven 回归 `1/1`，管理端 `253/253` 测试和构建、九服务 `local-stack.sh verify payment-chain` 均通过；服务已清理。真实银行卡、银行名和收款账号接入需要可信渠道/账户事实及脱敏方案，不能用本地占位符替代。
+
+### 10.530 2026-10-02 支付记录最近尝试与管理端列表契约闭环
+
+支付记录列表和导出此前用 `{paymentOrderId}-REQ` 冒充支付请求号、固定 `housekeeping-admin` 冒充发起应用，且未返回最近尝试的状态/样式/完成时间；管理端对成功支付要求完整成功尝试事实，真实列表响应因此会被客户端拒绝。详情虽然关联最近尝试，但两类页面的请求身份也会漂移。本轮按尝试创建时间、主键倒序确定唯一最近事实，列表、导出、详情统一投影实际 `attempt_no/source_app_id`，并让列表返回尝试状态与完成时间；未发起尝试的预付单保留空值，管理端允许该合法状态而不伪造请求。H2 覆盖同时间多尝试的稳定选择和无尝试情形。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest`、`PaymentRecordServiceListTest` 定向 Maven 测试，payment-core 全量 Maven 回归 `1/1`，管理端 `253/253` 测试及构建、happy-path 合同测试 `53/53`、九服务本地 HTTP happy-path 均通过。HTTP 脚本现以管理端实际列表和详情解析器校验支付记录，并比对最近请求号、来源和尝试完成时间；服务已清理。真实渠道和生产历史异常尝试仍需外部审计。
+
+### 10.531 2026-10-02 支付记录最新预付失效事实门禁
+
+支付记录此前把失效时间固定计算为支付单创建后一小时、有效期固定为“一小时”，与实际预付单 `expires_at` 可能不一致；多个预付关联时还会掩盖最新预付的真实期限。本轮列表、导出和详情统一取确定性最新预付的失效时间，并由其创建与失效时间精确计算有效期（整小时显示小时，其余显示秒）。H2 覆盖非一小时有效期及旧预付过期、最新预付仍有效的场景；跨系统本地 HTTP 将支付记录失效时间与收银台预付事实逐单绑定。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest` 定向 Maven 测试，payment-core 全量 Maven 回归 `1/1`、happy-path 合同测试 `53/53` 与九服务 `local-stack.sh verify payment-chain` 通过，运行后服务均清理；`git diff --check` 通过。目标 MySQL 历史数据和真实渠道有效期仍需受控验证。
+
+### 10.532 2026-10-02 支付记录通知地址与支付成功事件主题真实性门禁
+
+支付记录此前把通知地址固定为 `https://pay.housekeeping.local/callback`、MQ 主题固定为 `payment.payment-result`，二者都不是逐单实际留存事实，可能误导回调与事件排障。当前支付单不持久化接收回调地址，列表、导出、详情统一返回 `NULL`，管理端显示“—”；原 `callbackMqTopic` API 字段保持兼容，但内容改为最近一条实际 `PAYMENT_SUCCESS` 事件的 `event_topic`，界面和 CSV 明确标为“支付成功事件主题”。没有对应事件时保持空值，不借其他事件冒充。H2 覆盖同创建时间多成功事件的主键决胜、较晚提交事件不干扰以及无事件空值；跨系统本地 HTTP 将记录主题和实际成功事件主题绑定。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordRefundAggregationMapperIntegrationTest`、`PaymentRecordServiceListTest` 定向 Maven 测试，payment-core 全量 Maven 回归 `1/1`、管理端 `253/253` 测试及构建、happy-path 合同测试 `54/54` 和九服务 `local-stack.sh verify payment-chain` 均通过，服务已清理。真实渠道回调 URL 若需逐单展示，仍须增加可信留存事实，不能用当前配置反推历史地址。
+
+### 10.533 2026-10-02 支付记录用户及商品占位标识真实性门禁
+
+支付记录此前从客户姓名拼接 `userId`、`userPaymentChannelId`，从订单号拼接商品名称，并把固定业务线标识当作逐单事实；这些并非留存的用户、渠道账户、商品或业务线来源。本轮列表、导出和详情对四项均返回 `NULL`，管理端契约接受明确空值但拒绝缺失或无效值，页面展示未知。历史查询参数 `userId` 实际一直按 `customer_name` 模糊匹配，管理端改为“客户姓名”标签并保留接口参数兼容；不能将其解释为真实用户 ID。H2 回归覆盖充值记录空值和客户姓名筛选。
+
+本轮自测：定向 Maven 测试、payment-core 全量回归 `1/1` 模块通过；管理端 `254/254` 测试及构建通过；九服务 `local-stack.sh verify payment-chain` 通过且运行后均清理，`git diff --check` 通过。可信逐单用户、商品、渠道账户及业务线事实仍缺来源，目标数据库、真实渠道和正式发布尚未验收。
+
+### 10.534 2026-10-02 支付记录返回参数类型来源门禁
+
+支付记录此前按渠道代码把 `channel_transaction_no` 标为微信“预支付标识”、支付宝“订单号”或默认“银行流水号”，这些类型并不能从已留存的渠道交易号推断，且无交易号时仍会返回虚构类型。本轮列表、导出、详情只在交易号存在时标注“渠道交易号”，无值时类型和参数值均为空。H2 覆盖银行渠道有号及无号场景，管理端允许明确空值但拒绝无效类型，跨系统本地 HTTP 将记录类型和值与支付成功快照的渠道交易号逐单绑定。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest` 定向 Maven 测试、payment-core 全量回归 `1/1` 模块、管理端 `254/254` 测试及构建、happy-path 合同测试 `54/54`、九服务 `local-stack.sh verify payment-chain` 均通过，服务已清理；`git diff --check` 通过。具体渠道返回参数如预付标识若需展示，仍须有可追溯的逐单留存来源，不能用渠道代码反推。
+
+### 10.535 2026-10-02 支付记录网关身份来源门禁
+
+支付记录列表、导出和详情此前仅凭渠道代码前缀标记“微信支付网关”“支付宝支付网关”“银行支付网关”，其他渠道则统一标记“统一支付网关”。支付单、尝试及路由记录只留存渠道代码，配置表中的网关名称可变且并非逐单历史执行事实；本轮无可信逐单来源时将 `paymentGateway` 返回 `NULL`，保留实际 `paymentChannel` 供排障。管理端与 CSV 表头明确区分网关与渠道列并展示未知值，契约拒绝缺失或无效字段。H2 覆盖四种渠道代码，跨系统本地 HTTP 拒绝伪造网关标签。
+
+本轮自测：`PaymentRecordListMapperIntegrationTest`、`PaymentRecordServiceImplTest` 定向 Maven 测试、payment-core 全量回归 `1/1` 模块、管理端 `254/254` 测试及构建、happy-path 合同测试 `54/54`、九服务 `local-stack.sh verify payment-chain` 均通过且服务已清理；`git diff --check` 通过。真实逐单网关身份需在路由与渠道执行时可信持久化，不能通过当前可变配置反推历史事实；生产网关和历史数据仍未验收。
+
+### 10.536 2026-10-02 用户支付主流程前端解析契约联调门禁
+
+跨系统本地 happy-path 原先只使用脚本自有断言检查预付、收银台、提交和支付详情，无法发现后端响应虽满足脚本却被真实 App/H5/PC 共用的 `app-web` API 解析器拒绝。本轮在真实 HTTP 响应上复用 `normalizePrepayResult`、`normalizeCashierPageResult`、`normalizePaymentSubmitResult` 和 `normalizePaymentDetailResult`，分别覆盖预付创建、H5 收银台、提交后支付详情及成功后支付详情；原跨系统身份、金额、状态和下游资金事件断言保持不变。
+
+本轮自测：happy-path 合同测试 `54/54`、App Web `86/86` 测试及构建、九服务 `local-stack.sh verify payment-chain` 均通过，服务已清理；`git diff --check` 通过。该验证仍是本地 HTTP/模拟渠道，不代表真实浏览器、微信支付或生产验收。另经代码核对，用户端退款进度页当前查询 payment-core `/api/refunds/{refundOrderId}`，而跨系统退款由独立 refund-center `/api/refunds/{refundOrderId}` 创建和收口；未建立两个来源的用户进度查询连续性，不将本轮支付主流程通过解释为跨系统退款用户页已打通。
+
+### 10.537 2026-10-02 小程序与 API 端主流程响应契约门禁
+
+跨系统本地 happy-path 在 App/H5/PC 解析器之外，现对同一组真实支付 HTTP 响应复用小程序 `request.js` 的预付、收银台、提交和支付详情解析器，并复用 API 客户端 `validateCommandResponse` 的相应命令校验。分别覆盖预付创建、H5 收银台、渠道提交、待回调详情和支付成功详情；原支付、清分、结算、账务、退款及对账断言保持不变。该检查证明多端对本地响应形状的兼容性，不冒称使用小程序原生支付能力或真实渠道签名参数。
+
+本轮自测：happy-path 合同测试 `54/54`、小程序 `82/82`、API 客户端 `12/12`、标准用户端回归 `5/5` 应用，九服务 `local-stack.sh verify payment-chain` 通过且全部服务清理，`git diff --check` 通过。真实小程序运行环境、商户认证、渠道受理和资金到账仍需另行验收；refund-center 退款与 payment-core 用户进度页的跨来源查询缺口继续保留。
+
+### 10.538 2026-10-02 支付记录客户姓名筛选显式参数门禁
+
+支付记录页面虽已改标“客户姓名”，此前仍向后端发送 `userId`，容易被其他客户端误认为真正的用户 ID 查询。本轮列表和导出新增明确的 `customerName` 请求参数并使管理端使用它；旧 `userId` 仅作为单独提供的兼容别名，两者同时出现时在 Mapper 访问前拒绝，避免无声覆盖。内部 Mapper 继续按留存的 `customer_name` 匹配，不伪造逐单用户 ID。控制器测试覆盖新参数、旧别名及冲突；管理端测试覆盖列表/导出 URL 与字段绑定；跨系统本地 HTTP 用正确客户命中、其他客户不命中验证实际过滤生效。
+
+本轮自测：改动前的全系统基线 `12/12` 后端模块、`12/12` 管理端测试和构建通过；改动后 `PaymentRecordControllerTest`、`PaymentRecordListMapperIntegrationTest` 定向 Maven、payment-core 全量 Maven `1/1`、管理端 `255/255` 测试与构建、happy-path 合同测试 `54/54`、九服务 `local-stack.sh verify payment-chain` 和 `git diff --check` 均通过，服务已清理。生产数据身份、真实用户 ID 与正式权限治理尚未验收。
+
+### 10.539 2026-10-02 支付记录逐次网关来源留存
+
+真实渠道提交经 gateway-access 治理配置授权后，以已解析的 `gatewayCode` 覆盖上游可能返回的同名字段，随明确受理结果回传；payment-core 的 gateway-access 适配器对该字段缺失、超长及控制字符失败闭合。提交成功、快速回调成功及结果未知恢复分支都只按本次支付尝试号写入可空 `t_payment_attempt.gateway_code`，相同值可幂等写入、不同值拒绝覆盖。支付记录列表、导出与详情读取最近一次尝试的留存值；历史、模拟和未受理提交继续为空，不从当前路由配置反推。迁移 `2026-10-02-add-payment-attempt-gateway-code.sql` 必须先于新版 payment-core 部署，在备份及受控 DDL 窗口确认缺列后执行一次，不回填旧记录。
+
+本轮自测：gateway-access 与 payment-core 后端全量 Maven 测试分别通过，网关结果覆盖伪造上游值、缺失或非法编码拒绝、支付尝试写入冲突、三种记录投影及提交并发/未知分支均有定向断言；`git diff --check` 通过。默认真实提交适配器关闭，且本地示例渠道证书及发布窗口不能代表当前可用的真实渠道，因此未进行真实网关 HTTP/资金受理验证，也不宣称模拟订单具有真实网关来源。
+
+### 10.540 2026-10-02 网关来源跨系统契约兼容
+
+逐次网关来源留存后，原 happy-path 支付记录断言仍无条件要求 `paymentGateway` 为空，会将经真实 gateway-access 受理并留存 `GW_WX` 的正确记录误判为失败。本轮将断言改为与显式期望网关编码逐单匹配；默认期望仍为空，九服务本地模拟链路继续拒绝由渠道代码推断出的网关名称。合同测试覆盖有可信编码的列表/详情一致、列表与详情不一致、以及未显式提供来源却返回网关的拒绝；管理端 API 契约覆盖合法 `GW_WX` 的列表和详情读取，保留空值与非法值门禁。
+
+本轮自测：happy-path 合同测试 `54/54`、管理端 API 定向测试 `167/167`、管理端全量 `255/255` 与 Vite 生产构建通过，`git diff --check` 通过。此次只验证可信字段到合同校验与前端解析器的兼容性；真实网关环境、证书、资金受理及生产迁移仍未验证。
+
+### 10.541 2026-10-02 退款进度返回支付入口的场景门禁
+
+用户退款进度页原先将充值、提现补款、转账补款以外的所有支付场景默认路由到“余额支付补款”，使 `HOME_CLEAN` 等家政消费退款查看者点击“返回支付入口”后误入不相关的新业务入口。本轮仅对详情留存的四类明确支付场景及 App/H5/PC 终端后缀提供对应入口；对家政消费、未知或格式错误的场景不渲染返回按钮，提示从原业务订单页返回。不使用 URL 自声明的 `payScene` 决定跳转，避免查询参数覆盖详情事实。页面仍只查询 payment-core 退款；refund-center 产生的退款单尚未建立来源、授权与用户进度查询连续性，本轮不宣称该跨域缺口已关闭。
+
+本轮自测：退款场景定向测试 `13/13`、App 全量 `87/87`、H5 `4/4`、PC `4/4` 和三端 Vite 生产构建通过；`git diff --check` 通过。真实业务订单页跳转需由相应业务系统提供可信地址，当前不伪造链接。
+
+### 10.542 2026-10-02 收银台与支付结果场景文案及返回入口门禁
+
+继续复核用户支付主流程发现，收银台和支付结果页仍从 URL 自声明的 `bizType` 生成“返回业务入口”路径，并将未识别的场景显示为“余额支付”文案。携带 `HOME_CLEAN` 等真实家政消费场景的支付详情可能因此给出错误的补款入口和后续建议。本轮把四类确有统一入口的场景映射收敛到共享路由工具，三个页面均只依赖已加载的支付或退款详情 `payScene` 决定返回链接；收银台和结果页对其他场景展示中性业务支付说明及原业务订单页提示，不伪造家政消费入口。原请求路由的支付场景校验未放宽，也不以 URL `bizType` 覆盖服务端详情事实。
+
+本轮自测：App 全量 `89/89`、H5 `4/4`、PC `4/4` 测试及三端 Vite 构建通过，含四类场景三种终端的纯函数回归和三页入口/文案绑定断言；`git diff --check` 通过。用户支付 API 仍缺正式身份权限，家政消费业务订单页和跨域退款进度来源未接通，不能据此前端门禁宣称完整用户闭环。
+
+### 10.543 2026-10-02 支付尝试网关编码大小写冲突门禁
+
+逐次网关编码原按普通字符串相等约束重复写入；目标 MySQL 的实际排序规则若不区分大小写，同一尝试的 `GW_WX` 可能被 `gw_wx` 视为相等而覆盖，破坏不可变来源事实。本轮在按尝试号更新时将两侧转换为长度足以容纳该字段编码的二进制值后比较，仍允许同一编码重复写入，拒绝不同编码、大小写变体和尾随空格变体。H2 集成回归覆盖重复、冲突与不存在的尝试，Mapper 契约固定比较表达式；初次尝试仍允许可空网关，历史记录不回填。
+
+本轮自测：初版无长度 `BINARY` 在 H2 被截为首字节，新增冲突测试真实复现错误；修正为 `BINARY(256)` 后 `PaymentMapperStateTransitionIntegrationTest` 定向测试、payment-core 全量 Maven 与 `PaymentSchemaBaselineContractTest` 定向测试通过，`git diff --check` 通过。尚未在目标 MySQL 的实际排序规则、驱动参数和生产并发下验证，不将 H2 结果解释为生产行为证明。
+
+### 10.544 2026-10-02 支付及退款结果页自动刷新耗尽提示
+
+用户支付结果页和退款进度页均有有界自动刷新，但轮询次数耗尽时原页面仍保留上次状态而不告知已停止，易将旧的“处理中”误当成持续更新。本轮以已完成的自动请求次数显示“自动刷新已暂停、当前为上次成功查询状态”，保留支付主动查单与退款手动刷新；仅在成功的手动查询后开启新一轮有界自动刷新，失败或旧请求不重置计数，终态不显示暂停提示。App/H5/PC 复用同一页面组件。
+
+本轮自测：支付和退款页定向测试、App 全量 `91/91`、H5 `4/4`、PC `4/4` 与三端 Vite 构建通过，`git diff --check` 通过。另经代码核对，独立 refund-center 详情使用 `channelRefundId`、日志 `operatedAt`，而当前用户端退款解析器要求成功态 `channelRefundNo`、日志 `createdAt`；即使将当前页面简单改向 refund-center，也不能声称详情契约和用户授权已打通。后续需在明确来源归属及可信授权后设计正式投影与路由，不能只做 URL 转发。
+
+### 10.545 2026-10-02 风控复核结果的只读详情刷新与九服务复验
+
+支付结果页的自动详情轮询包含 `RISK_REVIEW`，而主动渠道查单正确地禁止该状态；轮询耗尽提示却统一要求“主动查单”，使风控复核中的用户面对禁用按钮且无法继续刷新。本轮新增独立的只读支付详情刷新，限定已加载且同一支付快照，按原支付场景向 payment-core 查询并校验支付单、预付单、业务链路、金额及保留字段；只有成功刷新才重置自动轮询上限。渠道查单门禁不变，停刷提示按能否查渠道分别引导主动查单或只读详情刷新。路由切换与过期请求不会覆盖新快照。
+
+本轮先确认九服务均未运行，在受控会话执行 `local-stack.sh verify payment-chain`：九服务 HTTP 冒烟、支付至清分/结算/账务、refund-center 退款及对账 happy-path 通过，最后九服务均清理；这仍是本地模拟渠道和演示库。改动后 App `92/92`、H5 `4/4`、PC `4/4` 测试及三端 Vite 构建通过；`git diff --check` 通过。风控正式审核与真实渠道尚未验证，跨域退款用户进度来源和授权缺口仍在。
+
+### 10.546 2026-10-02 小程序支付结果停刷与手动恢复
+
+五端用户回归基线通过后复核小程序支付结果：五分钟有界详情轮询耗尽时原页没有停刷提示；首次详情失败时只显示返回入口，无法重试；已加载详情的手动刷新失败会清除已验证快照，导致用户看不到上次结果。本轮在待推进状态耗尽轮询后明确提示状态已停刷，保留只读刷新入口；初次失败提供重试。手动刷新须延续支付单、预付单、业务链路及既有快照事实，失败保留上次可信快照并显示陈旧提示；仅成功的手动详情刷新或主动查单重置有界轮询，风控复核态仍不开放渠道查单。
+
+本轮自测：五端基线回归 `5/5` 在修改前通过；小程序结果页定向测试 `29/29`，涵盖失败重试、停刷提示、异常详情拒绝与成功续轮。尚未完成微信开发者工具和真机交互验收；小程序手动刷新依旧依赖 payment-core 详情的身份权限，不能替代可信认证、真实渠道和生产资金验收。跨域退款用户进度来源与授权缺口不变。
+
+### 10.547 2026-10-02 小程序退款进度快照保留与停刷恢复
+
+复核小程序退款进度发现，自动轮询五次耗尽后无提示，手动刷新成功也不会重置次数；页面重进会在查询前清空已验证详情并重置计数，即使请求失败也失去上次状态。首次加载失败时只允许返回入口，无法就地重试。本轮为首次失败提供重试，为轮询耗尽的非终态显示明确停刷提示；重进页面保留已有退款快照，由原有身份、金额、时间、场景和渠道事实校验决定是否接受新详情。失败仍显示上次可信快照，只有成功的手动刷新或页面重进查询才重置有界轮询。隐藏期间失效的旧请求不得覆盖新状态；终态不展示停刷提示。
+
+本轮自测：小程序退款进度定向测试 `22/22`，覆盖首屏失败重试、五次停刷、手动失败/成功续轮、隐藏期间过期响应、重进失败保留及身份漂移拒绝；用户端五模块声明测试/构建矩阵 `5/5`（API 客户端 `12`、App `92`、H5 `4`、PC `4`、小程序 `89`），JS 语法和 `git diff --check` 通过。小程序无生产构建脚本，未完成微信开发者工具和真机验收；当前退款页仍查询 payment-core，refund-center 跨域退款进度来源、可信授权和详情投影缺口未解决。
+
+### 10.548 2026-10-02 小程序外部业务场景不再静默降级
+
+小程序原 `resolveScene` 对未知场景回退余额支付，外部深链携带未支持的真实家政场景时，入口页可能按余额支付创建预付单；收银台、支付结果和退款进度则可能显示错误的业务标题或以余额场景查询。现在入口对显式未知、空或与可识别场景冲突的 `payScene` 显示不支持说明，不建单，允许用户自行选择四类已支持场景；收银台、结果、退款三个外部页面同样不发请求、不允许以错误场景继续操作。缺省场景仍兼容原余额支付入口，已识别场景保留既有查询/支付流程；属性原型键不再被当作场景。
+
+本轮自测：小程序新增入口、收银台、结果、退款页四组运行态拒绝回归及共享场景解析回归；小程序全量 `94/94`、用户端五模块矩阵 `5/5`（API 客户端 `12`、App `92`、H5 `4`、PC `4`、小程序 `94`）测试与三端 Vite 构建、JS 语法及 `git diff --check` 通过。未知场景的拒绝不是正式家政业务接入。另核对独立 refund-center 详情：其渠道退款字段为 `channelRefundId`、操作日志时间为 `operatedAt`，且当前无可信用户身份与退款来源映射；不能把其 URL 直接接入现有用户退款进度页，仍需服务端归属、授权与同源投影设计。微信开发者工具、真机和正式渠道未验收。
+
+### 10.549 2026-10-02 用户端首屏错误恢复与收银台旧快照门禁
+
+复核 App/H5/PC 共用的收银台、支付结果与退款进度页发现，首次详情查询失败后只有错误文本而无就地重试；退款手动刷新失败会清除定时器，却未在尚有额度时恢复自动轮询。收银台已有快照再次查询失败时仍可能按旧状态显示可支付、可本地关单，尤其是提交结果未知且回查失败的分支。本轮在三页错误态增加与当前路由标识绑定的只读重新加载入口；退款手动刷新失败后保留上次详情和次数，在非终态且未耗尽时重新安排有界轮询。收银台为失败的详情重核和未知提交回查标记旧快照，禁止支付提交和本地关单，仅在同一预付单快照核对成功后解除；主动查单与只读刷新仍可用于排障。
+
+本轮自测：三页定向源结构测试 `39/39`，五端声明测试/构建矩阵 `5/5`（API 客户端 `12`、App `97`、H5 `4`、PC `4`、小程序 `94`），App/H5/PC Vite 构建与 `git diff --check` 通过。另在本机无后端的 App 页面分别打开退款、支付结果、收银台虚构编号并点击首屏重试，Vite 代理日志均记录首次和第二次只读 GET，浏览器错误页仍保留重试按钮；再以只响应模拟 GET 的临时服务返回第一次有效收银台快照、第二次 503，浏览器实际显示“关闭本次支付”由可用变为禁用，并提示旧快照待核实。测试后关闭浏览器页和临时服务，未提交支付或关单。此证据仅覆盖 App 共享组件的局部浏览器交互与模拟网络，不替代 H5/PC 真机、真实渠道、并发提交或生产授权验收。可信用户身份、退款中心同源进度来源和生产发布阻断不变。
+
+### 10.550 2026-10-02 支付运营 CSV 全角公式前缀防护
+
+支付核心共用 `CsvExportSanitizer` 被支付记录、账单、退款、支付日志、日终与任务等 17 处导出单元调用。原实现仅对 ASCII `= + - @` 和制表/换行前缀加文本标记，未处理全角 `＝＋－＠`。本轮在共享单元追加四类全角首字符，保留普通文本与已有 ASCII 规则；支付记录真实 CSV 编码路径使用产品名称字段新增回归，确保输出单元格包含文本标记而来源 DTO 不被改写。
+
+本轮自测：新增定向用例先真实失败（共享单元及支付记录导出各一处），修正后两个类 `11/11`，payment-core 后端全量 Maven 回归 `1/1` 模块与 `git diff --check` 通过。此项是特定前缀的额外防护，不宣称所有电子表格客户端、重新保存后的文件或所有 CSV 使用方式均安全；仍需在目标办公软件和正式导出权限下验证。此前待办的目标 MySQL 排序规则行为本轮未复测：本机 Docker 客户端存在但 daemon socket 不可用，不以 H2 测试替代 MySQL 现场证据。
+
+### 10.551 2026-10-02 支付配置治理快照全域导出总行数门禁
+
+复核 payment-core CSV 路径时确认，支付异常告警中的整数回查次数直接由整数转文本，其余文本单元均经过共用公式前缀防护；尚未发现该路径遗漏。另发现支付配置治理快照 `section=ALL` 对八类配置分别做 1000 行限制，组合导出却可能超过同步导出的总行数上限。新增真实失败的跨渠道与路由规则组合用例后，复用行数门禁累计检查已选各域的行数；单域限制、原有列与顺序保持不变。组合恰好 1000 行可导出，第 1001 行拒绝且不返回部分 CSV。
+
+本轮自测：`PaymentConfigServiceImplTest` 与 `CsvExportRowLimiterTest` 定向测试 `112/112`，payment-core 后端全量 Maven 回归 `1/1` 模块、`git diff --check` 通过。测试使用 mock 映射器，不替代目标 MySQL 查询、正式导出权限及办公软件验证。监控快照 CSV 的渠道维度来自不受本行数门禁约束的监控概览查询，需另行评估容量与界面一致性；此轮未修改其行为。此前目标 MySQL 环境阻断及真实渠道联调边界不变。
+
+### 10.552 2026-10-02 支付监控快照 CSV 总行数与渠道聚合查询门禁
+
+支付监控快照导出原直接复用监控概览，渠道及支付方式分组查询没有结果条数边界，CSV 也没有累计行数校验。保留概览原查询及展示行为，新增仅供 CSV 导出的同源渠道聚合查询，在 SQL 端保留至多 1001 组用于超限判断；CSV 计算固定的十项摘要、五项指标定义及趋势、渠道、告警行数之和，超过 1000 行即拒绝，不返回部分快照。这样不会把监控概览悄然截成 1001 组，导出仍保持原有列、排序与公式前缀防护。
+
+本轮自测：导出超限用例先真实失败；修正后服务与 Mapper 集成测试 `17/17`，其中 H2/MySQL 模式插入 1002 组渠道订单并核实概览返回完整 1005 组、导出查询只返回 1001 组；payment-core 后端全量 Maven 回归 `1/1` 模块、`git diff --check` 通过。H2 不是目标 MySQL；监控概览本身的无界查询容量、正式导出权限及真实渠道依旧需要目标环境验证。
+
+### 10.553 2026-10-02 订单与异常告警 CSV 回车符单元边界
+
+复核 payment-core CSV 编码时发现订单与异常告警两处按需加引号的单元编码器只识别逗号、双引号和换行符，若服务品类或告警供应商投递说明中含单独回车符 `\r`，导出值未经引号包裹，标准 CSV 解析器将后半段当作新记录。本轮以两条实际导出路径加入解析器级回归，确认修复前单个数据行被拆为两条；现将单独回车符纳入加引号条件，保留原列次序、脱敏和公式前缀处理，导出解析后仍为同一个数据单元。
+
+本轮自测：订单与异常告警定向测试 `46/46`，payment-core 后端全量 Maven 回归 `1/1` 模块及 `git diff --check` 通过。此项仅保证标准 CSV 解析边界，不代表任何办公软件的重新保存、显示行为或正式导出权限验收；真实渠道、目标 MySQL 和可信身份相关阻断不变。
+
+### 10.554 2026-10-02 九服务本地支付至财务事实链复验
+
+对当前工作树重新执行受控九服务 `local-stack.sh verify payment-chain`。先确认所选服务全部未运行，沙盒内后台启动立即退出且无服务日志，未据此认定应用失败；经提权批准后使用同一脚本重新执行，九服务 HTTP 冒烟通过，随后本地支付事件、清分、结算、账务、独立 refund-center 退款和对账事实 happy-path 通过。输出显示账务事件类型包含 `PAYMENT_SUCCESS`、`CLEARING_GENERATED`、`REFUND_SUCCESS`，对账链路 `COMPLETED`、已完成阶段 `4/4`、可财务关账标志为真；脚本结束后九服务均停止，再次状态查询确认全部 `DOWN`。没有生产发布、真实资金操作或外部写入。
+
+该证据只覆盖本机演示库和模拟渠道的 HTTP 链路，不代替目标 MySQL、生产 MQ、正式渠道、真实到账及权限验收。跨系统退款发生在 refund-center，当前用户退款进度页仍查询 payment-core 且缺可信用户归属和同源投影；本轮 happy-path 不包含其用户页，不能据此声称退款进度跨源闭环。`git diff --check` 通过。
+
+### 10.555 2026-10-02 独立退款中心详情快照 CSV 防护
+
+在独立 refund-center 的详情快照导出中确认，退款原因、客户名称、操作备注和出站错误说明此前缺少公式前缀文本标记，单独回车符也未触发 CSV 单元加引号。沿原服务编码路径补齐 ASCII 与全角公式前缀、控制字符前缀及回车单元引用；失败先复现，修复后 `RefundServiceImplTest` `28/28`、refund-center 后端全量 Maven 回归 `1/1` 模块通过，详见 `systems/refund-center/docs/退款中心自测记录.md`。这不改变退款状态机，也未打通用户端跨来源退款进度；真实权限、渠道与到账仍需验证。
+
+### 10.556 2026-10-02 隔离 MySQL 排序规则下的网关编码比较探针
+
+此前 `recordPaymentAttemptGateway` 的二进制比较只在 H2/MySQL 模式验证，目标 MySQL 的排序规则行为未见数据库侧证据。本机发现 MySQL Community 5.7.17 二进制，使用全新临时数据目录与私有 Unix socket、`--skip-networking` 启动，无 TCP 监听、无现有数据库连接；在 `utf8mb4_general_ci` 的临时表上将 Mapper 中 `CAST(#{gatewayCode} AS BINARY(256))` 的参数替换为字面量作 SQL 探针。先写入 `GW_WX`，同值比较命中 `1`；普通字符串比较把 `gw_wx` 和 `GW_WX ` 均视为相等，而二进制门禁对两者及 `GW_WY` 均命中 `0`，尝试以小写变体更新后留存值仍为 `GW_WX`。探针后正常停止 mysqld，删除唯一临时目录；工作树数量未变化，`git diff --check` 通过。
+
+这是 MySQL **5.7.17** 的字面量 SQL 与指定不区分大小写排序规则证据，不是目标 MySQL 8、Connector/J 参数绑定、完整 Mapper 事务或生产并发验证；正式迁移、目标实例排序规则、真实网关和发布准入仍需受控环境确认。本轮不修改支付状态机或任何现有库。
+
+### 10.557 2026-10-02 H5 与 PC 三页首屏失败重试浏览器核验
+
+在无支付后端的本地 Vite 环境分别启动 H5、PC 用户端，使用仅访问 localhost 的临时 headless Chrome 对两端的退款进度、收银台、支付结果六个页面加载虚构编号。Mac 前台 UI 受锁屏阻断后没有臆造人工点击证据；经批准改用 Chrome DevTools 协议检查实际 DOM 错误态和“重试加载”按钮并点击。每页初次只读详情 GET 失败后仍展示对应终端的重试按钮，点击后同一资源路径再次发出 GET；六页均观察到两次只读请求，Vite 代理记录后端未运行导致的连接拒绝。没有触发支付提交、退款动作或关单。
+
+验证结束后 headless Chrome 脚本自动停止并清除临时 profile，两个 Vite 会话均由当前任务停止，临时浏览器日志与脚本已清理，`git diff --check` 通过。该证据补充 H5/PC 的无后端错误恢复交互，不替代真实 HTTP 成功响应、真机/浏览器矩阵、可信用户身份、跨源退款进度或正式渠道联调。
+
+### 10.558 2026-10-02 H5 与 PC 收银台及结果页详情加载成功态浏览器核验
+
+使用受控本地 `payment-core` 演示栈创建一笔虚构的 `HOME_CLEAN`、`¥88.00` 预付单，未提交支付。首次浏览器探针使用 `127.0.0.1:5176` 访问绑定于 `localhost` 的 Vite 服务时连接被拒绝；检查服务状态发现先前会话的后台进程已退出、PID 文件过期，并非页面详情加载验证结果。停止先前会话清理残留 PID 后，在同一提权受控命令中启动、冒烟、创建新预付单、浏览器验证和停服，将页面入口改为 `localhost`。
+
+headless Chrome 通过 DevTools 协议依次打开 H5、PC 各自的收银台及支付结果页；四页均观察到对应详情接口 `200 GET`，实际 DOM 显示对应终端标题、虚构订单号与 `¥88.00`，且未显示“重试加载”。本次仅验证预付单创建后的详情读取和渲染，不包含支付提交、退款进度成功态、真机矩阵或可信身份归属；本地演示数据也不代表真实渠道、目标 MySQL 或跨源退款闭环。脚本清除临时 Chrome profile，受控命令停止后五个服务均为 `DOWN`。
+
+### 10.559 2026-10-02 三端用户页可复用的本地浏览器冒烟
+
+将上一轮临时浏览器探针沉淀为 `tools/dev/payment-terminal-browser-smoke.mjs`，限定本地演示后端和 App/H5/PC 三个 `localhost` 前端端口；后续执行需显式传入 `--demo`，只创建一笔虚构 `HOME_CLEAN` 预付单，不提交支付。脚本分别核对六个页面的同源、同路径、`200 GET` 详情响应与实际 DOM 中的终端标题、订单号和 `¥88.00`，排除误把上一端响应当成本端成功。Chrome 临时 profile 在结束时清理，并拒绝把非 GET 的浏览器支付请求当作成功证据；新增四项测试覆盖预付单标识、六页矩阵、跨端口/非 GET 响应拒绝和未显式选择 demo 时的失败闭合。
+
+第一次运行因 App 标题浏览器文本将 `App` 显示为 `APP`，严格大小写断言超时；失败时页面已实际渲染正确订单和金额。断言按显示文本不区分英文大小写后，在同一受控会话重新启动本地演示栈，六页均通过，进程正常停止且五个服务均为 `DOWN`。README 本地入口由 `127.0.0.1` 改为实际绑定的 `localhost`，避免地址族不一致时连接拒绝。证据限于本地 H2/模拟数据、预付后只读详情和 headless Chrome；不证明支付成功、退款进度跨源查询、可信身份、真实渠道或生产发布。
+
+### 10.560 2026-10-02 管理端支付记录客户姓名筛选重置状态一致性
+
+支付记录页初始筛选已改为 `customerName`，但“重置”仍写入旧 `userId`，导致筛选对象形状与页面绑定和请求契约不一致。当前 API 解构默认空字符串，故不能据此声称重置后查询仍携带旧客户姓名；本轮修复的是状态键漂移，避免后续逻辑直接读取筛选对象时出现隐式 `undefined`。先添加针对重置函数的回归，修复前 `4/5` 且新断言失败；将旧键改为 `customerName` 后，定向 `5/5`、API client `167/167`、管理端完整 `256/256` 测试及 Vite 构建通过。此项不改变后端历史 `userId` 兼容参数、真实用户身份归属或正式查询权限。
+
+### 10.561 2026-10-02 payment-core 同源处理中退款三端浏览器核验
+
+在原用户端浏览器冒烟新增显式 `--demo --refund-demo` 模式，仅对本地 H2/demo 后端创建隔离虚构订单，模拟支付提交与成功回调，再申请、审核一笔 `¥18.00` 的 payment-core 退款；审核后的同源详情处于 `PROCESSING`，原支付金额 `¥88.00`。App/H5/PC 三端各自的收银台、支付结果和退款进度共九页，均观察到各自端口/路径匹配的 `200 GET`，DOM 显示同一订单及对应金额，退款页显示 `PROCESSING`，没有“重试加载”。浏览器本身未发起支付或退款写请求；流程准备阶段的模拟写请求是显式 demo 模式的一部分。
+
+脚本单测 `5/5`、真实本地浏览器九页通过，受控会话结束后五个服务均停止。此证据只覆盖 payment-core **自身** 创建的退款单和模拟处理态，不含退款成功终态、独立 refund-center 退款单到用户进度页的来源映射、可信用户授权、生产渠道或真实到账；不能据此声称跨源退款用户闭环。
+
+### 10.562 2026-10-02 同源退款终态时间精度与先后顺序修复
+
+将浏览器冒烟扩展到显式 `--demo --refund-demo --refund-success-demo`：本地虚构退款由 `PROCESSING` 经当前尝试号、渠道退款号绑定的模拟成功回调进入 `SUCCESS` 后，App 退款进度页详情 `GET` 返回 `500`，而处理态正常。后端日志只记录已脱敏的 `IllegalStateException` 类型；定向回归进一步复现了两个独立根因：H2/MyBatis 读出的数据库时间为带毫秒字符串，服务端严格格式器只接受整秒；原 Mapper 先写退款 `terminal_at`、后以另一次 `NOW()` 写尝试 `completed_at`，实测后者晚 `2ms`，违反自身终态时间线和异常任务筛选条件。
+
+修复保持精度：终态事实解析器兼容整秒及 1–9 位小数秒，但仍按完整精度比较；尝试完成时间直接取同一退款单的 `terminal_at`，且仅在匹配的退款终态与非空终态时间存在时允许最终更新。新增真实 Mapper/H2 成功及失败终态、无终态拒绝回归，服务层验证毫秒时间正确接收、毫秒逆序仍拒绝。修复前两项定向回归分别因毫秒解析和 `terminal_at < completed_at` 失败；修复后定向及 payment-core 后端全量 Maven 测试通过，同一受控 demo 栈的 App/H5/PC 处理态及成功态共 `18` 次页面加载均获同源详情 `200 GET` 且显示正确订单、金额和退款状态，随后五个服务停止。
+
+仅证明本机 H2、模拟支付及退款渠道和 headless Chrome；目标 MySQL 8 的 SQL/时间精度、真实渠道回执及到账、可信用户归属、独立 refund-center 跨源查询仍未验收，不构成发布放行。
+
+### 10.563 2026-10-02 退款尝试终态 SQL 在隔离 MySQL 5.7 上核验
+
+在临时目录初始化全新 MySQL 5.7.17 数据目录，以 `--no-defaults --skip-networking` 和私有 Unix socket 启动，仅导入当前 `schema.sql` 的 `t_refund_order`、`t_refund_attempt` 原表结构，并执行从 `RefundMapper.xml` 的 `finalizeRefundAttempt` 提取、仅替换测试参数的原 SQL。测试覆盖成功、失败、缺少终态时间、退款状态不匹配四种已受理尝试：成功与失败均更新为相应终态且 `completed_at` 等于退款 `terminal_at`；缺少终态时间及状态不匹配的两笔保持 `ACCEPTED` 且完成时间为空，四项汇总断言通过。测试实例已停止；未连接现有数据库或开放 TCP 端口。
+
+此验证补充了 MySQL 5.7 对相关子查询 `UPDATE` 的语法和上述行为证据。当前生产表结构使用 `DATETIME`（非 `DATETIME(3)`），该验证只比较整秒写入值，不证明 MySQL 8 或毫秒精度行为；H2 的分秒解析回归、目标数据库版本集成、真实渠道和跨源可信用户归属仍各自待验收，不作为发布放行。
+
+### 10.564 2026-10-02 payment-core 同源退款失败终态三端核验
+
+在原本仅覆盖处理态和成功态的受控浏览器脚本中增加显式 `--demo --refund-demo --refund-fail-demo` 模式；新模式使用本轮退款详情的渠道、当前尝试号及渠道退款号模拟 `FAIL` 回调，不允许与成功终态模式同时选择。单测覆盖失败态详情匹配、三端页面矩阵和缺失/冲突标志的失败闭合，`5/5` 通过。隔离的 H2/demo 支付核心与 App/H5/PC 前端运行中，分别检查处理态和失败态的收银台、支付结果、退款进度各九页：`18/18` 页面均观察到同源 `200 GET`、正确订单及金额，退款页正确显示 `PROCESSING` 或 `FAIL` 且无重试加载。完成后五个服务均停止，`git diff --check` 通过。
+
+该核验只证明 payment-core 自身创建的虚构退款及模拟失败回调可由三端只读页面展示；独立 refund-center 的退款来源映射、可信用户授权、正式渠道和目标 MySQL 8 仍未验收，不代表跨系统用户退款闭环。
+
+### 10.565 2026-10-02 浏览器演示脚本的后端身份门禁
+
+原脚本虽要求显式 `--demo`，但在首笔虚构预付写请求前未核实 `localhost:18081` 实际运行的 profile，误连非演示后端可能产生非预期写入。新增仅在 payment-core 的 `demo` profile 且 H2 驱动配置下注册的只读身份端点；浏览器脚本在任何预付、支付或退款写请求前必须取得精确匹配的身份响应，否则失败闭合，且拒绝 HTTP 重定向。该标记是本地误用防护，不是用于用户或渠道鉴权的凭据。
+
+Node 脚本单测 `6/6`，Java 条件装配测试分别验证 demo+H2 注册、非 demo 及 demo+MySQL 不注册；payment-core 后端全量 Maven 测试通过。受控 H2/demo 栈分别运行退款失败和成功模式，各自处理态及终态 `18/18` 页面、合计 `36/36` 个 App/H5/PC 页面观察到同源详情 `200 GET` 并正确渲染；两个流程均通过前置身份核验，完成后五个服务已停止。独立 refund-center 的可信用户归属、目标 MySQL 8 和正式渠道仍未验收。
+
+### 10.566 2026-10-02 跨系统 happy-path 本地写入前置门禁
+
+原 `cross-system-happy-path.mjs` 可用环境变量指定任意服务 URL，且首笔预付写入前不核验后端 demo 身份；误连非演示支付核心或外部系统可能产生非预期写入。本轮在任何写请求前要求 payment-core、清分、结算、账务、退款中心与对账的配置地址均为无路径、凭据或查询参数的本机 HTTP 根地址，并只读核验 payment-core 的 demo+H2 身份标记。所有 API 请求禁用跟随重定向，防止本机入口转发写请求到其他地址。新增无效目标、身份不匹配及重定向行为回归，合同测试 `57/57`、脚本语法检查与 `git diff --check` 通过；以外部退款中心 URL 启动 CLI 也在请求前得到明确拒绝。
+
+运行前核实九个后端均为 `DOWN` 且相关数据库 URL 环境变量未覆盖，启动后从本地 H2 服务完成受控 `local-stack.sh verify payment-chain`：支付、清分、结算、账务、退款中心及对账的合成 happy-path 通过，`reconciliationChainStatus=COMPLETED`、`reconciliationFinancialCloseable=true`，脚本结束九个服务均关闭。该门禁只减少本地脚本误连风险；不能证明其他服务具有独立演示身份、避免本机反向代理到外部环境、证明生产支付渠道与资金划拨，亦未解决独立退款中心用户归属授权。
+
+### 10.567 2026-10-02 失败退款任务重试时间精度门禁
+
+排查退款重试额度与终态事实后发现，`findRetrySourceForUpdate` 将渠道提交、申请、成功、终态及最新尝试完成时间统一 `DATE_FORMAT` 到整秒，导致任务重试的 Java 校验无法发现同一秒内尝试完成晚于退款终态的异常；最小 H2 Mapper fixture 因缺少 demo 专属 `DATE_FORMAT` 别名也不能直接查询该路径。新增真实 Mapper/H2 回归，写入 `terminal_at=...00.123`、`completed_at=...00.124`，修复前执行查询即因函数缺失失败；现改为读取数据库原始时间事实，不丢失分秒，回归精确得到两项不同值。服务层新增同秒逆序任务重试断言，验证拒绝重试且不产生渠道派发。定向 `RefundServiceImplTest,RefundSubmitOutboxMapperIntegrationTest` 与 payment-core 全量 Maven 测试均通过，`git diff --check` 通过。
+
+本地证据只覆盖 H2/MyBatis 与任务重试的精度和拒绝逻辑。目标 MySQL 8 当前表字段为整秒 `DATETIME`，无法用该本地场景证明目标库的分秒存储、历史数据或生产异常修复；真实渠道、退款到账及独立退款中心用户归属仍待单独验收。
+
+### 10.568 2026-10-02 支付成功尝试与支付单终态时间锚定
+
+复核支付成功收口发现，`markPaymentSuccessFromChannelResult` 先写支付单 `success_at`，`finalizeLatestPaymentAttemptSuccess` 后以另一次 `NOW()` 写最新支付尝试 `completed_at`；页面和事件验证读取的却是 `DATE_FORMAT` 整秒字段，同秒内时间逆序会被掩盖。新增真实 Mapper/H2 回归后，修复前两项失败：无支付成功事实的尝试仍能错误写成成功；已有支付成功时间 `2026-10-02 10:00:00.123` 的尝试却写入另一次本机 `NOW()`。现尝试完成时间直接取匹配支付单的 `success_at`，并仅在支付单 `SUCCESS` 且成功时间非空时允许最终更新。Mapper 定向测试和 payment-core 后端全量 Maven 测试通过。
+
+受控 H2/demo payment-core 与 App/H5/PC 浏览器脚本重新核验本轮合成支付成功、退款处理及成功状态，共 `18/18` 个页面观察到同源详情 `200 GET` 与正确订单、金额、状态，五个服务已停止。另以全新私有 socket、`--skip-networking` 的 MySQL 5.7.17 实例导入当前两张原表结构并执行从正式 Mapper 提取的更新 SQL：仅匹配成功且有终态时间的最新非终态尝试收口并与支付单时间相同，未成功、无成功时间、已有失败终态与更早的尝试均保持不变；实例已停止。该实例的 `DATETIME` 为整秒，MySQL 5.7 证据不代表目标 MySQL 8 或分秒精度、真实渠道支付与资金到账已验收；历史不一致数据与独立退款中心用户归属仍需另行处理。
+
+### 10.569 2026-10-02 支付成功详情与事件的原始时间线校验
+
+支付单详情和成功事件原以 `DATE_FORMAT` 整秒展示值比较时间线，同秒内 `success_at=...00.123`、最新尝试 `completed_at=...00.124` 会误判为相等。现由 `PaymentMapper.findDetail` 直接比较数据库原始时间，映射到不参与 JSON 序列化的布尔校验字段；支付查询、详情及成功事件在该字段不为真时失败闭合，不向下游发送成功事件。真实 Mapper/H2 回归证明上述逆序返回 `false`、改为 `...00.122` 后返回 `true`，且两种整秒展示相同、内部字段不出现在 JSON 中；服务层覆盖查询与事件拒绝路径。定向服务与 Mapper 测试分别通过，payment-core 后端全量 Maven `1493/1493`、`git diff --check` 通过。
+
+本轮未重跑浏览器，也未修复已有历史异常数据。H2 小数秒行为不证明目标 MySQL 8 的 `DATETIME` 精度；目标库验证、正式渠道与资金事实、独立退款中心可信用户归属仍是交付阻断，不构成发布放行。
+
+### 10.570 2026-10-02 收银台成功态复用支付事实校验
+
+盘点用户收银台读取路径发现，详情和成功事件虽已校验支付成功的原始时间线，`cashier` 仍可仅凭预付单或轻量提交快照的 `SUCCESS` 显示“支付成功”，包括历史同秒逆序或缺少详情事实。新增服务层失败回归后，收银台成功态按支付单号读取完整详情，要求返回同一支付单并复用成功事实校验；成功尝试状态和完成时间统一取已校验详情，缺少轻量快照但完整详情有效时仍可正常展示。覆盖同秒逆序、缺失详情、错单、正常快照及仅预付状态回退五条用例，修复前拒绝用例失败，修复后定向 `149/149`、payment-core 后端全量 Maven `1498/1498` 通过。
+
+受控本机 H2/demo 栈以显式 `--demo --refund-demo` 创建虚构支付及处理态退款，App/H5/PC 各自收银台、支付结果、退款进度共 `9/9` 页观察到同源详情 `200 GET` 和订单金额渲染；这是页面可用性证据，成功态文本和异常拒绝由服务单测验证。前台托管会话结束后确认五个服务均 `DOWN`，`git diff --check` 通过。未连接生产、未走正式渠道或真实资金；目标 MySQL 8、历史异常数据修复、独立退款中心可信用户归属仍未验收。
+
+### 10.571 2026-10-02 重复提交及并发回退成功态事实门禁
+
+用户再次提交已成功支付单时，`submit` 直接复用详情并返回预付单渠道事实，未像详情、收银台和成功事件一样校验原始时间线；并发更新预付单已被占用时，`prepareSubmit` 也可能直接返回另一请求写出的 `SUCCESS`。新增拒绝用例先分别复现两条漏检，再于来源应用、令牌及控制策略校验后对直接复用的成功详情校验，同步检查预付单宣称成功但支付单仍待回调的冲突。并发回退读取最新预付单和支付单后，成功态要求同一支付单且事实完整；返回状态、渠道及尝试时间以已校验详情为准，事务内异常仍按既有机制脱敏。覆盖直接复用逆序、预付/支付状态冲突、并发赢家逆序与正常赢家，以及原有成功复用路径；服务定向 `153/153`、payment-core 后端全量 Maven `1502/1502`、`git diff --check` 通过。
+
+本轮未重跑浏览器或启动服务；单测使用模拟 Mapper，原始分秒比较另由 10.569 的 H2 Mapper 测试证明。目标 MySQL 8、历史异常数据修复、正式渠道与资金事实、独立退款中心可信用户归属及跨源进度仍未验收，不构成发布放行。
+
+### 10.572 2026-10-02 演示链路支付成功后重复提交 HTTP 核验
+
+上一轮对重复提交与并发回退的门禁仅有服务层模拟 Mapper 回归。现将成功回调后的再次 `POST /api/payments/submit` 纳入显式 `--demo --refund-demo` 本地浏览器脚本：复用同一幂等键，并要求返回原支付单、`SUCCESS`、同一渠道交易号、成功尝试状态及与回调详情相同的尝试完成时间和成功时间，异常则在退款申请与浏览器页面加载前失败。脚本自身两个写入口均设置 `redirect: "error"`，避免本机演示请求跟随 307/308 等重定向继续向另一目标发送写操作；轻量详情读取也拒绝重定向。脚本测试新增重复提交事实断言和写请求重定向配置检查，`8/8` 通过。
+
+确认无数据库 URL/profile 环境覆盖后，前台托管本机 H2/demo payment-core 与 App/H5/PC，脚本先通过只读演示身份门禁，随后虚构支付成功后的真实 HTTP 重复提交复用同一渠道与终态时间；三端各自收银台、支付结果和处理中退款共 `9/9` 页同源 `200 GET` 且订单金额渲染。结束后五个服务均 `DOWN`，`git diff --check` 通过。后端代码未在本轮改动，上一轮后端全量 `1502/1502` 证据仍适用；此次只验证本机模拟通道及正常重复提交，不覆盖目标 MySQL 8、异常历史事实的真实 HTTP 数据修复、正式渠道和可信用户归属，也不证明本机反向代理不会指向外部环境。
+
+### 10.573 2026-10-02 同秒支付异常在运营告警与日终筛选的可定位性
+
+支付详情已对数据库原始时间线失败闭合，但若监控、日终和支付单管理筛选未使用相同精度，运营人员可能只看到用户端失败而无法定位异常单。本轮不改变现有三处 SQL，扩展真实 Mapper/H2 回归：令一笔原本正常的成功单 `success_at=...00.123`、最新成功尝试 `completed_at=...00.124`，日终成功事实不一致计数增加，监控出现 `P1` 成功事实告警且汇总告警数增加，支付单 `SUCCESS_FACT_MISMATCH` 的列表、计数和导出都包含该单；尝试改为 `...00.122` 后三处恢复原有值。定向三套 Mapper `44/44`、payment-core 后端全量 Maven `1503/1503`、`git diff --check` 通过。
+
+另将交付差距清单中误插入 `6.1` 核心能力表格中间的历史 `6.4` 补充章节移到 `6.3` 后，恢复表格连续及章节顺序，并用结构检查确认。当前本机仅发现 MySQL 5.7.17，Docker daemon 未运行，不能将 H2 分秒 SQL 测试视为目标 MySQL 8 或现行整秒 `DATETIME` 的精度验收；没有启动生产数据库、运行历史修复或真实渠道。目标 MySQL 8、既有异常数据处置、可信用户归属和资金事实仍待受控环境验证。
+
+### 10.574 2026-10-02 跨系统支付成功后重复提交事件唯一性
+
+原九服务 happy-path 仅在支付待回调阶段重复提交，未在成功回调、清分账务事件已完成后验证同一幂等键的再次提交。新增成功态重复提交断言，校验预付单仍属于原支付单和业务链、金额与收银台成功状态正确，渠道交易号、成功尝试完成时间及支付成功时间与已核验详情相同；再次读取支付事件台账，要求仍恰有一笔已完成的 `PAYMENT_SUCCESS`，且事件号不变。合同测试新增成功复用及变化事实拒绝用例，`58/58` 通过。
+
+运行前确认九后端均 `DOWN` 且没有数据库 URL/profile 与服务根地址环境覆盖。受控 `local-stack.sh verify payment-chain` 在本机 H2/demo 九服务中通过支付、清分、结算、账务、独立退款中心和对账 happy-path；成功后重复提交没有改变支付成功事件号，链路 `COMPLETED`、已完成阶段 `4/4`、可财务关账标志为真，执行器结束后再次检查九服务全部 `DOWN`。`git diff --check` 通过，原有大量未提交改动保持原状。该证据只覆盖本地模拟支付和同一幂等键的顺序重试；不证明生产并发、真实消息总线/渠道资金送达、目标 MySQL 8 或独立退款中心用户进度授权。
+
+### 10.575 2026-10-02 清分成功事件重复消费的不可变订单事实
+
+清分系统原先对相同 `paymentOrderId` 的重复支付成功事件仅比较已有非空 `payScene`，若重复载荷更换 `orderNo` 或金额，仍会返回旧的已消费事件。现于任何既有事件复用及清分结果 outbox 补齐之前，比较已有清分订单的订单号、金额数值和业务链路 ID；不一致时拒绝消费，保留对金额表示形式 `300.00`/`300.0` 的相同数值重试和历史空支付场景兼容。新增两条变化事实拒绝回归，确认原事件号与清分金额不变。清分后端 Maven 全量 `49/49` 通过、`git diff --check` 通过。
+
+运行前确认九服务均 `DOWN`、环境中没有服务根地址及数据库 URL/profile 覆盖。受控本地九服务 `local-stack.sh verify payment-chain` 的 HTTP 冒烟和支付至清分、结算、账务、退款及对账 happy-path 通过，链路 `COMPLETED`、已完成阶段 `4/4`，执行器结束九服务全部关闭。此为 H2/demo 顺序重试与服务层拒绝测试，不证明真实 MQ 重投/并发冲突、目标 MySQL 8、正式渠道及资金事实，也不解决独立退款中心用户授权与跨源进度。
+
+### 10.576 2026-10-02 清分事件入口订单标识预校验
+
+清分入口原先在金额校验后，未验证 `paymentOrderId`、`orderNo` 是否为空或超过原表 `VARCHAR(64)`；空业务订单号可落成无效清分事实，而空支付单号及超长标识依赖数据库异常才拒绝。新增拒绝用例先复现空值/超长的数据库异常，再将两项标识的非空、最多 64 字符及无首尾空格校验前移至业务链归一化和任何批次、清分单写入之前。测试覆盖空值、纯空格、超长、首部空格，并要求失败前后的订单及支付成功事件数量不变；清分服务定向 `12/12`、后端全量 Maven `51/51`、`git diff --check` 通过。
+
+运行前确认九服务全部 `DOWN` 且相关环境变量未覆盖，受控本机 H2/demo `local-stack.sh verify payment-chain` 的 HTTP 冒烟和支付至清分、结算、账务、退款、对账链路通过，财务链路 `COMPLETED`、阶段 `4/4`、可关账标志为真，运行后九服务全部停止。此为无效标识的本地服务层拒绝和正常消息的模拟链路验证，不证明真实 MQ 投递、生产多实例并发、目标 MySQL 8、正式渠道或资金事实；可信用户归属与独立退款进度仍阻断交付。
+
+### 10.577 2026-10-02 清分业务事件数据库唯一性
+
+清分事件表原仅以 `event_no` 唯一，`findEventByTypeAndBizNo` 查不到旧事件时的并发补录可能留下同类同业务号的两条事件。新库建表结构和独立迁移均增加 `(event_type, biz_no)` 唯一键；H2 Mapper 拒绝回归先证明两笔事件可以重复插入，再证明 `PAYMENT_SUCCESS` 和 `CLEARING_GENERATED` 各自的第二笔写入被数据库拒绝，查询仍各只有一条。九服务 happy-path 现在对清分支付成功事件的分页 `total` 和列表长度均要求为一，不再只取第一条。Node 合同 `59/59`、清分 Maven 全量 `52/52`、新增的第二类事件定向复验 `13/13`、`git diff --check` 通过。
+
+迁移 `systems/clearing-system/database/migrations/2026-10-02-add-clearing-event-business-uniqueness.sql` 尚未在目标 MySQL 8 执行。实施前必须只读查询 `SELECT event_type, biz_no, COUNT(*) FROM t_clearing_event GROUP BY event_type, biz_no HAVING COUNT(*) > 1`，存在历史冲突时由业务与财务核对后处置，不能自动删除；唯一键 DDL 遇重复会失败。运行前确认九服务 `DOWN` 且没有环境地址/数据库覆盖，受控本机 H2/demo 九服务 HTTP 冒烟和支付至财务事实链通过，链路 `COMPLETED`、阶段 `4/4`、可关账标志为真，结束后九服务均 `DOWN`。仍无目标 MySQL 8 DDL、生产多实例竞争、真实 MQ/渠道/资金、可信用户授权与跨源退款进度证据。
+
+### 10.578 2026-10-02 支付异常成功单的运营定位入口
+
+监控与日终的 `SUCCESS_FACT_MISMATCH`、`SUCCESS_TIME_MISSING` 告警已链接到支付单管理筛选页；但列表中“详情”原继续访问支付详情接口，而该接口刻意拒绝异常成功事实，运营人员只能看到失败页。“查单”对成功态同样在出站前触发事实门禁，按钮仍可点会产生无效动作。现在只在**已成功加载**的两类异常筛选快照中保留可选择的列表事实，以“处理日志”替换失败详情入口，并禁用成功态查单；排障建议明确异常快照并非可信支付成功。处理日志使用既有支付单号结构化筛选，其他正常列表仍保持详情和查单路径，加载中及过期快照继续禁用导航。
+
+支付管理页定向 `3/3`、管理端 Node 全量 `257/257`、Vite 构建和 `git diff --check` 通过。此轮没有启动浏览器或后端，也未修改事实拒绝门禁、修复历史异常记录或执行渠道查单；现有 Mapper/H2 异常筛选证据与此前的九服务 happy-path 不等于本轮真实页面点击验证。目标 MySQL 8、真实渠道与资金事实、可信身份和独立退款进度仍未验收。
+
+### 10.579 2026-10-02 异常筛选与失败详情只读浏览器核验
+
+上一轮新增的异常筛选导航未实际点击，且日志页仍提供“查看支付单”可进入被事实门禁拒绝的详情页。支付单详情现把“返回列表”改为携带当前路由支付单号的结构化列表筛选；仅当初次详情加载失败且没有可信快照时，额外提供按同一支付单号查看处理日志的只读入口，不开放原有查单/关闭按钮，也不把失败详情当作成功事实。详情视图定向 `2/2`、管理端 Node 全量 `258/258`、Vite 构建及 `git diff --check` 通过。
+
+用仅监听 `127.0.0.1`、拒绝非 GET 的临时虚构 API 运行管理端 Vite，浏览器访问 `SUCCESS_FACT_MISMATCH` 和 `SUCCESS_TIME_MISSING` 两个深链，均看到支付单快照、处理日志按钮和禁用的查单/关闭操作；点击处理日志后 URL 与筛选框均保留 `PAY-DIAGNOSTIC-001`，虚构日志正常呈现。模拟详情返回 `404` 后浏览器显示加载失败、无详情快照、查单/关闭仍禁用，并提供按路由支付单号查看日志；点击可回到原单日志页，“返回列表”可保留支付单号。普通 `status=全部` 列表仍显示原详情/查单按钮。全部模拟请求为本机 GET，Vite 与假 API 已停止，临时假 API 文件已清理。
+
+此为浏览器 UI/路由在虚构响应下的交互验证，不是后端成功事实异常的真实 HTTP 数据、目标 MySQL 8、生产授权或资金链路证据；详情 `404` 只是受控失败示例，不能替代实际不一致异常的后端行为验证。
+
+### 10.580 2026-10-02 成功异常的隔离 H2/真实 HTTP 读取路径
+
+上一轮浏览器只使用虚构响应和模拟 `404`，无法证明真实 payment-core 对异常成功事实的列表、详情、处理日志响应一致。新增 `PaymentDiagnosticHttpIntegrationTest`：在独立 H2 内存库和随机回环端口启动 `demo` Spring 应用，关闭定时任务与 Rabbit 监听，只用 GET 访问实际 Controller；先补齐演示支付单成功尝试完成时间，确认正常详情返回 `code=0`。随后将完成时间设置为成功时间后一毫秒，`SUCCESS_FACT_MISMATCH` 列表返回该单且总数为 1，按支付单号查询处理日志可读且记录归属一致，而支付详情返回 `PAYMENT-500`、`data=null`。再清空成功时间，`SUCCESS_TIME_MISSING` 列表仍可定位，详情继续失败闭合。没有创建真实订单、调用渠道、发布消息或访问非回环地址，测试结束上下文与 H2 连接均关闭。
+
+首次将完整 Spring 上下文测试加入同一 Maven fork 后，全量 1504 项中 6 项仅因 Spring 启动重置全局日志级别而未捕获 `TransactionTemplate` 的异常日志；新测试现于 `@AfterEach` 恢复启动前的 root/transaction logger 级别，涉及的日志断言回归与最终 payment-core 全量 Maven `1504/1504` 均通过。`git diff --check` 通过。该证据关闭本机 H2/demo 后端 HTTP 读取缺口，但尚未将真实异常库与管理端浏览器连成同一会话，不验证目标 MySQL 8、生产异常历史修复、真实渠道/资金、可信用户归属与独立退款进度。
+
+### 10.581 2026-10-02 成功事实异常在普通支付列表中的逐行标记
+
+普通 `status=全部` / `SUCCESS` 列表此前只看筛选条件，不知道单行成功事实是否异常：运营仍会看到可点击的“详情/查单”，但异常成功详情实际拒绝返回。列表 Mapper 现复用原 `SUCCESS_FACT_MISMATCH` SQL 判断，并优先标记成功时间缺失，为列表和导出行投影 `successFactIssue`（正常为 `null`）。该判断直接使用数据库时间精度和最新尝试事实，不从展示到秒的时间文本反推。管理端逐行验证异常码、展示危险状态和快照提示，异常行仅可进入按支付单号过滤的处理日志，不再开放详情/查单；普通同行保留原入口，本页成功计数不把已标异常当作可信成功事实。API 解析只对有合法异常码的成功行放宽与该异常冲突的事实校验，仍拒绝未知码、非成功行冒用以及字段缺失。
+
+隔离 H2/demo 实际 Mapper 和 HTTP 回归覆盖正常行 `null`、尝试完成时间晚于成功时间一毫秒的异常、成功时间缺失、两种普通列表筛选与异常筛选，以及导出 Mapper 同一投影；异常详情继续返回 `PAYMENT-500` 且无数据。管理端归一化混合行和异常缺失尝试事实回归、逐行按钮 wiring 回归通过；Node 定向 `170/170`、管理端全量 `258/258`、Vite 构建、支付后端 Maven 全量 `1504/1504` 与 `git diff --check` 通过。HTTP 测试只绑定本机临时回环端口，未连接正式渠道或改变资金。仍无目标 MySQL 8 的真实异常数据浏览器同会话验证、生产授权、资金与独立退款进度证据；CSV 文件本身未新增异常码列。
+
+### 10.582 2026-10-02 支付单 CSV 保留成功事实异常码
+
+上一轮列表已逐行标记成功事实异常，但运营导出的 CSV 只显示 `SUCCESS`，离线分析可能误把异常成功单当作可信到账。本轮在原有 CSV 列末尾追加“成功事实异常类型”：正常行为空，两类异常行分别保留 `SUCCESS_FACT_MISMATCH`、`SUCCESS_TIME_MISSING`，仍复用原 Mapper 筛选、原精度数据库判断、名称脱敏和 `CsvExportSanitizer`，不修改旧列顺序。Service 回归分别校验正常与两类异常行；隔离 H2/demo 真实 HTTP 对同一支付单先后构造正常成功、完成时间晚于成功时间一毫秒、成功时间缺失，逐次 GET `/api/payments/export` 并验证 BOM、CSV 类型、尾列与列表异常码一致。定向 Maven `155/155`、后端全量 `1505/1505`、`git diff --check` 通过。
+
+此前 10.581 与差距清单 10.559 所述“CSV 本体无异常码列”现已关闭。未在目标 MySQL 8 或真实异常历史上复验；真实渠道资金、生产权限、跨源退款进度与管理端浏览器同真实后端会话仍待验证。
+
+### 10.583 2026-10-02 异常支付单真实管理端与处理日志同会话联查
+
+上一轮真实 HTTP 和管理端浏览器分别核验，尚未证明实际 H2/demo 响应能被页面完整解析。本轮在所有本地支付服务停止且无环境数据库/服务地址覆盖后，用受控 `local-stack.sh up payment-core` 启动独立 demo 后端与管理端；新增只读 `tools/dev/payment-admin-diagnostic-browser-smoke.mjs --demo`，先检查 `/api/demo/identity` 和演示支付单事实，再以隔离 Chrome/CDP 同页验证 `PAY202607190001` 为 `SUCCESS_FACT_MISMATCH`，仅显示快照/处理日志且查单禁用，而 `PAY202607190002` 无异常码、仍有详情与可用查单。点击异常行快照与处理日志后，页面路由和日志列表均保留原支付单号，浏览器 API 请求均为 GET。Chrome 临时用户目录由脚本回收，演示栈结束后已停止。
+
+首次真实浏览器验证发现日志接口 HTTP 200 但管理端拒绝整页：后端按已有业务逻辑合法返回成功尝试/回调日志 `logLevel=INFO, logLevelType=success`，而解析器只接受 `INFO + info`。本轮只扩展成功信息这一对的列表和详情验证，`WARN + success`、`ERROR + success` 等错配继续拒绝；修复后同一无头 Chrome 冒烟通过。管理端定向 `167/167`、全量 `258/258`、Vite 构建、脚本语法与 `git diff --check` 通过，后端未因该前端修复再改动，最近一次支付后端全量仍为 `1505/1505`。此证据为本地 H2/demo 内置演示数据的前后端同会话只读联查，不是目标 MySQL 8、真实异常历史数据、正式渠道资金、可信授权或独立退款进度验证；本次浏览器只覆盖一种成功事实异常，未模拟成功时间缺失浏览器链路。
+
+### 10.584 2026-10-03 处理日志列表、唯一详情与 CSV 的支付成功事实标记
+
+此前支付单列表与导出能标记成功事实异常，处理日志却只显示关联单号；运营从异常单进入日志后，可能误将日志中的 `SUCCESS` 当作可信支付成功。本轮让日志 Mapper 复用支付单的数据库原精度诊断投影，在列表、唯一日志详情与 CSV 中加入所属支付单的 `successFactIssue`：正常或无匹配支付单为空，毫秒逆序为 `SUCCESS_FACT_MISMATCH`，成功时间缺失为 `SUCCESS_TIME_MISSING`。异常日志仍可读取和导出，但管理端不再提供会被后端门禁拒绝的支付详情入口；普通日志保持原有跳转，前端仅接受空值及两种已知异常码。
+
+Mapper/H2 回归覆盖正常、同秒毫秒逆序和成功时间缺失；隔离 H2/demo 真实 HTTP 覆盖日志列表、唯一详情与 CSV，末轮补充缺失成功时间的 CSV 断言。后端全量 Maven `1506/1506`、补断言后的定向 HTTP `1/1`、管理端测试 `260/260`、Vite 构建以及只读 Chrome/CDP 的日志列表和唯一详情均通过；浏览器 API 仅发 GET，演示栈已停止。本轮最后一处仅为测试断言补强，未因此重跑后端全量。
+
+上述只是本地 H2/demo 和内置异常样例的读取路径证据。尚未在目标 MySQL 8 或真实历史异常数据上校验，缺少成功时间缺失的浏览器路径；正式渠道与资金、可信用户授权及独立退款中心到用户端的跨源进度均未验收，不构成发布放行。
+
+### 10.585 2026-10-03 支付流水三处诊断投影与异常支付详情门禁
+
+统一流水排障台原有四类来源的列表、导出和唯一详情只展示业务状态与关联支付单号，异常成功单的流水仍可跳向已被支付详情门禁拒绝的页面。本轮复用支付单原始数据库精度的成功事实诊断 SQL，为流水列表、`flowSource + flowNo` 唯一详情与 CSV 末列增加 `successFactIssue`。正常或无支付单匹配时为空，毫秒逆序和成功时间缺失分别为 `SUCCESS_FACT_MISMATCH`、`SUCCESS_TIME_MISSING`。管理端只接收空值或两个已知码；异常流水仍保留快照、唯一详情、请求和处理日志联查，支付单详情入口禁用，普通流水导航不变。
+
+隔离 Mapper/H2 覆盖同一支付单四类来源、另一条路由及无匹配支付单，在正常、同秒毫秒逆序和成功时间缺失阶段核对分页、导出与详情；真实 H2/demo HTTP 对同一支付单的流水列表、唯一详情和 CSV 三阶段回归通过。浏览器第一次联查发现内置异常样例把支付尝试标成“成功”却缺少 `completed_at`，客户端正确拒绝不完整流水详情。仅修正 demo 样例的完成时间为支付成功时间后一秒，保持其事实异常，并在 HTTP 测试中锚定该样例；随后同一受控本地管理端 Chrome/CDP 会话中，异常流水的列表与唯一详情可读、支付详情禁用，同页普通流水仍可正常导航，浏览器 API 仅 GET。测试后停止演示栈，五个服务均 `DOWN`。
+
+payment-core 后端全量 Maven `1507/1507`、管理端全量 `262/262`、Vite 构建、脚本语法与 `git diff --check` 通过。此为 H2/demo 样例和本地只读浏览器证据，尚未在目标 MySQL 8、真实历史异常、成功时间缺失的浏览器链路、正式渠道资金或可信授权上复验；独立退款中心到用户端的跨源进度仍未验收，不构成发布放行。
+
+### 10.586 2026-10-03 支付请求列表、唯一详情与 CSV 的支付成功事实标记
+
+请求管理台原先可直接从异常成功单的请求行、侧栏和唯一详情跳向被支付详情门禁拒绝的页面，导出也只有请求状态而无所属支付单异常类型。本轮在三处读取路径复用支付单原精度 SQL 投影 `successFactIssue`，正常及无支付单匹配为 `null`，同秒毫秒逆序为 `SUCCESS_FACT_MISMATCH`，缺成功时间为 `SUCCESS_TIME_MISSING`；CSV 末列保留原始异常码，不改变已有脱敏或旧列顺序。管理端仅接收空值或两个已知码，异常请求仍可读并可进入快照、唯一详情、路由、流水及处理日志，支付详情入口禁用，普通请求导航不变。
+
+独立 Mapper/H2 测试覆盖正常、晚于成功时间一毫秒、成功时间缺失以及无支付单的旧请求；隔离 H2/demo 真实 HTTP 对同一支付单逐阶段验证请求列表、唯一详情和 CSV 与支付单诊断一致，并锚定内置演示成功尝试具备可读的完成时间。同一受控本地 Chrome/CDP 会话核验异常请求的列表、快照和唯一详情禁用支付单钻取，同时普通请求保留入口；浏览器 API 均为 GET，结束后演示栈五服务均已停止。后端全量 Maven `1508/1508`、管理端 `264/264`、Vite 构建、脚本语法与 `git diff --check` 通过。
+
+此证据限于 H2/demo 与内置异常样例，不等于目标 MySQL 8、真实历史异常或成功时间缺失的浏览器链路验收；正式渠道与真实资金、可信用户授权、独立退款中心到用户端跨源进度仍待验证，不构成生产发布放行。
+
+### 10.587 2026-10-03 支付路由列表、唯一详情与 CSV 的成功事实异常标记
+
+支付路由管理台此前把异常成功单的路由结果展示为可直接点击的支付详情，实际支付详情已被成功事实门禁拒绝。本轮沿用支付单数据库原精度判断，在路由列表、唯一详情和 CSV 尾列投影所属支付单的 `successFactIssue`：正常或无支付单匹配为空，同秒毫秒逆序为 `SUCCESS_FACT_MISMATCH`，成功时间缺失为 `SUCCESS_TIME_MISSING`。异常路由仍可读取快照、报文、唯一详情及其他安全联查，管理端仅禁用所属支付详情入口；普通路由保留原导航，客户端拒绝缺失或未知异常码。
+
+Mapper/H2 与隔离 H2/demo HTTP 对正常、毫秒逆序、缺成功时间及孤立路由核对列表、详情和 CSV；同一受控 Chrome/CDP 会话核验真实异常路由列表、快照、唯一详情的支付入口禁用及普通路由入口可用，浏览器 API 均为 GET，结束后五个演示服务均 `DOWN`。首次沙箱内全量后端测试因嵌入式 Tomcat 绑定回环端口 `Operation not permitted` 报一个上下文错误，获准回环运行后全量 Maven `1509/1509` 无失败或跳过；管理端 `266/266`、Vite 构建、脚本语法和 `git diff --check` 通过。
+
+上述仅为本地 H2/demo 样例证据，未在目标 MySQL 8、真实历史异常及成功时间缺失的浏览器会话中验证；正式渠道与资金、可信用户授权和独立退款中心到用户端的跨源进度仍未验收，不构成生产发布放行。
+
+### 10.588 2026-10-03 支付事件出站诊断投影与异常支付详情门禁
+
+事件出站管理台原可从异常成功单的事件侧栏和唯一详情跳转到被支付事实门禁拒绝的支付详情。本轮在事件列表、唯一详情和 CSV 末列复用支付单数据库原精度诊断，返回所属支付单的 `successFactIssue`：正常或无匹配支付单为空，同秒毫秒逆序为 `SUCCESS_FACT_MISMATCH`，成功时间缺失为 `SUCCESS_TIME_MISSING`。异常事件仍可读、可导出并保留日志和流水联查，管理端仅禁用失败的支付详情入口；不改变出站事件的投递、重试、审计或 HTTP `COMPLETED` 阶段既有语义。
+
+Mapper/H2 覆盖三阶段和孤立事件；隔离 H2/demo HTTP 验证列表、唯一详情及 CSV 与支付单诊断一致。浏览器同会话联查发现内置正常 `PAYMENT_PENDING` 事件虽为合法 `PENDING` 状态，但历史默认 HTTP 阶段为 `PENDING` 且设有未来 `nextRetryAt`，客户端此前将两者误判为非法而拒绝整页。本轮仅允许非成功事件的默认 `PENDING` 阶段仍显示“不适用”，拒绝冒用已受理/已完成阶段；待发布事件允许不早于创建时间的未来重试时刻，继续拒绝已发布时间和逆序时间。最终受控 Chrome/CDP 同会话验证异常和普通事件列表、快照、唯一详情及支付入口分流，浏览器 API 均为 GET，五个演示服务已停止。
+
+后端全量 Maven `1510/1510`、管理端全量 `268/268`、Vite 构建、脚本语法和 `git diff --check` 通过。此前全量运行曾因独立退款 outbox Mapper 测试配置未加载新复用的支付诊断 SQL 片段出现 `12` 个测试配置错误，补齐片段后定向和全量均通过。此为本地 H2/demo 样例的读取路径证据，不替代目标 MySQL 8、真实历史异常或缺成功时间浏览器路径，正式渠道资金、可信用户授权与独立退款中心跨源进度仍阻断生产放行。
+
+### 10.589 2026-10-03 收款记录成功事实诊断与详情门禁
+
+统一、微信支付宝和银行卡收款记录原先仅以中文“支付成功”及渠道流水展示成功单，异常记录详情仍可跳向已被支付详情事实门禁拒绝的页面。本轮在记录列表、唯一详情和 CSV 末列复用支付单原精度诊断 `successFactIssue`，正常为空、毫秒逆序为 `SUCCESS_FACT_MISMATCH`、缺成功时间为 `SUCCESS_TIME_MISSING`；不改写原收款金额或成功退款聚合。异常记录保留只读快照、报文、轨迹、请求及日志联查，管理端标记风险并从可信成功计数中排除，禁用失败的支付详情与主动查单入口；普通记录保持原导航。客户端对普通行继续执行原金额、状态和时间门禁，对异常行只放宽与已知成功事实异常直接冲突的成功时间、渠道号和最近尝试字段，拒绝缺失/未知异常码及非成功行冒用。
+
+Mapper/H2 与隔离 H2/demo HTTP 对同一记录的正常、同秒毫秒逆序和成功时间缺失三阶段核对列表、唯一详情与 CSV；受控 Chrome/CDP 同会话核验内置异常与普通记录列表和唯一详情、支付详情入口分流，浏览器 API 仅 GET。浏览器冒烟初次等待记录详情时误把 JS 模板字符串写成字面量，实际详情 GET 200 且页面已显示；修正测试路径匹配后同一真实 UI 检查通过，五个 demo 服务均已停止。后端全量 Maven `1511/1511`、管理端 `270/270`、Vite 构建、脚本语法与 `git diff --check` 通过。
+
+此为本地 H2/demo 的读取与导航证据，不替代目标 MySQL 8、真实历史异常、成功时间缺失的浏览器路径、正式渠道资金或可信用户授权；独立退款中心到用户端的跨源进度也仍未验收，不构成生产放行。
+
+### 10.590 2026-10-03 管理端可信支付成功聚合
+
+修复 dashboard 和支付监控摘要、最近七日趋势、渠道总览及导出将原始 `SUCCESS` 全部当作成功的口径。聚合与监控事实不一致计数/告警复用支付单同一成功事实门禁：缺成功时间、同秒毫秒逆序、状态/渠道/最新尝试事实不完整不计入成功笔数和金额，但仍保留总量、待处理和已有异常告警。跨日归属及有尝试的渠道分组范围不变；成功率用小数计算并四舍五入两位，避免 H2 整数截断。
+
+隔离 Mapper/H2 覆盖空表、可信成功、毫秒逆序、缺成功时间和缺最新尝试，逐一核对 dashboard、监控摘要、趋势、渠道与 CSV 同源导出，并补齐跨窗口样例的真实成功事实。demo 样例保留微信支付的异常完成时间，同时为另一笔银行转账成功单补齐可信完成时间；隔离 HTTP 测试在异常、修复、毫秒逆序、缺成功时间四阶段验证两处摘要依次为 `1→2→1→1`，渠道和百分比同步。实际 demo 只读 GET 核对 dashboard 与 monitor 均返回 `1` 笔、`¥3,600.00`、`33.33%`，告警数组及数量均为 `4`，不执行业务写入。定向 Mapper `15/15`，HTTP 集成 `1/1`，payment-core 全量 `1513/1513`、零失败/错误/跳过。
+
+首次沙箱全量仅因嵌入式 Tomcat 回环端口权限报上下文错误；获准后一次全量通过。增补 HTTP 断言后的第一次全量碰到无关并发 `RequestIdHolderTest` 生成 `10000` 个 ID 时仅得 `9999` 个的偶发碰撞，未改该组件；再次全量通过。`git diff --check` 通过，演示栈五服务均为 `DOWN`。
+
+本轮为 H2/demo 本地 Mapper、隔离 HTTP 与实际 demo 只读 GET 证据，未对该聚合另做浏览器端到端验收；目标 MySQL 8 精度、历史异常规模和执行计划、正式渠道资金、可信授权及独立退款中心跨源进度仍待验证，不构成生产放行。
+
+### 10.591 2026-10-03 收款记录可信成功退款聚合
+
+收款记录列表、唯一详情和 CSV 此前按原始 `SUCCESS` 汇总已退次数与金额，即使退款成功时间或最新尝试完成事实不完整，也会展示成已退。本轮共用退款单终态事实门禁，只有本地成功时间、状态类型、渠道受理及最新尝试时间线一致的成功退款计入已退；异常退款仍保留在退款单核查入口，不改写支付原金额、支付成功诊断、筛选或排序。demo 正常银行转账退款补齐与尝试完成一致的终态时间，不改异常微信支付样例。
+
+Mapper/H2 构造两笔可信成功及成功时间缺失、同秒毫秒逆序、无尝试、错误状态类型等异常退款，核对列表、唯一详情和 CSV 同源聚合。隔离 HTTP 针对同一银行收款记录让退款最新尝试完成时间晚于终态一毫秒，再恢复，核对已退次数 `1→0→1` 与金额 `¥600.00→¥0.00→¥600.00` 的列表、详情和 CSV 联动，无渠道写入。实际 demo 的只读 GET 再核对该收款记录列表、详情与 CSV 为 `1` 笔、`¥600.00`；五个服务随后停止。
+
+定向退款记录 Mapper `3/3`、支付记录列表 Mapper `13/13`、HTTP 集成 `1/1`；payment-core 全量 `1514/1514`、零失败/错误/跳过，`git diff --check` 通过。首次全量因独立支付记录列表 H2 配置未加载新退款 SQL 片段而出现 `13` 个配置错误，补齐片段与表结构后定向和全量均通过。目标 MySQL 8、实际历史异常、正式退款到账及独立退款中心到用户端跨源进度仍未验收，不构成生产放行。
+
+### 10.592 2026-10-03 收款记录异常成功退款显性化与核查下钻
+
+可信退款聚合剔除异常 `SUCCESS` 后，收款记录可能只显示 `0/¥0.00` 而不提示待核查退款。本轮新增 `unverifiedRefundCount`，由同一退款终态事实门禁在数据库原精度统计；列表、唯一详情和 CSV 尾列显示非可信成功退款笔数，管理端只接收非负整数并在列表、快照及详情提示风险，提供当前快照门禁下的退款异常筛选入口。退款列表终态筛选补齐 `status_type IS NULL` 的合成历史异常，避免剔除后无法下钻。
+
+Mapper/H2 对两笔可信、四笔异常成功及非成功退款核对三处投影；独立退款列表对空状态类型验证列表、计数和导出一致。隔离 HTTP 将同一退款尝试完成时间晚于终态一毫秒再恢复，验证可信和异常笔数 `0→1→0` 互换，CSV 保持原有列顺序且只追加末列。管理端 API 拒绝缺失、负数、非整数，组件提供只读下钻并在过期快照下禁用。
+
+定向 Mapper 与 HTTP 回归通过；payment-core 后端全量 `1515/1515`、管理端 `272/272` 与 Vite 构建、`git diff --check` 通过。同一受控 headless Chrome/CDP 会话重验真实 H2/demo 的异常与普通支付记录等诊断页面，浏览器 API 仅 GET；本地只读 HTTP 确认正常银行收款记录 `refundCount=1 / unverifiedRefundCount=0 / refundedAmount=¥600.00`，CSV 末列为 `0`，测试结束五个服务均为 `DOWN`。
+
+随后用强制 H2 内存数据库、demo profile 和 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库路径}/tools/dev/payment-refund-triage-demo.sql` 在启动时将内置退款尝试完成时间改为终态后一毫秒；浏览器脚本新增显式 `--refund-triage` 模式且先核对 demo 身份与异常响应。首次真实点击发现收款快照的按钮虽可用却停在原页：`refundsRoute` 依赖的 `refunds` 名称只存在于自造测试路由，真实路由未注册。补齐真实路由名称及注册断言后，同一隔离样例的收款行显示 `1 笔待核查`、快照显示未计入已退金额，快照和唯一详情分别点击进入带支付单号及 `TERMINAL_FACT_MISMATCH` 的退款列表，真实异常退款行可见；浏览器 API 仅 GET，无渠道写入。管理端重新全量 `273/273`、Vite 构建、脚本语法及 `git diff --check` 通过；后端代码未变，沿用本节已通过的 `1515/1515` 基线。Chrome 临时目录被清理，五个 demo 服务均已停止。
+
+这只证明本地 H2/demo 的正数异常退款运营下钻，不代表目标 MySQL 8、真实历史异常、可信用户身份、正式退款到账和独立退款中心到用户端跨源进度完成，仍不构成生产放行。
+
+### 10.593 2026-10-03 缺失支付成功时间的浏览器只读联查
+
+此前 Mapper/H2 和独立真实 HTTP 已覆盖 `SUCCESS_TIME_MISSING`，但真实管理端浏览器仍只验证成功时间逆序的 `SUCCESS_FACT_MISMATCH`。本轮用单独的 `tools/dev/payment-success-time-missing-demo.sql` 在内存 H2 的 demo 初始化阶段仅将 `PAY202607180074` 成功时间置空；保持默认样例文件及其他支付事实不变。启动前确认五个 demo 服务均为 `DOWN`，无数据库地址等外部环境覆盖；启动时强制 `HSP_DEMO_DB_URL=jdbc:h2:mem:payment_core_missing_time;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE`，并显式配置 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库路径}/tools/dev/payment-success-time-missing-demo.sql`。
+
+扩展 `tools/dev/payment-admin-diagnostic-browser-smoke.mjs --demo --success-time-missing`，先以 GET 验证 demo 身份、原有异常与普通支付样本和缺时间筛选只返回目标单，再在同一隔离 Chrome/CDP 会话中点击该支付单的处理日志、读取收款记录唯一详情。首次运行发现日志列表与侧边快照仅用笼统的“成功事实异常”，无法区分缺时间与时间逆序；日志响应已有异常码，遂在列表行和快照显示原码、不修改支付详情门禁或日志事实。重测确认列表筛选命中 `SUCCESS_TIME_MISSING`、查单不可用，日志按单号带参且显示原码，收款详情保留原码但禁用支付详情；浏览器 API 均为同源 GET，无渠道或资金写入。管理端全量 `273/273`、定向日志页测试、Vite 构建、Node 语法及 `git diff --check` 通过，后端源代码未改，沿用前轮 `1515/1515` 基线。
+
+仅证明隔离 H2 样例与浏览器的成功时间缺失只读运营路径。目标 MySQL 8、真实历史异常数据、正式渠道资金、可信用户授权和独立退款中心至用户端进度仍未验证，不构成发布放行。
+
+### 10.594 2026-10-03 独立退款中心逐支付单并发额度门禁
+
+退款中心退款申请原先在同一事务内读取累计金额并插入，却未锁定原支付单；不同幂等键的并发请求可能同时读取旧额度。本轮复用支付成功投影行的唯一支付单号，`SELECT ... FOR UPDATE` 后才查幂等键与活跃退款累计并插入。锁后首个一致性读取可观察到前一提交，重放仍返回同一退款单，来源缺失仍拒绝。H2 集成测试人为持锁让另一个 `60.00` 申请和同键重放等待，再提交 `70.00`：前者拒绝、后者复用，最终只有一笔退款。退款中心 Maven 定向及全量 `37/37` 通过；九服务本地 demo happy-path 完成退款和对账 `4/4`，均已停。MySQL 8、生产多实例、真实到账、可信用户身份和跨源退款进度未验证。
+
+### 10.595 2026-10-03 清分出站下游业务响应门禁
+
+首次 `verify payment-chain` 已启动九服务，但在账务 `CLEARING_GENERATED/CLO20003` 唯一消费断言失败后自动清理。排查确认清分 HTTP 派发仅按 2xx 判成功，而账务业务异常可用 `200 + 非零 code` 包装；原下游响应未保存，故只能确认该失败面存在，不能证明首次失败确切原因。清分现对结算、账务、对账回执统一要求 `code=0`，结算/账务地址为空也失败闭合；定向测试模拟账务业务失败与空地址，断言 outbox 继续可重试，全量清分 Maven `54/54` 通过。业务码门禁后独立启动九服务运行 demo happy-path，支付、清分、退款、三类账务事件及对账 `4/4` 完成；空地址补强后未再运行九服务，所有服务已停止。生产 HTTP/MQ、目标 MySQL 8、真实资金及授权依旧不能由此放行。
+
+### 10.596 2026-10-03 支付成功事件下游回执归属门禁
+
+payment-core 原 HTTP 派发仅检查 `code=0` 与非空 `data`，下游即使返回其他支付单的消费事件，仍可能将本单清分或账务阶段标记完成。现清分和账务均要求 `data` 为结构化事件，`eventType=PAYMENT_SUCCESS`、`bizNo` 与原支付单号一致、`businessChainId=CHAIN-{支付单号}`、`eventNo` 非空且 `eventStatus=已消费`；不匹配时沿用既有失败和重试路径，不推进下一阶段。定向 `PaymentEventDispatchServiceImplTest` `69/69` 覆盖清分错单、非结构化数据和账务错单；payment-core 全量 Maven `1518/1518` 通过（首次沙箱内嵌 Tomcat 绑定受限，放行仅本机 loopback 后重测通过）。此前同一回执门禁改动后的九服务本地 demo happy-path 已验证支付、清分、退款、账务事件与对账 `4/4` 并自动停服；本轮仅增补非结构化回执测试及契约文档，未重新启动九服务。此证据不覆盖目标 MySQL 8、真实下游和生产资金/授权。
+
+### 10.597 2026-10-03 对账事实回执必须包含本支付成功事实
+
+payment-core 已配置对账事实地址时，原来只检查 HTTP 2xx、`code=0` 与非空 `data`，其他业务链快照也可使事件进入 HTTP 完成阶段。现在要求回执 `data` 的业务链号匹配 `CHAIN-{支付单号}`，且 `facts` 中有支付核心提交的同链、同支付单、同业务单、同场景、`PAYMENT_SUCCESS/SUCCESS` 与相同金额的事实；错误链或错误金额均走既有失败重试，不推进 HTTP 完成阶段。未配置地址时保持原有可选投递语义，不把整个对账链已完成作为支付成功事实的前提。
+
+定向 `PaymentEventDispatchServiceImplTest` `72/72` 覆盖有效快照、错链和错金额，payment-core 全量 Maven `1521/1521` 通过。再次独立执行 `tools/dev/local-stack.sh verify payment-chain`，九服务本地 demo 冒烟及支付至清分、结算、账务、退款、对账 happy-path 通过，对账事实七项、阶段 `4/4`、财务可收口，脚本退出时九服务全部停下。仅证明本地 H2/模拟渠道及响应结构，目标 MySQL 8、正式渠道、真实资金/授权及生产多实例仍未验收。
+
+### 10.598 2026-10-03 清分结果下游业务回执归属
+
+跨系统 happy-path 的清分出站现要求结算和账务返回同清分单、同业务链的已消费事件，并要求配置的对账事实回执含本清分单、支付单、场景及金额一致的事实，而非只认 `code=0`。清分定向派发回归及全量 Maven `58/58` 通过；九服务本地 demo 支付、清分、结算、账务、退款与对账七项事实再次通过，阶段 `4/4`，退出码 `0` 且服务全部停下。仍需目标 MySQL 8、正式下游、真实资金与可信授权验收，详见 `systems/clearing-system/docs/清分清算系统自测记录.md`。
+
+### 10.599 2026-10-03 结算对账事实回执归属与缺单保护
+
+结算清分事件消费在已配置对账事实地址时不再静默跳过缺失的结算单，也不再只凭 `code=0` 确认对账上报；回执必须为本链快照，含本结算单、支付单、场景和净结金额一致的 `settlement-system/SETTLEMENT_CREATED/SUCCESS` 事实。错链、错金额及非结构化成功体保持上游可重试失败；结算定向 `6/6`、全量 `51/51`。本地九服务 demo 链路再次通过，对账事实七项、阶段 `4/4` 且九服务均自动停止。仅证明本地 H2 与模拟渠道，目标 MySQL 8、真实资金及可信授权仍待验收；详见 `systems/settlement-system/docs/结算出款系统自测记录.md`。
+
+### 10.600 2026-10-03 账务对账事实归属与冷启动间歇失败留证
+
+账务支付成功、清分生成与退款成功消费现要求对账回执为同链快照，且含账务事件号、原业务号、支付场景和金额匹配的 `ACCOUNTING_POSTED/SUCCESS` 事实；错误链、错误事实和非结构化响应拒绝，既有事务/上游重试边界不变。账务定向 `6/6`、全量 `63/63`；payment-core `1521/1521`、清分 `58/58` 的全量测试及三处定向回归通过。隔离本地 H2 对账和账务合成调用均成功。
+
+新门禁后的九服务演练曾两次冷启动失败，分别停在清分 outbox `FAILED` 和支付成功事件 `CLEARING_ACCEPTED/FAILED`；原始下游响应未留存，不能断言根因。随后保持同一 live 栈两次成功，又两次独立冷启动 happy-path 通过，对账事实七项与阶段 `4/4`；加入固定类别、异常类型的脱敏诊断后未再次复现。九服务均已停，**间歇失败未关闭**，后续应在复现时结合本地日志定位并回归，不作为生产稳定性放行依据。目标 MySQL 8、正式渠道资金与可信授权仍未验收。
+
+### 10.601 2026-10-03 账务同账户并发入账冲突修复与跨系统复验
+
+后续九服务冷启动再次停在支付成功事件 `CLEARING_ACCEPTED/FAILED`；账务新增的固定类别日志在同一秒两次明确记录 `BALANCE_UPDATE_CONFLICT`，清分与 payment-core 分别记录对账务响应的 `HTTP_CODE_OR_STRUCTURE`、`HTTP_CODE_OR_DATA`。本次复现可定位为并发余额 CAS 冲突，不能据此反推此前无日志的失败均同因。账务在事务内以 `SELECT ... FOR UPDATE` 读取待变更账户余额，保留既有 CAS、不足额检查与失败回滚；覆盖贷借记、冻结解冻和审批调账。并发双贷记测试修复前复现冲突、修复后两笔均成功且余额/流水相符，账务全量 `64/64`。
+
+修复后两次独立九服务冷启动 happy-path 均通过，支付、清分、结算、账务、退款和对账七项事实完成，阶段 `4/4`；九服务退出后均为 `DOWN`。这仅关闭已捕获的本地 H2 同账户并发冲突路径，不能证明所有间歇失败均已消失；目标 MySQL 8 锁竞争、多实例重试、正式资金、可信授权仍待验证，不构成生产放行。
+
+### 10.602 2026-10-03 账务事件同业务并发幂等
+
+余额更新先锁行后，同一支付事件的并发请求仍可在账户锁之前同时通过事件先查后写，产生两个账务事件与两笔入账；受控 H2 双线程测试修复前实际观察到两个不同事件号。账务支付、清分、退款、结算补偿消费者现先锁账户再查同业务事件，第二个同账户请求等待首笔提交后复用原事件；事件表 `(event_type, biz_no)` 唯一键额外阻断不同账户或旁路并发重复插入。测试验证同账户双请求仅一条事件、一笔流水、一次余额变更，数据库重复业务键被拒；账务全量 `66/66`，九服务 H2 happy-path 再次通过，对账事实七项和阶段 `4/4`，全部自动停服。
+
+生产迁移须先盘点历史重复事件并核对相应账务流水，不能自动删除或合并；本轮未在目标 MySQL 8 验证迁移及并发锁竞争，也不证明可信账户归属、正式资金或生产消息闭环。唯一键阻断的是并发重复插入，已提交事件的不同账户顺序重放在此时仍会被误认成功，见下一节。
+
+### 10.603 2026-10-03 账务已消费事件异账户重放拒绝
+
+账务支付成功、清分生成、退款成功和结算补偿事件的重复消费，原先只确认业务事件、链路、金额或场景，没有核对原记账账户。四个 H2 红色回归均证明已提交事件换用另一现有账户仍被误认为成功。现在重放分支按原业务流水检查账户归属，发现不同账户的流水即拒绝，避免向上游返回错误的已记账确认；同账户重放及历史事件校验不变。四类用例转绿，账务全量 Maven `70/70`；修改后九服务本地 H2 happy-path 通过、七项对账事实与阶段 `4/4`，所有服务已停。
+
+历史“事件存在、流水缺失”仍按既有兼容策略返回原事件，无法从原流水核验账户；该兼容路径不构成可信身份或账户授权。生产历史数据、目标 MySQL 8、真实资金、正式消息与可信用户归属仍未验收，不作为发布放行依据。
+
+### 10.604 2026-10-03 账务结算补偿重放事实与无效方向防护
+
+结算补偿重复消费过去只按补偿单号复用原事件，金额、原业务单号或借贷方向改变也会被误认；新消费的未知方向还可能默认为贷方入账。现在入口要求非空补偿单号/原业务号、正金额和明确的 `借方`/`贷方`，重复消费额外核对原事件载荷的三项业务事实，金额用数值比较保留格式兼容。H2 红绿用例验证漂移、未知方向、零/负金额和空编号的拒绝与合法重放，账务全量 `72/72`。
+
+九服务本地 H2 happy-path 再次通过，对账事实七项与阶段 `4/4`，全部停服；该主链不消费结算补偿，补偿本身仅有账务 H2 服务层证据。目标 MySQL 8、正式审批、真实资金和可信账户授权仍待验收，不构成生产放行。
+
+### 10.605 2026-10-03 payment-core 退款申请可信支付成功准入
+
+`RefundServiceImpl.apply` 原仅凭被锁支付单 `status=SUCCESS` 与剩余额度创建退款；若最近成功尝试缺完成时间，或同秒毫秒完成时间晚于支付成功时间，支付详情已拒绝该异常成功单，退款申请却仍可成功。独立 RefundMapper/H2 服务事务回归在修复前对两类异常均实际创建退款。现在原支付单加锁快照新增数据库原精度成功事实判定：支付状态/样式、正金额、渠道和交易号、创建与成功时间、最近成功尝试状态/样式和完成时间必须一致；异常事实在额度查询和新退款写入前失败闭合。既有同幂等键申请仍按原契约复用，不重新创建退款。
+
+H2 红绿回归覆盖缺完成时间、同秒毫秒逆序及合法同支付单并发额度申请；退款定向 `80/80`、获准回环端口后的 payment-core 全量 Maven `1523/1523` 通过。首次沙箱全量仅因嵌入式 Tomcat 绑定回环 `Operation not permitted` 报上下文错误，未修改代码而获准重跑通过。九服务本地 H2 happy-path 及对账七项事实、阶段 `4/4` 通过并自动停服；该主链的退款由独立 refund-center 承接，不覆盖 payment-core 同源退款申请，后者由 H2 服务事务测试验证。目标 MySQL 8、真实历史异常、正式渠道资金与可信用户授权未验收，不构成发布放行。
+
+### 10.606 2026-10-03 payment-core 失败退款重试支付事实准入
+
+手工和任务中心退款重试此前锁定失败退款单与支付单、校验额度及任务终态，却忽略支付快照的 `paymentSuccessFactsValid`。现两条入口在额度计算和状态变更前拒绝原支付成功事实异常；模拟缺失或不一致的支付事实，定向回归由红转绿，并确认不会触及额度、重提和下发。合法重试 fixture 明确设置成功事实标志。
+
+payment-core 当时全量 Maven `1524/1524`，九服务本地 H2 `verify payment-chain` 对账七项事实、阶段 `4/4` 通过且全部停服。当时尝试增加的 H2 重试回归因简化 fixture 缺少退款尝试列而撤回；后续已补齐并验证，见 10.608。九服务退款由独立 refund-center 承接，不验证 payment-core 手工或任务重试。目标 MySQL 8、历史异常数据、真实资金、可信授权和跨源退款进度仍待验收。
+
+### 10.607 2026-10-03 payment-core 审批下发前支付事实复核
+
+`approve` 原在退款状态更新和日志写入后直接创建尝试与下发事件，没有复核申请后可能劣化的原支付成功事实。现在审批在读取下发快照后、创建尝试前锁定原支付单，以数据库原精度投影判定成功事实；异常则在同一 Spring 事务中回滚状态和日志。保持退款行先于支付行的锁顺序，与重试一致；申请新退款先锁支付行而后插入新退款行，不锁既有退款行。
+
+定向单测由红转绿，验证异常不创建尝试或 outbox；H2 Mapper/服务事务回归先合法申请、再清除支付成功尝试完成时间，审批失败后显式回滚，数据库仍为 `REVIEWING` 且仅保留申请日志。当时简化 H2 fixture 不能完成合法审批的下发链路，后续已补齐并验证，见 10.608。沙箱内全量测试仅嵌入式 HTTP 测试绑定回环失败；获准重跑 payment-core 当时全量 `1526/1526` 通过。此前九服务 happy-path `4/4` 验证的是独立 refund-center，未覆盖本审批分支；目标 MySQL 8、多事务锁竞争、真实渠道资金与可信授权未验收。
+
+### 10.608 2026-10-03 payment-core 审批与失败重试的 H2 下发事务
+
+扩充原有 RefundMapper/H2 服务事务 fixture 的退款尝试与支付事件表字段，使其能真实执行退款尝试写入和 `REFUND_SUBMIT` outbox upsert。合法支付先申请退款、后审批，提交后验证退款为 `PROCESSING`、恰好一条新尝试、一条关联的待下发 outbox 和两条申请/审批日志。合法失败退款的手工和任务重试分别验证原失败尝试保留、新尝试及 outbox 各一条；支付成功尝试完成时间被清除后，手工和任务重试均在状态变更前拒绝，退款仍失败且未产生新尝试或 outbox。定向 H2 `10/10`，获准回环端口的 payment-core 全量 `1530/1530` 通过，`git diff --check` 无误。
+
+这是 H2 同源 Mapper/服务事务的写入与回滚证据；测试中渠道即时派发由 mock 代替，不能替代目标 MySQL 8 锁竞争、九服务独立 refund-center 链路、真实渠道受理和资金对账，也不证明可信用户授权或跨源退款进度。
+
+### 10.609 2026-10-03 退款终态最新尝试渠道归属
+
+共用退款终态 SQL 谓词此前仅比对最近尝试状态和完成时间，退款单渠道退款号即使与最近尝试不同，收款记录仍误将其计入可信已退金额。H2 收款记录列表/详情/CSV 的错受理号回归先红（预期 `1` 笔，实际 `2` 笔）；现以原精度状态、时间及最近尝试渠道编码和退款号同退款单一致作为终态事实门禁，异常行被下钻筛选捕获、可信已退金额剔除、待核查成功笔数增加。批量失败退款候选同样排除错渠道号；该候选测试先红（多出一条），修复后转绿。任务重试在锁定快照中二次比对尝试渠道编码及退款号；单测覆盖两类错归属，H2 服务事务覆盖错受理号被拒且不生成 outbox。
+
+退款列表、收款记录、任务候选及退款服务定向通过；获准回环端口的当时 payment-core 全量 Maven `1533/1533`，`git diff --check` 无误。简化 H2 fixture 的渠道字段按正式结构补齐。重复终态回调及主动查单读取的归属比对后续见 10.610；仍不证明真实渠道退款、独立 refund-center 路径、目标 MySQL 8、正式资金或可信身份授权。
+
+### 10.610 2026-10-03 回调与主动查单终态渠道归属
+
+退款回调和主动查单的两种快照原只投影最新尝试的渠道编码与退款号。即使退款单存储的受理渠道号被改写，重复终态回调或终态主动查单也会将尝试事实误认作完整幂等成功；处理中退款还可能在错归属下更新终态或调用外部渠道。现双快照额外读取退款单渠道字段，已受理尝试的回调及主动查单在副作用前复核两项归属；终态详情沿用同一事实校验，未知受理且尝试未绑定退款号的恢复入口保持既有逻辑。
+
+四个服务回归修复前分别观察到错误幂等成功或晚于预期的渠道调用/状态错误，修复后均按内部事实异常失败闭合；H2 Mapper/服务事务回归先完成合法申请、审批、受理及成功终态，随后篡改退款单渠道号，验证终态查询由成功变为拒绝。获准回环端口的 payment-core 全量 `1538/1538`，`git diff --check` 无误。该 H2 同源证据未覆盖目标 MySQL 8、多实例并发、真实渠道资金、独立 refund-center 或可信授权，不构成生产放行。
+
+### 10.611 2026-10-03 退款终态最近尝试样式一致性
+
+共用终态 SQL 谓词此前检查退款单状态样式、最近尝试状态和时间线，却忽略最近尝试的 `attempt_status_type`；成功尝试被改为 `warn` 后仍计入收款记录可信已退金额。H2 红色回归预期 `1` 笔、实际 `2` 笔；现最近尝试样式必须与退款单终态样式一致，列表异常筛选、收款记录可信金额与待核查笔数同步收敛。失败退款批量候选曾将最近 `FAIL/warn` 尝试误选，候选 H2 红色回归确认后已增加 `danger` 约束；任务执行在锁定快照中再次校验最新尝试样式。
+
+回调及主动查单双快照新增退款单和最新尝试状态样式；终态详情、重复回调和终态主动查单对 `SUCCESS/success`、`FAIL/danger` 分别失败闭合。两个服务红色回归转绿；H2 事务回归验证最新失败尝试样式漂移拒绝任务重试且无 outbox，合法成功终态在尝试样式漂移后拒绝查询。获准回环端口的 payment-core 全量 `1543/1543`，`git diff --check` 无误，服务均停止。目标 MySQL 8、真实历史异常、渠道资金、独立 refund-center 跨系统链路和可信授权仍未验收。
+
+### 10.612 2026-10-03 退款成功时间与最近尝试完成时间的毫秒一致性
+
+成功退款 `success_at` 可在同一秒内早于最新尝试的 `completed_at`，此前共用终态 SQL 与终态详情读取接受此异常，收款记录误计可信已退金额。H2 收款记录及服务红色回归确认后，共用 SQL 谓词与 Java 终态校验按原精度要求最新尝试完成时间不晚于成功时间；真实 Mapper/服务事务补测合法终态和一毫秒逆序拒绝，恢复合法事实后的样式/渠道漂移检查保持通过。本项与下项合并全量结果见 10.613；不证明渠道到账。
+
+### 10.613 2026-10-03 日终、监控与任务中心退款终态事实对齐
+
+日终终态异常计数、监控汇总及 P1 告警、任务中心失败退款可重试/阻断概览原各有简化谓词，遗漏最近尝试渠道归属、状态样式或成功毫秒时间线。三类 H2 回归先红：日终遗漏成功尝试比 `success_at` 晚一毫秒，监控告警遗漏同类异常，任务中心将错渠道或错样式失败退款误计可重试。现各入口复用 `RefundMapper` 共用终态谓词；监控汇总及独立告警查询均已收敛。补齐独立 MyBatis 测试配置及渠道字段，三组定向测试转绿；其余日终 Mapper 独立夹具也已加载共享片段。
+
+获准绑定本机回环端口的 payment-core 全量 Maven `1548/1548` 通过，`git diff --check` 无误；未启动常驻服务。仅有 H2/MySQL 兼容 SQL 与本地事务证据，没有目标 MySQL 8、生产历史异常、真实资金、独立 refund-center 或可信授权验收，不构成生产放行。
+
+### 10.614 2026-10-03 失败退款批量候选与任务中心概览同谓词
+
+继续核对 14.324 的“可重试集合与批量候选条件完全一致”契约：概览已复用退款终态事实谓词，但 `findFailedRefundOrderIds` 仍复制一份等价的失败终态校验，后续修改可能再次漂移。现候选查询也以 `FAIL` 和同一共用谓词排除终态事实异常，保留原 `terminal_at ASC, id ASC` 顺序及批次上限。H2 任务中心 Mapper 回归在真实候选 SQL 下同时断言合法失败一笔与概览计数一致、错渠道或错样式的两笔均不进入候选；原候选排序与边界测试亦通过。定向测试和获准回环端口的 payment-core 全量 `1548/1548` 通过。这里只证明本地候选资格口径一致，实际执行仍锁定并校验原支付、退款余额和终态事实；目标 MySQL 8、独立退款中心和真实资金尚未验收。
+
+### 10.615 2026-10-03 退款成功时间孤立缺失的告警排重
+
+复核 14.316 发现共用终态谓词将仅缺 `success_at` 的完整成功退款也计入 `TERMINAL_FACT_MISMATCH`，使日终和监控同一事实重复报两类 P1；缺成功时间同时存在错渠道或错样式时仍应保留双告警。真实 H2 Mapper 红色回归覆盖：日终不再将该笔孤立缺失计入终态异常、监控仅出现缺失告警、列表终态异常筛选不包含孤立缺失；另将最新尝试改为错样式/错渠道后仍进入终态异常。修复后共用谓词在成功时间缺失时跳过仅依赖该时间的比较，独立的终态异常条件保持有效。可信已退聚合继续显式要求成功时间非空，终态详情、重复回调及主动查单仍在 Java 校验拒绝缺失时间。
+
+定向 H2 Mapper 测试与获准回环端口的 payment-core 全量 Maven `1549/1549` 通过，`git diff --check` 无误。本地分类证据不证明目标 MySQL 8、真实退款到账、独立 refund-center 或可信授权，不能作为生产放行依据。
+
+### 10.616 2026-10-03 收款记录待核查成功退款下钻修复
+
+10.615 排除孤立成功时间缺失的重复终态告警后，收款记录的 `unverifiedRefundCount` 仍包含这笔未计入已退的原始成功退款，但管理端旧下钻固定使用 `TERMINAL_FACT_MISMATCH`，会出现提示有待核查笔数而落地列表为空。H2 真实 Mapper 红色回归证实新下钻资格尚不存在；管理端两处路由断言也先红。现退款列表/计数/CSV 新增 `UNVERIFIED_SUCCESS` 虚拟筛选，取原始成功且缺成功时间或其他终态事实异常的并集；收款记录列表快照和唯一详情都按支付单号跳转该筛选，退款管理页提供对应选项。原两个独立告警筛选不变。
+
+H2 回归覆盖孤立缺时间及错渠道均可下钻、完整成功与失败退款不进入新集合，列表、计数和 CSV 一致。进一步检查管理端 API 客户端发现，原列表一致性验证会把缺成功时间的诊断行整页拒绝；新增红色回归后，三种诊断筛选允许结构完整的终态异常行只读展示，仍拒绝错误归属、非法金额和字段形状。诊断页禁用申请、审批、查单、重试及可能被后端终态校验拒绝的详情跳转；普通列表原有严格校验不变。管理端全量 `276/276`、生产构建通过，获准回环端口的 payment-core 全量 Maven `1549/1549` 通过。尚未在真实浏览器对新下钻执行点击验证；目标 MySQL 8、历史异常数据、独立 refund-center 和真实资金链路仍未验收。
+
+### 10.617 2026-10-03 收款记录待核查退款真实管理端只读下钻
+
+在五个演示端口均 `DOWN` 且没有环境数据库、SQL 初始化或网关覆盖后，使用独立 `HSP_DEMO_DB_URL=jdbc:h2:mem:payment_core_refund_missing_20261003;...` 与 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库路径}/tools/dev/payment-refund-success-time-missing-demo.sql` 启动本地 payment-core/demo 和管理端。新夹具只把内置 `REF202607180019` 的退款成功时间置空，其余退款单、最新尝试和渠道事实保持完整。增强只读 Chrome/CDP 冒烟先核验 `/api/demo/identity=payment-core-h2-demo`：退款 `UNVERIFIED_SUCCESS` 与 `SUCCESS_TIME_MISSING` 各命中此单，`TERMINAL_FACT_MISMATCH` 为零；收款详情原始 `SUCCESS` 却为 `0` 笔可信已退、`1` 笔待核查、`¥0.00`。真实浏览器分别从收款列表快照及唯一详情点击“查看待核查退款”，同源 GET 后路由保留原支付单号和新筛选，退款行可见，诊断提示可见；快照可读、详情与退款操作均禁用。浏览器 API 请求仅有同源 GET，无写入。
+
+为回归原异常路径，再以独立 H2 内存库和既有 `payment-refund-triage-demo.sql` 构造成功退款尝试完成时间晚于终态一毫秒，复用同一浏览器脚本 `--refund-triage`；该样例同样从收款快照及详情下钻新筛选，行可见且只读。两次运行均用 `local-stack.sh up payment-core` 前台托管，退出后五个服务均停止，Chrome 临时配置被脚本清理。脚本语法、管理端 `276/276` 与生产构建、payment-core `1549/1549` 均通过，`git diff --check` 无误。证据限本地 H2/demo、模拟渠道与演示数据；目标 MySQL 8、真实历史数据、可信授权、独立 refund-center 跨源进度及真实资金仍未验收。
+
+### 10.618 2026-10-03 退款终态非正金额不再计入可信已退
+
+数据库历史记录可能存在零额或负额退款；终态详情已有正金额校验，但共用终态 SQL 未覆盖，导致原始 `SUCCESS` 被收款记录误计入可信已退金额。H2 红色回归分别把完整成功退款改为 `0.00` 和 `-5.00`，验证收款列表与详情的可信笔数、金额及待核查笔数，以及日终终态异常计数。现共用终态谓词明确拒绝空值及非正金额，因而列表、计数、CSV、日终、监控及任务中心的终态异常口径同源；简化 H2 夹具同步提供合法正金额，避免用缺失金额伪造合法失败候选。
+
+六组相关 Mapper 定向测试通过；获准回环端口的 payment-core 全量 Maven `1551/1551` 通过，`git diff --check` 无误。该修复尚未将退款金额与原支付金额、累计可退余额逐一核对，也不证明目标 MySQL 8、真实渠道到账或独立退款中心事实。
+
+### 10.619 2026-10-03 非正退款金额的管理端诊断可见性
+
+10.618 将零额和负额退款归入终态事实异常后，管理端的共用列表边界仍强制金额为正，导致只读诊断筛选被异常行整页阻断。新增红色客户端回归覆盖格式化零额、负额和空金额在 `TERMINAL_FACT_MISMATCH`、`UNVERIFIED_SUCCESS` 可读而普通列表拒绝；不规范负额、超精度、缺失字段和错支付归属继续拒绝。仅诊断模式允许后端格式化的带符号金额或明确的 `null`，缺额显示“—”；本页金额卡片不汇总异常数值，避免旧求和器把负额与空值算成零。诊断页依然不允许详情跳转及退款写操作。
+
+补充 H2 Mapper 回归证明零额及负额 `SUCCESS` 在 `TERMINAL_FACT_MISMATCH`、`UNVERIFIED_SUCCESS` 的列表、计数和 CSV 中同源可见，金额文本分别为 `¥0.00`、`¥-5.00`。客户端相关回归 `169/169`、管理端全量 `276/276` 和生产构建、payment-core 全量 `1552/1552` 通过。本项没有运行新的浏览器点击，也不证明目标 MySQL 8、正式渠道到账或独立退款中心事实。
+
+### 10.620 2026-10-03 退款终态单笔金额不超过原支付金额
+
+Java 终态详情此前已拒绝超过原支付金额的退款，但共用 SQL 只要求退款金额为正。H2 红色回归把原支付金额从 `100.00` 调为 `25.00`，证明 `30.00` 成功退款仍被收款记录计入可信已退。共用终态谓词现在按原支付单号要求存在金额为正的支付单，且单笔退款不超过实付金额；缺原支付单或超额均转入终态事实异常。新增回归覆盖收款列表/导出/详情可信与待核查笔数、退款诊断列表/计数/CSV 的 `11.00 > 10.00` 及缺原支付单、日终超额告警；监控夹具删去支付单后亦断言孤儿退款告警。简化 H2 夹具补充原支付单归属与合法金额，不将缺少父单的模拟数据误认为可信终态。
+
+六组相关 Mapper 定向和获准本地回环端口的 payment-core 全量 `1554/1554` 通过，`git diff --check` 无误。单笔上限不代替同一支付单多笔退款累计可退余额检查；目标 MySQL 8、正式渠道和真实资金事实尚未验证。
+
+### 10.621 2026-10-03 多笔成功退款累计超原支付的整组隔离
+
+申请及重试入口已有活动退款累计上限，但历史同源记录可能出现两笔各自有效且均未单笔超额的成功退款合计超过原支付金额。红色 H2 聚合回归将已支付 `100.00` 调为 `40.00`，使有效成功退款 `20.00 + 30.00` 超额，旧查询仍回传两笔可信已退。现将共用终态 SQL 分为单笔核心门禁和累计门禁：仅对具备成功时间且核心事实完整的同支付单成功退款求和；合计超额时所有成功退款待核查，不任意选择哪一笔继续作为可信金额。既有夹具的其他不可信退款不被算入累计候选，失败终态不会仅因其他成功退款超额而被误归因。
+
+H2 回归覆盖收款记录列表/导出/详情由两笔 `¥50.00` 变为零笔 `¥0.00`、六笔待核查；日终同组 `10.00 + 20.00 > 25.00` 两笔均报终态异常；退款列表、计数及 CSV 在 `TERMINAL_FACT_MISMATCH` 和 `UNVERIFIED_SUCCESS` 均下钻两笔，支付金额提高至 `30.00` 后恢复。定向 Mapper 与获准本地回环端口的 payment-core 全量 `1557/1557` 通过，`git diff --check` 无误。目标 MySQL 8 的执行计划与大数据量性能、正式渠道和真实资金及独立退款中心跨源事实仍需验收。
+
+### 10.622 2026-10-03 退款终态详情、查单与重复回调对齐累计门禁
+
+10.621 将累计超额成功退款隔离在列表和收款聚合后，Java `validateTerminalFacts` 仍仅校验单笔金额，可能在终态详情、终态主动查单或同状态重复回调把该退款当作可信终态返回。红色服务回归确认详情仍放行。现在两种退款回调来源快照均投影共用 `refundTerminalFactMismatchCondition`，服务校验要求明确为 `false`；累计超额或缺失投影一律拒绝，不触发渠道查单或状态写入。共享片段中退款单字段统一加别名，避免与回调最新尝试及原支付单的同名字段歧义。首次从处理中收口渠道结果的写入路径保持原状，不能因历史累计异常丢弃渠道确认的真实事实。
+
+服务单测覆盖详情、终态查单、重复成功回调及空事实标志的拒绝；H2 Mapper 回归以两笔 `40.00 + 40.00 > 68.00` 验证只读与锁定快照均为异常，调高原支付金额至 `80.00` 后均恢复。定向测试与获准回环端口的 payment-core 全量 `1559/1559` 通过，`git diff --check` 无误。目标 MySQL 8、历史资金、渠道事实和独立退款中心跨源路径仍需验证。
+
+### 10.623 2026-10-03 历史非正活动退款不再抵消可退额度
+
+复核 `sumActiveRefundAmount` 发现 `REVIEWING/PROCESSING/SUCCESS` 历史退款中的负额会抵消合法活动占额，导致新申请或失败退款重试可能在累计额度看似未超支付金额时继续写入。服务红色回归分别证明新申请放行及重试未按异常数据门禁拒绝。现原支付单锁定和支付事实校验后，先以同一活动状态范围统计空值及非正金额；若存在即失败关闭，再执行原有金额求和及上限比较。失败状态不占活动额度，失败单自身的非正金额仍由重试校验拒绝；既有幂等申请仍先按原请求返回。
+
+H2 Mapper 回归覆盖零额、负额、空值、失败状态排除和原支付单隔离；真实 Mapper/服务集成以历史 `PROCESSING -80.00` 验证原求和为负、`60.00` 新申请被阻断且没有新增退款单。手工及任务重试的单测均断言在状态写入前拒绝。定向测试与获准回环端口的 payment-core 全量 `1563/1563` 通过，`git diff --check` 无误。目标 MySQL 8、正式渠道、生产历史和真实资金仍未验收。
+
+### 10.624 2026-10-03 累计超额成功退款的真实浏览器只读下钻
+
+目标 MySQL 8 尚无本机可用实例（Docker CLI 存在但 daemon 未运行），因此本轮使用独立 H2 内存库补真实管理端浏览器证据，不将它冒充 MySQL 验收。新增 `tools/dev/payment-refund-cumulative-demo.sql`，在原演示支付单 `PAY202607180074` 已支付 `3600.00`、已有成功退款 `600.00` 的基础上，增加同支付单且渠道与尝试事实完整的成功退款 `3200.00`；两笔均未单笔超额，但合计 `3800.00` 超支付金额。启动前核对五个回环端口 `DOWN` 且无数据库与 SQL 初始化环境覆盖，显式指定独立 `HSP_DEMO_DB_URL` 与 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库路径}/tools/dev/payment-refund-cumulative-demo.sql`，由 `local-stack.sh up payment-core` 前台托管。
+
+扩展 `payment-admin-diagnostic-browser-smoke.mjs --demo --refund-cumulative`：先核验 demo 身份、收款详情 `0` 笔可信已退、`2` 笔待核查、`¥0.00` 与两种退款诊断筛选均包含两单，再用真实 Chrome/CDP 分别从收款列表快照与唯一详情点击“查看待核查退款”。两笔退款均可见，诊断页提示金额不汇总；逐行确认快照可用、其他操作禁用。浏览器捕获的 API 全是管理端同源 GET，无退款写入。为防新参数破坏既有单笔路径，再用另一独立 H2 库与原 `payment-refund-triage-demo.sql` 重跑 `--refund-triage`，同样通过。两次演示栈均已前台停服并确认回环端口关闭，Chrome 临时用户目录由脚本清理；脚本语法及 `git diff --check` 通过。支付核心代码未变，沿用本轮前已通过的 `1563/1563` 全量基线。该证据不证明目标 MySQL 8 执行计划、真实渠道资金或跨系统退款事实。
+
+### 10.625 2026-10-03 零额与负额退款的真实管理端诊断可见性
+
+10.619 的客户端回归与 H2 Mapper 测试已证明非正金额可进入只读诊断，但缺真实浏览器点击。新增 `tools/dev/payment-refund-invalid-amount-demo.sql`：在内置 `PAY202607180074` 上把原成功退款金额改为 `0.00`，另加入渠道与尝试事实完整、金额 `-5.00` 的历史成功退款。先核对五个端口均 `DOWN` 且无外部数据库与 SQL 初始化环境覆盖，再以独立 H2 内存库和显式 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库路径}/tools/dev/payment-refund-invalid-amount-demo.sql` 启动 `local-stack.sh up payment-core`。
+
+扩展 `payment-admin-diagnostic-browser-smoke.mjs --demo --refund-invalid-amount`，先以 GET 核对 demo 身份、收款记录可信已退 `0` 笔/`¥0.00`、待核查 `2` 笔，两种诊断筛选均包含两单并返回 `¥0.00`、`¥-5.00`；随后用真实 Chrome/CDP 从收款列表快照和唯一详情分别下钻。两行金额文本均准确，诊断金额卡片显示“—”不汇总，逐行仅快照可用、详情与写操作禁用。浏览器 API 全为管理端同源 GET。脚本改动后再用另一独立 H2 库重跑 `--refund-cumulative`，既有两笔累计超额路径仍通过且仅 GET。两次前台栈均已停、临时 Chrome 用户目录由脚本清理。脚本语法、`git diff --check` 通过；应用代码未改，沿用前轮 payment-core `1563/1563` 与管理端 `276/276` 基线。目标 MySQL 8、真实历史数据、正式渠道资金及独立退款中心跨源事实仍未验收。
+
+### 10.626 2026-10-03 成功支付详情拒绝最近尝试错渠道
+
+支付成功详情以前只按原精度核对创建、尝试完成、支付成功时间线及状态，但不核对最近尝试的渠道是否属于支付单渠道；历史错渠道成功尝试因此可从用户端详情、收银台、重复提交或终态查单复用。`PaymentMapper.findDetail` 的内部成功事实标志现同时要求尝试渠道与支付单渠道一致，现有服务成功事实门禁因此拒绝错归属。H2 Mapper 定向回归在合法同渠道与同时间线基础上切换尝试渠道，验证错误归属拒绝及恢复后放行。简化 H2 返回码夹具同步补列；回环 HTTP 测试获准运行后 payment-core 全量 `1563/1563` 通过，`git diff --check` 无误。
+
+本轮尚未把同一规则接入支付单列表/监控/日终共享异常谓词及退款锁定原支付事实，不能将这些运营投影或同源退款申请视为已覆盖；目标 MySQL 8、真实历史与渠道资金均未验收。
+
+### 10.627 2026-10-03 成功支付错渠道尝试的运营与退款隔离
+
+沿 10.626 的详情门禁继续核对共享成功事实谓词，发现列表/CSV/计数、监控金额与告警、日终异常计数、退款锁定原支付校验仍接受最新成功尝试的错渠道归属。现 `PaymentMapper.paymentSuccessFactMismatchCondition` 与 `RefundMapper.findPaymentSourceForUpdate` 均要求最近尝试渠道等于支付单渠道；日终独立异常计数 SQL 同步相同判断。异常成功单仍保留原始状态和只读诊断，但不进入可信成功汇总，payment-core 自身退款不创建单或下发。
+
+H2 覆盖支付单筛选/计数/导出在错渠道时新增异常、改回同渠道后恢复，监控 P1 告警与可信汇总、日终按成功日期的异常计数；真实 Mapper/服务事务覆盖错渠道退款申请阻断且无新退款单，修复渠道后合法申请可进入待审核。同步补齐简化 H2 表结构及合法历史样例渠道；获准回环端口的 payment-core 全量 Maven `1564/1564` 通过，`git diff --check` 无误。本地证据不证明目标 MySQL 8 查询计划、历史事实清理、正式渠道到账或独立 refund-center 的跨源校验。
+
+### 10.628 2026-10-03 错渠道支付尝试在成功收口前拦截
+
+复核支付回调与主动查单发现：上一节只隔离已写入的异常成功事实，`markPaymentSuccessFromChannelResult` 仍可先把错渠道尝试对应的支付单改为成功、生成领域事件与结算副作用，然后在读取时才暴露异常。现 `findDetail` 增加不外显的提交渠道归属标志；回调、主动查单在外部渠道动作或成功收口前检查，获取订单协调锁重读后再次核对。`markPaymentSuccessFromChannelResult`、`markPaymentPendingFromCallback` 与 `finalizeLatestPaymentAttemptSuccess` 各自以数据库最新尝试渠道为条件，防止旁路或并发漂移越过服务预检。
+
+H2 状态迁移回归验证 `WAIT_CALLBACK` 与历史已关闭单的错渠道成功结果不写状态，处理中回调不绑定渠道交易号；修复归属后合法单仍能成功收口并完成尝试，成功单渠道漂移时不终态化尝试。无提交尝试的已过期关闭单不再可直接由单条成功消息迁移；真实渠道事实需人工核查。服务单测验证错渠道回调不写成功、主动查单不调用外部渠道；Mapper 还验证归属标志正反值且不进入 JSON。获准回环端口的 payment-core 全量 `1568/1568` 通过，新增 JSON 断言的定向回归亦通过，`git diff --check` 无误。目标 MySQL 8 锁行为、正式回调资金、历史错渠道数据及独立退款中心跨源事实仍未验收。
+
+### 10.629 2026-10-03 非正历史支付金额的可信成功隔离与诊断
+
+共享支付成功事实和日终独立异常计数此前未检查原支付金额；金额为 `0.00` 或负数的历史 `SUCCESS` 可进入运营可信成功笔数，负值还会污染成功金额。H2 红色回归先复现列表/计数/导出、指标与日终三处漏判，再把空值及非正金额纳入 `SUCCESS_FACT_MISMATCH`；正金额恢复后原有可信路径不变。`RefundMapper` 原支付准入本身已有正金额条件，本轮未放松。简化 H2 运营夹具补齐支付金额列。
+
+管理端支付列表只对带成功事实异常标记的行接受严格格式化的非正金额或明确空值，普通行仍要求正金额；异常行保留只读快照与处理日志入口、禁用成功详情及渠道查单。本页若含不可核验金额，“实付金额”卡片显示“—”而不静默跳过异常值求和。回环 HTTP 集成以既有成功单改为 `0.00`、`-5.00`，核对支付指标及监控仍为其他可信成功金额、异常筛选和 CSV 保留原金额、成功详情拒绝。详情错误由客户端参数错误纠正为成功事实不一致的服务端错误；服务单测覆盖零额、负额、空值。
+
+获准回环端口的 payment-core 全量 Maven `1569/1569`、管理端 `276/276` 与 Vite 生产构建、`git diff --check` 通过。本节当时尚未做管理端真实浏览器点击，后续补齐见 10.630；目标 MySQL 8、正式资金、生产历史异常和独立退款中心跨源事实仍需单独验收。
+
+### 10.630 2026-10-03 非正支付金额的真实浏览器只读验收
+
+新增 `tools/dev/payment-invalid-amount-demo.sql`，仅在 H2/demo 初始化阶段把 `PAY202607190001` 最新尝试完成时间改为原成功时间、金额改为 `0.00`，把原本成功事实完整的 `PAY202607180074` 金额改为 `-5.00`，以免用既有时间逆序误证金额诊断。启动前确认五个回环端口均空闲、无数据库或初始化环境覆盖；强制 `HSP_DEMO_DB_URL=jdbc:h2:mem:payment_core_invalid_amount_20261003;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE` 和 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库绝对路径}/tools/dev/payment-invalid-amount-demo.sql`，由 `local-stack.sh up payment-core` 前台托管。
+
+扩展 `tools/dev/payment-admin-diagnostic-browser-smoke.mjs --demo --payment-invalid-amount` 的独立只读路径：预检 demo 身份、两笔 `SUCCESS_FACT_MISMATCH` 筛选行与原金额、详情业务错误 `PAYMENT-500`、支付指标及监控可信成功 `0` 笔/`¥0.00`；真实 Chrome/CDP 浏览器分别按单号打开异常支付列表，核对 `¥0.00`、`¥-5.00`、金额卡片“—”与异常状态，实际点击快照与处理日志，验证详情入口不存在且查单禁用。浏览器 API 请求均为管理端同源 GET，无写请求。首次在沙箱运行因回环端口 `EPERM` 失败，获准后重试；首次预检误以为详情异常使用 HTTP 500，实际接口以 HTTP 200 封装 `PAYMENT-500`，修正断言后脚本 `[PASS]`。`node --check`、`git diff --check` 通过；Chrome 临时目录清理，五个服务已停且监听端口关闭。本验收仅证明隔离 H2/demo 页面行为，不替代 MySQL 8 执行计划、真实渠道资金、生产历史异常或独立退款中心跨源事实验收。
+
+### 10.631 2026-10-03 历史负额成功单不得抵消订单超额与日终差异
+
+盘点异常中心 `issueUnion` 与日终成功差异 SQL 发现两处都直接累计原始成功金额；历史负额成功单会掩盖另一笔正金额形成的订单超额。新增 H2 Mapper 红测：应收 `100.00`，同订单依主键顺序成功 `80.00`、`-20.00`、`30.00`，旧查询找不到超额异常。修正后仅对正金额原始成功单聚合，异常关联最后一笔正金额成功单，摘要合计 `110.00`、超额 `10.00`、笔数 `2`，日终两笔超额差异金额共 `60.00`（含原夹具另一笔 `30.00`）。再删除负额历史单的支付事件，红测证明原日终差异金额被负额抵消；现差异单数增加而金额保持 `60.00`。不将原始 `SUCCESS` 改为可信成功，负额本身仍由独立成功事实诊断处理。
+
+定向运行 `PaymentOverpaidSuccessDetectionMapperIntegrationTest`、`PaymentDayEndPaymentSuccessFactsMapperIntegrationTest`、`PaymentDayEndPatrolMapperIntegrationTest` 通过。首次全量 Maven 仅临时 HTTP 测试因沙箱回环端口 `EPERM` 出错，获准放行后同命令全量 `1570/1570`（零失败、零错误、零跳过）通过，`git diff --check` 无误；目标 MySQL 8 执行计划、真实历史、正式渠道资金和独立退款中心跨源事实仍未验收。
+
+### 10.632 2026-10-03 历史负额支付单不得冲抵渠道日限额
+
+在上轮超额场景后进一步检查渠道路由容量：`PaymentMapper.sumTodayAcceptedAmountByChannel` 对原始 `WAIT_CALLBACK/SUCCESS` 直接求和，历史负额成功或待回调单会抵消正金额占额，导致本应转兜底或拒绝的请求被路由到超额渠道。H2 Mapper 红测以同日同渠道成功 `80.00`、负额成功 `-20.00`、待回调 `5.00`、负额待回调 `-10.00`，另有关闭 `100.00` 与其他渠道成功 `200.00`，原返回 `55.00` 而非 `85.00`。现只累加正金额的原状态受理单；定向 `PaymentRouteExecutionMapperIntegrationTest` 与 `PaymentChannelRoutingServiceImplTest` 通过，既有 `90.00 + 20.00 > 100.00` 兜底规则未改。
+
+该修复不把异常历史支付单当作可信资金，也不提供多实例原子限额预留；获准回环端口的 payment-core 全量 Maven `1571/1571`（零失败、零错误、零跳过）、`git diff --check` 通过，演示栈仍为 `DOWN`、无端口监听。目标 MySQL 8 执行计划、正式渠道容量和真实资金仍需独立验收。
+
+### 10.633 2026-10-03 已提交支付的幂等复用不重走容量选路
+
+检查 `PaymentServiceImpl.submit` 发现对 `WAIT_CALLBACK/SUCCESS` 已受理单也先执行渠道路由，原渠道日限额在首次提交后被填满时，重复请求会在只读复用判断前失败；配置变化还可能选到另一渠道并改变默认幂等键。新增服务红测令原渠道在重试时抛日限额错误，确认原逻辑误拒。现仅当已有支付详情绑定渠道且请求渠道为空或与绑定渠道一致时复用原渠道；仍校验客户端字段、来源应用控制策略、幂等键归属和成功事实，不创建新尝试或调用渠道。缺省字段依赖运营默认值的后续差距见 10.635。显式请求其他渠道仍走原路由并保留禁用渠道的拒绝；旧错误令牌回归改为走已绑定渠道路径，确认不会因跳过选路而跳过鉴权。`PaymentServiceImplTest` 定向全类通过。
+
+本项只针对已有 `WAIT_CALLBACK/SUCCESS` 的只读复用，不替代首次提交的多实例原子日限额配额预留。获准回环端口的 payment-core 全量 Maven `1572/1572`（零失败、零错误、零跳过）、`git diff --check` 通过，演示服务全部 `DOWN`、无端口监听；目标 MySQL 8、真实渠道额度与正式资金仍未验收。
+
+### 10.634 2026-10-03 本轮支付改动后九服务本地 happy-path 复验
+
+在九个回环端口均空闲、无数据库或 SQL 初始化环境覆盖后，获准运行 `tools/dev/local-stack.sh verify payment-chain`。脚本以 `SPRING_PROFILES_ACTIVE=demo` 启动运营配置、风控、网关、账户账务、清分、结算、独立退款中心、对账和 payment-core；HTTP 冒烟全通过。happy-path 在任何本地写入前由 `GET /api/demo/identity` 确认 payment-core 为 `payment-core-h2-demo`，随后生成本地隔离支付单，完成支付、清分、结算、账务与退款联查；结果 `[PASS] cross-system local happy path`，七项对账跨源事实均为 `SUCCESS`，对账链状态 `COMPLETED`、阶段 `4/4`，本地 `reconciliationFinancialCloseable=true`。同一会话统一停服，九个端口 `lsof` 无监听，`git diff --check` 通过。
+
+本项验证当前基线的演示链路而非专项并发额度竞争；不代表目标 MySQL 8 的事务锁与执行计划、正式渠道真实资金、生产历史及可信授权已验收。
+
+### 10.635 2026-10-03 已受理支付缺省字段重试独立于现行默认配置
+
+10.633 绕开重新选路后，`submit` 仍先请求当前运营默认快照。模拟原支付已 `WAIT_CALLBACK`、绑定支付方式与 `wx_h5`，客户端重试仅传预付单号而默认配置已不可用，红测证实返回“当前支付场景缺少有效运营配置”。现优先从已受理支付详情补齐缺省方式与渠道；保留传入值和原有剩余必填校验，`applyOpsConfigDefaults` 仅在原事实不足时使用。绿测验证默认键 `PRE-OPS-REPLAY|微信支付|wx_h5` 的尝试归属检查、返回原渠道与方式，运营配置、路由及渠道提交均无调用；错误令牌测试也改为缺省字段复用路径，仍返回 `PAYMENT_ACCESS_TOKEN_INVALID`。`PaymentServiceImplTest` 全类定向通过。
+
+此修复仅涉及已有 `WAIT_CALLBACK/SUCCESS` 且渠道已绑定的只读复用，不对无有效原事实、显式异渠道或首次提交放宽；获准回环端口的 payment-core 全量 Maven `1573/1573`（零失败、零错误、零跳过）、`git diff --check` 通过，演示栈仍为 `DOWN` 且无端口监听。目标 MySQL 8、正式身份、生产运营配置及真实渠道资金未验收。
+
+### 10.636 2026-10-04 缺省字段幂等复用的真实 H2 Mapper/Spring 回归
+
+前述服务单测使用 Mockito，不能证明真实初始化数据、Mapper 幂等键和控制策略兼容。新增 `PaymentSubmitReplayIntegrationTest` 用独立内存 H2、demo profile 和无 Web 端口的 Spring 上下文，显式关闭运营快照联动及调度。在内置待回调单 `PAY202607190002` 上将支付金额对齐其预付金额 `6800.00`，确认已存在 `PRE202607190002|支付宝|alipay_h5` 尝试；仅传预付单号与默认策略允许的商户号调用真实 `PaymentService.submit`，返回原支付单、支付宝及 `alipay_h5`，尝试数和路由记录数不变，集成测试通过。
+
+首次将该集成测试并入全量时，Spring 启动修改了 JVM 全局日志级别，导致其后的三项日志捕获断言失败；新测试按现有 HTTP 集成测试模式在 `@AfterEach` 恢复 root 和事务日志级别。四类相关测试联合定向通过，获准回环端口的 payment-core 全量 Maven `1574/1574`（零失败、零错误、零跳过）通过，`git diff --check` 无误，演示栈全部 `DOWN` 且端口无监听。本项仅验证 H2 同源只读复用，不证明目标 MySQL 8、正式渠道资金、多实例配额或可信身份。
+
+### 10.637 2026-10-04 App/H5/PC 支付结果与退款双终态浏览器复验
+
+先确认五个演示端口均空闲、无数据库或 SQL 初始化环境覆盖；分别用 `HSP_DEMO_DB_URL=jdbc:h2:mem:payment_terminal_20261004;...` 与 `jdbc:h2:mem:payment_terminal_fail_20261004;...`、`SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql` 前台托管 `local-stack.sh up payment-core`。在每套隔离库上执行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo --refund-demo --refund-success-demo` 或 `--refund-fail-demo`。脚本在任何 POST 前先验证 `/api/demo/identity=payment-core-h2-demo`，创建虚构预付单；模拟渠道成功后，重复提交复用原渠道、渠道交易号及终态时间，再发起同源退款和模拟成功/失败回调。
+
+两种终态各自 `[PASS]`：实际 Chrome/CDP 分别从 App/H5/PC 打开收银台、支付结果、退款进度，处理中及最终 `SUCCESS`/`FAIL` 各 9 页，每种终态路径 18 次页面访问、两套库共 36 次；全部同源 `200 GET`，订单和金额渲染准确，浏览器不发支付写请求。五个服务在两次运行后均由前台托管会话停止，Chrome 临时 profile 清理，回环端口无监听；`node --check` 与 `git diff --check` 通过。这里的支付/退款回调仅写入独立 H2/demo 内存库，不等于真实渠道资金、MySQL 8、生产授权或独立 refund-center 跨源进度验收。
+
+### 10.638 2026-10-04 预付金额与支付单金额的提交绑定
+
+排查发现正常 `prepay` 创建事务向预付单、支付单双写相同剩余应付金额，但 demo 待回调单 `PAY202607190002` 的支付金额为 `2000.00`，绑定预付单及已有渠道尝试的金额均为 `6800.00`。`submit` 按预付金额路由、风控并向渠道提交，重复提交则直接复用支付状态；独立 H2/Spring 红测确认金额不一致时待回调单仍返回原支付状态。现提交时先对绑定预付单与支付单金额作正数数值比较，任何状态的金额不一致均在路由、风控与出站前拒绝，不以金额缺失视作合法；修正 demo 支付单金额为 `6800.00`，保持订单已付 `2000.00` 与剩余应付 `6800.00` 各自语义。原真实 Mapper 幂等复用测试不再需要临时修正库数据；回归同时覆盖待回调重试及未提交状态、无新增渠道尝试和路由记录。服务 mock 测试补齐对应两侧真实金额，不放宽生产门禁。
+
+新增红测修复后转绿；payment-core 全量 Maven `1575/1575`（零失败、零错误、零跳过）及 `git diff --check` 通过。全量中 HTTP 测试因沙箱监听 `EPERM` 在获准本机回环环境重跑通过。本项为本地 H2/demo 与服务 mock 证据，不代表 MySQL 8、生产历史金额清洗、正式渠道资金、多实例并发或可信身份验收。
+
+### 10.639 2026-10-04 首次渠道绑定的数据库金额门禁
+
+10.638 的服务入口金额检查在渠道路由前完成，但首次提交的状态占用与渠道绑定仍需在数据库写入时复核，避免读取后金额或预付关系漂移继续建立新尝试。真实 H2 Mapper 红测将待支付单与其唯一预付单改为 `68.00/67.00`，原 `updatePaymentMethodAndChannel` 仍返回 `1` 并进入 `WAIT_CALLBACK`。现更新 SQL 要求支付金额为正、该支付单恰有一笔关联预付单，且关联订单号和两侧正金额精确相等；不一致或重复绑定均返回 `0`，交由原事务抛错回滚。测试覆盖金额不等、重复预付关系拒绝及合法 `68.00/68.00` 绑定成功；红测转绿，`PaymentMapperStateTransitionIntegrationTest` 与真实 H2 提交重试定向通过，获准回环环境 payment-core 全量 `1576/1576`（零失败、零错误、零跳过），`git diff --check` 通过。
+
+这项门禁只针对首次从未提交状态进入 `WAIT_CALLBACK` 的原子绑定；已受理历史单的渠道成功回调、主动查单及其跨源收口金额事实需另行核查。H2/demo 不代替目标 MySQL 8、正式渠道、生产历史或多实例事务验收。
+
+### 10.640 2026-10-04 已受理支付成功收口的金额事实门禁
+
+沿 10.639 排查发现，已受理支付若历史支付金额与预付金额漂移，成功回调原会继续结清账单、产生支付成功事件；服务单测先红（预期拒绝却正常返回）。真实 H2/demo 中将 `PAY202607190002` 改回 `2000.00` 而关联预付仍为 `6800.00`，原 `markPaymentSuccessFromChannelResult` 返回 `1`，即使提交重试门禁已阻止此单，回调仍可将其改成成功。现 `findDetail` 从原精度金额、订单号和唯一预付关联生成内部金额事实标志：缺失、重复、非正金额、订单号或金额不等均为 `false`；成功回调和主动查单在订单维度加锁并重读后要求该标志明确为 `true`，否则不触发成功写入和下游事件。历史 `SUCCESS` 详情及复用也须满足该事实，不能将异常历史成功视为可信。`markPaymentSuccessFromChannelResult` 在数据库原子更新中重复校验唯一预付、订单号及正金额精确相等，避免锁后漂移绕过服务判断。
+
+回归覆盖成功回调、主动查单、历史成功详情三种拒绝；真实 Mapper 验证合法种子标志 `true`、错金额标志 `false`，错金额成功状态更新 `0` 且原单仍为 `WAIT_CALLBACK`。旧返回码快照 H2 夹具补齐真实表的预付金额和订单号列，状态迁移夹具补齐有效预付绑定，不放宽生产门禁。定向回归通过，获准回环环境 payment-core 全量 Maven `1579/1579`（零失败、零错误、零跳过）及 `git diff --check` 通过。渠道已确认成功但本地金额异常的人工核查和历史数据修复仍需正式数据与渠道对账；这里不证明 MySQL 8、正式渠道真实资金、可信身份或多实例事务语义。
+
+### 10.641 2026-10-04 金额门禁后九服务 H2/demo happy-path 复验
+
+确认支付链九个回环端口空闲且无数据库初始化环境覆盖后，获准执行 `tools/dev/local-stack.sh verify payment-chain`。脚本前台托管本地运营配置、风控、网关、账户账务、清分、结算、退款中心、对账和 payment-core，写入前检查 payment-core 的 `/api/demo/identity` 为 `payment-core-h2-demo`；HTTP 冒烟与 `[PASS] cross-system local happy path` 均通过。支付、清分、结算、账务及退款共七项跨源对账事实齐备，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。脚本退出码为 `0`，九服务均自动停止，回环端口无监听，`git diff --check` 通过。本项只证明本地隔离 H2/demo 链路，不等于正式渠道真实资金、目标 MySQL 8、生产历史金额处理或可信身份验收。
+
+### 10.642 2026-10-04 成功收口零行回查不再静默确认待处理单
+
+10.640 的数据库原子金额门禁可能在服务加锁检查后返回 `0`（例如金额或预付关联事实进一步漂移）；成功回调与主动查单原在此分支重读并直接返回最新 `WAIT_CALLBACK`，控制器会把渠道已确认成功却未完成本地收口的响应包装为成功。两项服务红测模拟加锁时绑定有效、成功写入 `0`、重读时绑定失效，原来均未报错。现两条路径只复用经过成功事实校验的 `SUCCESS` 赢家；有效且已 `CLOSED` 的原有“保持关闭、不重新结清”契约保留；仍待处理或金额绑定异常则抛出非成功异常，不发支付成功事件。回调分支仅在回查为可信终态后才释放提交并发令牌，异常路径随事务回滚。定向服务/H2 回归和获准回环环境 payment-core 全量 Maven `1581/1581`（零失败、零错误、零跳过）、`git diff --check` 均通过。本项不证明正式渠道重试策略、目标 MySQL 8 或生产历史异常处置，仍需结合渠道对账及人工核查。
+
+### 10.643 2026-10-04 零行成功赢家回查的渠道交易归属
+
+10.642 在成功状态更新返回 `0` 时会复用可信 `SUCCESS` 赢家，但回调来源交易号或主动查单确认的渠道交易号可能与回查赢家不同。服务红测分别模拟原锁定详情未绑定交易号、随后另一交易号完成成功收口；原两条路径均返回另一笔交易的 `SUCCESS`。现回调零行回查再次校验渠道和渠道交易号，不相符时按已有回调不匹配错误拒绝，且不释放提交并发令牌；主动查单零行回查将锁前支付渠道和本次确认交易号与赢家逐一比对，拒绝跨交易复用，并按已有 `QUERY_FAILED` 流程保留查单失败日志。原来同渠道同交易号的成功赢家复用、有效 `CLOSED` 不再结清的契约保持。定向回归和获准回环环境 payment-core 全量 Maven `1583/1583`（零失败、零错误、零跳过）、`git diff --check` 通过。该结论限于服务 mock 和本地 H2/demo，不代替真实渠道并发通知、多实例 MySQL 8 或生产资金对账。
+
+### 10.644 2026-10-04 预付错绑成功单的管理端可信统计隔离
+
+10.640 已拒绝支付详情及成功收口的预付金额错绑，但列表成功事实异常谓词未同步：H2/demo HTTP 红测将原本可信成功单 `PAY202607190001` 的关联预付金额由 `268.00` 改为 `267.00`，支付详情拒绝，仪表盘及监控却仍把该单计为可信成功（预期 `1` 笔，实际 `2` 笔）。现共用 `paymentSuccessFactMismatchCondition` 要求成功支付具有唯一预付关联、相同订单号及相等的正金额，缺失、重复和金额漂移均进入 `SUCCESS_FACT_MISMATCH`，可信成功指标、监控渠道汇总、告警与列表/计数/CSV/日志下钻共享该口径；`SUCCESS_TIME_MISSING` 继续独立分类。HTTP 回归验证错绑时可信成功从 `2` 笔 `¥3,868.00` 降至 `1` 笔 `¥3,600.00`，异常列表和流水下钻可定位，详情拒绝；恢复预付金额后指标回到 `2` 笔。独立 Mapper H2 夹具补齐真实预付关系、金额和订单号，包括动态成功单，原有重复预付样例仍保留其异常语义而不放宽门禁。
+
+获准回环环境 payment-core 全量 Maven `1583/1583`（零失败、零错误、零跳过）和 `git diff --check` 通过。九服务 H2/demo `verify payment-chain` 写前验证 payment-core demo 身份，HTTP 冒烟与 happy-path 均 `[PASS]`，七项跨源对账事实、`COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`；脚本退出码 `0`，九服务均停且端口无监听。这里仅验证本地演示数据与模拟渠道，不等于目标 MySQL 8 执行计划、生产历史修复、正式资金及可信授权验收。
+
+### 10.645 2026-10-04 用户收银台及活跃预付复用的金额绑定门禁
+
+沿 10.644 排查发现，非成功支付单即使关联预付金额与支付单金额不一致，收银台仍会展示预付金额；有效期内的预付单复用也可能返回同一错绑金额。独立 H2/demo 红测将 `PAY202607190002` 的金额由 `6800.00` 改为 `2000.00`，原 `cashier` 未拒绝。现 `findPrepay` 与 `findLatestActivePrepayByOrderNo` 从数据库原精度投影内部绑定事实，要求预付/支付金额均为正、金额和订单号相同且支付单仅绑定一个预付单；收银台展示、有效预付单复用及预付单写后读响应要求该事实明确为 `true`，缺失或错绑均拒绝，不通过格式化金额比较。该内部标志不出现在用户 JSON 中。正常金额恢复后，收银台及复用仍可用；回归还验证重复关联、跨订单关联均无法展示。
+
+定向 `PaymentSubmitReplayIntegrationTest` 与 `PaymentServiceImplTest` 通过；获准回环环境 payment-core 全量 Maven `1584/1584`（零失败、零错误、零跳过），`git diff --check` 通过。九服务隔离 H2/demo `verify payment-chain` 的 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，脚本退出后九服务全部停下。沙箱内全量测试曾因 Tomcat 回环监听 `Operation not permitted` 失败，放行回环后全量通过；此处不证明目标 MySQL 8、正式渠道、真实资金、多实例竞争或生产历史异常处置。
+
+### 10.646 2026-10-04 直接提交重试拒绝重复预付与跨订单错绑
+
+沿 10.645 发现，用户即使无法打开异常收银台，直接调用 `submit` 仍只比较两个格式化金额；当金额相同而支付单绑定多个预付单或预付单订单号与支付单不同，已受理支付的重试会复用原有结果。独立 H2/demo 红测复用 `PAY202607190002` 的已存在提交尝试，新增同支付单预付关联后预期拒绝，原来却直接返回。现 `submit` 进入路由、鉴权及复用分支前要求 `findPrepay` 原精度内部绑定事实明确有效；重复绑定和跨订单绑定均拒绝，且不新增支付尝试或路由记录。正常绑定的重试契约与错金额拒绝保持原样。
+
+定向 `PaymentSubmitReplayIntegrationTest`、`PaymentServiceImplTest` 通过；获准回环环境 payment-core 全量 Maven `1584/1584`（零失败、零错误、零跳过），`git diff --check` 通过。九服务 H2/demo `verify payment-chain` 的 HTTP 冒烟和跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，九服务退出后均停。入口读后到事务预备、渠道调用间的并发漂移仍需专门验证；这里不证明 MySQL 8 多实例竞争、正式渠道真实资金或生产历史修复。
+
+### 10.647 2026-10-04 支付渠道原子绑定必须归属原预付单
+
+沿 10.646 检查发现，提交入口校验通过后，事务预备的支付单渠道绑定 SQL 虽已要求唯一、同订单、同金额正数的预付单，却未确认它仍是本次提交的预付单。Mapper H2 红测将原预付单改绑到另一支付单，并给当前支付单挂一张同订单、同金额的新预付单，原更新仍返回 `1`，可能将渠道提交事实绑定给错误的预付单。现 `updatePaymentMethodAndChannel` 要求原请求预付单号与唯一有效关联同属当前支付单；首次渠道提交与风险决策路径均传入该单号，换绑则返回 `0`，事务预备拒绝继续调用渠道，正常新预付单绑定仍返回 `1`。此举不替代提交入口或成功收口的其他事实门禁。
+
+定向 `PaymentMapperStateTransitionIntegrationTest`、`PaymentServiceImplTest`、`PaymentSubmitReplayIntegrationTest` 通过；获准回环环境 payment-core 全量 Maven `1585/1585`（零失败、零错误、零跳过），`git diff --check` 通过。九服务隔离 H2/demo `verify payment-chain` 的 HTTP 冒烟与跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED` 且 `reconciliationFinancialCloseable=true`，脚本退出后服务均停。仅验证确定性换绑样例及 H2/demo 原子 SQL；事务提交后到真实渠道调用间的外部并发漂移、MySQL 8 多实例隔离级别、正式渠道及生产历史仍未验收。
+
+### 10.648 2026-10-04 并发提交输家回查不再返回失效预付快照
+
+提交首次读取有效预付单后，若并发赢家已占用收银台（`updatePrepayToPaying` 返回 `0`），原输家路径重读最新预付单却没有校验绑定事实；最新结果失效或缺失时甚至可能回退到第一次读取的旧快照，并将其作为 `WAIT_CALLBACK` 或支付中响应。服务红测模拟入口绑定有效、并发回查绑定变为无效且支付单已进入 `WAIT_CALLBACK`，原路径仍返回预付单。现输家路径只接受同一预付单号、同一支付单号且内部原精度绑定事实明确有效的最新预付单，缺失或错绑时事务拒绝返回、不会调用渠道；正常并发输家复用及可信成功赢家契约保持。
+
+定向 `PaymentServiceImplTest` 通过；获准回环环境 payment-core 全量 Maven `1586/1586`（零失败、零错误、零跳过），`git diff --check` 通过。九服务 H2/demo `verify payment-chain` 的 HTTP 冒烟、跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，退出后九服务均停。这里仅覆盖确定性服务并发回查和本地模拟链路，不证明事务提交后至正式渠道调用间的实时漂移、MySQL 8 多实例隔离级别或生产历史处置。
+
+### 10.649 2026-10-05 支付重试回包前复核预付绑定
+
+沿 10.648 继续检查发现，`submit` 首次读取预付绑定有效后，已受理状态复用、幂等键复用及事务预备中的幂等竞争分支仍可能直接返回首次读取的旧快照。服务红测模拟 `WAIT_CALLBACK` 的首读有效、回包前绑定失效，原路径未拒绝。现上述三类复用分支再次读取同一预付单并核对预付单号、支付单号及原精度内部绑定事实；并发收银台输家复用同一检查，杜绝最新记录缺失或错绑时回退旧快照。正常历史提交重放和并发赢家复用保持可用，未新增渠道调用。
+
+定向 `PaymentServiceImplTest` 与 `PaymentSubmitReplayIntegrationTest` 通过；获准回环环境 payment-core 全量 Maven `1587/1587`（零失败、零错误、零跳过），`git diff --check` 通过。九服务隔离 H2/demo `verify payment-chain` 的 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，退出后九服务均停。这里仅验证本地确定性首读/重读漂移，不保证重读后到响应或事务提交到正式渠道调用之间的不可变性，MySQL 8 多实例和真实资金仍未验收。
+
+### 10.650 收银台会话失效口径与支付受理状态一致
+
+管理端会话列表、唯一详情、状态筛选、CSV 和总览原只凭 `expires_at < NOW()` 将非成功会话显示为“已失效”，导致已受理 `WAIT_CALLBACK` 且预付状态为“支付中”的历史会话在管理端误报失效；即将失效数也可能把已受理支付计入临期。Mapper H2 红测模拟过期的已受理会话，原详情返回“已失效”而不是“支付中”。现五类查询均关联原支付单，只有支付单仍为 `PREPAY_CREATED`（或支付单缺失、维持历史排障展示）时才按时间覆写为“已失效”；临期指标同样排除已受理支付。列表/计数/导出、详情和总览共享状态表达式，筛选口径同步。独立真实 H2/demo HTTP 回归对种子 `PRE202607190002` 验证过期且 `WAIT_CALLBACK` 仍为“支付中”，详情、列表、CSV、总览一致；改为未提交状态后才显示“已失效”。
+
+定向 Mapper 与 HTTP 回归、payment-core 全量 Maven `1589/1589`（零失败、零错误、零跳过）、管理端 Node 测试 `276/276` 与 Vite 构建通过，`git diff --check` 通过。九服务隔离 H2/demo `verify payment-chain` 的 HTTP 冒烟和跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，脚本退出后九服务均停。本项是本地运营展示口径修正，不代替 MySQL 8 执行计划、正式渠道资金、生产历史数据治理或可信权限验收。
+
+### 10.651 已受理支付的滞后预付状态不误计待支付
+
+沿 10.650 检查发现，管理端虽不再把过期的 `WAIT_CALLBACK` 会话判为已失效，但关联预付单历史状态若仍为“待支付”，列表、详情、筛选、CSV 和总览仍会误报“待支付”；即使有效期只剩 5 分钟，也不应把已受理支付算入临期。Mapper 红测在支付单为 `WAIT_CALLBACK` 时把预付展示状态改为“待支付”，原详情确实返回“待支付”。现共享状态表达式针对支付单 `WAIT_CALLBACK` 且预付展示状态为“待支付”或“支付中”的会话统一返回“支付中”/`info`，保留实际未提交 `PREPAY_CREATED` 的待支付、过期与临期判定。H2 Mapper 覆盖详情、列表/计数、导出和总览；真实 H2/demo HTTP 对同一演示会话的状态、样式、列表、CSV、总览及临期数复验，再改成未提交过期单验证“已失效”恢复。
+
+定向 `CashierSessionListMapperIntegrationTest` 与 `PaymentDiagnosticHttpIntegrationTest` 通过；获准回环环境 payment-core 全量 Maven `1589/1589`（零失败、零错误、零跳过）、`git diff --check` 通过。九服务隔离 H2/demo `verify payment-chain` 的 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`，对账链 `COMPLETED`、`reconciliationFinancialCloseable=true`，退出后服务均停。历史支付/预付成功状态相互矛盾、目标 MySQL 8 执行计划、正式渠道资金与生产历史治理仍需另行核验。
+
+### 10.652 管理端会话“支付中/info”前后端契约闭合
+
+复核 10.650/10.651 的真实 H2/demo HTTP 结果发现，后端对已受理会话返回合法的“支付中”/`info`，但管理端 `isConsistentCashierSessionStatus` 仅允许“支付中”/`warn`，使会话列表或详情整体拒绝加载；此前管理端测试 `276/276` 通过是因为夹具只使用了旧 `warn` 样例，不能证明实际演示响应被接受。前端列表与详情红测均复现客户端拒绝。现仅对“支付中”兼容 `info` 和历史 `warn`，其余状态/样式配对仍严格；“待支付”/`info` 的负例保持拒绝。管理端既有 `.badge.info` 样式直接承载该状态，不改页面结构。
+
+管理端 Node 全量测试 `276/276`、Vite 构建及 `git diff --check` 通过；后端前一阶段真实 H2/demo HTTP 已核实详情、列表、CSV 返回“支付中”/`info`，payment-core 全量 `1589/1589`、九服务模拟 happy-path 及停服证据见 10.651。本项关闭该确定性前后端响应契约缺口；未新做真实浏览器点击，仍不代表生产可信权限、目标 MySQL 8 或正式渠道资金验收。
+
+### 10.653 管理端“支付中/info”真实浏览器只读验收
+
+为补齐 10.652 未做的页面点击，将 `tools/dev/payment-admin-diagnostic-browser-smoke.mjs` 扩展为独立的 `--demo --cashier-paying` 分支：首先核验 `/api/demo/identity=payment-core-h2-demo`，再用只读 GET 检查演示 `PRE202607190002` 的会话列表与唯一详情均为“支付中”/`info`，关联 `PAY202607190002`。真实 Chrome/CDP 进入带会话号及“支付中”筛选的管理端列表，确认 `.badge.info` 正确渲染，点击“查看快照”核对支付关联，点击“唯一详情”核对详情状态及支付单号；浏览器捕获的 API 请求全部为管理端同源 GET，未触发任何支付或渠道写入。
+
+在端口空闲、无数据库/SQL 初始化覆盖的前提下，以独立 H2 内存库和 `classpath:data.sql` 由 `local-stack.sh up payment-core` 前台托管演示栈；沙箱回环 `EPERM` 后获准执行，脚本返回 `[PASS]`。`node --check`、`git diff --check` 通过。结束后 Chrome 临时用户目录由脚本清理，前台栈退出且 18081、5174–5177 均无监听。验收只覆盖本地演示数据与只读页面渲染，不代替 MySQL 8、多实例、正式渠道、生产历史或权限验收；沿用 10.651/10.652 的后端及前端全量测试基线。
+
+### 10.654 预付展示成功但支付尚未受理/完成时不误报会话成功
+
+延续 10.651 对支付单和预付状态矛盾的排查：原收银台会话投影优先信任预付单“支付成功/已完成”，即使关联支付单仍为 `WAIT_CALLBACK` 或 `PREPAY_CREATED`，也会在列表、详情、状态筛选、CSV 和总览误报支付成功。H2 Mapper 红测将已受理/未提交的预付展示状态改成成功，复现了已受理会话仍显示“支付成功”。现共享状态/样式表达式在这两类明确未完成的支付状态下优先按支付单投影：`WAIT_CALLBACK` 为“支付中/info”；`PREPAY_CREATED` 未过期为“待支付/warn”，已过期为“已失效/danger”。支付单状态为 `SUCCESS` 且预付已标成功的既有展示保持不变；支付单缺失、其他终态冲突或成功事实本身异常等历史矛盾仍待治理，不能由此认定为可信成功。
+
+定向 Mapper 回归覆盖详情、列表/计数、导出、总览及临期指标，HTTP 集成回归用独立 H2/demo 库核实客户端实际收到的列表、详情、CSV 和总览口径。沙箱全量 HTTP 用例因回环端口 `EPERM` 无法启动，获准后全量 payment-core Maven `1590/1590`（零失败、零错误、零跳过）通过，`git diff --check` 通过。此处仅修改管理端只读投影，不写支付状态或调用渠道；目标 MySQL 8、多实例、生产历史相互矛盾数据的治理及正式渠道资金仍未验收。
+
+随后在九个回环端口空闲、无数据库或 SQL 初始化环境覆盖的前提下，使用独立 payment-core H2/demo 内存库运行 `tools/dev/local-stack.sh verify payment-chain`。脚本在写入前校验 payment-core demo 身份，九服务 HTTP 冒烟与跨系统模拟 happy-path 均 `[PASS]`；支付、清分、结算、账务、退款与对账事实到达 `COMPLETED`，阶段 `4/4`，`reconciliationFinancialCloseable=true`。脚本退出码 `0`，九服务自动停止且端口无监听。该链路回归证明本地演示栈仍可运转，不代替真实异常历史数据上的新投影验收或正式渠道资金验收。
+
+### 10.655 管理端会话生命周期与支付单风险/终态一致
+
+沿 10.654 继续核对真实支付服务状态：服务端会将预付单设为“待回调”“结果待确认”“已关闭”“待风控复核”“风控拦截”“风控拒绝”，但管理端会话客户端只允许原五类状态，导致包含上述任一正常业务行的整个会话列表或详情拒绝加载；支付单已进入风险、`PAYING`、`FAIL` 或 `CLOSED` 时，若预付展示快照滞后为“支付成功”，原 Mapper 还会误报成功。前端列表与详情红测均复现客户端拒绝，H2 Mapper 红测复现风险状态误报成功。
+
+现管理端严格接受上述六类状态与对应 `warn/danger` 样式，保留状态/样式错配拒绝；筛选框开放全部合法状态。Mapper 共享投影优先按支付单 `RISK_REVIEW/RISK_BLOCKED/RISK_REJECTED/PAYING/FAIL/CLOSED` 显示对应的待复核、拦截、拒绝、支付中、结果待确认或已关闭；未提交 `PREPAY_CREATED` 若预付误标支付中，恢复待支付/过期展示。已受理 `WAIT_CALLBACK` 的“待回调”“结果待确认”保留原展示，历史 `支付中/warn` 兼容仍在。列表、唯一详情、状态筛选、导出和总览复用相同投影，不修改支付状态或调用渠道。
+
+定向 H2 Mapper 覆盖六类风险/终态冲突及未提交的滞后支付中；真实 H2/demo HTTP 回归核实关闭会话的详情、筛选列表、CSV 和总览。管理端 Node `276/276`、Vite 构建及 payment-core 全量 Maven `1591/1591`（零失败、零错误、零跳过）通过，`git diff --check` 通过。上一阶段的九服务 happy-path 在此改动前完成，不能代替本项回归；真实浏览器点击、目标 MySQL 8、多实例、正式渠道资金和生产历史矛盾数据仍待验收。
+
+### 10.656 生命周期会话真实浏览器点击与总览剩余状态计数
+
+为补齐 10.655 的页面验收，在独立 H2/demo 初始化夹具 `tools/dev/payment-cashier-lifecycle-demo.sql` 中，将三笔内置虚构支付单分别置为 `CLOSED`、`RISK_REVIEW`、`FAIL`，预付展示快照设为滞后的“支付成功”。扩展只读 CDP 脚本 `--demo --cashier-lifecycle`：先核验 `/api/demo/identity`，再用 GET 核对三笔会话的筛选列表和详情；浏览器按状态实际打开管理端列表、点击“查看快照”和“唯一详情”，同时检查同源 GET 与状态徽标。首次运行发现页面整页报错：总览客户端强制“已失效+成功+支付中+待支付=总数”，遗漏合法的关闭、风控、待确认等会话，虽然后端详情和列表均正确仍无法加载。
+
+现后端总览新增 `otherSessionCount`，只累计不属于上述四类的会话；服务空值默认为零，管理端增加“其他状态”指标卡，客户端维持六类计数之和等于总数的严格校验，并拒绝缺失或不一致的剩余计数。H2 Mapper、HTTP 回归与管理端校验测试覆盖关闭会话计数及非四类状态。重新启动隔离库后，Chrome/CDP 对关闭、待风控复核、结果待确认三类状态均 `[PASS]`，页面列表、快照和唯一详情可读，浏览器 API 请求均为管理端同源 GET；另用独立原始 demo 种子复验旧 `--cashier-paying` 路径同样 `[PASS]`。两次脚本都清理临时 Chrome 用户目录，演示栈退出后 18081、5174–5177 无监听。
+
+管理端 Node `276/276`、Vite 构建、payment-core Maven 全量 `1591/1591`（零失败、零错误、零跳过）、脚本语法与 `git diff --check` 通过。这里只证明本地启动夹具和只读真实页面，不代表生产异常历史数据、目标 MySQL 8、多实例、正式渠道资金或可信权限验收。
+
+随后在九服务回环端口空闲、无数据库初始化环境覆盖后，使用独立 payment-core H2/demo 内存库运行 `tools/dev/local-stack.sh verify payment-chain`。写入前由脚本确认 payment-core demo 身份，HTTP 冒烟与跨系统模拟 happy-path 均 `[PASS]`；支付、清分、结算、账务、退款和对账形成七项跨源事实，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。脚本退出码 `0`，九服务均自动停服并核实回环端口无监听，`git diff --check` 通过。该结果补齐本次总览 DTO 改动后的本地链路基线，不等于真实渠道资金、目标 MySQL 8 或生产跨源历史事实验收。
+
+### 10.657 管理端会话成功状态复用支付可信事实门禁
+
+延续 10.654 的历史矛盾排查：原会话 Mapper 若支付单已标 `SUCCESS` 且预付展示被误标成功，即使该支付单缺完成时间、渠道/交易号或最近成功尝试与支付单不一致，也会在会话列表、详情、筛选、导出和总览误报成功。真实 H2/demo HTTP 红测将内置成功事实异常单 `PAY202607190001` 的预付会话置为“支付成功”，原详情确实返回“支付成功”；管理端新异常状态的列表与详情红测也拒绝解析。
+
+现会话 Mapper 直接复用 `PaymentMapper.trustedPaymentSuccessCondition`，不另造简化成功规则：`SUCCESS` 且可信事实不满足时展示“成功事实异常/danger”，计入“其他状态”而非可信成功；事实完整时即便预付展示滞后为待支付也投影“支付成功/success”，原“已完成”保持已完成。管理端严格接受新状态/样式配对并开放筛选。独立 H2 Mapper 回归覆盖唯一预付绑定、最近尝试、缺成功时间、完成时间逆序及列表/计数/导出/总览；真实 HTTP 回归对异常和可信成功种子核实。管理端 Node `276/276`、Vite 构建、payment-core Maven 全量 `1592/1592`（零失败、零错误、零跳过）、脚本语法及 `git diff --check` 通过。
+
+只读浏览器验证使用 `tools/dev/payment-cashier-success-fact-demo.sql` 仅在隔离 H2/demo 初始化时将异常单预付展示改成成功；`payment-admin-diagnostic-browser-smoke.mjs --demo --cashier-success-fact` 先核验 demo 身份，再 GET 检查异常会话和内置可信会话的详情、状态筛选及总览，Chrome/CDP 分别点击列表快照与唯一详情，两者均 `[PASS]`，浏览器 API 请求全是同源 GET。脚本清理 Chrome 临时目录，前台演示栈停服后 18081、5174–5177 均无监听。本项只修改管理端只读投影，不写渠道或支付状态；目标 MySQL 8 的关联子查询执行计划、多实例、生产历史治理、可信身份及正式资金仍待验证。
+
+补充重复预付关联红绿回归：在原可信成功支付单上插入第二张同支付单的预付会话后，会话详情立即转为“成功事实异常”，清理重复绑定后恢复“支付成功”；随后获准在九服务回环端口空闲、无数据库初始化覆盖时用独立 H2/demo 内存库运行 `tools/dev/local-stack.sh verify payment-chain`。脚本写前核验 demo 身份，HTTP 冒烟和跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实覆盖支付、清分、结算、账务、退款，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。退出码 `0`，九服务均自动停服，回环端口无监听；修改测试后 payment-core 全量 `1592/1592` 仍通过，`git diff --check` 通过。这是本地模拟链路基线，不等于目标 MySQL 8、生产异常历史或正式渠道验收。
+
+### 10.658 用户收银台历史误标成功的到期投影
+
+延续 10.657 检查用户收银台：支付单仍为 `PREPAY_CREATED`、预付已过期，但预付展示快照误标“支付成功”时，收银台先根据支付单将状态投影为“待支付”，旧 `isPrepayExpired` 又要求原始预付状态为“待支付/支付中”，因此遗漏到期，错误展示为“待支付”。真实 H2/demo HTTP 红测在 `PaymentDiagnosticHttpIntegrationTest.shouldNotExpireSubmittedCashierSessionOverHttp` 中依次将同一会话快照误标成功、支付单还原为 `PREPAY_CREATED` 并设置过去的到期时间，复现了用户接口未返回“已失效”；相同数据下管理端详情、列表、总览及导出已正确识别过期。
+
+现 `PaymentMapper.isPrepayExpired` 仅以预付到期时间和关联支付单 `PREPAY_CREATED` 判定，不信任可能滞后的预付展示状态；`PaymentServiceImpl.cashier` 原有投影将该会话展示为“已失效/danger”，非预付阶段仍不被此到期规则覆盖。定向 HTTP 测试转绿；在允许绑定回环端口的环境运行 payment-core Maven 全量 `1592/1592`（零失败、零错误、零跳过）。首次受沙箱端口限制运行时仅两项 HTTP 测试因 `SocketException: Operation not permitted` 报错，并非业务断言失败，授权环境重跑全绿。
+
+九服务回环端口空闲且无数据库初始化覆盖后，使用独立 H2/demo 执行 `tools/dev/local-stack.sh verify payment-chain`：HTTP 冒烟与跨系统模拟 happy-path 均 `[PASS]`，写入前校验 payment-core demo 身份；七项跨源事实覆盖支付、清分、结算、账务、退款，对账链 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`。脚本退出码 `0`，九服务自动停服且端口无监听，`git diff --check` 通过。该验证只覆盖本地模拟数据，不等于目标 MySQL 8、生产历史纠偏、多实例或正式渠道资金验收。
+
+### 10.659 有效预付复用不信任滞后的收银台展示快照
+
+延续 10.658 排查重复拉起支付：旧 `findLatestActivePrepayByOrderNo` 同时要求支付单为 `PREPAY_CREATED`/`WAIT_CALLBACK`、预付未过期且原始收银台快照为“待支付/支付中”。若快照误标“支付成功”，有效预付被忽略，重复请求会为同一订单创建第二套支付单及预付单。独立 H2 MySQL 模式服务+Mapper 红测先正常创建预付，将其展示快照改为“支付成功”、保持支付单 `PREPAY_CREATED` 且未过期，再重复 `prepay`，实际返回了新的预付单号，证实重复支付事实风险。
+
+现有效预付候选不依赖原始收银台快照，只依据未过期时间与关联支付单状态，复用前继续校验唯一绑定、金额及请求与订单事实；复用响应将 `PREPAY_CREATED` 投影为“待支付/warn”，并纠正 `WAIT_CALLBACK` 下假成功快照，不把旧快照的假成功传给用户端。回归先后核实两种支付单状态复用同一预付单、账单/支付单/预付单各只有一行。首次将投影放入通用写后读方法时，`PaymentServiceImplTest` 捕获极速成功回调被误覆盖；现严格限制在已有有效预付复用分支，原回调测试仍绿。定向 `172/172`、payment-core Maven 全量 `1593/1593`（零失败、零错误、零跳过）通过。
+
+在九服务回环端口空闲且无数据库初始化覆盖时，再运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`。脚本写前校验 demo 身份，HTTP 冒烟和跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实形成，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`；退出码 `0`，九服务自动停服、端口无监听，`git diff --check` 通过。此项不覆盖目标 MySQL 8 的锁竞争/执行计划、生产历史治理、可信身份或正式渠道资金验收。
+
+### 10.660 待确认展示与风控复核中的预付单复用
+
+延续 10.659 核对状态语义：`WAIT_CALLBACK` 下“结果待确认/danger”是渠道提交结果未知后的合法展示，旧复用响应却无条件改写为“待回调/warn”；独立 H2 服务+Mapper 红测复现了状态丢失。现仅对 `WAIT_CALLBACK` 下不合法或互相矛盾的收银台状态/样式回退到“待回调/warn”，保留合法的“待回调/warn”“结果待确认/danger”“支付中/info”，仍纠正假成功。与写后读和极速成功回调分支保持隔离。
+
+同一订单进入 `RISK_REVIEW` 后仍在风控处理中，旧有效预付查询却将其排除。另一条独立 H2 红测先创建正常预付，再把支付单置为 `RISK_REVIEW`、将预付展示误标成功；重复 `prepay` 实际创建第二套支付事实。现未过期的 `RISK_REVIEW` 加入有效预付候选，复用前继续核验唯一绑定、金额、订单和请求事实，响应根据支付单投影“待风控复核/warn”。红绿回归确认两条路径均只复用原预付/支付单且事实表各一行；定向 `173/173`、payment-core Maven 全量 `1594/1594`（零失败、零错误、零跳过）通过。
+
+九服务回环端口空闲、无数据库初始化覆盖时运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`，脚本在写入前核验 demo 身份；HTTP 冒烟与跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实形成，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。退出码 `0`，九服务自动停服、端口无监听，`git diff --check` 通过。目标 MySQL 8 锁竞争与执行计划、真实风控审批、可信身份、生产历史数据和正式渠道资金尚未验收。
+
+### 10.661 到期后的处理中支付单仍须复用原支付事实
+
+继续审查同订单重复拉起：旧有效预付查询无条件要求 `expires_at > NOW()`，即使支付单已处于 `WAIT_CALLBACK` 仍会在预付展示有效期结束后被忽略，用户再次进入支付时可能新建另一张支付单，形成两笔处理中事实。独立 H2 MySQL 模式服务+Mapper 红测先创建预付，再将支付单置为 `WAIT_CALLBACK`、预付展示置为“结果待确认/danger”，把预付创建和到期时间整体移至过去；旧查询实际返回新预付单号。另对已支持的 `PAYING` 状态做未到期红测，旧查询同样会新建第二套支付事实。
+
+现 `findLatestActivePrepayByOrderNo` 将 `PAYING` 纳入处理中候选，复用响应根据支付单投影“支付中/info”；有效期只约束尚未提交的 `PREPAY_CREATED`，`WAIT_CALLBACK/RISK_REVIEW/PAYING` 在尚未收口时即使预付展示期已过也优先复用原绑定支付事实。复用仍执行唯一绑定、同订单同金额和请求事实校验；`WAIT_CALLBACK` 保留合法的“结果待确认/danger”。边界回归证明：待回调到期和风控复核到期各只保留一组账单/支付单/预付单；反向验证尚未提交的 `PREPAY_CREATED` 到期后会创建新的预付/支付单，旧单不会被当作有效候选。定向 `176/176`、payment-core Maven 全量 `1597/1597`（零失败、零错误、零跳过）通过。
+
+在九服务回环端口空闲、无数据库初始化覆盖时运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`，写入前核验 demo 身份；HTTP 冒烟与跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实形成，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。退出码 `0`，九服务自动停服、端口无监听，`git diff --check` 通过。此处仅模拟支付单状态与时间，未替代目标 MySQL 8 高并发、真实渠道长时待回调、生产历史数据、可信身份和正式资金验收。
+
+### 10.662 历史多笔活跃支付事实的预付复用闭锁
+
+延续 10.661 排查已有历史双活数据：`findLatestActivePrepayByOrderNo` 原按创建时间降序 `LIMIT 1`，若同订单已有两套仍在等待支付/回调的预付和支付单，用户重复拉起会任意复用最新一笔，旧渠道单仍可能成功，存在重复付款风险。独立 H2 MySQL 模式服务+Mapper 红测先创建正常预付，再人为插入同订单、同金额、各自唯一绑定的一套未过期支付事实；原 `prepay` 未拒绝，直接返回其中一笔。
+
+现候选查询在同一次 SQL 快照内使用 `COUNT(*) OVER ()` 返回活跃候选总数，仍只选最新一行供展示；服务在复用前要求计数恰好为一，否则拒绝继续，不自动选择也不创建第三笔。原先同支付单重复预付绑定仍先走绑定事实校验，保留既有错误语义；内部计数用 `@JsonIgnore` 隐藏，不暴露给用户端。回归覆盖两张未提交活跃单、旧 `WAIT_CALLBACK` 已过展示期加新未提交单的历史双活，二者均闭锁；待新未提交单到期后，又可安全复用唯一的待回调旧单。定向服务/Mapper/序列化契约 `180/180`、payment-core Maven 全量 `1598/1598`（零失败、零错误、零跳过）通过。
+
+九服务回环端口空闲、无数据库初始化覆盖时运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`；写入前核验 demo 身份，HTTP 冒烟和跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实形成，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。脚本退出码 `0`，九服务自动停服、端口无监听，`git diff --check` 通过。此闭锁不自动治理生产历史双活；目标 MySQL 8 窗口函数执行计划与并发隔离、真实历史处置、可信身份和正式渠道资金仍待验收。
+
+### 10.663 直接提交与事务预备复用同订单双活门禁
+
+延续 10.662 检查用户持旧预付单直接提交的旁路：原闭锁只在 `prepay` 复用入口生效。独立 H2/demo 服务红测以真实已有 `WAIT_CALLBACK` 尝试做幂等重放，在同订单再插入另一套独立且未到期的预付/支付事实；旧 `submit` 仍返回原单，未识别双活。现非成功/非关闭支付单在提交入口先查询同订单活跃候选，只允许唯一候选与当前预付单号一致；歧义或另一笔活跃单则拒绝，不继续路由、风控或渠道支付。可信 `SUCCESS/CLOSED` 的无资金重放保持原路径。
+
+为了处理入口检查后再出现新预付的竞争窗口，正常支付尝试预备与风险决策写入均在各自事务开始时获取预付创建所用的订单级数据库锁，锁后重新核验同一候选及原单号，并复核尚未提交预付是否已到期；失败则在渠道提交或风险事实落库前拒绝。单元回归分别覆盖事务预备遇到新双活、入事务后到期、风控分支双活，验证锁调用和无尝试/渠道写入；H2/demo 重放红绿回归核实既有渠道尝试和路由行数不变。payment-core Maven 全量 `1601/1601`（零失败、零错误、零跳过）通过。
+
+生产代码改动后在九服务回环端口空闲、无数据库初始化覆盖时运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`；脚本写前核验 demo 身份，HTTP 冒烟和跨系统模拟 happy-path 均 `[PASS]`，七项跨源事实形成，对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`。脚本退出码 `0`，九服务自动停服、端口无监听，`git diff --check` 通过。本地测试不构成目标 MySQL 8 两事务竞争、真实渠道长时回调、生产双活治理或可信身份/正式资金验收。
+
+### 10.664 H2 双事务验证提交预备等待订单锁后拒绝新双活
+
+在现有服务与 Mapper 的 H2/MySQL 模式并发夹具中增加真实独立连接和事务的提交预备回归：先提交原预付单，事务一持有订单级预付创建锁；事务二调用 `prepareSubmit`，在事务一提交前持续等待；事务一插入并提交同订单第二套未到期活跃预付/支付事实后，事务二获得锁，重查活跃候选数量并因双活拒绝。核验两套原有事实保留、支付尝试为零，避免将仅使用 mock 的单元测试误当作数据库锁证明。夹具只增补幂等查询所需的最小尝试表，不触发外部渠道。
+
+定向并发类 `10/10`，payment-core Maven 全量 `1602/1602`（零失败、零错误、零跳过），`git diff --check` 通过。首次在受限沙箱跑全量时，两个 HTTP 集成测试因回环端口绑定 `Operation not permitted` 报上下文错误；在允许本地监听的环境重跑全量通过。此测试通过反射进入提交事务预备路径，验证该路径的实际数据库锁和写入前闭锁，不替代完整 HTTP 提交及目标 MySQL 8 隔离级别、真实历史双活治理和正式资金验收。
+
+### 10.665 风控决策写入前的同订单双事务闭锁
+
+延续 10.664，对非放行风控决策分支补独立 H2/MySQL 模式双事务回归：事务一持有同一订单级预付创建锁，事务二进入 `handleRiskDecision` 后等待；事务一插入并提交第二套未到期活跃预付/支付事实，事务二随后获取锁、重查活跃候选并拒绝双活，原支付单仍为 `PREPAY_CREATED` 和待选渠道，支付尝试为零。测试仅调用事务内服务路径，不构造 HTTP 请求或外部风控/渠道调用。两条回归共用历史双活夹具，保留真实连接上的等待与提交后重读，而非用 mock 模拟加锁。
+
+定向并发类 `11/11`、payment-core 全量 `1603/1603`（零失败、零错误、零跳过），`git diff --check` 通过。目标 MySQL 8 事务隔离与锁等待、生产双活清理、真实风控审批、可信身份和正式资金仍需目标环境验收。
+
+### 10.666 锁等待期间未提交预付到期的真实事务回归
+
+在同一 H2/MySQL 模式服务与 Mapper 夹具中补独立连接测试：先提交未到期预付，事务一持有订单锁；事务二进入支付尝试预备并等待；事务一把原预付到期时间改至过去并提交，事务二获锁后重新查询到期事实，返回 `PAYMENT_PREPAY_EXPIRED`。核验支付单与预付单仍各一条、支付尝试为零；该路径避免使用进入事务前的有效期快照继续支付。此测试直接覆盖事务内预备方法，不代替完整 HTTP 请求或真实渠道下单。
+
+定向并发类 `12/12`、payment-core 全量 `1604/1604`（零失败、零错误、零跳过），`git diff --check` 通过。目标 MySQL 8 锁隔离、真实渠道与风控审批、生产历史数据治理和正式资金验收仍未完成。
+
+### 10.667 管理端基线与跨源退款边界复核
+
+按全量交付清单复核当前本地证据：后端仍为上一轮 H2/demo 全量 `1604/1604`，本轮管理端 `npm test` 为 `276/276`、`npm run build` 成功。清单中旧的“12 个管理端测试”口径已更新为本次实测数量，并明确用户端及九服务 happy-path 是历史记录，本轮未重跑。工作树约 490 个原有未提交文件保留，`git diff --check` 通过。
+
+确认支付核心同订单多笔 `SUCCESS` 不能一律当成重复收款：现有异常中心与日终按成功金额合计超过订单应收识别超额，合计不超过应收的拆单不误报；本轮没有加入“第二笔成功直接拒绝”的错误资金规则。独立 refund-center 的详情接口和 payment-core 用户进度页仍非同源，缺可信归属/授权，不能靠本地代理或按退款单号直接开放来宣称用户进度闭环。目标 MySQL 8、真实渠道及正式资金证据仍未取得。
+
+### 10.668 跨系统 happy-path 真实账单收口读回
+
+九服务 H2/demo 脚本此前从预付单取得账单号，但未查询账单中心，支付成功回调后直接验证支付详情和下游清分、结算、账务，不能发现账单金额或最近支付/预付关联的展示漂移。现通过 `GET /api/bills/{billNo}` 在预付创建后、成功回调及重复回调后各读一次同一账单；分别要求应收 `88.00`、已付/未付 `0.00/88.00` 与 `88.00/0.00`、状态 `待支付/warn` 与 `已结清/success`，并核验订单号、预付单、支付单、支付场景、对应金额及支付/收银台状态样式。账单只读核验不新增真实资金操作。
+
+合同回归 `60/60`，覆盖同一脚本中两次读回的调用位置、金额、身份及状态矛盾拒绝；`node --check`、`git diff --check` 通过。改动后在无数据库覆盖、九服务端口空闲的条件下运行独立 `tools/dev/local-stack.sh verify payment-chain`，脚本在写前确认 H2/demo 身份，HTTP 冒烟及跨系统 happy-path 均 `[PASS]`；对账链 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`，九服务结束时自动停服。此处验证虚拟单账单而非标准订单 `t_order` 已付字段；不替代目标 MySQL 8、真实渠道到账、独立 refund-center 的用户进度归属/授权或正式财务验收。
+
+### 10.669 标准订单部分已付到结清的独立 H2 服务回归
+
+延续 10.668 的虚拟单边界，复用 demo 隔离 H2 种子中应收 `8800.00`、已付 `2000.00`、待回调支付 `6800.00` 的真实标准订单与账单。在现有 Spring 演示上下文中先读订单/账单欠款和部分支付事实，模拟可信本地 `alipay_h5` 成功回调后复查订单已付 `8800.00`、剩余 `0.00`、状态“待履约”，账单已付 `8800.00`、待付 `0.00`、状态“已结清”，最近支付单仍为原单且为 `SUCCESS`；重复回调后仍只保留一条成功事件、支付成功派发仅触发一次。派发服务在测试上下文注册为主测试桩，避免接触任何下游 HTTP/MQ；不新增 demo 写入接口或修改种子数据。
+
+最初把新验证单独启动第二个 Spring 上下文，单测通过但完整类共享 H2 内存库建表冲突；改独立库后完整类通过，全量中又发现多次 Boot 日志初始化使六处日志捕获单测失败。最终将新场景合入原演示测试的唯一上下文，并恢复原有日志级别清理；定向类 `1/1`，获准回环端口的 payment-core Maven 全量 `1604/1604`（零失败、零错误、零跳过），`git diff --check` 通过。此项是本地服务与 Mapper 的标准订单结清证明，不构成标准订单完整 HTTP/九服务资金链、目标 MySQL 8、正式渠道到账或生产财务验收。
+
+### 10.670 标准订单预付后欠款漂移的支付提交门禁
+
+标准订单预付创建后，原提交路径仅复查预付与支付金额、双活及过期，订单已付金额变化时仍可能按旧欠款发起支付。现在未完成单在路由前核对当前应收、已付、客户及原预付金额，事务取得同订单预付创建锁后再次读取并核对；已结清、来源缺失与金额/客户漂移分别失败闭合。无标准订单来源的虚拟单及既有成功/关闭单路径保持原有语义。
+
+服务单测覆盖路由前直接拒绝；H2/MySQL 模式双事务回归让提交等待订单锁，首事务把已付金额改为 `50.00` 并提交，提交获锁后以 `PAYMENT_PREPAY_REQUEST_CONFLICT` 拒绝，原支付单和预付单各一条，支付尝试为零。定向测试通过；获准回环端口的 payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1606/1606`（零失败、零错误、零跳过）。九服务 `tools/dev/local-stack.sh verify payment-chain` 的 HTTP 冒烟与模拟 happy-path 通过，对账 `COMPLETED`、阶段 `4/4`、可关账；脚本自动停服，运行前确认无数据库覆盖且九个端口空闲。此处订单锁只协调遵守同一锁约定的本地写入，不证明其他系统并发改订单的全局原子性，也不代替目标 MySQL 8 隔离、真实渠道资金、可信身份或独立退款中心用户进度归属授权验收。
+
+### 10.671 标准订单无效金额与缺客户的预付创建门禁
+
+预付创建曾只检查标准订单剩余应付为正：负应收加更低的负已付、或正应收加负已付均可生成正欠款；客户缺失则可能交给账单表的非空约束并落入系统错误。现于订单锁后、读取活跃预付与写入账单前拒绝非正应收或负已付为 `PAYMENT_PREPAY_REQUEST_CONFLICT`，缺失/纯空客户为 `PAYMENT_ORDER_SOURCE_MISSING`；既有已结清门禁和无订单来源的虚拟单语义不变。
+
+两条服务单测先红后绿，覆盖负应收/负已付、正应收/负已付和缺客户，均未进入后续创建；H2/MySQL 模式真实 Mapper/服务回归用负已付来源复核账单、支付单、预付单零行。定向两类通过；payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量在沙箱内仅两项嵌入式 HTTP 用例因禁止绑定回环端口而失败，获准沙箱外重跑 `1609/1609`（零失败、零错误、零跳过）。未重跑九服务或真实渠道；目标 MySQL 8 隔离、跨系统订单来源一致性和资金到账仍需现场验收。
+
+### 10.672 预付创建来源类型持久化与来源消失门禁
+
+预付创建以 `t_order` 当前存在与否决定标准/虚拟路径，但旧提交在订单行后来消失时会把原标准预付当作虚拟单继续接受。现为 `t_prepay_order` 增加内部 `source_kind`，创建时分别保存 `STANDARD_ORDER/VIRTUAL`；复用活跃预付与未完成提交须与当前来源一致，订单行消失、虚拟号后来出现同号订单或未知标记均返回 `PAYMENT_ORDER_SOURCE_MISSING`，不新增支付尝试。字段不对外序列化；原成功和关闭单路径保持不变。
+
+应用/交付 schema、Mapper、demo 种子和增量迁移已同步；迁移只为存量设置 `UNKNOWN`，不按当前订单行自动推断历史创建来源。上线前需识别仍活跃的存量、核对可信历史事实并经受控审批后补标，无法核实的待安全收口或按业务事实重新创建；该迁移未在目标 MySQL 8 执行，也没有在线 DDL、备份/回滚与多实例切换演练。H2/MySQL 模式服务事务新增三条回归：标准订单行删除后重拉及提交拒绝、存量未知标记拒绝、新虚拟单可创建、虚拟号后来出现标准订单后的重拉及提交拒绝；迁移契约断言两套 schema 一致且禁止自动补标。获准回环端口的 payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1613/1613`（零失败、零错误、零跳过）。在环境无数据库覆盖、九个端口空闲的条件下重跑 `tools/dev/local-stack.sh verify payment-chain`，HTTP 冒烟与模拟 happy-path 通过，对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`，结束自动停服。以上不等于真实渠道到账、跨系统订单全局原子性、可信身份或目标 MySQL 8 生产放行。
+
+### 10.673 成功收口补订单来源与剩余应付复验
+
+上一轮已为预付创建和未完成提交保存来源类型，但成功回调和主动查单仍只用当前订单行是否存在决定标准或虚拟结清，标准来源消失后会误按支付金额结清虚拟账单，支付受理后订单已付漂移也会按旧欠款覆盖订单。现在支付详情只在内部携带 `source_kind`；结清守卫按创建来源核对当前应收、已付、客户与支付金额，虚拟来源必须仍无标准订单行，未知来源拒绝，才执行订单与账单更新。
+
+查单事务配置为允许某些 `BusinessException` 不回滚，因此结清不变量异常使用 `IllegalStateException` 触发回调与查单事务整体回滚，不能把已标记成功的支付、尝试或预付留在库中。服务单测覆盖标准来源消失、虚拟业务号后来成为标准订单和主动查单欠款漂移；隔离 H2/Spring 演示上下文在标准订单已付 `2000.00→2050.00` 后模拟查单成功，核对支付仍 `WAIT_CALLBACK`、尝试未完成、账单已付仍 `2000.00`、无成功事件；恢复已付 `2000.00` 后原标准订单的成功回调仍结清，响应不暴露来源标记。获准回环端口的 payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1616/1616`（零失败、零错误、零跳过），`git diff --check` 通过。九服务 H2/demo HTTP 冒烟和模拟 happy-path 重跑通过，对账 `COMPLETED`、阶段 `4/4`、可关账，结束全部停服。该证据不覆盖目标 MySQL 8 隔离、外部系统并发写订单、真实渠道资金及存量 `UNKNOWN` 的可信核验和发布演练；渠道可能已成功但内部拒绝结清时必须人工核查，不能自动重付。
+
+### 10.674 2026-10-05 已成功支付的来源事实与退款准入一致性
+
+发现历史 `SUCCESS` 支付虽已完成渠道成功事实，若预付创建来源为 `UNKNOWN` 或与当前订单行存在性不符，详情/重复提交与管理端可信成功指标仍可能接纳。现服务成功事实守卫要求内部 `source_kind` 为 `STANDARD_ORDER/VIRTUAL` 且符合当前订单来源，支付运营共享 SQL 对唯一正金额预付绑定增加同样约束；未知及来源漂移进入 `SUCCESS_FACT_MISMATCH`，不计入可信成功。payment-core 退款锁定原支付的独立成功谓词同步核对唯一预付的订单号、原精度金额和来源，避免异常单继续退款。原始成功状态不自动改写，也不凭当前订单行猜测存量来源。
+
+服务与 Mapper 定向回归覆盖未知来源、标准订单消失、虚拟订单号碰撞和重复预付绑定；精简 H2 夹具按实际标准/虚拟来源补齐。获准回环端口的 payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1619/1619`（零失败、零错误、零跳过）；无数据库环境覆盖、九服务端口空闲后运行 `tools/dev/local-stack.sh verify payment-chain`，HTTP 冒烟与模拟 happy-path 通过，对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`，九服务自动停服。`git diff --check` 通过。本证据仅是本地 H2/demo，不代表目标 MySQL 8 隔离/执行计划、可信历史补标、真实渠道资金、跨系统退款或生产发布验收。
+
+### 10.675 2026-10-05 日终成功事实异常补订单来源诊断
+
+发现日终 `countPaymentSuccessFactMismatchByDate` 独立核验支付终态与最近尝试，却未要求唯一预付的订单号、正金额和创建来源；运营列表已经标 `SUCCESS_FACT_MISMATCH` 的历史未知来源单，日终会漏计。保留成功日 `[起始, 次日)` 的可索引时间范围和原始成功金额/渠道/事件口径，仅在异常计数谓词增加与共享成功事实一致的唯一绑定及 `STANDARD_ORDER/VIRTUAL` 当前订单存在性检查。不自动修改历史日终快照。
+
+正式 Mapper 的 H2/MySQL 模式红测证实 `UNKNOWN` 时原计数 `8` 未增加；修复后逐次验证未知来源、标准来源订单消失/补回、虚拟来源撞号/恢复和重复预付绑定，异常计数在 `8/9` 间正确变化；既有毫秒时间逆序、渠道归属及非正金额回归保持通过。JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1620/1620`（零失败、零错误、零跳过）；环境无数据库覆盖、九服务端口空闲时重跑本地 `verify payment-chain`，HTTP 冒烟与模拟 happy-path 通过，对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`，全部服务自动停服。`git diff --check` 通过。目标 MySQL 8 执行计划、可信历史补标、日终历史批次受控重跑和真实渠道资金仍未验收。
+
+### 10.676 2026-10-05 结清订单与账单防陈旧快照覆盖
+
+成功回调/主动查单原先先复验标准订单金额和客户，再只按 `order_no` 更新订单已付；不遵守本地协调锁的旁路写入若发生在读取与回写之间，会被旧金额覆盖。同一事务的账单也只按 `bill_no` 无条件改为已结清。现在订单条件更新同时核对当前应收、读取时的已付和客户；账单条件更新核对归属订单、客户、应收和此前已付（标准来源取订单复验值，虚拟新账单取零）。任一更新未恰好影响一行即抛内部异常，触发支付单、尝试、预付、订单和账单所在事务回滚，不派发成功事件。渠道可能已成功但内部未结清时必须核查，不能自动再次付款。
+
+正式 Mapper 的 H2/MySQL 模式分别验证订单已付/应收/客户与账单已付/应收/客户/归属漂移均返回零且不覆盖；恢复快照后各更新一行。服务单测覆盖订单 CAS 失败不继续写账单和事件；demo 真实 H2/Spring 事务把标准账单已付由 `2000.00` 改为 `2050.00` 后成功回调被拒，核对支付仍 `WAIT_CALLBACK`、订单保持 `2000.00`、账单保留 `2050.00`、尝试未完成且无成功事件；恢复账单后原回调正常结清。获准回环端口的 payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1623/1623`（零失败、零错误、零跳过）；无数据库环境覆盖且九服务端口空闲时运行 `tools/dev/local-stack.sh verify payment-chain`，HTTP 冒烟和模拟 happy-path 通过，对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`，服务全部自动停服。`git diff --check` 通过。目标 MySQL 8 并发隔离、跨库订单写入、真实渠道资金和存量异常账单仍未验收。
+
+### 10.677 2026-10-05 存量未知预付来源只读盘点
+
+`source_kind` 增量迁移故意让无法证明来源的存量保持 `UNKNOWN`，但此前没有可复核的初步盘点查询。本轮新增 `database/audits/2026-10-05-prepay-source-kind-readonly.sql`：第一条只读查询按支付状态及当前订单行是否存在汇总全部未知预付；第二条仅列出最近最多 500 行的预付号、支付号、订单号、金额、时间与同支付绑定数，优先展示非终态，再展示成功态，不输出客户姓名。附有只读账号、目标 MySQL 8 执行计划、样本上限与历史凭证审批的使用边界。`PRESENT_NOW/ABSENT_NOW` 绝非历史创建来源证据，脚本不含补标或资金写入。
+
+H2 MySQL 模式用待回调标准号、成功虚拟号、缺失支付绑定与已确认虚拟对照行验证两条查询输出和排序；契约断言脚本仅为 `USE` 加两条 `SELECT`，无预付更新。payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1624/1624`（零失败、零错误、零跳过），`git diff --check` 通过。本轮未连接或执行目标 MySQL 8、未做生产存量导出/迁移，也未重跑九服务（仅新增离线审计和测试，应用运行代码不变）；真实历史核验、受控分页、补标审批与发布演练仍未完成。
+
+### 10.678 2026-10-05 已标记来源漂移与非法值的只读盘点
+
+在原未知来源汇总与样本之外，为 `database/audits/2026-10-05-prepay-source-kind-readonly.sql` 增加两条只读 `SELECT`：按支付状态和异常类型汇总全部 `STANDARD_ORDER` 当前订单行消失、`VIRTUAL` 当前订单号撞号及非法 `source_kind`，再按非终态优先、成功态其次取最多 500 行明细。明细展示预付/支付/订单号、创建时间、金额及同支付绑定数，不输出客户姓名；来源一致的行不进入异常结果。`STANDARD_MISSING_NOW`、`VIRTUAL_COLLISION_NOW` 仅反映当前订单状态，不能反推历史创建来源或自动修复；两个明细结果各为样本，不可充当全量异常清单。
+
+H2 MySQL 模式夹具实测未知来源 `WAIT_CALLBACK/PRESENT_NOW`、`SUCCESS/ABSENT_NOW`、`MISSING_PAYMENT/ABSENT_NOW` 各一行；已标记异常 `WAIT_CALLBACK/STANDARD_MISSING_NOW`、`SUCCESS/VIRTUAL_COLLISION_NOW`、`WAIT_CALLBACK/INVALID_SOURCE_KIND` 各一行，正常标准与虚拟来源对照行均被排除。四条查询的汇总、样本排序与只读契约通过；脚本仅含 `USE` 和四条 `SELECT`。payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1624/1624`（零失败、零错误、零跳过），`git diff --check` 通过。没有运行目标 MySQL 8 审计、迁移或资金写入；目标库只读权限与负载、`EXPLAIN`、超过 500 行的受控分页、可信历史凭证、补标审批和回滚演练仍待验收。仅离线审计、测试和文档变更，未重跑九服务，不据此发布。
+
+### 10.679 2026-10-05 预付来源精确值与运营、日终、退款口径一致
+
+服务层按 Java 字符串精确判断 `source_kind`，但成功事实 SQL、日终异常计数、退款原支付资格和离线审计原用普通字符串相等/`NOT IN`；在不区分大小写的列比较下，小写 `virtual` 被当作合法 `VIRTUAL`。使用 H2 MySQL 模式 `VARCHAR_IGNORECASE` 构造红测：运营列表/导出/详情未标异常、日终异常数仍为 `8`、退款资格仍有效，审计误判为虚拟来源冲突。现这些 SQL 改为定长二进制精确比较；在线成功事实再核对来源长度，避免二进制补零把尾部空字节当作合法值，审计采用末尾定界符保证短值也不因补零碰撞。合法来源保持原口径，大小写变化及尾部空字节失败闭合并列入非法来源审计，不自动修改存量。
+
+定向四类 Mapper/审计 H2 回归通过；payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1624/1624`（零失败、零错误、零跳过）。沙箱内首次全量仅两个嵌入式 HTTP 用例因回环监听 `Operation not permitted` 报错，获准在本机重跑后全量通过。确认无目标库覆盖及九服务端口占用后，独立 H2/demo `tools/dev/local-stack.sh verify payment-chain` 的 HTTP 冒烟与模拟 happy-path 通过；七项跨源事实齐备，对账 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`，结束自动停服。`git diff --check` 通过。H2 不替代目标 MySQL 8 的 collation、字节比较和执行计划实测；真实存量证据、受控补标、正式渠道及资金核验仍待验收，不据此发布。
+
+### 10.680 2026-10-05 仪表盘与全局告警的异常来源复验
+
+运营可信成功谓词已精确核对预付来源，但仪表盘和全局 P1 告警此前没有大小写不敏感列上的直接回归；告警文案只描述最新尝试不一致和完成事实缺失，未覆盖当前预付绑定或订单来源异常。现 H2 MySQL 模式两个正式 Mapper 夹具将 `source_kind` 改为 `VARCHAR_IGNORECASE`：完整成功单从 `VIRTUAL` 改为小写 `virtual` 或末尾空字节时，仪表盘成功笔数/金额降为零、全局 `PAYMENT_SUCCESS_FACT_MISMATCH` 告警出现；恢复后重新计入可信成功且告警消失。告警说明和处置动作现提示核对预付、订单来源、渠道流水、最新尝试与日志，明确不得自动补标。接口文档 14.318 的历史最小口径同步改为引用当前扩展契约。
+
+两类定向回归通过；payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1624/1624`（零失败、零错误、零跳过）。无外部数据库覆盖、九服务端口空闲时运行独立 H2/demo `tools/dev/local-stack.sh verify payment-chain`，HTTP 冒烟与模拟 happy-path 均通过，七项跨源事实、对账 `COMPLETED`、阶段 `4/4` 且 `reconciliationFinancialCloseable=true`，九服务自动停服。`git diff --check` 通过。目标 MySQL 8 collation/计划、可信历史来源与正式渠道资金未验收；不自动补标、不据此发布。
+
+### 10.681 2026-10-05 支付监控页来源异常处置建议对齐
+
+监控 P1 服务端提示已覆盖预付绑定和订单来源，但管理端 `PaymentMonitorView` 选中“支付成功事实不一致”后仍额外展示只核对最新尝试状态/完成时间的旧辅助建议，可能让运营漏查来源异常。现辅助建议指向预付绑定、订单来源、支付尝试、渠道流水与操作日志，明确不得凭当前订单行自动补标或重发付款；服务端 `suggestedAction` 原样继续展示，告警跳转和快照过期门禁未变。
+
+管理端监控页定向 `2/2`、全量 `277/277`（零失败）及 Vite 构建通过，`git diff --check` 通过。本轮仅改监控页文案和前端回归/文档，后端运行逻辑与数据库未变；此前九服务 H2/demo 与对账通过不代替本轮 UI 浏览器点击、目标 MySQL 8、可信历史来源、真实渠道资金或正式告警处置验收。
+
+### 10.682 2026-10-05 监控 P1 告警到异常支付筛选的真实浏览器复验
+
+在既有只读 Chrome/CDP 演示脚本新增 `--monitor-advice` 路径：先核验后端 `/api/demo/identity=payment-core-h2-demo`、内置成功事实异常支付及 `/api/payment-monitor/overview` 的 P1 告警、动作路由和禁止自动补标建议。Chrome 打开管理端 `/payment-monitor`，实际点击“支付成功事实不一致”告警，核对服务端告警快照及前端“预付单绑定、订单来源、支付尝试与渠道流水”辅助建议同时可见；再点击“立即排查”，确认路由进入 `SUCCESS_FACT_MISMATCH` 筛选、同源 `200 GET /api/payments` 和内置异常支付单渲染。抓取的所有 `/api/` 请求均为同源 GET，无写请求或跨源 API。
+
+运行前确认无外部数据库/SQL 初始化覆盖、18081 和 5174—5177 端口空闲，隔离 H2/demo 支付栈的 HTTP 冒烟通过；脚本执行 `[PASS]`，`node --check` 与 `git diff --check` 通过。Chrome 临时 profile 已清理，演示栈按 Ctrl-C 自动停服，五端口无监听。此证据只覆盖内置模拟异常的监控点击和只读下钻，不证明生产来源异常处置、目标 MySQL 8 字节比较/执行计划、真实渠道资金或正式身份治理。
+
+### 10.683 2026-10-05 小写预付来源的真实监控与支付列表诊断
+
+为避免 10.682 仅用默认时间线异常代替来源漂移验证，新增独立 H2/demo 附加初始化 `payment-source-kind-drift-demo.sql`：仅将原可信标准订单成功单 `PAY202607180074` 的唯一预付来源从 `STANDARD_ORDER` 改为小写 `standard_order`，不改原支付、金额、尝试或渠道流水。以独立 `HSP_DEMO_DB_URL=jdbc:h2:mem:payment_core_source_drift_20261005;MODE=MySQL;IGNORECASE=TRUE;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE` 和显式 `SPRING_SQL_INIT_DATA_LOCATIONS=classpath:data.sql,file:{仓库绝对路径}/tools/dev/payment-source-kind-drift-demo.sql` 启动演示栈；事先确认五端口空闲且无外部数据库/初始化覆盖。`IGNORECASE=TRUE` 的 H2 列普通比较会把小写值等同大写，定长字节精确比较仍拒绝该值。
+
+只读脚本 `--demo --monitor-source-drift` 先核验 demo 身份、该成功单进入 `SUCCESS_FACT_MISMATCH`，可信成功笔数/金额为 `0/¥0.00`，P1 告警影响 `2` 笔（含原内置异常）；真实 Chrome/CDP 点击告警，核对来源排查与禁止自动补标建议，再点“立即排查”，异常筛选中同时显示原异常单和小写来源单的“成功事实异常”徽标。首次断言误找原始 `SUCCESS_FACT_MISMATCH` 代码而页面展示中文徽标，修正断言后 `[PASS]`；捕获全部浏览器 API 请求均为同源 GET。`node --check`、`git diff --check` 通过，Chrome 临时 profile 清理、演示栈按 Ctrl-C 自动停服且五端口无监听。此为人为隔离历史异常，不是目标 MySQL 8、生产历史核验/审批、真实渠道资金或正式发布证明。
+
+### 10.684 2026-10-05 来源异常成功单的 App/H5/PC 结果页失败闭合
+
+发现共用用户支付结果页初始详情读取失败时虽展示错误卡片，顶部仍用无可信快照的默认 `pending` 显示“支付处理中”，可能使已由成功事实门禁拒绝的历史成功单看似正在渠道受理。现加载期间明确为“正在加载支付结果”/“加载中”；读取失败且没有可信详情时改为“支付结果待核查”/“待核查”，提示请勿重复付款、保留支付单号并联系运营核查渠道及订单。只有可信详情加载成功才按其真实状态显示；原重试加载入口保留，未添加支付/查单写动作。
+
+隔离 H2/demo 以 `IGNORECASE=TRUE` 和附加 SQL 构造原可信标准来源小写漂移：服务端支付详情为 `PAYMENT-500` 且无数据，收银台会话为“成功事实异常”/`danger`；Chrome/CDP 先核对 P1 告警与异常筛选，再依次访问 App/H5/PC 对应结果页，三端均以同源 GET 收到详情拒绝并渲染“待核查”、禁止重复付款及重试加载，而非成功或处理中。所有浏览器 API 请求仅同源 GET，脚本 `[PASS]`、`node --check` 通过。App `98/98`、H5 `4/4`、PC `4/4` 测试及三端 Vite 构建均通过；演示栈退出且五端口无监听，`git diff --check` 通过。该状态仅表示详情未获可信确认，不推断真实渠道是否扣款；目标 MySQL 8、生产历史来源、可信身份与资金核对仍待验收。
+
+### 10.685 2026-10-05 已显示成功后的手动刷新失败闭合
+
+App/H5/PC 共用结果页此前在已加载成功详情后，用户手动刷新若详情读取失败仍保留旧成功快照，容易误以为本次核验也确认成功。现仅在同一支付单、同一次有效请求的手动详情刷新失败时清除展示快照和已加载单号，呈现“支付结果待核查”、禁止基于旧快照执行支付动作，并提供只读“重试加载支付结果”；路由切换或过时请求不得覆盖新详情。此改动不推断支付失败，也不写入服务端状态。
+
+沿用独立 H2/demo 原可信成功单 `PAY202607180074`，只读浏览器路径 `--demo --result-refresh-failure` 显式携带原始 `payScene=PC`（否则三端默认 `BALANCE_PAY_*` 与该演示单不匹配，会被客户端正确拒绝）；Chrome/CDP 逐一在 App/H5/PC 验证首次可信 `SUCCESS`，模拟断网点击“刷新支付详情”后均显示待核查且旧成功操作区消失，恢复网络点击重试后再次由服务端详情确认为成功。浏览器所有 API 请求均为各自终端同源 GET，脚本 `[PASS]`；App `99/99`、H5 `4/4`、PC `4/4`，三端构建（本轮此前执行）、`node --check`、`git diff --check` 通过。仅覆盖隔离演示与浏览器行为；目标 MySQL 8、生产身份/历史及真实资金仍未验收。
+
+### 10.686 2026-10-05 主动查单与关单失败不沿用旧结果
+
+进一步检查共用结果页：主动查单或本地关单请求失败时原先仍展示旧成功/可关单快照，仅追加错误消息；请求可能已经到达后端，继续沿用旧结果或再次执行动作不安全。现两条异常分支仅在原支付单和原路由版本仍有效时清除详情快照与已加载单号，回到“支付结果待核查”，仅提供 GET 详情重试；不把请求失败推断为支付失败或关闭成功。既有过时请求保护保持不变。
+
+视图契约测试新增两条失败闭合断言，App 全量 `100/100`、H5 `4/4`、PC `4/4`，三端 Vite 构建通过。没有对隔离服务或外部渠道实际发起主动查单/关单写请求；前一节只读 Chrome 演示不覆盖此两条 POST 失败分支。目标 MySQL 8、正式接口故障注入和真实资金仍待单独验收。
+
+### 10.687 2026-10-05 结果页后台轮询失败的过期事实提示与动作门禁
+
+App/H5/PC 共用结果页对 `WAIT_CALLBACK`、`PAYING`、`RISK_REVIEW` 有界轮询时，GET 失败或同单事实不匹配原先静默保留旧处理中/待复核状态；在下次成功查询前，用户可能据旧状态主动查单、关单或返回收银台。现当轮有效请求失败时保留上次详情仅供核对，同时顶部显示“支付结果待核查”/“待核查”，提示勿重复付款；主动查单、关单和返回收银台均暂禁，页面建议亦改为先刷新详情。原有有界自动重试继续进行；同单详情重新通过校验后自动解除过期标记，手动只读刷新也可解除，手动失败仍回到无快照待核查。路由切换和被更晚请求取代的失败不会污染新状态。
+
+新增视图回归，App `101/101`、H5 `4/4`、PC `4/4` 及三端 Vite 构建通过。隔离 H2/demo 原 `PAY202607190002` 的 `H5` 场景待回调详情预检成功；真实 Chrome/CDP 在三终端首次读取 `WAIT_CALLBACK` 后模拟断网，等待后台轮询失败，三端均显示待核查、上次读取事实提示，非只读动作禁用；恢复网络后无需用户操作，下一轮 GET 成功使原 `WAIT_CALLBACK` 展示及可用动作恢复。原成功单手动刷新断网及恢复场景复跑亦 `[PASS]`；浏览器 API 均为各终端同源 GET，无写请求。沙箱回环启动失败后获准仅在本机启动演示栈，不涉及目标 MySQL 8、正式渠道、生产数据或真实资金；这些环境仍待验收。
+
+### 10.688 2026-10-05 用户退款进度失败查询的过期事实提示
+
+App/H5/PC 共用退款进度页此前初次查询失败仍在顶部显示“退款状态”/“加载中”；处理中自动轮询失败时继续展示旧“退款处理中”，成功终态手动刷新失败也保留旧“退款成功”标题，仅靠下方错误或五次耗尽后提示。现首次失败在无快照时显示“退款进度待核查”；手动或自动刷新失败但保有上次匹配详情时，保留金额与轨迹供核对，顶部改“待核查”，明确其非最新确认，禁止从旧状态返回支付入口。原有五次有界自动重试不因单次失败停止，且在当前退款单匹配详情重新查询成功后解除过期标记；场景切换和过时请求不覆盖新结果。不推断退款失败或资金到账。
+
+隔离 H2/demo 预检 `REF202607190001` 为 `H5` 场景 `PROCESSING`、`REF202607180019` 为 `PC` 场景 `SUCCESS`；真实 Chrome/CDP 在 App/H5/PC 各自加载处理中退款、手动断网刷新、恢复后手动重验、自动断网轮询、恢复后自动重验，再对成功退款重复手动断网和恢复，均显示预期待核查/原状态转换，浏览器请求只有同源 GET。App `102/102`、H5 `4/4`、PC `4/4`，三端 Vite 构建及脚本语法通过。仅模拟本机查询失败，不覆盖独立退款中心到账事实、目标 MySQL 8 或正式渠道资金；演示栈结束后停止。
+
+### 10.689 2026-10-05 小程序退款进度失败查询与三端待核查口径对齐
+
+小程序退款页虽在手动失败时提示“上次成功查询状态”，顶部和摘要仍可能显示旧“退款成功”；自动轮询失败完全静默，首次详情失败也保留“退款状态”的泛化标题。现请求失败时将标题与摘要标为“退款进度待核查”/“待核查”，保留上次详情、金额和轨迹仅供核对，明确请勿重复申请退款；有旧快照时暂禁返回业务入口，原有有界轮询不中断。手动、自动或重进页面的同单可信详情读取成功后解除过期标记并清除旧错误提示；隐藏期间的过时请求不能反写。首次无快照失败仍提供只读重试。
+
+小程序页面模拟测试覆盖首次失败/重试、处理中自动失败/恢复、成功退款手动失败/恢复、旧成功入口门禁及重进页面旧请求隔离；退款页 `25/25`、小程序全量 `96/96` 和 `git diff --check` 通过。没有真实微信开发者工具/设备上的页面渲染验收，也未接独立退款中心、目标 MySQL 8 或正式渠道到账；这些仍待现场验证。
+
+### 10.690 2026-10-05 小程序支付结果页失败请求不沿用旧终态和动作
+
+小程序支付结果页原先首查失败仍在标题显示“支付处理中”，后台轮询失败或同单事实不匹配被静默忽略；已确认成功后的只读刷新失败以及主动查单/关单请求失败虽保留旧快照，却继续展示旧成功状态或可执行动作。现首查等待和失败分别明确为“正在加载支付结果”与“支付结果待核查”。有效后台 GET 失败或返回不匹配事实时，将保留的详情标为仅供核对，顶部和摘要显示待核查，并暂停主动查单、关单及回收银台/业务入口；有界 GET 自动重试继续。手动详情刷新及动作失败同样禁用旧快照动作，直至同一支付单的匹配详情读取成功；不把请求失败推断为支付失败，也不重复执行渠道动作。旧请求因隐藏或更新版本失效时不反写新结果。
+
+页面模拟测试覆盖首查失败重试、处理中后台失败恢复、成功终态手动失败恢复、金额/账单/客户等错配动作响应门禁，以及失败查单不重置轮询次数；旧连续查单后关单测试改为两笔独立页面夹具，避免在被禁止的旧快照上继续动作。结果页 `32/32`、小程序全量 `98/98`、脚本语法和 `git diff --check` 通过。未运行微信开发者工具或真机渲染，也未向渠道发送任何查单/关单写请求；目标 MySQL 8、生产身份与真实资金仍未验收。
+
+### 10.691 2026-10-05 成功支付状态字符串的长度与大小写语义对齐
+
+`PaymentServiceImpl.validatePaymentSuccessFacts` 对 `SUCCESS`/`success` 类型使用不修剪的忽略大小写比较、对中文“成功”使用精确比较；可信成功 SQL 和退款原支付资格此前在大小写敏感的 H2 上把合法大写类型误判异常，而在 MySQL 8 的 PAD SPACE 比较规则下可能把尾部空格值当作相同枚举。日终 H2 增加 `PAY-NORMAL` 大写 `status_type` 的红测，原异常笔数从期望 `8` 错变 `9`。现保留可索引的状态相等条件，并对支付状态、状态类型、最近成功尝试状态及类型增加原字符长度约束；类型用 `LOWER(...)` 与 `success` 比较，既接受同长度大小写变体，又排除尾部空格。共享可信成功/异常投影、日终异常统计及退款原支付资格三处谓词对齐；原始状态计数与退款终态自身事实谓词未在本项重定义。
+
+日终、支付指标和退款原支付 H2 定向回归通过，payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1626/1626`（零失败、零错误、零跳过）。首次全量在沙箱内仅两个嵌入式 HTTP 用例因回环监听 `Operation not permitted` 报错，获准本机重跑后全绿；`git diff --check` 通过。H2 的比较语义不能替代目标 MySQL 8 当前 collation、PAD 属性、执行计划及真实历史值实测；正式渠道资金、生产身份与历史治理仍待验收，不据此发布或自动补标。
+
+### 10.692 2026-10-05 退款终态状态及尝试状态的精确事实门禁
+
+续查退款共享终态谓词：在大小写不敏感列上，`status='SUCCESS'` 和最近尝试状态相等可能接受小写 `success`，与服务层 `validateTerminalFacts` 的精确状态要求不一致。日终 H2 `VARCHAR_IGNORECASE` 红测中，将原可信成功退款订单与最近尝试同时改为小写，预期异常数 `2`，原 SQL 仅得 `1`。现为 `SUCCESS`/`FAIL` 订单状态及最近尝试状态加入字符长度与二进制精确比较，类型保留等长的大小写不敏感匹配，拒绝尾空格；不改变日终原始成功/失败计数口径。该共享谓词同时用于退款详情/列表异常筛选、回调前事实核验、支付记录可信退款聚合与日终异常统计。
+
+定向回归覆盖合法大写类型、小写成功/失败订单状态与尝试状态、类型及尝试状态尾空格、支付记录列表/导出/详情可信退款笔数和金额；两组 Mapper 共 `17/17` 通过。JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1629/1629`（零失败、零错误、零跳过）；沙箱内两项嵌入式 HTTP 因回环监听 `Operation not permitted` 失败，本机重跑通过。`git diff --check` 通过。H2 对订单状态尾空格的外围筛选不复现 MySQL PAD SPACE，该路径、目标 MySQL 8 当前 collation/PAD/执行计划和历史脏值仍须目标环境只读核验；不连接目标库、不自动补标、不代表真实渠道资金或发布验收。
+
+### 10.693 2026-10-05 退款终态渠道绑定精确性与空标识隔离
+
+继续对齐 `RefundServiceImpl.validateTerminalFacts` 与退款共享 SQL 谓词：服务层要求订单和尝试的渠道编码、渠道退款单号按 Java 字符串精确相等且具有文本；原 SQL 仅做数据库排序规则下相等及非 `NULL` 检查。`VARCHAR_IGNORECASE` 红测将原可信退款的最近尝试渠道 `wx_h5` 改成 `WX_H5`，日终预期异常数 `2`，原 SQL 仍为 `1`。现订单两个渠道字段拒绝空串/纯空格，并对尝试与订单的渠道编码、渠道退款单号同时校验原字符长度和二进制内容，避免大小写或尾部空字节被宽松比较吞掉。原始日终退款成功/失败计数未改口径。
+
+H2 定向回归覆盖渠道编码和退款单号大小写漂移、订单与尝试均为空白、可信支付记录列表/导出/详情的成功退款笔数、金额与未核实笔数；两组 Mapper `19/19` 通过。JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1631/1631`（零失败、零错误、零跳过），`git diff --check` 通过，既有工作树变更保留。没有连接目标 MySQL 8；其真实 collation/PAD、二进制转换、执行计划与历史值，及正式渠道退款到账和生产身份，仍需受控验收，不据此自动补标或发布。
+
+### 10.694 2026-10-05 预付与原订单号大小写漂移不得复用支付事实
+
+继续检查支付成功的订单归属。前端及服务边界对订单号仅裁剪空白、不折叠大小写；但支付单、预付单与原订单的关联在大小写不敏感列下只做普通相等，可把 `ORD-001` 和 `ord-001` 当作相同来源。三条 H2 `VARCHAR_IGNORECASE` 红测分别证实日终原可信支付单在预付订单号变小写后异常数未从 `8` 增至 `9`、退款原支付资格仍放行、首次渠道绑定仍返回 `1`。现相关支付成功共享事实与日终谓词、退款原支付资格、提交/成功收口的原子预付绑定、预付和支付详情归属投影、原订单金额读取以及订单/账单结清写入，都保留原可索引相等条件，并增加原字符长度和二进制精确比较；真实大小写漂移必须拒绝，合法同值路径保持通过。
+
+定向 H2 回归还覆盖支付记录列表/导出/详情的 `SUCCESS_FACT_MISMATCH` 投影、原订单金额查找及结清写入；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1638/1638`（零失败、零错误、零跳过）与 `git diff --check` 通过，既有工作树变更保留。订单超额/日终差额的原始订单号归组、其他以排序规则关联的历史来源、目标 MySQL 8 collation/PAD/`CAST AS BINARY` 行为及执行计划仍需单独盘点和受控核验；未连接目标库、不补标、不操作真实渠道资金。
+
+### 10.695 2026-10-05 原始成功支付按精确订单号计算超额
+
+沿 10.694 的订单归属门禁复查超额 P1 和日终差额：`PaymentIssueMapper` 原按排序规则连接原订单并按 `order_no` 分组，日终累计原始成功金额也将大小写漂移的支付单纳入同一订单。H2 `VARCHAR_IGNORECASE` 红测中，`ORD-SPLIT` 的两笔原始成功金额拆为 `ord-split` 的 `60.00` 和 `ORD-SPLIT` 的 `50.00`，模拟两个原订单号并存时误报第二笔超额；另有仅存在小写来源订单的 `ORD-ALIAS` 支付被错误挂到该来源。两种情形的超额 P1 均从预期 `1` 错增为 `2`。
+
+现超额来源连接增加原字符长度和二进制比较，分组增加长度与二进制键；日终超额分支的来源连接和历史成功金额子查询也增加相同精确门禁，保持其余原始成功、通知和事件口径不变。两组回归验证虚假超额消失、既有 `ORD-OVERPAID` 的真实 P1 保留，日终差异保持 `1/¥30.00`，仅大小写漂移的来源不得误挂。payment-core JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1640/1640`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树变更保留。H2 双大小写来源行只用于测试宽松比较，不代表目标 MySQL 8 唯一键允许这两行并存；该库的 collation/PAD、执行计划、真实历史和正式资金仍需只读核验与受控验收，未连接目标库或执行资金操作。
+
+### 10.696 2026-10-05 活跃预付与账单按精确订单号复用
+
+沿 10.694 的用户支付主流程检查发现，`prepay` 对原订单金额已采用精确查找，但活跃预付和原账单仍按数据库排序规则查 `order_no`。H2 `VARCHAR_IGNORECASE` 实际服务红测：先创建 `ORD-PREPAY-CONCURRENT-001` 的预付单与账单，再把已有支付单/预付单订单号改成小写，重新按大写请求时原服务直接返回小写旧预付单；补精确活跃预付查找后，又发现新建预付仍挂到小写旧账单。两处 Mapper 查询现保留相等索引条件，并以 `CHAR_LENGTH` 及二进制原值比较门禁大小写漂移，不从另一逻辑订单复用资金或账单事实。
+
+同一真实 H2 Mapper/服务回归验证原小写预付与账单仍独立留存、原大写请求创建新的预付单、支付单和账单；两种大小写的活跃预付候选数分别为 `1`。同订单并发创建、原有效预付复用、风险复核和提交路径的整类定向测试通过。JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1641/1641`（零失败、零错误、零跳过），`git diff --check` 通过，498 项工作树改动保留。H2 夹具人为制造历史漂移，不证明目标 MySQL 8 当前唯一键/collation/PAD、二进制转换与索引执行计划允许这些状态；仍需目标库只读核验、真实历史治理审批与正式渠道资金验收，未连接目标库或发布。
+
+### 10.697 2026-10-05 用户预付单号大小写别名不得进入收银台和提交
+
+继续检查用户按预付单号读取收银台与提交支付。业务边界仅裁剪标识空白，预付单号是支付单、账单与幂等归属的直接入口；原 `findPrepay`、过期判定、关联号查询和首次渠道绑定仍只依赖数据库相等。在 `VARCHAR_IGNORECASE` 夹具中，小写 `pre-unsubmitted` 会查到真实 `PRE-UNSUBMITTED` 并带出支付单，Mapper 红测先证实了错误归属。现这些入口在原索引相等条件后增加原字符长度与二进制精确比较，包括首次绑定更新，大小写别名不能读到或绑定另一标识。
+
+H2 Mapper 回归验证原预付单号读取及绑定仍成功，小写别名读取、过期判定、关联订单/支付单号与更新均拒绝；真实 H2 服务以生成的预付单验证大小写变体在 `cashier` 和 `submit` 两个用户入口均返回 `PREPAY_ORDER_NOT_FOUND`，未进入支付渠道动作。JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1643/1643`（零失败、零错误、零跳过），`git diff --check` 通过，498 项工作树改动保留。目标 MySQL 8 当前 collation/PAD、唯一键、执行计划及真实历史仍须受控核验，不连接目标库、不自动治理历史数据、不做正式资金或发布验收。
+
+### 10.698 2026-10-05 支付单号详情读取与用户动作精确门禁
+
+支付单详情及提交事实读取原先仅以数据库默认相等比较支付单号；在大小写不敏感列上，小写别名可取回大写支付单详情。现 `findDetail`、`findSubmissionFact` 在等值条件外增加原字符长度及二进制精确比较；详情、主动查单、关单与回调初始读取还校验返回详情的支付单号与请求精确一致，避免宽松数据库比较或异常 Mapper 返回把别名引入用户动作或回调处理。关单在任何状态判断或写入前完成校验。H2 大小写不敏感列回归验证原号仍可读取详情及提交事实、别名均查不到；服务层回归验证详情、查单、关单别名均返回 `PAYMENT_ORDER_NOT_FOUND`，关单未执行关闭或释放并发令牌。
+
+两组定向测试 `185/185` 通过。JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1645/1645`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。沙箱内两个嵌入式 HTTP 用例因回环监听 `Operation not permitted` 报错，按批准流程本机复跑全绿。H2 不能代替目标 MySQL 8 的实际 collation/PAD、`CAST AS BINARY` 行为、执行计划及真实历史校验；未连接目标库、自动治理历史、发布或操作真实资金。
+
+### 10.699 2026-10-06 支付详情预付及最近尝试关联按支付单号精确匹配
+
+详情读取虽已精确命中主支付单，预付及最近尝试子查询仍只以数据库默认相等条件关联支付单号，大小写不敏感列可把别名预付的另一账单或别名尝试的状态带给真实支付单；提交事实的最近尝试亦同。H2 红测为真实支付单创建相同金额的大小写别名预付、账单和更晚尝试，原详情错读 `BILL-SNAPSHOT-OTHER`。现三个子查询在可索引的等值条件后增加原字符长度与二进制精确比较；回归确认详情只显示原账单和原尝试状态，提交事实亦取原尝试。此项不扩大到支付记录列表或共享成功事实的其他关联，后续继续盘点。
+
+两组定向测试 `186/186` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1646/1646`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。H2 的大小写模拟不替代目标 MySQL 8 当前唯一键、collation/PAD、`CAST AS BINARY` 与执行计划、历史值核验，也不是生产身份或正式资金验收；未连接目标库、自动补标、发布或操作真实资金。
+
+### 10.700 2026-10-06 支付可信成功事实按支付单号精确归属
+
+共享 `paymentSuccessFactMismatchCondition` 此前用宽松相等条件匹配绑定预付、计算同支付单预付笔数以及挑选最近成功尝试。大小写不敏感列中，别名预付被计为第二笔可把真实成功错报为事实异常，别名尝试亦可能遮蔽真实尝试的时间异常。H2 红测在原成功支付单之外插入大小写别名预付和更晚尝试，事件列表的支付事实投影先错报 `SUCCESS_FACT_MISMATCH`。现三处查询均保留等值预筛，再加入支付单号原长度和二进制精确比较；事件列表、导出与详情在别名存在时仍显示原可信成功，而原尝试的完成时间越界时均报告事实异常。
+
+事件及支付详情两组 Mapper 定向 `16/16` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1647/1647`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。支付记录列表/导出的预付与尝试展示关联及其他按支付单号连接的历史来源还需继续盘点；目标 MySQL 8 当前 collation/PAD、唯一键、二进制转换与执行计划、真实历史和正式渠道资金仍须受控验收，未连接目标库或发布。
+
+### 10.701 2026-10-06 支付列表与导出预付、尝试展示精确归属
+
+运营支付列表与导出仍按数据库默认相等选取最近预付和尝试。在大小写不敏感支付单号列上，原支付单的列表可错误显示别名预付的 `OTHER_SCENE` 和别名尝试的“成功”，即使详情已隔离。H2 红测先证实列表 `HOME_CLEAN` 错读为 `OTHER_SCENE`；现列表和导出各两处子查询在等值筛选后增加支付单号原长度及二进制精确比较，两个视图均只展示原支付单的场景和尝试状态。
+
+事件及支付详情 Mapper 定向 `17/17` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1648/1648`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。其他按支付单号连接的历史来源仍待盘点；目标 MySQL 8 当前 collation/PAD、唯一键、二进制转换与索引执行计划、历史数据及正式渠道资金仍须受控验收，未连接目标库、发布或操作真实资金。
+
+### 10.702 2026-10-06 支付过期关单候选与重试清理按支付单号精确归属
+
+过期关单批次原先依赖数据库宽松相等关联最新预付、重试和尝试；大小写别名的未过期预付或已提交尝试能隐藏原过期支付，别名的已过期预付也可能把仍有效的支付错误选入批次。原子关单再查预付与尝试时存在同类错绑；成功后更新预付状态或删除重试可能误触别名。H2 大小写不敏感列红测先复现原过期支付被别名未过期预付隐藏。现候选批次、原子关单与预付状态更新、重试删除均在等值条件后加入原长度及二进制精确比较；重试清理的支付、最新预付和尝试关联亦按精确支付单号判断，不会因别名尝试误删原重试。回归覆盖别名新旧预付、别名尝试与待重试记录，并确认原号可关、别名号不能关，原预付状态更新不波及别名。
+
+状态迁移 Mapper 定向 `40/40` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1651/1651`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。H2 不代替目标 MySQL 8 当前唯一键/collation/PAD、二进制转换与索引执行计划、历史值及真实渠道资金核验；未连接目标库、自动补标、发布或操作真实资金。手动关单与其他直接按支付单号写入仍须持续盘点。
+
+### 10.703 2026-10-06 手动关单原子写入的支付单号精确门禁
+
+服务入口虽在读取详情时已拒绝大小写别名，`markUnsubmittedPaymentClosed` Mapper 原子更新仍以宽松相等匹配支付单号，在大小写不敏感列上直接传入小写别名可关闭原支付单；尝试存在性检查也可能把另一大小写标识的尝试计入原支付单，阻止合法手动关单。H2 红测确认 `pay-older` 原先错误关闭 `PAY-OLDER`。现更新条件增加支付单号原长度和二进制比较，尝试存在性检查同样精确归属；回归验证别名无法关闭、别名尝试不阻止真实无提交支付关闭。
+
+状态迁移与服务两组定向 `222/222` 通过，JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1652/1652`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。其他按支付单号直接写入、目标 MySQL 8 当前 collation/PAD、唯一键、`CAST AS BINARY` 及执行计划、历史值仍待盘点和受控核验；未连接目标库、发布、自动治理或操作真实资金。
+
+### 10.704 2026-10-06 渠道提交首次绑定的支付单号精确归属
+
+`updatePaymentMethodAndChannel` 是从预付进入 `WAIT_CALLBACK` 的原子写入。原支付单号命中、同支付单预付数量及预付归属均使用数据库默认相等；大小写不敏感列下，别名预付会被误计为第二笔，阻止原支付单正常提交；只剩别名预付时又可反向提供假绑定。H2 红测分别复现原单被拒绑定和仅凭别名预付成功绑定。现保留等值筛选后，为原支付单号、预付计数及指定预付归属增加原字符长度和二进制精确比较；别名支付单号无法更新原单，合法原单不受别名预付干扰。
+
+状态迁移与服务定向 `224/224` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1654/1654`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。成功收口与其他原子写入仍需沿支付单号归属继续盘点；目标 MySQL 8 当前唯一键/collation/PAD、`CAST AS BINARY` 行为、执行计划及真实历史须受控核验，未连接目标库、发布或操作真实资金。
+
+### 10.705 2026-10-06 渠道成功收口与尝试最终写入的精确归属
+
+渠道成功收口原子更新原先以数据库宽松相等匹配支付单、绑定预付数量、预付归属、最近尝试和关单恢复事件。大小写不敏感列下，别名预付会阻止真实成功，只有别名预付时又可错误支持成功收口；别名尝试或关单事件也可能混入最新事实判断。H2 红测分别复现原单成功被阻、仅凭别名预付错误成功。现保持原等值条件并对上述支付单号归属增加原长度及二进制精确比较，关单恢复只接受本支付单事件与尝试。最近尝试成功最终写入原先还能选中较晚的别名尝试；追加红测确认小写请求错误更新它，现尝试选择及与已成功支付单的两处关联均精确匹配，真实最近尝试仍可完成，别名尝试保持处理中。
+
+状态迁移与服务两组定向 `228/228` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1658/1658`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。回调处理中及提交结果的其他原子写入、目标 MySQL 8 collation/PAD、唯一键、`CAST AS BINARY` 行为、执行计划与真实历史仍待受控核验；未连接目标库、发布、自动补标或操作真实资金。
+
+### 10.706 2026-10-06 提交结果恢复与回调待处理按支付单号精确更新
+
+渠道提交结果绑定、提交结果未知恢复与处理中回调写入原先仅以数据库默认相等命中支付单；最近尝试选择及存在性判断也可能取到另一大小写标识的尝试，令真实待处理单错误拒绝恢复，或用别名未完成尝试为已终结原尝试背书。最近尝试状态更新同样可能修改别名尝试。H2 大小写不敏感列红测复现小写支付单号直接写入大写支付单、别名终结尝试遮蔽原尝试、别名未完成尝试为终结原尝试提供错误恢复依据。现四条原子语句的目标或候选支付单号均加入原长度和二进制精确比较；提交结果未知恢复的外层尝试也核对精确归属。回归确认别名请求均不写原单，真实未完成尝试仍可恢复，已终结原尝试不被别名放行，最新尝试状态只写原号。
+
+状态迁移与服务两组定向 `231/231` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1661/1661`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。支付状态通用更新、渠道返回码快照及其余直接按支付单号写入仍待盘点；H2 不替代目标 MySQL 8 当前 collation/PAD、唯一键、二进制转换与执行计划、历史值和正式渠道资金验收，未连接目标库或发布。
+
+### 10.707 2026-10-06 通用支付状态和渠道返回码快照写入精确命中
+
+`updatePaymentStatus` 用于风控审核状态，`updatePaymentReturnCodeSnapshot` 保存支付渠道返回码标准化结果，两者原先只按数据库默认相等匹配支付单号。H2 大小写不敏感列红测确认小写别名可更新真实大写支付单状态或快照。现保留等值匹配，并对目标支付单号加原字符长度和二进制精确比较；别名写入均影响零行，原支付单号仍可更新，快照查询保持未受别名污染。
+
+状态迁移、快照与服务三组定向 `239/239` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1663/1663`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。其他直接写入与历史关联、目标 MySQL 8 当前 collation/PAD、唯一键、二进制转换、执行计划及真实历史还需受控核验；未连接目标库、发布或操作真实资金。
+
+### 10.708 2026-10-06 提交并发令牌的预付、应用与支付单号精确隔离
+
+用户支付提交的并发令牌按预付单号和来源应用查找、占用，按支付单号释放。原 SQL 均只依赖数据库默认相等，大小写不敏感列下可用小写预付别名读取已释放令牌并重占；支付单号别名也可能释放原令牌。H2 红测先证实 `pre-token-001` 能读取 `PRE-TOKEN-001` 的令牌。现查找和占用分别对预付单号、来源应用增加原字符长度与二进制精确比较；释放对支付单号增加相同门禁。回归验证两种别名均不读占、别名支付单号不释放，原号仍正常占用与释放。
+
+状态迁移与服务定向 `233/233` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1664/1664`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。目标 MySQL 8 当前唯一键/collation/PAD 下别名令牌占位是否会使原号插入碰撞、`CAST AS BINARY` 和索引执行计划、真实历史及正式渠道资金仍须受控核验；不能将 H2 夹具视作生产历史证据，未连接目标库或发布。
+
+### 10.709 2026-10-06 支付详情通知、路由与事件轨迹按原支付单号隔离
+
+支付详情按精确支付单号读取主记录后，通知、路由与事件轨迹原先仍用数据库默认相等回查。在大小写不敏感列上，原支付单会混入小写别名的通知、规则命中和业务事件；别名查询也会看到原支付单的轨迹。H2 红测分别插入一条别名通知、路由、事件，原支付单通知列表由预期三条增为四条。现三个轨迹查询保留等值条件，并增加支付单号原字符长度和二进制精确比较；回归确认原记录排序及数量不变，别名轨迹只属于别名查询。
+
+轨迹与服务两组定向 `183/183` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1665/1665`（零失败、零错误、零跳过），`git diff --check` 通过，498 项既有工作树改动保留。目标 MySQL 8 当前 collation/PAD、二进制转换和索引执行计划、真实历史、生产身份与正式资金仍需受控核验；未连接目标库、发布或自动治理历史数据。
+
+### 10.710 2026-10-06 收银台预付归属及绑定计数按支付单号精确判断
+
+支付详情、按预付单号查询收银台及按订单号复用活跃预付的 `prepayAmountBindingValid` 投影，原先按数据库默认相等计数同支付单预付。在大小写不敏感列中，另一大小写的预付会被误计为第二笔，令原支付单与预付绑定错误显示无效；预付到支付单的三个连接也可能把别名预付关联到原支付单，影响收银台读取、过期判断和活跃预付复用。H2 红测确认加入别名预付后原详情绑定投影从真变假、原收银台绑定投影变假。现三处计数增加支付单号原长度及二进制比较，三个预付到支付单连接也增加同样精确归属；回归确认原详情和收银台绑定保持有效，别名预付不能借原支付单读取、判过期或成为活跃候选。
+
+详情、状态迁移与服务三组定向 `241/241` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1666/1666`（零失败、零错误、零跳过），`git diff --check` 通过，既有工作树变更保留。目标 MySQL 8 当前唯一键/collation/PAD、`CAST AS BINARY` 行为、索引执行计划和真实历史须受控核验，H2 夹具不代表目标库允许同大小写来源并存；未连接目标库、发布或操作真实资金。
+
+### 10.711 2026-10-06 支付尝试号回写与提交幂等键查询精确隔离
+
+渠道提交结果、网关编码及运营配置快照版本按尝试号回写，提交前的幂等键存在性和归属查询，原先仅依赖数据库默认相等。在大小写不敏感列下，小写尝试号能改写真实大写尝试，幂等键大小写变体也被当作已存在而错误复用原预付与支付单归属。H2 红测分别确认尝试号别名回写影响一行、幂等键别名存在性错误返回真。现三个尝试号写入和两个幂等键读取在等值条件后增加原字符长度及二进制精确比较；正常原号仍可回写与读取，大小写别名不再越界。
+
+状态迁移与服务定向 `236/236` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1668/1668`（零失败、零错误、零跳过），`git diff --check` 通过，499 项既有工作树变更保留。目标 MySQL 8 当前幂等键唯一约束/collation/PAD 下大小写变体是否会产生插入冲突、二进制转换与索引计划、真实历史和正式渠道资金仍须受控核验；本项只隔离读取及回写，不声称目标库允许两种大小写幂等键并存，未连接目标库或发布。
+
+### 10.712 2026-10-06 支付提交前预付状态迁移精确命中预付单
+
+提交支付占用并发令牌后，`updatePrepayToPaying` 原先只用数据库默认相等匹配预付单号。H2 大小写不敏感列红测证明小写 `pre-unsubmitted` 可以直接将真实 `PRE-UNSUBMITTED` 的收银台状态改为支付中；若存在人为模拟的双大小写来源，还可能把两行一并更新。现原等值条件后增加预付单号原字符长度和二进制比较；回归确认别名请求影响零行，原号只更新原预付，别名预付仍待支付。
+
+状态迁移与服务定向 `237/237` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 全量本机 `1669/1669`（零失败、零错误、零跳过），`git diff --check` 通过，499 项既有工作树变更保留。目标 MySQL 8 唯一键/collation/PAD 下双来源行能否并存、二进制转换及索引计划、真实历史和正式渠道资金仍待受控核验；未连接目标库、发布或操作真实资金。
+
+### 10.713 2026-10-06 生效控制策略精确归属来源应用
+
+收银台可用方式展示与支付提交校验共用 `findActiveControlPolicyBySourceAppId`。原查询只按数据库默认相等匹配 `source_app_id`，在大小写不敏感列下可能把另一来源应用的方式、渠道、商户、令牌及严格模式策略用于当前请求。H2 红测证实大小写别名读出原策略，模拟双大小写来源时大写来源也读到小写来源策略。现保留原等值索引候选，并增加来源应用号原字符长度和二进制比较；回归覆盖别名与尾部空格拒绝、双来源各自精确读取。
+
+定向 `2/2` 通过；沙箱内全量 `1671` 项中仅两个嵌入式 HTTP 用例因回环监听受限报错，本机 JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1671/1671`（零失败、零错误、零跳过），`git diff --check` 通过，既有工作树改动保留。目标 MySQL 8 唯一键/collation/PAD 是否允许双来源并存、二进制转换及执行计划、真实历史、正式渠道资金仍需受控验收；H2 夹具不代替目标库核验，未连接目标库、发布或操作真实资金。
+
+### 10.714 2026-10-06 控制策略配置复核与自检精确归属
+
+管理端控制策略复核流程的当前策略加锁、版本列表/单版/最新版本、待复核占位、详情读取，以及策略更新和自检结果回写原先按来源应用号使用数据库默认相等。H2 大小写不敏感列红测证明大写别名能够读到小写来源应用的加锁策略，进而可能误占版本或写入策略、自检结果。现上述八处在原等值条件后增加原字符长度和二进制精确比较；夹具回归逐项确认别名不能读策略、历史版本、待复核占位，也不能更新原行，原来源仍可执行完整复核。
+
+复核 Mapper 定向 `2/2` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1672/1672`（零失败、零错误、零跳过），`git diff --check` 通过，既有工作树改动保留。目标 MySQL 8 collation/PAD、唯一键限制、二进制转换及索引执行计划、真实历史和正式资金仍需受控核验；未连接目标库、发布或操作真实资金。
+
+### 10.715 2026-10-06 控制策略审批申请号拒绝大小写别名
+
+控制策略批准或拒绝前按申请号加锁查询，完成审批时按同号清除待复核占位。原两处只使用数据库默认相等：大小写不敏感列下，小写 `cpr-alias-001` 能读出真实 `CPR-ALIAS-001` 申请，并可能被用于审批。将复核夹具的申请号改为 H2 大小写不敏感列，红测复现别名读取；现在加锁查询和完成更新均增加申请号原字符长度及二进制比较，回归确认别名既不能读申请，也不能改变待复核状态，原号仍可完成审批。
+
+复核 Mapper 定向 `2/2` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1672/1672`（零失败、零错误、零跳过），`git diff --check` 通过，既有工作树改动保留。其他配置类型的审批申请号仍需逐项检查；目标 MySQL 8 collation/PAD、唯一键、执行计划和真实历史仍须受控验收。未连接目标库、发布或操作真实资金。
+
+### 10.716 2026-10-06 配置审批申请号统一拒绝大小写别名
+
+继控制策略审批后，渠道配置、路由规则、协议配置、返回码映射、返回码批量导入、网关配置、告警供应商和值班路由八类审批仍按申请号默认相等加锁读取、完成回写。将各自 H2 复核表的申请号设为大小写不敏感列，七组测试中八条审批路径的红测均证明小写别名可读到大写原申请。现八类读取和完成更新各自增加原字符长度与二进制精确比较，别名无法读取或改变审批状态；原申请号仍能正常完成审批。连同 10.715 的控制策略，`PaymentConfigMapper.xml` 中十八处按 `request_no` 定位审批申请的条件已逐处核对。
+
+七组定向 `15/15` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1672/1672`（零失败、零错误、零跳过），`git diff --check` 通过，509 项既有及本轮工作树改动保留。目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划、真实历史与正式渠道资金仍需受控核验；H2 红绿回归不代替目标库验收，未连接目标库、发布或操作真实资金。
+
+### 10.717 2026-10-06 配置待复核占位精确匹配业务键
+
+管理端提交变更前的待复核占位原先按数据库默认相等读取。渠道、路由、协议、返回码映射、返回码批量导入、网关、告警供应商和值班路由八条路径的 H2 大小写不敏感列红测均复现别名被当作原业务键的待复核占位；批量导入的固定槽位 `RETURN_CODE_IMPORT` 也能错误识别其小写变体。现七处业务键参数和一处固定槽位均在原等值条件后增加原字符长度与二进制比较。H2 对已存小写值的大小写更新保留原值，测试先删除别名夹具再插入规范槽位，验证别名不占位且规范占位仍可正常审批。
+
+七组定向 `15/15` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1672/1672`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。目标 MySQL 8 collation/PAD、唯一键冲突、二进制转换及执行计划、历史配置与正式资金仍须受控验收；精确查询不能保证别名可与原键在目标唯一索引下并存，未连接目标库、发布或操作真实资金。
+
+### 10.718 2026-10-06 渠道与网关配置及版本精确归属
+
+渠道配置按编码读取会返回回调密钥、公钥、商户参数，路由按编码读取会影响支付通道选择；网关配置保存接入地址、证书别名等。原配置及版本按编码查询、渠道路由读取、渠道与网关更新只靠数据库默认相等。H2 大小写不敏感列红测确认别名能读到真实渠道密钥和网关接入配置。现两类配置及版本、渠道路由读取和写入共十四处在原等值条件后加入编码原字符长度及二进制比较；回归确认别名既不能读配置/版本或改状态，也不能修改原配置，原号仍正常读取历史。
+
+渠道与网关两组定向 `4/4` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1674/1674`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。返回码映射等其他按渠道编码读取/更新需继续检查；目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划、真实历史和正式资金仍需受控验收。未连接目标库、发布或操作真实资金。
+
+### 10.719 2026-10-06 返回码双键与导入冲突写入精确隔离
+
+返回码标准化运行时按渠道编码和渠道原始返回码双键读取映射；管理端加锁读取、状态审批更新与导入 `ON DUPLICATE KEY UPDATE` 原先只靠数据库默认相等或唯一键。H2 双大小写不敏感列红测确认别名能读到原映射、误改状态，且别名导入与原键唯一约束冲突时会改写真实映射。现三处双键读取/更新均追加两个键的原字符长度和二进制比较；UPSERT 仅在原键双精确一致且未归档时修改各字段，否则保持原行不变。回归覆盖渠道及返回码分别发生大小写碰撞、原键正常更新和归档映射不被改写。
+
+导入审批原来只接受 UPSERT 影响一行，H2/MySQL 的命中更新通常返回两行而被误拒；现允许一或两行，并在批次审计与完成审批前用落库映射核对精确双键、归档状态和候选字段。服务红测证明即使驱动将别名空写报告为一行，也不能误记为已应用；合法更新两行可继续。Mapper 与服务两组定向 `23/23` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1676/1676`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。目标 MySQL 8 collation/PAD、唯一键冲突、`ON DUPLICATE KEY UPDATE` 影响行数及执行计划、历史事实和正式渠道资金仍需受控验收；未连接目标库、发布或操作真实资金。
+
+### 10.720 2026-10-06 路由规则配置与版本精确归属
+
+管理端按规则编码读取当前路由、加锁复核、读取单版和历史列表、查询最新版本及更新路由条件原先只靠数据库默认相等。H2 大小写不敏感列红测证实小写别名会读到原规则的通道选择与灰度配置，甚至改写原规则的目标通道。现六处在原等值条件后增加规则编码原字符长度与二进制比较；别名不能读取规则/版本或修改真实路由，规范编码仍可读取基线版本。运行时规则列表和目标渠道读取不受影响。
+
+规则版本 Mapper 定向 `4/4` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1677/1677`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。协议等其余按配置编码查找/更新路径还需继续审视；目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划、真实历史和正式资金仍待受控验收。未连接目标库、发布或操作真实资金。
+
+### 10.721 2026-10-06 支付协议配置及历史版本精确归属
+
+支付协议正文、签约要素及历史版本由管理端按协议编码读取并用于复核、回滚；原当前配置与版本查询及协议更新只按数据库默认相等。H2 大小写不敏感列红测证明小写别名能读真实协议正文并潜在改写原协议。现六处按协议编码的查询与更新在等值条件后增加原字符长度及二进制比较；别名不能读取协议/版本或修改协议正文，规范编码仍可读取基线版本。
+
+协议 Mapper 定向 `3/3` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1678/1678`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。其他管理端配置编码路径、目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划、真实历史和正式资金仍待受控验收；未连接目标库、发布或操作真实资金。
+
+### 10.722 2026-10-06 告警供应商与值班路由配置编码精确归属
+
+告警供应商和异常值班路由的待复核占位查询此前已拒绝编码别名，但真实配置的加锁查询和回写仍只依赖数据库默认相等。两组 H2 MySQL 模式夹具将真实配置编码列设为 `VARCHAR_IGNORECASE` 后，新增的别名加锁读取红测分别读到了规范配置。现四处 SQL 在原等值条件后增加编码原字符长度与二进制值比较，别名加锁查询返回空、别名更新影响零行，规范编码记录保持不变且原有复核/更新流程仍通过。
+
+告警供应商和值班路由 Mapper 定向 `5/5` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1680/1680`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。其他配置键路径、目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划、真实历史和正式资金仍待受控验收；未连接目标库、发布或操作真实资金。
+
+### 10.723 2026-10-06 告警派发供应商按通道精确筛选
+
+运行时外部告警派发按规范大写通知通道查询启用的供应商，原查询仅按数据库默认相等筛选。独立 H2 MySQL 模式 Mapper 红测以大小写不敏感通道列、规范 `IM` 与历史小写 `im` 两条供应商记录，证明旧查询会把历史别名供应商排在首位。现按原字符长度及二进制值精确筛选通道，`IM` 与 `im` 各只返回自身配置；不触发通知器或外部告警。
+
+任务中心 Mapper 定向 `29/29` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1681/1681`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。目标 MySQL 8 collation/PAD、二进制转换、执行计划和历史供应商通道数据仍待受控验收；未连接目标库、发布或进行真实通知/资金操作。
+
+### 10.724 2026-10-06 支付自动任务租约拒绝编码与持锁人别名
+
+调度任务租约以 `task_code` 初始化，获取、续租、释放此前均只按数据库默认相等匹配；续租和释放还依赖默认相等匹配 `lock_owner`。H2 MySQL 模式将两个字段设为大小写不敏感后，红测证明规范大写任务编码可抢占小写历史任务行，且大小写别名执行者可续租原持锁人。现获取、续租及释放按任务编码原字符长度和二进制值精确定位，续租和释放进一步精确校验持锁人；原有到期换主及正常释放路径保持通过。
+
+任务中心 Mapper 定向 `31/31` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1683/1683`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。若目标库已有与规范任务编码按唯一键冲突的小写别名，`INSERT IGNORE` 后的规范任务会获取失败并跳过，须受控盘点/清理历史行，不可把本修复视为历史治理完成。目标 MySQL 8 collation/PAD、二进制转换、执行计划和真实历史仍待受控验收；未连接目标库、发布或运行真实资金任务。
+
+### 10.725 2026-10-06 退款单号直接读写拒绝大小写别名
+
+退款回调收口、主动查单、运营详情、失败重试及渠道受理回写按退款单号访问事实，原 13 处直接读取/更新仍依赖数据库默认相等。H2 MySQL 模式将退款单号唯一列设为 `VARCHAR_IGNORECASE` 后，红测证明小写别名能加锁读取 `REF-TRACE` 的回调事实。现全部直接按 `refundOrderId` 定位的查询与更新在等值条件后增加原字符长度和二进制值比较；别名不能取得回调/重试/渠道下发快照或尝试历史，也不能改变退款状态或重启失败单，规范编号仍可走原流程。夹具补充既有 `DATE_FORMAT` H2 别名以覆盖尝试历史查询。
+
+退款 outbox Mapper 定向 `16/16` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1685/1685`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。尝试号、渠道退款号及支付单号等其他复合事实键尚需继续审视；目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.726 2026-10-06 退款尝试与渠道退款号精确归属
+
+渠道下发按尝试号读取请求快照、变更尝试状态，回调按渠道编码加渠道退款号核对旧尝试归属。H2 MySQL 模式将尝试号、渠道编码和渠道退款号列设为 `VARCHAR_IGNORECASE` 后，红测证明小写尝试号可读取规范尝试，上下游渠道号别名也可命中真实尝试。现尝试快照及受理、失败、未知、终态更新均按尝试号原字符长度与二进制值匹配；渠道退款号归属查询同时精确比较渠道和渠道退款号。首次受理及 UNKNOWN 恢复三条回写中的尝试号、退款单号、渠道号、渠道退款号及最新尝试子查询同样精确归属，未知提交事件确认按尝试号精确匹配；规范事实的原路径保持通过。
+
+退款 outbox Mapper 定向 `18/18` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1687/1687`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。事件 UPSERT 的唯一键碰撞、目标 MySQL 8 collation/PAD、二进制转换、执行计划及历史退款事实仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.727 2026-10-06 退款提交事件 UPSERT 碰撞不改写旧事件
+
+退款提交 outbox 的稳定事件号使用唯一键，原 `ON DUPLICATE KEY UPDATE` 不核对业务身份，H2 大小写不敏感唯一列红测证明小写事件号别名可将另一笔已失败退款事件重置为 `PENDING`、清零重试并覆盖原报文。现重复键仅在事件号、类型、支付单号、退款尝试号、下游系统和事件主题全部按原字符长度与二进制值精确一致时重排；别名碰撞及同号不同业务均不修改旧行。服务层在 UPSERT 返回一行后再查询精确身份及待派发状态，避免数据库驱动将无变化碰撞报告为一行时误判成功并发起派发。既有完全相同事件的失败后重排仍保持通过。
+
+退款 outbox Mapper `19/19`、退款服务 `90/90` 定向通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1689/1689`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。目标 MySQL 8 的重复键行数、collation/PAD、唯一键、二进制转换及执行计划和真实历史仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.728 2026-10-06 支付事件号读取及状态回写精确归属
+
+退款提交事件 UPSERT 已阻断别名碰撞，但事件详情、派发加锁读取、成功/失败/死信/未知状态回写、支付成功 HTTP 两阶段及成功重发审计仍按数据库默认相等匹配事件号。H2 MySQL 模式将事件号唯一列改为 `VARCHAR_IGNORECASE` 后，两组红测证明小写别名可读取规范支付事件并将其状态改写。现 `PaymentEventMapper` 的 10 处按事件号直接读写均补原字符长度和二进制值比较；别名不能读取事件或改写派发状态、HTTP 阶段与重发审计，规范事件路径保持通过。
+
+事件审计 Mapper `13/13`、退款 outbox Mapper `19/19` 定向通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1691/1691`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。其他任务/监控 Mapper 的事件号路径、目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划和真实历史仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.729 2026-10-06 支付流水详情四来源编号精确归属
+
+运营端支付流水详情按来源类型分别查询支付尝试、渠道通知、路由记录与业务事件，原四处均按数据库默认相等匹配流水号。H2 MySQL 模式将对应主编号列设为 `VARCHAR_IGNORECASE` 后，红测证明小写别名可读取规范支付尝试的详情。现四个详情分支按编号原字符长度与二进制值精确筛选，别名不再读取其他来源的规范流水，原详情关联与列表路径保持通过。
+
+流水 Mapper 定向 `4/4` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1692/1692`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。关联表之间的历史别名连接、目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划和真实流水仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.730 2026-10-06 路由记录与支付尝试的复合身份精确关联
+
+支付流水列表、支付尝试详情与路由详情原仅按尝试号默认相等关联路由记录和支付尝试；H2 MySQL 模式红测复现小写尝试号别名及同号不同支付单误关联。现三处连接同时校验尝试号与支付单号，并对两个编号分别校验原字符长度和二进制值。补充支付单号大小写别名回归，确保异常路由不能借用别笔尝试的预支付信息或写入尝试详情的路由字段；规范关联仍通过。
+
+流水 Mapper 定向 `7/7` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1695/1695`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。其他跨表关联、目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划和真实流水仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.731 2026-10-06 支付流水预付场景按复合身份归属
+
+支付尝试及路由列表和详情原仅凭预付单号关联预付单，回调和事件列表、详情的最新预付场景仅凭支付单号关联。H2 MySQL 模式三组红测证明，异单同预付号、预付号大小写别名或支付单号大小写别名均可错误归属支付场景或账单。现直接关联同时精确比较预付单号和支付单号，最新场景子查询精确比较支付单号，均包含原字符长度和二进制值。四来源的规范场景列表及详情仍可读取，异常预付单不能污染流水中的场景或账单。
+
+流水 Mapper 定向 `10/10` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1698/1698`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。支付请求、路由执行等其他运营视图的跨表归属和目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.732 2026-10-06 支付请求视图精确关联支付单、预付单与路由
+
+支付请求详情原可通过尝试号大小写别名读取规范请求；支付请求列表、导出和详情的路由仅凭尝试号匹配，预付单仅凭预付号匹配，支付单则按默认相等关联。H2 MySQL 模式八组红测分别复现主编号别名、路由尝试号/支付单号别名及异单、预付号/支付单号别名及异单、支付单号别名导致的错误归属。现详情主编号精确筛选；共享 SQL 片段在列表、导出、详情和汇总/统计中精确比较对应编号的原字符长度与二进制值，并要求路由、预付单的支付单号与请求一致。正常支付请求、路由及预付场景仍通过。
+
+支付请求 Mapper 定向 `12/12` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1706/1706`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。路由执行等其他运营视图、目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.733 2026-10-06 路由执行视图精确归属支付、尝试与预付事实
+
+路由详情原可凭路由号大小写别名读取；详情仅凭尝试号关联支付尝试、凭预付号关联预付单，列表/导出/统计对支付单、最新预付和尝试的关联使用默认相等。H2 MySQL 模式九组红测复现路由号别名、显式尝试号及支付单号别名或异单、预付号及归属支付单号别名或异单、支付单号别名，以及历史空尝试号通过支付单别名借用尝试。现列表和详情均按原字符长度及二进制值精确归属支付单、尝试和预付记录；保留规范路由的显式尝试匹配与历史空尝试号同单时间回退。
+
+路由执行 Mapper 定向 `14/14` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1715/1715`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。其他运营/资金事实关联、目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划和真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.734 2026-10-06 支付记录与退款聚合按支付单号精确归属
+
+支付记录详情原可由支付单号大小写别名读取，最新预付、最新尝试、成功事件及成功退款汇总均按数据库默认相等关联。H2 MySQL 模式五组红测复现借用别名事实，第六组红测证明相同支付单号的规范与别名退款在大小写不敏感分组下会合并计数。现详情拒绝别名；三个最新事实子查询对支付单号比较原字符长度及二进制值；退款汇总按原编号、原长度与二进制值分组，再按原长度与二进制值精确关联支付记录。增加已核验成功退款金额的别名隔离回归，规范退款与预付、尝试、事件仍可读取。
+
+支付记录 Mapper 两类定向 `32/32` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1722/1722`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。退款自身的其他跨表关联、目标 MySQL 8 collation/PAD、唯一键、二进制分组执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.735 2026-10-06 退款终态与累计金额拒绝跨编号借事实
+
+退款列表、详情的最新预付场景、终态核心事实中的支付单金额与末次退款尝试、成功退款累计金额原仅按数据库默认编号相等关联。H2 MySQL 模式四组红测复现支付单号别名借用场景和金额通过终态校验、退款号别名借用末次尝试，以及规范与别名退款跨单累计造成错误超退诊断。现五处关联同时比较原字符长度和二进制值；规范同单终态事实与真实超退诊断保持通过，别名退款标记为终态事实不一致和未核验成功，不污染规范退款的累计金额。
+
+退款列表 Mapper 定向 `13/13`、支付记录退款聚合 Mapper `12/12` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1726/1726`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。退款其他详情/读写路径和目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.736 2026-10-06 退款受理来源锁与成功事实拒绝支付单号别名
+
+退款首次受理和重试恢复共用的支付来源加锁查询原按支付单号默认相等命中；来源有效性门禁中的唯一预付数、预付事实和最新支付尝试同样可把大小写别名当成本单事实。H2 MySQL 模式五组红测分别复现别名直接锁到规范支付单、别名预付/尝试冒充来源、别名预付导致误报重复、较新别名尝试覆盖本单真实成功。现加锁定位及三个来源子查询分别校验支付单号原字符长度与二进制值，规范支付单成功与来源唯一性保持通过。
+
+退款支付来源 Mapper 定向 `8/8` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1731/1731`（零失败、零错误、零跳过），`git diff --check` 通过，509 项工作树改动保留。退款详情、回调/重试来源的其他跨表关联和目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.737 2026-10-06 退款详情及回调快照精确归属
+
+退款详情、渠道下发、回调与重试快照中的父支付单、末次退款尝试和退款提交事件原可按数据库默认编号相等借用大小写别名或同号异单事实。H2 MySQL 模式六组红测复现父支付、尝试、事件尝试号/支付单号/类型别名及异单误关联；另补事件下游系统与主题错配两组回归。现父支付与末次尝试分别按原编号长度及二进制值精确关联，提交事件同时校验事件类型、尝试号、支付单号、下游系统与主题；规范身份的详情与状态仍可读取。
+
+退款提交 Outbox Mapper 定向 `27/27` 通过。沙箱内全量首次 `1739` 项中两个 HTTP 用例因回环监听 `Operation not permitted` 无法启动 Tomcat；获准在本机重跑后 JDK 8、Maven 3.9.16 `-Pdemo` 全量 `1739/1739`（零失败、零错误、零跳过），`git diff --check` 通过，509 项既有工作树改动保留。退款其他历史关联、目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划及真实历史仍待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.738 2026-10-06 退款申请幂等回放拒绝键与申请日志别名
+
+退款申请虽先精确加锁支付来源，但既有退款查询在大小写不敏感排序规则下可把幂等键大小写别名当成本次申请，同内容时直接回放原退款单；回放操作者快照又可借用退款号或 `APPLY` 动作码别名，造成错误冲突或错误确认。H2 MySQL 模式三组红测分别复现键别名误回放、别名日志阻断规范回放及动作码别名误回放。现快照返回原幂等键，由服务按 Java 原字符串与支付单号及申请内容一起比对；保留数据库默认相等查询以发现唯一键排序规则下的冲突，但别名只返回业务幂等冲突，不返回原退款单。日志子查询按退款号、动作码的原长度与二进制值精确关联，规范申请、相同幂等键并发回放及原操作日志保持可用。
+
+退款申请事务集成与服务单测定向 `108/108` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1742/1742`（零失败、零错误、零跳过），`git diff --check` 通过，510 项工作树改动保留。目标 MySQL 8 collation/PAD、复合唯一键与真实历史别名行为仍需受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.739 2026-10-06 退款申请与重试额度只按原支付单号归属
+
+申请和失败退款重试共用的已占用退款金额汇总、异常活跃金额计数原按数据库默认支付单号相等筛选；大小写别名历史退款可误占规范支付单额度，负数别名又可错误阻断规范申请。H2 MySQL 模式两组红测复现规范退款加别名退款导致的超额误拒、别名负额导致的异常误拒。现两个查询均校验支付单号原字符长度与二进制值，保留规范活跃退款金额和异常金额的正常门禁；额外补测手动重试可在别名退款存在时恢复正确尝试。
+
+退款申请事务集成与退款提交 Outbox Mapper 定向 `48/48` 通过；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1745/1745`（零失败、零错误、零跳过），`git diff --check` 通过，510 项工作树改动保留。实际历史别名退款可能代表需人工核对的真实资金占用，不应仅凭本机排除结果放行生产；目标 MySQL 8 collation/PAD、唯一键、执行计划和历史资金流水仍待受控核验，未连接目标库、发布或触碰真实资金。
+
+### 10.740 2026-10-06 退款未知受理恢复只绑定并确认精确事件
+
+退款未知渠道受理恢复原仅按退款提交类型与尝试号查找 UNKNOWN 事件，未核对支付单、下游系统、主题及原值；最终事件确认只按类型和尝试号更新，可把异单事件一起改为成功。H2 MySQL 模式五组红测复现异单事件、类型别名、下游或主题错配、混入有效事件的异单事件批量确认以及 UNKNOWN 状态别名误恢复，并补支付单号别名回归。现绑定事件按类型、尝试号、退款单支付单号、下游、主题与 UNKNOWN 状态逐项原长度及二进制值精确门禁；确认事件同时要求精确事件身份及与退款单、已受理尝试、渠道受理号一致。有效 UNKNOWN 事件仍可完成正常恢复，混入异单或别名事件保持原状态。
+
+退款提交 Outbox Mapper 定向 `33/33`、JDK 8 和 Maven 3.9.16 `-Pdemo` 本机全量 `1751/1751`（零失败、零错误、零跳过），`git diff --check` 通过，510 项工作树改动保留。目标 MySQL 8 collation/PAD、唯一键、二进制转换、执行计划、历史未知事件与渠道真实事实尚待受控核验；未连接目标库、发布或触碰真实资金。
+
+### 10.741 2026-10-06 退款事件派发前核对目标与状态
+
+退款渠道派发原在调用渠道前未核对事件下游系统与主题，且退款快照不再为 `PROCESSING` 时直接将事件改为发布成功，未核对支付单、尝试或渠道受理事实；直接调用还可让非法事件状态进入下发路径。服务三组红测复现错误目标继续查询快照、终态退款误标事件成功及未知结果绕过人工核查。现派发入口要求精确 `REFUND_SUBMIT`、`gateway-access`、`payment.refund.submitted.v1` 与尝试号，拒绝不支持的发布状态；非处理中退款不调用渠道，普通待派事件转失败/死信重试治理，`UNKNOWN` 保持人工核查门禁，不再伪标成功。合法处理中退款正常受理及已受理痕迹重放仍通过。
+
+派发服务定向 `76/76`，JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1755/1755`（零失败、零错误、零跳过），`git diff --check` 通过，510 项工作树改动保留。事件目标不一致当前安全拒绝但不自动重写异常历史事件，需运营核查；真实渠道受理、目标 MySQL 8 collation/PAD、事务和发布治理仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.742 2026-10-06 已成功退款提交事件须有持久化渠道受理痕迹
+
+退款派发遇到 `SUCCESS` 事件原直接返回成功，不查询退款尝试及退款单的实际受理事实；历史伪成功事件可掩盖缺失或漂移的渠道退款号。服务红测复现无受理痕迹仍返回成功，H2 MySQL 模式红测复现退款状态小写别名误被认作规范处理中。现成功短路通过只读 Mapper 精确核对事件号、类型、尝试号、支付单归属、下游、主题和成功状态，并要求尝试与退款单的渠道编码、渠道退款号、提交时间一致及规范受理/终态状态；不匹配时不调用渠道、不改写事件，交由运营核查。补测仅尝试受理、退款单渠道号漂移、异单或支付单号别名、成功状态别名及正常终态回调，规范受理与终态仍可确认。
+
+退款 Outbox Mapper 与派发服务定向 `114/114`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1760/1760`（零失败、零错误、零跳过），`git diff --check` 通过，510 项工作树改动保留。此读门禁不自动修复已成功事件、无法证明真实渠道受理；目标 MySQL 8 collation/PAD、唯一键、二进制转换及执行计划和历史资金流水仍待受控核验，未连接目标库、发布或触碰真实资金。
+
+### 10.743 2026-10-06 退款已受理尝试重发核对退款单双侧事实
+
+退款提交快照原把退款尝试渠道码同时投影成“已绑定渠道码”，重发遇到已受理尝试时实际在比较同一列；即使退款单未绑定渠道退款号，仍可将失败或未知事件标记成功。H2 Mapper 和服务三组红测复现自比、缺失退款单渠道痕迹与渠道码大小写别名误确认。现快照分别读取退款单渠道码、渠道退款号及受理时间存在性，重发要求与尝试侧原字符值及退款号完全一致；不匹配时不再次调用渠道、不标成功。普通事件保留失败/死信治理，`UNKNOWN` 保留人工核查且不尝试伪造未知状态；正常双方受理痕迹仍可完成幂等确认。
+
+退款 Outbox Mapper 与派发服务定向 `118/118`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1764/1764`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。该本地门禁不证明渠道实际受理，历史单侧痕迹须人工核对；目标 MySQL 8 collation/PAD、执行计划和真实资金流水仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.744 2026-10-06 退款单侧已有渠道痕迹时阻断二次下发
+
+退款提交快照虽已拆分尝试与退款单渠道事实，但当前尝试渠道退款号为空时，派发原未检查退款单已有渠道码、渠道退款号或受理时间，仍可再次调用外部渠道；尝试渠道退款号仅含空白时也会被 `hasText` 当作未绑定并进入提交路径。服务两组红测复现完整退款单受理痕迹及空白尝试号的二次调用。现渠道调用前发现退款单侧任一已有痕迹即安全阻断，普通待派事件转失败/死信治理，`UNKNOWN` 继续人工核查；尝试号非 NULL 即走已受理校验，空白值不会当作全新渠道请求。补测仅有渠道码的部分标记、UNKNOWN 事件及 H2 快照中退款单有受理号而尝试为空的场景，规范无痕迹提交继续通过。
+
+退款 Outbox Mapper 与派发服务定向 `123/123`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1769/1769`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。历史单侧或空白脏事实需人工核对真实渠道，不自动重发或补标；目标 MySQL 8、真实资金与正式治理仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.745 2026-10-06 退款 UNKNOWN 渠道标记绑定指定提交事件
+
+退款渠道结果未知时，退款单渠道码写入原只核对处理中的退款单与末次 UNKNOWN 尝试，未要求本次提交事件存在或归属正确。H2 红测复现无事件和借用其他支付单事件仍写入渠道码；现派发传入事件号，Mapper 写入前精确核对事件号、退款提交类型、尝试号、原支付单号、目标系统、主题及可转换发布状态。补充事件号大小写别名、错误目标与已成功状态回归，规范事件仍能写入 UNKNOWN 渠道标记。
+
+退款 Outbox Mapper 与派发服务定向 `127/127`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1773/1773`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。沙箱内 HTTP 用例因回环监听被拒，获准在本机重跑后通过。该标记不证明真实渠道受理；目标 MySQL 8 collation/PAD、二进制比较、执行计划及历史资金事实仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.746 2026-10-06 退款渠道绑定写入拒绝覆盖后到的单侧痕迹
+
+常规受理绑定及结果未知的渠道码标记原只要求退款单渠道退款号为空：即使派发前快照没有渠道痕迹，调用渠道期间若退款单已被写入渠道码或受理时间，两处更新仍可覆盖或补造另一组受理事实。H2 两组红测均复现已有异渠道码被覆盖；现两处更新同时要求退款单渠道码、渠道退款号、受理时间均为空，补测单独存在受理时间时拒绝绑定、完全无痕迹时正常写入。服务在受理事实绑定失败时抛错并回滚本地事务，但外部渠道结果仍须按退款单人工核对，不能据此再次下发。
+
+退款 Outbox Mapper 定向 `45/45`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1775/1775`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、执行计划、并发时序与真实渠道流水仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.747 2026-10-06 UNKNOWN 受理恢复拒绝覆盖异渠道和已有受理时间
+
+人工核查后恢复未知退款受理时，退款单绑定原只要求渠道退款号为空，可能把已有异渠道码或单独存在的受理时间覆盖成新受理事实。H2 红测复现异渠道码被覆盖；现恢复允许渠道码尚未标记或与核查渠道原字符一致，但拒绝不同渠道码及已有受理时间，保留原有正确渠道码的恢复路径。补测仅受理时间已存在时拒绝、清除冲突后正常恢复。服务恢复失败抛错并回滚本地事务，不将历史脏数据自动确认成功。
+
+退款 Outbox Mapper 定向 `46/46`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1776/1776`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、并发时序、真实渠道核查及历史资金事实仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.748 2026-10-06 UNKNOWN 事件成功收敛要求受理时间与末次尝试
+
+可信核查后的事件成功更新原虽校验退款尝试与退款单双方渠道码、渠道退款号一致，但未要求退款单已有受理时间，也未限定事件尝试为退款单末次尝试。H2 两组红测复现缺少受理时间或已有更新尝试时仍把旧 UNKNOWN 事件标成功；现更新前要求退款单受理时间存在，并按原退款号长度与二进制值定位末次尝试。补测补齐受理时间后正常收敛；服务正常恢复路径仍先绑定受理事实，再更新事件。
+
+退款 Outbox Mapper 定向 `48/48`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1778/1778`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。H2 测试不替代目标 MySQL 8 collation/PAD、并发时序、执行计划或真实渠道流水验收；未连接目标库、发布或触碰真实资金。
+
+### 10.749 2026-10-06 UNKNOWN 恢复及事件确认拒绝状态别名和缺失提交时间
+
+退款 UNKNOWN 受理恢复和后续事件成功确认原用默认相等比较 `PROCESSING`、`ACCEPTED`，在大小写不敏感排序规则下可能将状态别名误认为规范状态；事件确认也未要求尝试已有提交时间。H2 两组红测复现退款状态小写别名仍绑定和仍将事件标成功；将尝试状态测试列模拟为大小写不敏感后，补测尝试状态别名、缺失提交时间及恢复规范事实。现两处写入对退款与尝试状态比较原字符长度及二进制值，并要求尝试提交时间存在后才能绑定受理、确认 UNKNOWN 事件成功。
+
+退款 Outbox Mapper 定向 `50/50`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1780/1780`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、二进制比较、执行计划、并发时序及真实渠道流水仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.750 2026-10-06 首次退款受理与 UNKNOWN 标记拒绝状态别名及无提交时间
+
+常规受理绑定、结果未知时写退款单渠道码原按默认相等比较 `PROCESSING` 和尝试 `ACCEPTED`/`UNKNOWN`，且不核验尝试提交时间，大小写不敏感排序规则下可能将状态别名或残缺提交事实当作规范渠道受理。H2 两组红测复现退款状态小写别名误写；在大小写不敏感尝试状态列上补测尝试状态别名、提交时间缺失和正常受理。现两处写入均按原字符长度与二进制值精确核对状态，并要求尝试提交时间存在；退款单渠道码、退款号、受理时间原有空白门禁保留。
+
+退款 Outbox Mapper 定向 `52/52`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1782/1782`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、二进制比较、执行计划、并发时序及真实渠道流水仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.751 2026-10-06 支付提交渠道结果拒绝状态、渠道及交易号别名
+
+支付主流程正常渠道受理绑定原按数据库默认相等比较 `WAIT_CALLBACK`、渠道码和已有渠道交易号；结果未知恢复也按默认相等比较状态与交易号。在大小写不敏感排序规则下，状态或渠道码别名可误绑定，交易号大小写别名可误认为同一受理事实。H2 两组红测复现小写状态仍绑定及恢复；将支付状态、渠道码和交易号测试列模拟为大小写不敏感后，补测渠道码、交易号别名与原值正向路径。现两处写入按原字符长度和二进制值核对相关事实，保留空白历史渠道号的既有恢复语义。
+
+支付状态转换 Mapper 定向 `58/58`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1784/1784`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、PAD SPACE、执行计划、真实渠道流水和并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.752 2026-10-06 支付提交结果与未知恢复绑定发起它的末次尝试
+
+渠道提交发生在准备交易之后，原支付结果绑定未携带尝试号；结果未知恢复只要求支付单存在可转换末次尝试，旧尝试的迟到结果可能落到同单更新尝试上。H2 两组红测复现创建更新尝试后旧结果仍可正常绑定、旧结果仍可把支付单标为待核查。现服务传入本次准备阶段生成的尝试号，两处 Mapper 写入同时核对原尝试号、原支付单、与支付单精确一致的渠道码、末次尝试及未终结状态。补测新尝试正向写入、尝试号别名、异单尝试、已完成尝试和无尝试历史支付单拒写；服务测试确认绑定尝试号与实际创建尝试号一致。无尝试历史单不再由这条提交恢复路径直接补标，应人工核验。
+
+支付状态转换 Mapper `61/61`、支付服务 `181/181`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1787/1787`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、索引/执行计划、真实渠道流水与并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.753 2026-10-06 支付终态快回调兜底不借用更新尝试成功事实
+
+上一轮把支付提交正常绑定与未知恢复限定到本次末次尝试，但两处写入失败后的终态兜底原只核对渠道码、渠道交易号及成功事实，未核对终态是否属于本次提交尝试。服务红测复现旧尝试迟到结果可借用同单其他尝试的成功事实返回成功并回写旧尝试响应。现终态 `SUCCESS`/`CLOSED` 兜底前，按支付单号与尝试号原字符长度和二进制值核对该尝试为当前末次尝试；不匹配时不补写响应或网关码，不把旧提交当作本次成功。H2 补测末次/历史尝试、编号别名、异单及后到新尝试；同一尝试的快速成功回调及未知恢复仍可收口。
+
+支付状态转换 Mapper `62/62`、支付服务 `182/182`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1789/1789`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、索引/执行计划、真实渠道流水及并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.754 2026-10-06 支付提交渠道结果拒绝覆盖预绑定支付方式
+
+支付提交准备阶段已把支付方式和渠道写入支付单，但渠道受理结果绑定原只核对渠道与状态，会把调用渠道期间漂移的支付方式覆盖为本次请求；未知结果恢复也未核对支付方式，可能给另一方式的支付单补写待核查和交易号。H2 红测复现异方式下仍绑定；现正常绑定、未知恢复均要求支付单预绑定方式与本次请求原字符长度及二进制值一致。测试列模拟大小写不敏感排序规则，补测方式大小写别名拒绝、规范方式仍可绑定与未知恢复；服务将已规范化的本次方式传至恢复 SQL。
+
+支付状态转换 Mapper `63/63`、支付服务 `182/182`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1790/1790`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、二进制比较、索引/执行计划、真实渠道流水与并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.755 2026-10-06 支付首次准备拒绝清除已有渠道交易与成功痕迹
+
+支付首次准备的支付方式与渠道绑定原可在支付单处于可提交状态时把已有渠道交易号覆盖为入参 `NULL`，也未阻断异常残留的成功时间；方法还允许用非空渠道交易号在调用渠道之前填充受理事实。H2 红测复现已有渠道号被清除。现准备阶段同时要求原渠道交易号、成功时间和传入交易号均为空，保留规范无痕迹支付单的提交及风控留痕路径；已有痕迹的异常历史单不自动重发，须核查真实渠道。
+
+支付状态转换 Mapper `64/64`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1791/1791`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8、并发时序、执行计划与真实渠道流水仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.756 2026-10-06 路由运营配置快照写入拒绝编号别名
+
+支付提交准备时路由配置快照版本原只以 `route_no = ?` 回写；在大小写不敏感或 PAD 比较下，传入 `route-api` 等别名可改写 `ROUTE-API` 的快照。H2 测试先以大小写别名复现错误影响一行，再要求大小写及尾空格别名均不写入、规范编号仍正常回写；SQL 增加原长度与二进制精确门禁。
+
+路由执行 Mapper 定向 `15/15`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1792/1792`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。沙箱内 HTTP 测试因回环监听权限失败，获准在本机复跑后全量通过。目标 MySQL 8 collation/PAD、唯一键、执行计划及并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.757 2026-10-06 支付回调状态迁移不覆盖已有渠道交易号
+
+回调服务读到的交易号原已精确核对，但成功收口 SQL 未核对写入时原交易号，待回调 SQL 则用数据库等值条件核对；并发漂移或宽松 collation 可把另笔交易号覆盖。状态条件也可能接受 `wait_callback` 大小写别名。H2 红测分别复现已有号别名和状态别名误写；修复为 SQL 原子核对既有交易号原长度/二进制值，并要求待回调及历史关闭恢复状态规范精确。测试保留原号为空首次补录、同号幂等和正常成功收口路径。
+
+支付状态迁移 Mapper 定向 `66/66`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1794/1794`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、实际并发时序和真实渠道资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.758 2026-10-06 成功尝试收口与回调尝试渠道拒绝别名
+
+成功尝试收口原以数据库等值比较支付单成功状态及支付单与末次尝试渠道码；宽松 collation 下，`success` 可终结尝试，`WX_H5` 支付渠道也可借用 `wx_h5` 尝试。成功与待回调迁移对末次尝试渠道同样只做等值比较。H2 红测分别复现状态别名、渠道别名的错误收口和回调迁移；修复为状态及渠道原长度/二进制精确门禁，并保留规范渠道成功、待回调与历史关单恢复路径。
+
+支付状态迁移 Mapper 定向 `69/69`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1797/1797`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、索引/执行计划、真实渠道与并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.759 2026-10-06 历史关单成功恢复核对事件完整归属
+
+历史 `CLOSED` 支付的可信成功恢复原只检查同支付单号的 `PAYMENT_CLOSED` 或 `PAYMENT_EXPIRED_CLOSED` 事件类型；同单错业务号、下游系统或主题的事件亦可授权恢复，大小写不敏感事件类型还会接受别名。H2 红测以宽松列比较复现错订单业务号和过期事件类型别名误恢复；现同时核对原支付单及订单业务号、规范事件类型、对应下游系统和主题，人工关闭路径继续要求未终结末次尝试。规范人工关闭及过期关闭事件仍可恢复。
+
+支付状态迁移 Mapper 定向 `71/71`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1799/1799`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、实际存量事件与索引/执行计划、真实渠道资金及并发时序仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.760 2026-10-06 过期关闭历史恢复拒绝终态尝试
+
+历史 `PAYMENT_EXPIRED_CLOSED` 事件原可使已有终态或失败末次尝试的支付单先改写为 `SUCCESS`，而后续尝试终结才失败；即使服务事务通常回滚，也不应允许原子支付状态迁移先接受矛盾事实。H2 红测复现失败且已完成尝试被改写；两类关闭事件现共用精确支付归属的开放末次尝试条件，拒绝已完成和失败但缺完成时间的脏事实，规范开放尝试仍可可信恢复。
+
+支付状态迁移 Mapper 定向 `72/72`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1800/1800`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。终态冲突须人工核对真实渠道；目标 MySQL 8、并发时序、存量事件与索引/执行计划仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.761 2026-10-06 关单候选及写入拒绝成功时间和状态别名
+
+过期关单候选及原子写入原只检查 `PREPAY_CREATED`、渠道交易号为空和无支付尝试，人工未提交关单同样未检查成功时间；脏历史支付单即使留下 `success_at` 也可被关单。宽松 collation 下的 `prepay_created` / `risk_review` 别名亦会通过。H2 两组红测复现候选误纳入；修复同步覆盖过期候选、失格重试标记清理、过期原子关单和人工关单，要求成功时间为空及规范精确状态。恢复规范事实后正常关单仍可完成。
+
+支付状态迁移 Mapper 定向 `74/74`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1802/1802`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。异常历史须人工核对真实渠道和资金；目标 MySQL 8 collation/PAD、索引/执行计划及真实并发时序仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.762 2026-10-06 提交结果与回调原子迁移拒绝残留成功时间
+
+首次准备此前已禁止已有成功时间，但后续正常提交结果绑定、UNKNOWN 恢复、待回调与成功收口仍可能在 `WAIT_CALLBACK` 或历史关闭支付单中复用异常残留的 `success_at`。H2 红测复现提交绑定误写；四处 SQL 原子迁移现统一要求原成功时间为空，避免后续补造受理事实、覆盖渠道号或将旧成功时间误认作本次成功。规范无成功痕迹的绑定、UNKNOWN、待回调和成功路径保留。
+
+支付状态迁移 Mapper 定向 `75/75`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1803/1803`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。脏历史须核对真实渠道及资金；目标 MySQL 8、真实并发时序与索引/执行计划仍待受控验收，未连接目标库、发布或触碰真实资金。
+
+### 10.763 2026-10-06 回调成功与待回调 SQL 拒绝空渠道交易号
+
+服务入口已有回调字段校验，但成功收口 Mapper 原可将 `NULL` 渠道交易号写成成功状态与成功时间，待回调 SQL 亦可回写空号。H2 红测复现；两处原子迁移现拒绝 `NULL` 或纯空格号，测试确认拒绝时状态、渠道号和成功时间不变，规范非空号仍可先写待回调、再成功收口。提交结果未知路径允许空渠道号，不受本项改变。
+
+支付状态迁移 Mapper 定向 `76/76`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1804/1804`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8、正式渠道报文、真实并发时序及索引/执行计划仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.764 2026-10-06 风控状态写入只在渠道下发前生效
+
+原 `updatePaymentStatus` 允许任何非 `SUCCESS/CLOSED` 支付单改为任意状态，并覆写渠道交易号；待回调已下发支付也能被回退成风控态。H2 红测复现。现内部 Mapper 收敛为 `updatePaymentRiskStatus`，只从规范 `WAIT_CALLBACK`、无成功时间与渠道号、无原单支付尝试时写入三类规范风控状态与对应样式，不再接收或修改渠道交易号。回归覆盖已下发、错误来源状态、别名状态、残留成功事实、伪造目标状态与三类正常目标，服务调用和测试同步更新。
+
+状态迁移 Mapper 定向 `77/77`、支付服务 `182/182`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1805/1805`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 并发时序、历史异常支付与执行计划仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.765 2026-10-06 支付详情成功渠道归属拒绝别名
+
+`findDetail` 原以普通数据库等值比较最新支付尝试与支付单渠道码，生成内部 `paymentFactTimelineValid` 和 `paymentSubmissionChannelValid`；在大小写不敏感列上，`WX_H5` 尝试可能被当成 `wx_h5` 支付单的可信渠道，进而影响成功详情校验和事件派发。扩展 H2 原始时间线测试先复现两个标记错误为真，再要求渠道码原长度及二进制值精确一致；错渠道和别名均无效，规范渠道与时间线仍有效。两标记继续不暴露至响应 JSON。
+
+状态迁移 Mapper 定向 `77/77`；JDK 8、Maven 3.9.16 `-Pdemo` 本机全量 `1805/1805`（零失败、零错误、零跳过），`git diff --check` 通过，511 项工作树改动保留。目标 MySQL 8 collation/PAD、二进制转换、索引/执行计划、真实历史及渠道资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.766 2026-10-06 九服务本地支付退款与对账 happy-path 复核
+
+核对九个目标回环端口空闲且无 `HSP`/数据库环境覆盖后，使用本机 JDK 8、Maven 3.9.16 和隔离 H2/demo 执行 `HSP_LOCAL_START_TIMEOUT_SECONDS=120 bash tools/dev/local-stack.sh verify payment-chain`。九个后端全部 `READY`，HTTP 冒烟通过；脚本先确认 payment-core 返回 `payment-core-h2-demo` 身份，随后以本地模拟单 `LOCAL-HAPPY-1791275701320-84969` 完成支付成功、清分、结算、账务入账、退款成功与七项对账事实读回，对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`。验证会话自行停止九个服务，事后检查目标端口无监听，原有两个前端历史 PID 文件未动。
+
+此前同一代码基线 payment-core 后端全量 `1805/1805`，本轮没有修改业务代码；`git diff --check` 通过，511 项工作树改动保留。H2/demo 不能替代目标 MySQL 8 collation/PAD、真实 MQ/渠道资金、生产身份、并发时序、历史数据或发布验收；未连接目标库、发布或触碰真实资金。
+
+### 10.767 2026-10-06 三类风控决策的真实 Mapper 持久化验证
+
+扩展既有预付单服务/H2 Mapper 夹具，以真实 `PaymentServiceImpl.handleRiskDecision` 和 `PaymentMapper.xml` 跑通 `REVIEW`、`INTERCEPT`、`REJECT`：提交前锁及金额/订单校验通过后，支付方式和渠道绑定、支付单与预付单风险态、待发布事件及对应处理日志均在同一 SQL 会话中落库并提交读回；逐一核对状态样式、决策载荷、事件关联与没有渠道支付尝试。原并发歧义拒绝测试继续通过。本项补齐服务到真实 Mapper 的正常风控路径测试，不改变生产业务代码，也不能代表外部风控服务或渠道下发验收。
+
+定向 `PaymentPrepayCreationConcurrencyIntegrationTest` `22/22`。首次沙箱内全量 `1808` 项中仅两个 HTTP 测试因端口绑定被禁止而报 `SocketException: Operation not permitted`；获准在沙箱外重跑相同 JDK 8、Maven 3.9.16、`-Pdemo` 命令后全量 `1808/1808`（零失败、零错误、零跳过）。目标 MySQL 8 collation/PAD、并发时序、生产身份、实际存量事实和真实资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.768 2026-10-06 公开支付提交的风控事务与失败回滚
+
+10.767 的真实 Mapper 用例经私有方法直接调用，尚未验证公开 `submit` 的路由、来源策略和 `REQUIRES_NEW` 事务边界。新增独立 Spring/H2-demo 集成测试，经公开入口分别注入三类风控结果，核对支付与预付状态、方式/渠道绑定、待发布事件、处理日志和无渠道尝试；演示策略使用允许的商户及令牌。另一用例在事件表设置拒绝 `PAYMENT_RISK_REVIEW` 的检查约束，确保状态更新后事件写入失败，校验异常被脱敏且支付方式、渠道、支付/预付状态均回滚，无事件、日志与渠道尝试。新测试关闭 Spring 上下文后恢复原有日志级别，避免影响后续事务日志断言；不修改生产代码。
+
+定向新测试 `2/2`，与任务租约日志测试联合 `12/12`；首轮全量仅任务租约日志断言受新测试日志级别串扰失败，恢复日志级别后使用本机 JDK 8、Maven 3.9.16、隔离 H2/demo 在受控本机端口权限下全量 `1810/1810`（零失败、零错误、零跳过）。目标 MySQL 8 collation/PAD、实际并发与存量事实、真实风控服务和渠道资金仍未验收；未连接目标库、发布或触碰真实资金。
+
+### 10.769 2026-10-06 风控复核与拦截事件拒绝业务标识别名
+
+在模拟不区分大小写的列上，风控原 Mapper 可将小写支付单号认作已有已批准复核，或用小写复核号误审批他单；小写支付单号/策略号亦会误复用拦截事件。新增 H2 红测复现，精确长度与二进制匹配后测试转绿，审批还拒绝非规范 `PENDING` 状态。风控后端 `15/15`，九服务隔离 H2/demo 支付至退款、对账 happy-path 通过，对账 `COMPLETED`、`4/4`、可关账，服务自动停服。payment-core 生产代码和本机 `1810/1810` 基线未变。
+
+此项仅阻断大小写别名引用；已有人工批准复核与原金额、支付方式、渠道等上下文未绑定，仍需独立设计。目标 MySQL 8 collation/PAD 与执行计划、真实人工审核身份、渠道资金和正式发布均待受控验收；未连接目标库或触碰真实资金。
+
+### 10.770 2026-10-06 风控人工批准仅对原请求上下文有效
+
+风控中心原待审/已批准复核按业务单号复用，改变支付方式、渠道或金额后仍可能获得原人工批准。红测复现后，在复核单新增版本化 SHA-256 上下文摘要，精确绑定原业务号、来源、场景、金额、方式、渠道、商户及终端/设备/手机号/IP；不匹配时评估失败闭合，无摘要的历史批准不再放行、历史待审不能批准，拒绝事实仍保持拒绝。新增后端与正式 schema、独立待审批迁移，H2 回归证明迁移不自动回填历史事实；接口和数据库设计注明迁移先于部署及历史人工处置。payment-core 代码和此前 `1810/1810` 测试基线未变。
+
+风控后端 `17/17`，九服务隔离 H2/demo 正常 PASS 支付退款与对账 `COMPLETED`、`4/4`、可关账，服务自动停服；该 happy-path 不验证人工复核 HTTP 回环。目标 MySQL 8 DDL/历史空摘要盘点、真实审批身份、审核材料、正式渠道资金和生产发布仍待受控验收；未连接目标库或触碰真实资金。
+
+### 10.771 2026-10-06 支付核心默认风控地址对齐服务端口
+
+支付核心风控评估地址默认指向 `localhost:18160`，该端口在本地栈属于保证金，实际风控后端监听 `18180`；只配置 `HSP_PAYMENT_RISK_CONTROL_ENABLED=true` 而不覆盖地址时会将准入请求发往错误服务，失败闭合。配置红测复现后将默认地址改为 `localhost:18180`，保留显式环境变量覆盖；跨模块本地默认契约同时校验支付核心 URL 和风控后端端口。默认风险联动仍为关闭，未擅自启用生产环境。
+
+配置定向 `2/2`、本地默认契约 `6/6`、JDK 8/Maven 3.9.16 payment-core 全量 `1810/1810`；未设置目标数据库环境，在本机回环显式启用风险评估，以隔离 H2/demo 九服务运行模拟支付、退款和对账 happy-path，结果 `COMPLETED`、阶段 `4/4`、可关账，结束后九服务全部停服。此演练只覆盖正常准入路径，尚未对 HTTP 复核、审批后重试与变更上下文拒绝做跨服务验证；目标 MySQL 8、可信审核身份和真实渠道资金仍待受控验收。
+
+### 10.772 2026-10-06 支付核心至风控中心人工复核 HTTP 回环
+
+在无数据库环境覆盖且目标端口空闲时分别启动本机 H2 风控中心与 H2/demo 支付核心，显式设置 `HSP_PAYMENT_RISK_CONTROL_ENABLED=true`，先确认支付核心 `/api/demo/identity=payment-core-h2-demo`。以本地虚拟单 `LOCAL-RISK-1791280050052` 提交命中样例高风险手机号：支付返回 `RISK_REVIEW`，风控复核单 `REVIEW-1791280050503` 为 `PENDING`。将方式/渠道/商户改为支付宝组合时，支付核心返回 `PAYMENT-1024`，支付仍保持 `RISK_REVIEW`、无最新尝试状态；通过风控 HTTP 审批后，原请求重试进入 `WAIT_CALLBACK`。
+
+另以独立 H2 会话和虚拟单 `LOCAL-RISK-APPROVED-1791280160694` 复测先批准再改渠道：审批 `REVIEW-1791280161091` 为 `APPROVED` 后，更换支付宝方式/渠道/商户同样返回 `PAYMENT-1024`，支付仍为 `RISK_REVIEW` 且无最新尝试状态；恢复原请求进入 `WAIT_CALLBACK`。两次演练均由本地脚本关闭自行启动的支付、风控及对应前端，事后无相关端口监听。该证据覆盖真实跨服务 HTTP 调用、请求指纹变更失败闭合与批准后重试，不代表审核员身份可信、真实 MySQL 8 迁移/历史事实、正式渠道资金或生产发布。
+
+### 10.773 2026-10-06 双服务人工复核回环固化为可重复验证
+
+新增 `tools/dev/cross-system-risk-review.mjs` 及断言测试，`bash tools/dev/local-stack.sh verify risk-review` 在单个受控会话中仅启动 H2/demo 支付核心与风控后端，先拒绝数据库、端口、网关关键覆盖、已有 PID 文件或相关端口占用，再核对本机 HTTP 地址和支付核心 H2/demo 身份。演练新建虚拟单，验证 `RISK_REVIEW` 与唯一待审复核单；待审及批准后改变支付方式、渠道、商户均返回 `PAYMENT-1024`，支付单保持 `RISK_REVIEW` 且无渠道流水及最新支付尝试；原请求批准后进入 `WAIT_CALLBACK`，并核对渠道与支付尝试事实。无需启动前端，退出自动停止本次服务。
+
+实跑 `verify risk-review` 返回 `[PASS]`，两服务已停止且目标端口无监听；相关 Node 测试 `70/70`、`bash -n tools/dev/local-stack.sh` 和 `git diff --check` 通过。此前同一业务代码基线 payment-core 全量 `1810/1810`、风控 `17/17`。此项只固化本地 HTTP 回环，不代替目标 MySQL 8 迁移与历史空摘要处置、可信审核身份及授权、生产渠道和真实资金验收；未连接目标库、发布或操作真实资金。
+
+### 10.774 2026-10-06 风控本地复核身份门禁
+
+此前 `verify risk-review` 仅以风控总览可用作为对端就绪依据，不足以在首笔写入前确认风控实例使用本地 H2。风控后端新增 `/api/demo/identity`，仅 `local-risk-review` profile 且 H2 驱动时提供 `risk-control-h2-local-review` 标记；本地栈仅在双服务复核验证模式为风控进程启用该 profile。HTTP 脚本先核对支付和风控的隔离身份，再创建虚拟单。风控端标记不是生产身份认证，仍需避免本机端口代理或被篡改环境。
+
+风控端点条件测试覆盖正确 profile + H2、错误 profile、错误驱动；风控 Maven 全量 `18/18`，Node 定向 `10/10`，双服务 H2/demo `verify risk-review` 实跑 `[PASS]`，待审及批准后变更均 `PAYMENT-1024`、原请求 `WAIT_CALLBACK`，退出后两后端停止。首次运行发现 Shell 空数组在 `set -u` 下报错，修复为非空环境参数数组；第二次发现 verify 未传递 scope 导致风控 profile 未激活，改为显式传参后通过。未连接目标 MySQL 8、处理历史复核数据或接入可信审核身份及真实资金。
+
+### 10.775 2026-10-06 用户收银台复核后沿原支付上下文继续
+
+四端原收银台都禁用 `RISK_REVIEW` 提交，但风控批准只更新复核单，支付单仍为待复核，导致结果页提示“审核后返回收银台重试”无法执行。支付核心收银台只读投影在待复核时新增原支付方式与路由渠道，来自支付单而非 URL/用户选择；前端只在原方式可用、渠道编码一致（忽略大小写）、无支付尝试、会话未过期且令牌可用时允许原请求重试。App/H5/PC 复核态锁定方式切换，小程序复核响应跳过原生支付，直接进入结果页；缺失或错配绑定保持不可提交，最终批准与否仍由后端请求指纹和复核决策判定。
+
+支付核心 `PaymentServiceImplTest` 定向 `183/183`，获准本机回环后 `-Pdemo` 后端全量 `1811/1811`（零失败、零错误、零跳过）；App `103/103`、小程序 `99/99`、H5/PC 各 `4/4`，三个 Vite 构建通过。双服务 H2/demo `verify risk-review` 核对待审及批准后的收银台原方式/渠道字段，变更请求均 `PAYMENT-1024`，原请求 `WAIT_CALLBACK`，服务自动停下。普通沙箱中全量 HTTP 测试因 Tomcat 回环 `Operation not permitted` 失败，在获准回环环境重跑通过。该证据不证明正式渠道参数、可信用户/审核身份、跨终端重试同一请求、目标 MySQL 8 或生产历史复核可继续；历史缺失绑定仍失败闭合。
+
+### 10.776 2026-10-06 显式渠道路由拒绝跨方式兜底
+
+路由规则先于用户显式渠道解析，规则目标失格后可把微信/银行请求静默换到支付宝 fallback；直接指定支付宝渠道配微信方式也未校验支付方式。定向红测 `3` 项复现。现规则目标与 fallback 均先确认请求支付方式，且显式渠道候选必须匹配原请求规范渠道；显式渠道无可用规则时仍走原请求渠道校验，不转到其他渠道。PC 端 `银行卡/BANK_CARD` 对现有 `银行转账/offline_bank` 的别名保留，未显式渠道的同方式健康 fallback 保留。补充同方式规则抢占显式渠道和银行别名回归。
+
+路由定向 `27/27`，获准本机回环的 payment-core `-Pdemo` 全量 `1815/1815`（零失败、零错误、零跳过），`git diff --check` 通过；未修改 schema、规则存量或前端。演示数据里跨方式 fallback 现被运行时过滤，不自动改写管理端规则；生产配置盘点与规则编辑校验、目标 MySQL 8 执行计划、真实通道与资金仍待受控验收。
+
+### 10.777 2026-10-06 路由完整渠道标识不借用家族健康别名
+
+复核时发现原 `normalizeChannelCode` 同时用于短窗健康聚合和显式/规则路由定位，`wx_jsapi` 与 `wx_h5` 被折叠为同一键；规则目标缺失时可能冒用另一微信适配器，显式请求旧别名亦可能路由到另一实际渠道。红测 `2` 项复现后，将路由目标定位与健康家族聚合分离：规则目标按完整编码定位；显式请求仅大小写及首尾空白归一，保留前端既有 `BANK_CARD → offline_bank` 映射。微信家族健康指标聚合语义不变。
+
+路由定向 `29/29`，获准回环的 payment-core `-Pdemo` 全量 `1817/1817`（零失败、零错误、零跳过）；隔离 H2/demo `verify risk-review` 的待审、上下文拒绝与原请求批准后 `WAIT_CALLBACK` 均 `[PASS]`，两服务自动停止。未连接目标 MySQL 8、发布或触碰真实资金；真实适配器编码清单、旧别名客户端兼容性与生产配置存量仍需受控核验。
+
+### 10.778 2026-10-06 管理端路由规则兜底支付方式一致性
+
+管理配置候选原仅核对目标与兜底渠道存在且编码不同，跨方式规则仍可提交或批准；红测复现微信目标搭配支付宝兜底可创建。现 `buildRouteRuleEntity` 对非空兜底核对两端规范支付方式，缺失或不一致在候选写入前拒绝，保留原不存在和相同渠道错误；新建、编辑、复核提交/批准、启用和历史回滚共用该门禁。银行卡与银行转账别名仍视为同一方式，禁用历史跨方式规则仍可申请。管理端兜底下拉筛选同方式渠道，历史跨方式或已删除选中值只读可见，编辑时不静默清空。
+
+定向 `PaymentConfigServiceImplTest` `115/115`、管理端兜底工具测试 `2/2`、管理端全量 `279/279` 与 Vite 构建通过。首次普通沙箱的后端全量因 Tomcat 回环 `Operation not permitted` 和一次并发请求号随机碰撞失败；获准本机回环后补齐旧规则禁用/启用边界，并重跑 H2/demo 全量 `1824/1824`（零失败、零错误、零跳过）。演示数据中的跨方式 fallback 未迁移；目标 MySQL 8 存量配置、真实渠道和资金、可信审批与生产发布均未验证。上线前须盘点并人工处置历史跨方式规则，不能靠表单筛选替代后端校验。
+
+### 10.779 2026-10-06 存量路由兜底异常提示与 H2 Mapper 联合验证
+
+上轮表单可保留历史异常值，但规则列表和待审候选缺少逐条盘点线索。管理端现在只在最新渠道总览快照可用时，对有兜底的规则提示同渠道、渠道缺失、支付方式缺失或跨方式问题；待审且拟启用的候选同步提示，禁用候选不被误标为审批阻断。该提示是只读人工排查线索，不改变规则、版本或审批操作，不把当前快照当作生产真实路由或最终校验。
+
+新增 H2/MyBatis 集成用例用真实 `findChannelForRouting` 映射读取微信/支付宝渠道，提交现存跨方式候选时拒绝且无待办写入；将兜底渠道配置调整为同方式并清除测试 SqlSession 缓存后可提交候选，运行态仍保留原规则直至审批。定向 Mapper `5/5`、管理端工具 `3/3` 与全量 `280/280`、Vite 构建以及获准回环的 payment-core H2/demo `1825/1825`（零失败、零错误、零跳过）通过。未连接目标 MySQL 8、改写演示规则或操作真实资金；渠道方式变更对旧规则的影响、可信身份、目标库存量盘点与迁移需另行受控处理。
+
+### 10.780 2026-10-06 既有渠道编码与支付方式绑定
+
+上一轮路由保存时虽检查目标与兜底方式一致，但渠道配置完整候选仍可把已存在 `wx_h5` 从微信改为支付宝，复核批准或回滚历史版本也可发布不同方式，令旧规则、表达式和支付快照在同一渠道编码下语义漂移。三项红测复现提交/回滚不拒绝、批准继续进入写库。现对既有渠道按支付方式原文不变约束，在编辑候选、批准和历史回滚处核对，不修改运行态、版本或待办；现有启停和同方式字段编辑保持原路径。管理端编辑支付方式只读并提示新建渠道及迁移规则，服务端仍是最终门禁。即使 `银行卡/银行转账` 路由可视为别名，也不允许在同一渠道编码下改写持久化方式原文。
+
+`PaymentChannelStatusReviewServiceImplTest` 定向 `28/28`、获准本机回环的 payment-core H2/demo 全量 `1828/1828`（零失败、零错误、零跳过），管理端全量 `280/280` 与 Vite 构建通过，`git diff --check` 通过。此限制只覆盖应用服务路径，不证明目标 MySQL 8 的历史配置和直连写入已经合规；正式渠道、网关商户迁移、实际资金与可信审核仍须受控验收。
+
+### 10.781 2026-10-06 风控复核跨来源应用与旧摘要版本门禁
+
+双服务 H2/demo HTTP 回环先复现另一有效来源应用及令牌借用原待审复核单。现在支付核心向风控传递并校验 `sourceAppId`，风控摘要绑定来源应用，待审与批准后更换来源应用、支付方式/渠道/商户、终端、设备或手机号均返回 `PAYMENT-1024`，不创建支付尝试；原请求批准后进入 `WAIT_CALLBACK`。风控摘要新增可识别 `v2:` + 无填充 Base64URL SHA-256 格式；历史空值和旧 64 字符十六进制摘要既不能批准也不能放行，仍可人工拒绝待审单，不自动补标。
+
+风控定向及全量 `20/20`、支付核心风控定向及获准本机回环全量 `1828/1828`、Node 测试 `4/4`、隔离双服务 HTTP 回环 `[PASS]` 并自动停服，`git diff --check` 通过。普通沙箱端口权限导致初次全量/演练未通过，获准回环后复验通过。目标 MySQL 8 的空值/旧版本存量须盘点、备份、审批并人工处置；可信审批主体、正式渠道及资金不以本地测试视为已验收。
+
+### 10.782 2026-10-06 风控复核后当前硬规则仍优先
+
+风控待审/已批准单原先直接复用，后来启用的设备黑名单或硬策略即使命中也不再被检查。风控侧现先核对原请求摘要，再扫描当时启用的硬 `INTERCEPT/REJECT` 黑名单及策略；软复核规则仍可被原批准覆盖，硬规则生成/复用事件而不借用历史批准。红测 `2` 项，真实 H2 Mapper 覆盖旧软名单排在新硬名单前的待审和批准后拦截，风控全量 `23/23`。首次双服务回环因演练设备名含 `RISK` 而被现有硬设备策略正确阻断，改为普通设备后 `[PASS]`、自动停服，Node 测试 `4/4`。支付核心代码及全量基线仍为上一轮 `1828/1828`，本轮未重跑全量；目标 MySQL 8、真实策略治理、可信审批与正式资金仍待受控验收。
+
+### 10.783 2026-10-06 首次准入硬风控优先级
+
+继已复核单重新准入修复后，三项红测确认新请求仍可能先命中软名单、运营大额或限额而跳过后续硬黑名单/策略。现在同一轮准入先取黑名单与策略中的硬命中，生成拦截/拒绝事件，不创建待审单；无硬命中时保留原软规则的优先顺序。H2 Mapper 在旧软手机号名单先于新增设备硬拦截的情况下验证首次支付单直接 `INTERCEPT`、无复核单；额外单测覆盖软策略和运营大额同时命中后续硬策略，风控全量 `27/27`。双服务 H2/demo 软复核支付回环 `[PASS]` 并自动停服；本轮支付核心代码不变，上一轮全量 `1828/1828`，未据此宣称目标 MySQL 8、可信审核或真实资金已验收。
+
+### 10.784 2026-10-06 首次硬风控支付侧终态 HTTP 联调
+
+在 `verify risk-review` 的原软手机号复核续付之后，新增独立支付单使用同手机号及命中演示硬设备策略的设备标识。隔离双服务真实 HTTP 验证首次提交直接 `RISK_BLOCKED`，支付详情没有渠道流水或支付尝试，风控不存在该单复核单，存在唯一对应 `POLICY_DEVICE_RISK` 的拦截事件；原软复核支付仍在批准后 `WAIT_CALLBACK`。Node 断言 `5/5`，获准本机 H2/demo 回环 `[PASS]` 并自动停服；payment-core Java 代码未改、后端全量仍以上一轮 `1828/1828` 为基线。目标 MySQL 8、可信审核和正式渠道资金仍待受控验收。
+
+### 10.785 2026-10-06 风控追踪编号随机后缀
+
+风控复核单号与拦截事件号原只靠毫秒时间戳，不同支付单并发时可能撞唯一键。风控后端保留原前缀并追加完整 UUID 十六进制，适配现有 64 字符列，不回填历史编号。100 笔独立决策编号单测红绿验证格式、唯一性及长度；风控全量 `28/28`，隔离 H2/demo 双服务 HTTP 回环 `[PASS]`，新复核号批准后原请求可继续 `WAIT_CALLBACK`、硬设备策略仍 `RISK_BLOCKED`，自动停服。支付核心 Java 未改，本轮未重跑其全量；同业务单并发建复核、目标 MySQL 8、真实审核身份与资金仍未验收。
+
+### 10.786 2026-10-06 风控同业务单待审复核原子去重
+
+风控新复核单写入按原业务单号精确 UTF-8 SHA-256 得到的可空 `BINARY(32)` 业务键，唯一索引裁决同单并发；重复键后锁定读回胜出待审单，复验 `v2` 上下文一致才返回同一复核号。历史空键和重复行不自动回填，状态已终结或请求变化失败闭合。H2 迁移/大小写不敏感列与双线程决策回归、风控全量 `31/31`、双服务隔离 HTTP 软复核批准与硬拦截 `[PASS]` 并停服。支付核心 Java 未变，未重跑其全量；上线仍须受控执行迁移、避免旧版空键写入与新服务混跑，目标 MySQL 8 多实例并发、历史数据、风险事件去重、可信审核及资金未验收。
+
+### 10.787 2026-10-06 风控事件精确组合键与来源隔离
+
+风险事件新增可空 `event_key BINARY(32)` 唯一约束，原支付单号、策略、处置结果和有效来源系统按长度编码并以原字节 SHA-256 摘要；同组合并发冲突读回相同身份胜出事件，不再重复生成事件号。旧事件查询也要求来源系统、处置结果及原业务键精确一致。历史空键和重复事件不自动回填。H2 迁移、错误归属服务单测、跨来源真实 Mapper、双线程复核及事件单行回归通过；风控全量 `34/34`，隔离双服务 H2/demo HTTP `[PASS]` 并停服。支付核心 Java 未变，本轮未重跑其全量；目标 MySQL 8、旧版空键写入切换、可信审批与实际资金仍待受控验收。
+
+### 10.788 2026-10-06 已受理支付复用的支付方式绑定
+
+`WAIT_CALLBACK`/`SUCCESS` 已绑定渠道的只读复用路径，显式请求另一支付方式原可绕开路由并返回当前支付状态。新增支付详情已有方式时的冲突拒绝，保留缺省方式从原事实补齐及历史方式缺失的兼容行为。Mockito 红测证实原路径未抛错，修复后定向测试、`PaymentServiceImplTest` 及本机回环权限下 payment-core Maven 全量 `1829/1829` 通过；首次沙箱全量仅两项 HTTP 集成测试因 Tomcat 端口权限失败，非业务断言。`git diff --check` 通过。未连接目标 MySQL 8、真实渠道或资金系统，可信调用方身份及生产回放仍需独立验收。
+
+### 10.789 2026-10-06 已受理支付拒绝另一有效渠道复用
+
+已受理支付显式选择同支付方式下另一有效渠道时，旧逻辑虽重新路由，却仍返回原 `WAIT_CALLBACK` 状态，造成请求渠道与返回的受理事实不符。Mockito 红测验证 `wx_h5 → wx_jsapi` 被错误复用；修复后在路由和控制校验之后要求解析渠道与原支付详情渠道一致，异渠道返回 `PAYMENT-1035`，不下发新尝试。`PaymentServiceImplTest` 与本机回环权限下 payment-core 全量 `1830/1830` 通过，补丁检查通过；原渠道重复提交和缺省方式复用保持既有行为。未连接目标 MySQL 8 或真实渠道/资金，可信调用方授权与生产回放仍待验收。
+
+### 10.790 2026-10-06 待回调支付缺少渠道归属拒绝复用
+
+历史支付详情处于 `WAIT_CALLBACK` 但渠道为空时，原提交重试会先解析新渠道再直接复用旧预付状态，可能让调用方误认本次渠道已受理。Mockito 红测证实该问题；现要求返回原待回调状态前必须具备已绑定渠道，否则 `PAYMENT-1054` 失败闭合，不产生支付尝试或渠道下发。旧“已待回调可复用”用例补齐原渠道事实并断言不重复路由；`PaymentServiceImplTest` 与本机回环权限下 payment-core 全量 `1831/1831` 通过，`git diff --check` 通过。历史无归属单仍需人工核对真实渠道；目标 MySQL 8 与实际资金未验收。
+
+### 10.791 2026-10-06 待回调复用要求末次渠道尝试事实
+
+仅有支付单渠道的 `WAIT_CALLBACK` 历史记录仍可能没有末次有效渠道提交尝试，却被重复提交直接复用。Mockito 红测构造渠道已绑定但 `paymentSubmissionChannelValid=false` 的详情，旧链路返回原状态；现复用既有 `requireChannelSubmissionFact`，拒绝末次尝试缺失、无状态或渠道与支付单不一致的受理事实，返回 `PAYMENT-1054`。四处旧测试夹具补齐真实尝试状态与渠道归属，支付服务测试及本机回环权限下 payment-core 全量 `1832/1832` 通过，补丁检查通过。Mapper 的原长度/二进制渠道比对已有 H2 回归；目标 MySQL 8、历史脏单真实流水和实际资金仍待验收。
+
+### 10.792 2026-10-06 待回调与终态尝试冲突失败闭合
+
+原受理事实门禁只要求末次尝试状态非空，因此 `WAIT_CALLBACK` 的历史单即使末次尝试已为成功或失败终态也会被重复提交复用。六种中英文终态 Mockito 红测复现；现与首次渠道提交返回值共用终态判定，重复提交及主动查单均拒绝该异常组合，返回 `PAYMENT-1054`，不补造新尝试。支付服务测试和本机回环权限下 payment-core 全量 `1833/1833` 通过，`git diff --check` 通过。真实终态冲突存量、目标 MySQL 8 与资金事实仍需独立核验。
+
+### 10.793 2026-10-06 待回调与末次尝试完成时间冲突
+
+支付单仍为 `WAIT_CALLBACK`、末次尝试渠道一致且状态为 `处理中` 时，若尝试已具有完成时间，旧提交路径仍返回待回调状态。Mockito 红测复现；现共用受理事实门禁检查完成时间非空即 `PAYMENT-1054` 失败闭合，重复提交及主动查单均不再信任该异常组合。支付服务测试和本机回环权限下 payment-core 全量 `1834/1834` 通过，`git diff --check` 通过；未连接目标 MySQL 8、真实渠道或资金系统，历史完成时间冲突仍须人工核查。
+
+### 10.794 2026-10-06 并发提交返回前校验赢家受理事实
+
+并发占用预付单后返回、事务内发现同幂等键、事务外二次检查同幂等键三条路径原先可能绕过 `WAIT_CALLBACK` 的末次渠道提交尝试验证，或复用另一渠道已受理的状态。三项 Mockito 回归分别覆盖无有效尝试、异渠道及外层幂等检查缺少受理事实；统一回读最新预付单/支付详情，核对支付单归属、已绑定渠道和支付方式，并复用待回调/成功事实门禁。普通幂等重试仍保留请求支付方式，结果待确认/支付中展示状态不被待回调覆盖。`PaymentServiceImplTest` 及获准本机回环下 `-Pdemo` 全量 `1837/1837`（零失败、零错误、零跳过）通过；沙箱内仅两项 HTTP 集成测试因回环权限报错。`git diff --check` 通过。目标 MySQL 8、真实并发时序和渠道资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.795 2026-10-06 成功事实诊断拒绝渠道编码别名
+
+支付列表/导出与监控共用的 `paymentSuccessFactMismatchCondition` 原只用数据库等值比较末次尝试与支付单渠道，在不区分大小写的字段排序规则下，`WX_H5` 被当成 `wx_h5` 的正常成功事实；日终使用独立 SQL，不能由该回归推定已修复。H2 `VARCHAR_IGNORECASE` 红测复现列表诊断数量仍为 8，修复为原长度及二进制双重匹配后，大小写和尾空格别名均计入异常（9），正常编码恢复后回到 8；与已有支付详情严格渠道投影一致。状态迁移、日终及监控 Mapper 定向测试通过；获准本机回环下 payment-core `-Pdemo` 全量 `1837/1837`（零失败、零错误、零跳过），`git diff --check` 通过。日终独立口径的后续补强见 10.796；目标 MySQL 8 的 collation/PAD 和存量异常单仍须受控复验与人工核查；未连接目标库、发布或触碰真实资金。
+
+### 10.796 2026-10-06 成功尝试创建时间线及日终独立诊断
+
+成功事实原只核对支付单创建、尝试完成及成功时间，历史尝试若创建在支付单之前或完成之后，支付详情、列表/导出、监控仍可能误认可信；日终还保留独立且未做二进制渠道校验的诊断 SQL。状态迁移 H2 红测复现时间倒置漏报；同步更新详情原始时间投影、列表/监控共享诊断与日终独立查询，要求 `支付单创建 ≤ 尝试创建 ≤ 尝试完成 ≤ 支付成功`，并在日终要求渠道原长度和二进制一致。两种时间倒置、日终大小写及尾空格渠道别名均纳入回归。定向 HTTP 测试揭示 H2 演示支付单创建时间晚于预付和尝试，已同步校正两份演示种子；定向 HTTP 与获准本机回环下 payment-core `-Pdemo` 全量 `1837/1837`（零失败、零错误、零跳过），`git diff --check` 通过。目标 MySQL 8、正式渠道时间源与历史异常资金事实仍需受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.797 2026-10-06 日终支付成功事实关联键精确核对
+
+日终独立成功事实查询原先以宽松等值匹配预付单和末次尝试的支付单号，且绑定数量也按宽松等值计数；H2 `VARCHAR_IGNORECASE` 红测把预付单 `PAY-NORMAL` 改成 `pay-normal` 后仍误记为正常成功。现对预付单归属、唯一绑定数量及末次尝试选取统一加入原长度和二进制校验，大小写/尾空格别名均计入异常（8→9），恢复原号回到 8。日终 Mapper 全类与获准本机回环下 payment-core `-Pdemo` 全量 `1838/1838`（零失败、零错误、零跳过）通过，`git diff --check` 通过。目标 MySQL 8 的排序规则/PAD、历史异常单及实际资金仍待受控复核；未连接目标库、发布或触碰真实资金。
+
+### 10.798 2026-10-06 快速回调后提交结果不借渠道及方式别名
+
+渠道结果绑定 CAS 返回 0 时，旧回读门禁对渠道使用 trim/大小写宽松比较，且未核对已绑定支付方式；Mockito 红测复现 `wx_h5` 的受理结果借用回调已绑定的 `WX_H5` 成功事实。现要求渠道编码完全一致、已有支付方式与本次提交一致，保留渠道流水号精确核对；结果未知恢复也复用该门禁。两项快速成功竞态测试分别拒绝渠道别名和另一支付方式，正常同渠道抢先成功回归保留。支付服务全类和本机回环权限下 payment-core `-Pdemo` 全量 `1840/1840`（零失败、零错误、零跳过）通过，`git diff --check` 通过。目标 MySQL 8、真实渠道回调竞争时序与资金流水仍须受控验证；未连接目标库、发布或触碰真实资金。
+
+### 10.799 2026-10-06 首次路由后的并发赢家拒绝渠道别名
+
+初始支付详情仍为 `PREPAY_CREATED` 时，本次路由解析 `wx_h5`，并发占用分支回读赢家 `WAIT_CALLBACK`/`WX_H5` 原先通过忽略大小写校验，错误复用另一编码的受理事实。Mockito 红测复现；仅将竞争结果回读渠道改为逐字符精确一致，返回 `PAYMENT-1035` 且无新渠道下发；已受理单的同编码大小写只读复用保持原契约。支付服务全类与本机回环权限下 payment-core `-Pdemo` 全量 `1841/1841`（零失败、零错误、零跳过）通过，`git diff --check` 通过。目标 MySQL 8 collation/PAD、真实多请求竞态与渠道资金仍待受控复验；未连接目标库、发布或触碰真实资金。
+
+### 10.800 2026-10-06 待回调预付单重复拉起核对末次渠道受理
+
+原 `prepay` 在来源、金额及唯一绑定核对后，直接复用 `WAIT_CALLBACK` 支付单，即使缺少末次渠道尝试也返回待回调。Mockito 红测复现；现复用前查询同一支付单的轻量提交事实投影，要求精确支付单号、待回调状态、非空渠道、精确末次尝试渠道和未完成的非终态尝试，异常返回 `PAYMENT-1054` 且不另建支付单。H2 服务+Mapper 验证缺少尝试、渠道大小写别名均失败闭合，恢复精确尝试后复用原单；既有过期但已提交的待回调单及“结果待确认”展示夹具补齐真实尝试。支付服务与预付并发集成定向通过；本机回环权限下 payment-core `-Pdemo` 全量 `1844/1844`（零失败、零错误、零跳过）及 `git diff --check` 通过。目标 MySQL 8、真实渠道流水与历史异常资金仍需受控核对；未连接目标库、发布或触碰真实资金。
+
+### 10.801 2026-10-06 收银台待回调展示复用受理事实门禁
+
+原 `cashier` 在预付投影为 `WAIT_CALLBACK`、轻量提交事实为空时仍由预付快照显示“待回调”；有提交事实但末次尝试渠道错归属或尝试已结束时也无校验。Mockito 红测复现缺失事实；现与预付单重复拉起共享校验，待回调展示前要求精确归属、渠道绑定及有效末次尝试，否则返回 `PAYMENT-1054`。单测覆盖缺失、错归属、终态、完成时间与正常展示；H2 服务+Mapper 同时验证缺失尝试、渠道大小写别名拒绝及恢复原渠道后正常展示。定向测试、本机回环权限下 payment-core `-Pdemo` 全量 `1845/1845`（零失败、零错误、零跳过）及 `git diff --check` 通过。目标 MySQL 8 与真实渠道资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.802 2026-10-06 渠道归属投影缺失不得作为受理事实
+
+共享待回调受理门禁原仅拒绝 `paymentSubmissionChannelValid=false`，投影缺失（`null`）但末次尝试状态非空时仍可放行收银台和其他查单、回调、提交复用路径。Mockito 红测复现收银台误放行；现门禁统一仅接受显式 `true`，空投影与不一致同样返回 `PAYMENT-1054`。另补查单与回调空投影直测，并给合法夹具补齐渠道一致性事实，不改变生产 Mapper 的二进制精确投影。支付服务定向及本机回环权限下 payment-core `-Pdemo` 全量 `1847/1847`（零失败、零错误、零跳过）、`git diff --check` 均通过；历史缺失投影或渠道事实需人工核对，目标 MySQL 8 与真实渠道资金仍待验收，未连接目标库、发布或触碰真实资金。
+
+### 10.803 2026-10-06 数据库原子迁移拒绝英文及空白终态尝试
+
+服务层把 `SUCCESS`、`FAIL`、`FAILED` 及首尾空格包裹的中文终态认作已完成，但六处 Mapper 原子条件只排除精确中文终态。H2 红测将未完成时间的末次尝试改为英文 `SUCCESS`，旧 SQL 仍允许回调标记待回调；现支付成功/关闭恢复、结果绑定与未知恢复、待回调回调及末次尝试更新/成功收口统一对齐中英终态口径。正向原子状态迁移与新反向回归在 Mapper 全类通过；本机回环权限下 payment-core `-Pdemo` 全量 `1848/1848`（零失败、零错误、零跳过）和 `git diff --check` 通过。目标 MySQL 8 的排序规则、`TRIM` 行为、多实例并发与真实渠道资金仍待受控验证；未连接目标库、发布或触碰真实资金。
+
+### 10.804 2026-10-06 支付结果详情待回调拒绝缺失受理事实
+
+`detail` 原只校验成功事实，支付单虽处于 `WAIT_CALLBACK` 但末次渠道尝试不存在、渠道不匹配或尝试已终态时，仍会返回待回调给用户结果页。Mockito 红测复现；现详情 GET 在外发脱敏前复用待回调受理门禁，异常返回 `PAYMENT-1054` 且不读取后续轨迹，正常待回调详情保留。独立 H2 服务+Mapper 验证无尝试与仅大小写不同的渠道均失败闭合，测试夹具补齐详情必要的投影列；本机回环权限下 payment-core `-Pdemo` 全量 `1850/1850`（零失败、零错误、零跳过）及 `git diff --check` 通过。目标 MySQL 8、历史异常资金和正式渠道回执仍需受控核对，未连接目标库、发布或触碰真实资金。
+
+### 10.805 2026-10-06 已关闭支付有渠道痕迹但末次尝试终态
+
+原共享渠道受理门禁对 `CLOSED` 只校验渠道归属投影便直接放行；末次尝试已为英文 `FAILED` 时，主动查单仍进入渠道调用，返回 `PAYMENT-1026`，虽数据库原子迁移已拦截终态，服务仍可能无意义地请求渠道。Mockito 红测复现；现已关闭且有渠道痕迹的查单和成功回调要求末次尝试非终态、未完成，异常返回 `PAYMENT-1054` 且不下发渠道或执行成功迁移。未提交的关闭单只读返回、历史已提交且尝试仍开放的超时关闭支付成功回调恢复保持原契约。支付服务定向与本机回环权限下 payment-core `-Pdemo` 全量 `1852/1852`（零失败、零错误、零跳过）、`git diff --check` 通过。目标 MySQL 8、正式渠道和历史真实资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.806 2026-10-06 多端主动查单入口与渠道受理门禁对齐
+
+App/H5/PC、管理端及小程序原仅凭支付状态和非空末次尝试文字启用查单；已终态或有完成时间的尝试仍展示按钮，且收款记录中文状态导致正常查单入口始终不可用。三端 helper 红测复现后，入口同步核对中英尝试终态、完成时间及已关闭支付的渠道交易号；保留成功只读、未提交关闭只读和历史关闭且尝试未终结时的合法查询，`PAYING` 不再假作服务端可查状态。收款记录映射“支付成功/支付中/已关闭”，建议先查单的运营提示也仅在可查时展示；收银台查询资格读取同一份可信快照，不混用新旧尝试字段。定向红绿及 App `105/105`、H5 `4/4`、PC `4/4`、管理端 `281/281`、小程序 `100/100` 全量测试与四端构建、`git diff --check` 均通过。UI 仅引导操作，服务端渠道一致性与资金门禁不变；目标 MySQL 8、真实渠道与历史资金仍待受控复核，未连接目标库、发布或触碰真实资金。
+
+### 10.807 2026-10-06 并发成功回调防止迟到查单覆盖返回码快照
+
+原主动查单在外部渠道返回处理中后，无条件更新支付单返回码快照并直接返回原待回调详情；期间成功回调先提交时，旧查单仍可覆盖赢家诊断信息或误回待回调。Mockito 红测复现零行写入原抛异常，H2 Mapper 红测证实已成功支付仍可被 `USERPAYING` 覆盖。现共享 SQL 写入按支付状态与成功时间防覆盖，查单事务按已提交读；写入零行且回读到成功赢家时校验成功事实和渠道交易号，记录查询轨迹后返回真实成功快照，冲突则按 `PAYMENT-1026` 留失败轨迹，无法确认赢家时保持失败闭合。正反向定向回归（服务 `206/206`、Mapper `79/79`）及获准本机回环下 `-Pdemo` 全量 `1855/1855`（零失败、零错误、零跳过）、`git diff --check` 通过；提交共享写入路径未受破坏。目标 MySQL 8、多实例并发、真实渠道与历史资金仍待受控验收；未连接目标库、发布或触碰真实资金。
+
+### 10.808 2026-10-06 主动查单成功赢家拒绝渠道大小写别名
+
+主动查单确认成功但原子迁移输给并发回调时，原赢家复核使用 `equalsIgnoreCase`；只要渠道交易号相同，即使查询起点为 `wx_h5`、回读赢家为 `WX_H5`，仍会误认同一受理来源。Mockito 红测复现；现按原始渠道编码逐字符比较，大小写别名返回 `PAYMENT-1026` 并记录失败查单，不重复派发支付成功事件；原渠道与交易号一致的成功赢家保持正常返回。支付服务全类 `207/207`、获准本机回环下 payment-core `-Pdemo` 全量 `1856/1856`（零失败、零错误、零跳过）及 `git diff --check` 通过。目标 MySQL 8 排序规则、多实例竞态、真实渠道流水与资金仍待受控复核；未连接目标库、发布或触碰真实资金。
+
+### 10.809 2026-10-06 渠道成功但本地关闭单无法原子恢复时失败闭合
+
+已提交的历史关闭支付若渠道查单报 `SUCCESS` 而原子成功迁移未命中，原服务在预付绑定有效时仍把 `CLOSED` 当作正常查单结果返回，页面会误以为“支付已关闭”，可能诱导重复支付。原测试只检验不重开和不发事件；修改为红测确认须抛 `PAYMENT-1026` 并留 `QUERY_FAILED`，不发布成功事件或结算。服务现保留查询轨迹、追加失败诊断并阻止误导性 `CLOSED` 返回；未提交关闭只读与可信过期关闭成功恢复路径不变。支付服务 `207/207`、获准本机回环下 payment-core `-Pdemo` 全量 `1856/1856`（零失败、零错误、零跳过）及 `git diff --check` 通过。历史异常须人工核实真实渠道资金；未连接目标 MySQL 8、发布或触碰真实资金。
+
+### 10.810 2026-10-06 成功回调关闭恢复落空不再返回成功载荷
+
+原 `SUCCESS` 回调在原子成功迁移零行、回读仍为 `CLOSED` 且预付绑定有效时，释放提交令牌并作为正常关闭详情返回；Controller 因而构造 `ApiResponse.success`，误将已签名成功通知当作已完成收口。Mockito 红测复现；现该路径抛系统异常回滚事务，不释放令牌、不更新预付、不生成成功事件，可信过期关闭成功迁移保持原路径。服务全类 `208/208`、获准本机回环下 payment-core `-Pdemo` 全量 `1857/1857`（零失败、零错误、零跳过）及 `git diff --check` 通过。当时通用异常处理仍可能以 HTTP 200 发送错误码，此缺口现按 10.811 修正；正式渠道 ACK/重试和异常资金核对仍待受控联调，不可声称已自动重试。未连接目标 MySQL 8、发布或触碰真实资金。
+
+### 10.811 2026-10-06 支付回调错误的 HTTP 非确认语义
+
+新本机 HTTP 红测证实 `/api/payments/callback/wx_h5` 的无效 JSON 原以 HTTP 200 返回错误码，存在被渠道按成功 ACK 理解的风险。现统一响应体 advice 仅对匹配的支付回调路径、非零错误码设置 HTTP 503；定向真实 demo HTTP 测试覆盖反序列化错误、业务校验错误、已成功幂等回调仍为 200，以及模拟历史关闭冲突返回 503、数据库仍关闭且无成功事件；普通 `/api/payments/query` 错误仍为原 HTTP 200。定向 HTTP `1/1` 通过。首次全量 `1858` 项中 6 项日志捕获断言受新增 HTTP 测试未恢复日志级别影响；已按既有 HTTP 测试模式补 `@AfterEach` 复原 root/事务日志级别，随后不需监听的相关 8 类 `404/404` 通过。权限审核服务返回 502，修正后的本机 HTTP 与全量套件尚未获准复跑，**不得称全量通过**。正式渠道 ACK 格式、真实重试和签名失败策略仍未验收；未连接目标 MySQL 8、发布或触碰真实资金。
+
+### 10.812 跨系统 happy-path 拒绝待支付快照中的终态支付尝试
+
+原离线脚本在预付、收银台及支付提交仍显示待支付/待回调时，仅拒绝中文“成功”，却可能接受“失败/支付失败”且样式为 `danger`、或英文 `SUCCESS/FAIL/FAILED` 的终态尝试，导致跨系统成功链路误通过。现三处使用同一终态判断，与支付核心提交门禁一致，对首尾空格及英文大小写不敏感；保留处理中、无尝试及既有完成时间约束。先添加失败夹具复现，再完成修复；`tools/dev/cross-system-happy-path.test.mjs` 离线 `61/61`、`node --check` 与 `git diff --check` 通过。未运行需启动九服务的写入型 HTTP happy-path；本项不代表目标 MySQL 8、多实例、正式渠道或真实资金验收。
+
+### 10.813 用户支付端与 API 客户端待处理尝试终态门禁
+
+承接 10.812，App/H5/PC 共用的响应适配器、小程序与 API 命令客户端在预付、收银台及提交响应仍处于 `PREPAY_CREATED/WAIT_CALLBACK` 时，同样可接受样式为 `danger` 的失败终态，或大小写不同、带空格的英文终态；UI/命令行可能把不可继续的支付误作待处理。三端红测均复现；现对待处理状态 `PREPAY_CREATED/RISK_REVIEW/WAIT_CALLBACK/PAYING` 拒绝中文“成功/失败/支付失败”及英文 `SUCCESS/FAIL/FAILED`（英文忽略大小写及首尾空格），成功与已失败支付原有展示路径不变。API 客户端的详情、查单、关单响应也拒绝“待回调+终态尝试”，替换了旧测试中误认为有效的“待回调+成功尝试”夹具。App 全量 `106/106`、小程序 `101/101`、API 客户端 `13/13` 离线测试及 `git diff --check` 通过；未启动服务、连接目标 MySQL 8 或操作真实资金。此处仅验证响应契约，正式渠道和生产历史单仍需受控验收。
+
+### 10.814 失败支付的英文尝试样式与成功事实矛盾门禁
+
+继续核对待处理门禁后的失败单：App/H5/PC 共用适配器、小程序及 API 客户端原把英文 `FAIL/FAILED` 当作普通文字，不校验 `latestAttemptStatusType`；`FAIL` 支付详情甚至能接受英文 `SUCCESS` 的尝试，造成“支付失败”与“尝试成功”并存。三端红测先复现，再将中文/英文终态的样式映射统一为成功 `success`、失败 `danger`，并拒绝非成功支付携带英文成功尝试；仍允许失败支付携带 `FAILED/danger`，不改变已成功支付必须具有中文“成功”与完成时间的契约。App `107/107`、小程序 `102/102`、API 客户端 `14/14` 离线全量测试和 App/H5/PC 三端构建通过；`node --check` 与 `git diff --check` 通过。未重跑需本机监听的 payment-core 全量测试，未连接目标 MySQL 8、发布或触碰真实资金；正式渠道与历史异常单仍待受控核实。
+
+### 10.815 跨系统演示写入限定隔离启动与固定目标
+
+原 `local-stack.sh verify payment-chain/all` 可复用已有端口上的外部服务，直接 `happy-path`/Node 脚本只验证 payment-core H2 身份，其余下游只需本机 URL 即可能接收演示写入。写前红测覆盖缺少隔离标记、目标端口换绑、数据库环境覆盖及现存后端 PID。现将 `happy-path` 调整为隔离 `verify payment-chain` 别名；`verify` 在启动前拒绝相关配置覆盖、现存 PID、目标端口监听，启动后要求所有选中后端均有本轮启动且仍运行的 PID；Node 在任何写入前要求作用域标记、六个固定服务根地址及 payment-core H2/demo 身份。端口预检依赖本机 `lsof/nc`，防复用不依赖仅有的 HTTP 健康状态。离线 Node 合同/本地基础设施 `71/71`、Shell 和 Node 语法、`git diff --check` 通过；无标记直接执行脚本退出 1 且未发起 HTTP 请求。本轮未启动九服务或执行写入型 HTTP happy-path，不代表其他五个下游已具备独立 H2 身份核验，也不代替目标 MySQL 8、正式渠道与生产资金验收。
+
+### 10.816 九服务本地演示身份逐一核验
+
+承接 10.815 的剩余误连风险，支付链路在首笔演示写入前现在逐一读取九个固定本机地址上的独有 `/api/demo/identity`。新增运营配置、风控、网关、账务、清分、结算、退款与对账八个只读端点，仅在 `local-payment-chain` profile 且 H2 驱动下暴露；`verify payment-chain/all` 只在本轮隔离启动这些服务时设置 profile，支付核心保留 `demo` 并附加该 profile。九个身份任一缺失/错配都拒绝继续；只读 Node 合同覆盖全部读回与逐个错配失败，未发起演示写入。八个独立 Maven/JUnit 定向类 `8/8`（每类验证本地 H2 可见、生产 profile 不可见、MySQL 驱动不可见），Node 合同 `71/71`、`bash -n` 与 `git diff --check` 通过。尚未运行九服务 HTTP 演练，不能声称完整链路通过；端点是本机误连防护，不是可信身份认证、目标 MySQL 8、正式渠道或资金验收。
+
+### 10.817 演示身份端点无监听 HTTP 映射复核
+
+补强 10.816 的直接方法调用证据：八个下游分别通过无监听 MockMvc 检查 `GET /api/demo/identity` 返回 HTTP 200、`code=0` 和独有身份值，同时保留非本地 profile 与非 H2 驱动时控制器不注册的断言；payment-core 维持现有轻量测试依赖，以注解映射及 `ApiResponse` 字段断言验证同一路径与返回体，不增加 `spring-test` 依赖。九个模块的定向 Maven 测试 `9/9`（零失败、零错误、零跳过），跨系统 Node 离线合同 `71/71`、`git diff --check` 通过。测试未绑定本机端口，九服务进程间 HTTP 读回、写入型 happy-path、payment-core 全量套件及真实渠道资金均未在本轮验收。
+
+### 10.818 收款记录英文失败尝试的样式门禁
+
+管理端收款记录列表与详情对英文 `FAILED` 的最近尝试状态原落入普通状态兜底，允许 `latestAttemptStatusType=success`，与失败终态矛盾。离线红测分别复现两处误收；现将 `FAILED` 与既有 `FAIL`、中文失败状态一样要求 `danger`，保留合法 `FAILED/danger` 失败单及成功事实异常单的独立诊断路径。管理端定向收款记录 `6/6`、全量 Node `281/281` 通过；未运行支付核心全量套件、九服务 HTTP 或写入型联调，未连接目标 MySQL 8、发布或触碰真实资金。
+
+### 10.819 管理端支付主链英文尝试终态门禁
+
+沿支付动作、详情、列表及预付响应复核：英文 `FAIL/FAILED` 原未约束样式，可把失败终态标为 `success`；非成功支付还可携带英文 `SUCCESS` 尝试，待处理支付可携带英文失败终态。四路离线红测复现；现共享中英文成功/失败终态判定，待处理状态拒绝成功或失败终态，失败单仍允许 `FAILED/danger`；已成功支付维持原有中文“成功”、样式和完成时间的严格契约。管理端定向 `9/9`、全量 Node `282/282` 与 Vite 构建通过，`git diff --check` 通过。未运行 payment-core 全量套件、九服务进程间 HTTP 或写入型联调，未连接目标 MySQL 8、发布或触碰真实资金。
+
+### 10.820 九服务隔离 H2 演示链路 HTTP 读回
+
+承接 10.817 的无监听证据，执行 `bash tools/dev/local-stack.sh verify payment-chain`：首次沙箱内启动九个进程均立即退出且日志为空，未进入写入阶段；按沙箱限制对同一命令申请扩展权限后，九个后端均由本轮隔离启动并通过 HTTP 冒烟，脚本写前核验九个本地 H2 演示身份，跨系统本地 happy-path 通过。链路读回支付成功、清分、结算、退款、账务事件以及对账阶段 `COMPLETED`、`4/4`，财务关账标记为 true。命令退出码 0，九个后端均按脚本清理；随后 `status payment-chain` 显示九个 DOWN，未触碰已有的运营配置前端 PID。该验证仅证明隔离本机 H2/demo 演示，不是可信身份认证、目标 MySQL 8 行为、正式渠道资金或生产发布验收；payment-core 全量后端套件仍未在本轮运行。
+
+### 10.821 演示身份绑定固定内存库 URL
+
+10.820 的身份端点原仅校验 profile 与 H2 驱动，若误配置 `jdbc:h2:tcp://...`、`jdbc:h2:file:...` 或带额外初始化指令的 H2 URL，仍可能对外声称本机演示身份；payment-core 定向红测复现远程 URL 误通过。现九个身份端点均在原有 profile 基础上同时要求 H2 驱动与各服务 `application.yml`（payment-core 为 `application-demo.yml`）约定的**完整、固定内存库 URL**，不再对远程、文件或附加初始化指令的 H2 URL 发放演示身份。九个独立 Maven/JUnit 定向测试 `9/9` 均通过，覆盖非本地 profile、MySQL 驱动及三种异常 H2 URL；八个下游还通过无监听 MockMvc 复核映射，payment-core 通过映射注解检查。隔离九服务 `verify payment-chain` 再次通过真实 HTTP 冒烟、身份核验与写入型 happy-path，对账仍为 `COMPLETED`、`4/4`，退出码 0，九个后端均停服，`git diff --check` 通过。此门禁是误配置防护而非可信服务认证；未连接目标 MySQL 8、正式渠道或真实资金，未执行 payment-core 全量后端套件与生产发布。
+
+### 10.822 风控复核隔离身份复用固定内存库条件
+
+双服务 `verify risk-review` 的风控端演示身份原仍只校验 `local-risk-review` profile 和 H2 驱动；红测证明远程 H2 URL 仍能获取身份。现保留其专属 profile，并复用同模块支付链已验证的固定 `risk_control` 内存库 URL 与驱动条件；新增远程、文件和附加初始化指令 H2 URL 拒绝用例。风控两个身份 JUnit 定向 `2/2` 通过，隔离支付核心与风控的真实 HTTP 复核链路返回 `[PASS]`：变更上下文被 `PAYMENT-1024` 拒绝，原请求批准后为 `WAIT_CALLBACK`，硬规则支付为 `RISK_BLOCKED`。脚本退出码 0，两后端停服，原运营配置前端 PID 未动，`git diff --check` 通过。仅证明本机 H2/demo 行为，不是可信身份授权、目标 MySQL 8、真实渠道资金或生产发布验收；payment-core 后端全量未在本轮运行。
+
+### 10.823 支付尝试“支付成功”别名的终态门禁
+
+服务层和六处支付状态原子 SQL 原未把中文 `支付成功` 当作终态尝试：待回调重试可能把它当作开放尝试，渠道提交结果可继续作为受理，SQL 还能覆盖其状态；App/H5/PC、小程序、API 客户端及管理端查单资格同样存在判定漂移。服务复用与提交受理、Mapper 原子迁移、渠道结果样式、三端响应及管理端查单资格红测分别复现。现统一将 `支付成功` 识别为成功样式的终态，拒绝待处理支付携带该状态及失败支付与其矛盾的成功尝试；实际可信成功仍只接受规范的 `成功`、`success` 与完成时间，不把历史别名自动补标为支付成功。payment-core 三个相邻后端测试类 `292/292`、App `107/107`、小程序 `102/102`、API 客户端 `14/14`、管理端 `282/282` 离线测试与 App/H5/PC/管理端四个 Vite 构建通过。未运行 payment-core 全量后端套件、目标 MySQL 8 或真实渠道资金验收；既有工作树改动保留。
+
+### 10.824 晚到渠道提交结果不得覆盖无完成时间的终态尝试
+
+原 `updatePaymentAttemptSubmitResult` 只以 `completed_at` 判定是否更新尝试状态：历史尝试已写为终态但缺完成时间时，晚到提交响应仍可将其覆盖为“待回调”。Mapper 红测先复现；现对未完成尝试追加非空白、非中英双语终态的原子资格，终态和空白状态更新零行且不写入晚到响应载荷，开放尝试仍可更新。已有完成时间的尝试维持原兼容路径，只补响应载荷，不改变状态或样式。相邻三个后端测试类在新增测试后 `293/293` 通过，随后扩充带空格的 `支付成功` 和空白状态用例；最终 Mapper 定向复跑 `80/80`（零失败、零错误、零跳过）通过。代码修改后九服务隔离 H2 `verify payment-chain` 经 HTTP 写入与读回通过，对账 `COMPLETED`、`4/4`、退出码 0；脚本结束九个后端均 DOWN，原运营配置前端 PID 未动。此结果不是 payment-core 全量后端套件、目标 MySQL 8、正式渠道或真实资金验收；历史异常仍须人工核对渠道资金事实，既有工作树改动保留。
+
+### 10.825 渠道提交英文终态的样式一致性
+
+渠道提交结果边界原只校验中文终态的样式，`SUCCESS/danger` 或 `FAIL/success` 等英文终态矛盾组合仍可通过适配校验，虽然后续受理门禁会拒绝终态。补充英文大小写及首尾空格红测复现后，现与既有终态识别对齐：中英成功终态要求 `success`，中英失败终态要求 `danger`；矛盾组合返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，非终态样式不变。渠道结果校验及支付服务两个定向类 `213/213` 通过，最终追加渠道服务和网关提交适配器后四类 `238/238`（零失败、零错误、零跳过）通过，`git diff --check` 通过。仅证明本地校验和服务回归，不代表正式渠道响应样本、目标 MySQL 8、真实资金或生产发布验收；payment-core 全量后端套件未在本轮运行。
+
+### 10.826 客户端及演练查单资格补齐“支付成功”尝试别名
+
+App/H5/PC 与小程序查单按钮 helper 及九服务跨系统演练的待处理尝试断言，原仍漏掉 `支付成功`，可能对缺完成时间的历史别名开放无效查单入口，或让预付、收银台及提交快照误通过演练。三处红测分别复现后补齐别名及首尾普通空格用例；演练脚本离线 `61/61`、App 全量 `107/107`、小程序全量 `102/102`、App Vite 构建、Node 语法与补丁检查通过。随后 `verify payment-chain` 在沙箱内九后端启动即退出、未进入写入阶段；按限制申请扩展权限后，脚本确认本轮隔离九个 H2/demo 后端、HTTP 冒烟及演示身份，写入型 happy-path 读回支付、清分、结算、退款和账务事件，对账 `COMPLETED`、`4/4`，退出码 0；停服后 `status payment-chain` 九个后端均 DOWN。此修复仅对齐前端资格与演练断言，服务端原子裁决仍独立生效；隔离演示不代表目标 MySQL 8、正式渠道或真实资金验收。
+
+### 10.827 多端主动查单按钮须有渠道绑定
+
+App/H5/PC、小程序及管理端的开放尝试查单 helper 原只看支付状态、尝试状态及完成时间，缺少原支付渠道仍会开放按钮；服务端 `requireChannelSubmissionFact` 则拒绝无渠道事实。三端红测复现 `WAIT_CALLBACK` 和已有开放尝试的 `CLOSED` 缺渠道仍可查；现各页面将同一快照的渠道字段传入 helper，开放尝试仅在渠道非空时显示主动查单。`SUCCESS` 和从未提交渠道的 `CLOSED` 只读入口仍保留，收款记录用其展示渠道字段提示，实际渠道归属仍由服务端核验。小程序既有待回调测试夹具补齐真实渠道后，App `107/107`、管理端 `282/282`、小程序 `102/102` 离线全量与 App/管理端 Vite 构建通过，`git diff --check` 通过。未重新执行九服务 HTTP、目标 MySQL 8、正式渠道或真实资金验收；管理端生产身份及授权仍未完成。
+
+### 10.828 收银台查单资格使用规范支付状态
+
+App/H5/PC 收银台原优先将中文展示 `status`（如“支付中”）传给仅接受 `WAIT_CALLBACK/CLOSED/SUCCESS` 的查单 helper，即使真实收银台 `paymentStatus=WAIT_CALLBACK` 且尝试与渠道均有效，也会误禁用主动查单。页面红测先锁定同快照状态来源与渠道事实；现收银台快照使用规范 `paymentStatus`，已有查单详情时使用详情 `status`，不从另一快照补拼资格。收银台定向 `15/15`、App 全量 `107/107`、H5 `4/4`、PC `4/4` 与 App/H5/PC 三端 Vite 构建通过。后续浏览器现场发现收银台服务响应另缺渠道字段，按 10.829 补齐；本项单独的离线结果不代表已验证按钮可用，仍不替代服务端受理门禁或目标 MySQL 8/真实渠道验收。
+
+### 10.829 待回调收银台渠道投影与三端查单按钮浏览器实测
+
+新增显式 `--demo --pending-demo` 浏览器模式：在固定端口的本机 H2/demo 身份确认后创建虚构预付并模拟一次渠道受理，再对 App/H5/PC 收银台与结果页逐一核对同源 `200 GET`、订单金额及查单按钮启用；默认 `--demo` 只读模式不变，浏览器内不发支付写请求。首次真实浏览器运行在 App 收银台超时，诊断发现后端已验证 `WAIT_CALLBACK` 渠道归属，却未把 `channel` 投影至 `CashierPageDTO`，使前端新增门禁对正常单也禁用按钮。服务红测先因 DTO 无字段无法编译，现待回调资格校验后返回已核验渠道，成功态返回成功详情渠道；App/小程序收银台适配器对待回调缺渠道失败闭合，测试夹具同步事实。修复后隔离支付核心与四个前端重启，Chrome headless 六页均通过按钮与读回检查，脚本退出码 0；停服后后端和前端均 DOWN。后端服务定向 `208/208`、App `107/107`、小程序 `102/102`、H5 `4/4`、PC `4/4`、浏览器脚本离线 `9/9` 及 App/H5/PC 构建通过，`git diff --check` 通过。本机身份字符串只防误连，并非可信认证；未触碰真实资金，未完成目标 MySQL 8、正式渠道、浏览器跨系统资金链或生产发布验收。
+
+### 10.830 待回调收银台原支付方式与渠道流水展示
+
+原收银台响应只投影已核验的渠道，已提交支付宝时三端页面会回退选中渠道列表首项，且首次主动查单前的流水展示为 `-`。现服务端在 `WAIT_CALLBACK` 事实门禁通过后投影同一提交事实的 `paymentMethod` 与 `channelTransactionNo`，`SUCCESS` 则取经核验的成功详情；App 收银台优先绑定已提交的原支付方式，App/小程序适配器拒绝缺支付方式的待回调快照，页面在未查单时展示收银台快照中的原渠道流水。演练首次超时揭示页面漏显示流水；补上后再次超时揭示浏览器脚本局部命令队列遮蔽了待回调参数，脚本断言始终读取 `undefined`，现已改名并保留失败时的页面诊断。最终固定本机 H2/demo 支付宝提交后，Chrome headless 对 App/H5/PC 六页的同源 `200 GET`、订单金额、已启用查单按钮、收银台原支付宝选中和原流水展示均通过；浏览器没有发起支付写请求，演示订单仅由脚本在浏览器启动前创建。另单独重启同一隔离栈，`--demo` 默认只读六页也通过，无支付提交。本轮 App `109/109`、小程序 `102/102`、H5/PC 各 `4/4`、浏览器脚本 `9/9` 及三端构建通过；后端相关定向 `208/208` 已在此前代码修改后通过，本轮未重跑后端全量。两次结束后支付核心及前端均 DOWN。仅为隔离演示，未验收目标 MySQL 8、正式渠道资金、可信授权和生产发布。
+
+### 10.831 末次渠道尝试还须精确匹配原支付方式
+
+收银台已开始显示原支付方式，但轻量受理事实与支付详情的 `paymentSubmissionChannelValid` 原只比较尝试和支付单的渠道编码；历史数据如原支付单为微信、末次尝试为支付宝而渠道编码仍相同，仍会被当作已受理。H2 回归先以另一方式、尾随空格、额外字符、空方式及英文大小写别名复现投影误判，成功详情原始事实时间线也曾放行错绑方式；后续纯空格两侧相等的红测再次复现。现两处 SQL 投影同时要求非空白、原长度及二进制精确一致的支付方式，成功时间线同样校验；原共享服务门禁据此对待回调、查单、回调及复用失败闭合，真实成功仍需其他成功事实。首轮红测 Mapper `81` 例中 2 项失败，纯空格补测再有 1 项失败；最终 Mapper `81/81`、支付服务 `208/208`、SQL 绑定 `1/1` 通过。隔离 H2/demo 支付宝浏览器六页验证同源 GET、原方式/流水及查单入口，通过后支付核心与前端均 DOWN，`git diff --check` 通过。空白加强后仅重跑离线定向测试；未运行后端全量套件、目标 MySQL 8、真实渠道或历史异常资金核对；未发布。
+
+### 10.832 成功收银台客户端须持有原渠道、支付方式与流水
+
+后端成功收银台已投影经核验的三项字段，但 App/H5/PC 与小程序响应适配器此前只在 `WAIT_CALLBACK` 拒绝缺渠道或方式，对 `SUCCESS` 可接受缺失事实并在页面回退选中候选方式、展示 `-` 流水。两端响应归一化红测各 1 项失败后，现成功态也要求非空渠道和原支付方式，并额外要求非空渠道交易号；待回调和未提交规则不变。App 全量 `109/109`、小程序全量 `102/102`、H5/PC 各 `4/4` 及 App/H5/PC 三端构建通过。隔离 H2/demo 微信支付成功、重复提交幂等复用与处理中退款九页 Chrome 同源 GET 演练通过，浏览器页面无支付写请求；脚本启动浏览器前生成演示订单，随后停服，支付核心及前端均 DOWN。`git diff --check` 通过。客户端门禁不代替后端成功资金事实核验；未运行后端全量、目标 MySQL 8、正式渠道或生产可信身份验收，未发布。
+
+### 10.833 小程序已受理收银台展示原方式
+
+小程序收银台原将支付方式卡片和按钮固定写为“微信支付”，即使同一预付单已在其他终端以支付宝受理或成功，也会把原方式误显为微信。现在有已核验原方式的待回调/成功快照会展示原方式、渠道和已有渠道流水，风控复核展示原复核方式；无上述方式事实时仍显示微信候选。其他方式使用中性蓝色标识，待回调/成功按钮显示只读状态而非“确认微信支付”。实际提交资格仍由 `canSubmitPayment` 的场景、渠道、方式和尝试事实控制，未改变小程序仅能提交微信的边界。WXML 页面绑定检查及支付资格定向 `30/30`、小程序全量 `103/103` 通过，`git diff --check` 通过。未用微信开发者工具或真机渲染，亦未连接正式渠道、目标 MySQL 8 或真实资金；服务均保持 DOWN，未发布。
+
+### 10.834 九服务链路复验待回调及成功收银台归属
+
+最近服务端支付方式精确归属和多端成功收银台门禁改动之后，先复跑跨系统脚本离线 `61/61`，再在写前端口/进程检查及九个 H2/demo 身份核验下执行原 happy-path：虚构订单支付、清分、结算、退款、账务和对账完整读回，`COMPLETED`、`4/4`、退出码 0，九个后端自动停服。检查发现演练只读了提交前收银台，未核对同一支付单在 `WAIT_CALLBACK` 和 `SUCCESS` 的收银台方式、渠道、流水是否与支付详情保持一致。新增 `assertBoundCashierPage` 绑定身份、场景、金额、原方式、渠道、交易号、末次尝试与展示状态，并让 App/小程序适配器验证这两份快照；离线 `62/62`，带新断言的九服务 HTTP happy-path 再次 `COMPLETED`、`4/4`、退出码 0，停服后九后端均 DOWN，`git diff --check` 通过。演练只证明隔离 H2 模拟链路，不代表目标 MySQL 8、正式渠道资金、可信调用方或发布验收。
+
+### 10.835 支付成功写路径与管理异常投影精确绑定方式
+
+此前读取投影已要求方式精确一致，但原子成功迁移、待回调回写、尝试成功收口、提交结果绑定和管理端可信成功异常投影仍只按渠道归属尝试。现对应 SQL 同时要求支付单与尝试方式非空白、原长度和二进制精确一致；H2 红绿用例覆盖错绑方式及边界。`PaymentMapperStateTransitionIntegrationTest` `83/83`、`PaymentServiceImplTest` `208/208`、SQL 绑定 `1/1` 通过。相邻 Mapper 首轮 `121` 例有 `47` 个测试简化表缺 `payment_method` 列的错误；补齐五个夹具及对应成功种子后，相关五类 Mapper `59/59`，HTTP 诊断 `2/2` 通过（本机临时端口须脱离沙箱）。隔离 H2/demo 九服务 payment-chain 再验 `COMPLETED`、`4/4`、退出码 0，自动停服。未运行后端全量套件，也未验收目标 MySQL 8、历史真实资金、正式渠道或可信身份；未发布。
+
+### 10.836 退款资金来源与日终异常守门补齐支付方式和时间线
+
+继续追查成功事实消费方发现，退款申请/审核/重试共用的加锁来源查询与日终差异计数仍只按渠道核对成功尝试。两处红测各 1 项先确认另一方式被误信；现同时要求原方式非空白、原长度及二进制一致，退款来源再精确核对渠道。退款来源时间线原仅比较支付创建至尝试完成、尝试完成至支付成功，补测发现尝试可在支付单创建前生成或在自身创建前完成；现按成功详情要求 `支付创建 <= 尝试创建 <= 尝试完成 <= 支付成功`。简化 H2 表补齐生产已有的尝试方式列，并为并发退款服务新增错绑方式拒绝与恢复申请回归。相关 15 类后端定向先通过 `289` 项，时间线加强后核心 Mapper/服务四类 `129/129`；最终九服务隔离 H2/demo happy-path `COMPLETED`、`4/4`、退出码 0，自动停服且九服务均 DOWN，`git diff --check` 通过。未运行后端全量套件，未验证目标 MySQL 8 排序/PAD、真实渠道资金或生产审批身份；未发布。
+
+### 10.837 日终凭证归属防止别名和跨渠道、跨业务单误记
+
+巡检发现日终渠道成功、内部成功、异常及成功缺口原仅以宽松支付单号关联渠道回调日志/出站事件，别名日志、其他渠道日志或其他业务单事件可能掩盖真实缺口。H2 红测以大小写别名复现，并补验尾随空格。现十处指标引用相同的精确渠道收口/内部成功事件存在性片段：支付单号原长度与二进制一致，渠道日志编码精确匹配原渠道，成功事件 `biz_no` 精确匹配原业务单号；计数、金额和缺口不再各自漂移。旧过款集成样本补齐事件业务单号，并将变更原订单号后未同步事件的期望改为日终异常。日终 Mapper/服务五类定向 `56/56`、隔离 H2/demo 九服务支付至退款和财务对账 `COMPLETED`、`4/4`、退出码 0，自动停服后九服务 DOWN，`git diff --check` 通过。未运行后端全量，目标 MySQL 8 的字符集/PAD、真实渠道通知、财务对账文件及发布仍待验收。
+
+### 10.838 异常中心拒绝别名事实及告警详情真实回查状态
+
+异常中心待回调摘要原可借用别名尝试/回调；待处理回调、失败事件、退款提交未知事件和停用渠道配置也能经不敏感关联误归属。H2 两项红测复现；现父支付单、渠道及最新事实要求原长度和二进制精确一致。列表/详情的动作、应用内/外部告警、派发汇总按异常原编号精确关联且二进制分组；单条异常/告警读取与待回执告警确认写入拒绝编号别名。补测真实告警详情 Mapper 时还发现 `receiptQueryStateExpression` 要求 `query` 阈值，但原 `findAlertLogByAlertNo` 只传 `alertNo`，导致 `BindingException`；现服务端按与列表相同的最短等待、最大回查次数和 claim 超时传参，详情与确认回读可执行。七类异常/任务/告警定向 `94/94`，九服务隔离 H2/demo happy-path `COMPLETED`、`4/4`、退出码 0，自动停服后九服务 DOWN，`git diff --check` 通过。未运行后端全量套件或验收真实历史孤儿记录、目标 MySQL 8、可信运营身份及生产告警触达；未发布。
+
+### 10.839 告警派发、回执及来源确认精确归属
+
+H2 不敏感告警号/异常号夹具的红测确认：outbox 加锁可接受大小写别名；外发日志可借用来源告警别名进入成功历史和回执领取。现派发加锁与状态回写精确校验告警号及异常号；通道成功/失败历史、最近派发和供应商窗口统计精确核对来源告警及异常身份；已受理列表、单条和到期回查要求精确来源，领取、完成、送达回写和来源确认同时核对三段编号。大小写与尾随空格别名被拒绝，精确链路保留原有成功路径。先跑两个派发红测及一个回执红测，修复后 Mapper `35/35`、相邻派发/任务中心/异常服务合计四类 `231/231` 通过，`git diff --check` 通过。未在目标 MySQL 8 排序规则/PAD 下验收、未接真实供应商回执或运行后端全量套件；未发布。
+
+### 10.840 SLA 候选不受别名告警或渠道配置压制
+
+任务中心的首次告警候选原按宽松异常号检查既有待确认告警，大小写与尾随空格别名可压掉真实候选；升级排重又可通过别名来源号、别名异常号或历史告警内容的前缀误命中而漏升级。SLA 的四处停用渠道连接同样可能从别名渠道配置产生误报。H2 红测分别复现三类缺口；现首次告警按原长度和二进制精确排重，升级候选须核对精确异常号及来源告警号，旧记录只有 `source_alert_no` 为空且内容以精确的 `升级来源告警 <告警号> 已超过` 起始时才作为排重依据，显式错绑来源不得被内容兜底。停用渠道关联精确核对渠道编码；大小写/尾随空格别名不产生 SLA 超时，精确记录仍可统计与排重。Mapper `38/38`，四类定向 `234/234`，`git diff --check` 通过。未在目标 MySQL 8 排序规则/PAD 或真实历史升级数据上验收，未运行后端全量套件；未发布。
+
+### 10.841 到期关单看板与实际关单资格一致
+
+任务中心概览、待关单及退避计数原以宽松支付单号关联最新预付、支付尝试与关单重试，可能把别名新预付当成原预付、把别名尝试当成原单已提交、把别名退避当成原单待重试，造成看板与 `PaymentMapper.findExpiredPayments` 的真实执行候选不一致；旧计数还缺 `success_at IS NULL` 与精确 `PREPAY_CREATED` 状态门禁。H2 红测插入大小写/尾随空格别名复现待关单计数从 2 误降为 1；现三项计数复用执行侧的精确编号、状态及成功时间边界，别名记录不改变 2 个到期、1 个退避、概览 3 个待处理的事实，带成功时间或大小写变体状态也不计入。任务中心 Mapper `39/39`、支付状态迁移 Mapper `83/83`、到期服务 `11/11`、任务中心服务 `94/94`，合计 `227/227`，`git diff --check` 通过。未在目标 MySQL 8 的排序/PAD 或真实历史数据上验收，未运行后端全量套件；未发布。
+
+### 10.842 自动日终批次与成功任务日志精确关联
+
+日终巡检的三项关联检查原以宽松 `business_ref_no = batch_no` 判定已关联、孤儿及重复；H2 不敏感排序红测复现别名任务日志错误掩盖原批次缺失。任务代码、`AUTO` 模式、调度触发身份和 `SUCCESS/WARNING` 结果也可被大小写变体伪装成合格凭证。现批次号、任务引用与更早日志按原长度和二进制精确关联，批次及任务的模式、代码、触发者和终态须原样匹配；别名日志不能掩盖缺失或制造重复，精确日志仍按一对一及重复事实巡检。任务中心 Mapper `41/41`、服务 `94/94`、日终巡检 Mapper `1/1`、日终服务 `32/32`，合计 `168/168`，`git diff --check` 通过。未在目标 MySQL 8 排序/PAD、真实日终文件与历史批次日志上验收，未运行后端全量套件；未发布。
+
+### 10.843 任务执行日志详情和筛选拒绝别名
+
+管理端任务日志详情原仅用宽松 `task_log_no` 比较，大小写别名可读到另一条日志；列表、计数、导出中的任务编码、运行方式、任务状态、严重等级也可与大小写或尾随空格别名互相混入。H2 红测复现详情号误读；现详情按原长度和二进制精确绑定日志号，三个筛选入口复用相同的精确过滤片段。别名参数不读出精确日志，精确参数也不包含别名任务编码的日志。任务中心 Mapper `42/42`、服务 `94/94`、控制器 `5/5`，合计 `141/141`，`git diff --check` 通过。未在目标 MySQL 8 排序/PAD 或真实历史任务日志上验收，未运行后端全量套件；未发布。
+
+### 10.844 待回调支付查单候选与退避历史精确归属
+
+任务中心的人工/自动查单列表及积压/到期计数原以宽松支付单号选末次尝试和预付，可把无精确预付或无精确尝试的单据排入查单，并将小写状态视作 `WAIT_CALLBACK`。自动查单历史还按不敏感支付单号聚合，别名最近查单可使真实待查支付单进入退避。H2 两项红测分别复现伪候选（积压 6 错计 9）及别名退避（到期 3 错计 2）；现四处查询精确核对支付单、预付、末次尝试和原样状态，历史按原长度及二进制身份分别聚合并精确关联，大小写/尾空格历史不能压掉真实待查单。补验别名新尝试不能覆盖原末次，精确新尝试和精确近期查单仍按原规则阻止未到等待时间或退避中的补查。Mapper `45/45`、任务中心服务 `94/94`、控制器 `5/5`、支付服务 `208/208`，合计 `352/352`，`git diff --check` 通过。未在目标 MySQL 8 排序/PAD、真实渠道查单及历史回调中验收，未运行后端全量套件；未发布。
+
+### 10.845 处理中退款查单只接受精确尝试、提交事件与退避日志
+
+人工/自动退款查单候选及积压/到期计数原可将别名退款尝试、别名提交事件和小写 `PROCESSING` 视为真实待查记录；自动退避聚合还可借用别名尝试号、别名退款单号或另一退款单的日志。H2 红测分别复现积压 9 错计 12、到期 5 错计 4，以及错绑提交事件使 `REF-UNKNOWN-PENDING` 伪装为待查。现四处查询按原长度和二进制精确选同退款单最新尝试、原样状态及提交事件，后者还须精确匹配原支付单、`gateway-access` 下游和 `payment.refund.submitted.v1` 主题；退避直接按操作日志的退款单号及尝试号独立分组并精确关联，原样查单动作才计入。另补验别名新尝试、尾空格日志、错误下游/主题和大小写终态不影响候选，精确新尝试与真实近期查单仍执行等待/退避。任务中心 Mapper `50/50`、退款查询任务 `5/5`、退款服务 `90/90`、任务中心服务 `94/94`、控制器 `5/5`，合计 `244/244`，`git diff --check` 通过。未在目标 MySQL 8 排序/PAD、真实退款渠道及历史日志上验收，未运行后端全量套件；未发布。
+
+### 10.846 查单监控趋势排除状态和动作别名
+
+先在无环境覆盖、无现存目标 PID/端口的写前门禁下，运行九服务隔离 H2/demo `verify payment-chain`：HTTP 冒烟、演示身份与支付至退款、清分、结算、账务、对账读回均通过，对账 `COMPLETED`、`4/4`，退出码 0，九后端停服。随后发现任务中心查单总量、失败量、小时趋势仍按不敏感状态/动作统计，历史尾空格支付通知及大小写/尾空格退款动作可能误增监控失败比例并触发虚假告警。H2 红测复现总量 `36` 错计 `37`；现三处指标共用精确状态和动作筛选，失败计数也核对原长度和二进制值。别名不改变 `36` 次查单、`4` 次失败或趋势，真实精确失败仍计入 `37/5`。Mapper `51/51`、任务中心服务 `94/94`、控制器 `5/5`，合计 `150/150`。SQL 修改后再次运行九服务隔离演练，通过 HTTP 冒烟及写入型支付到财务对账 happy-path，对账 `COMPLETED`、`4/4`，退出码 0，九后端自动停服，`git diff --check` 通过。仍未运行后端全量套件，也未在目标 MySQL 8 的 collation/PAD、真实渠道查单和历史日志上验收，不涉及真实资金或发布。
+
+### 10.847 查单监控告警冷却拒绝别名记录压制
+
+查单失败趋势与限流拒绝告警在冷却期原只按数据库默认排序规则比较异常类型、应用内渠道和待确认状态；历史类型尾空格、渠道大小写变体或确认状态尾空格可冒充真实待确认 outbox，导致应生成的监控告警被错误抑制。H2 不敏感列红测复现限流拒绝候选从应计 `0` 错计为 `1`；现冷却查询对三项字段同时约束原长度和二进制原值，别名不压制，真正同类型待确认应用内告警仍计入 `1` 并实施冷却。任务中心 Mapper `52/52`、服务 `94/94`、控制器 `5/5`，合计 `151/151`，`git diff --check` 通过。本项仅做定向 SQL/服务测试，未另行运行九服务链路、后端全量套件，也未验收目标 MySQL 8 collation/PAD、生产告警历史或真实通知；未发布。
+
+### 10.848 待派发告警看板、候选与终态写入共用资格
+
+任务中心待派发/失败数与最老等待时长原要求 `ack_status = '待确认'`，但实际派发候选和加锁用 `COALESCE` 接受历史空确认状态；同时宽松渠道、派发状态和确认状态可将别名旧记录计入看板、选作候选。H2 红测将同一批原样待派发、历史空确认与大小写/尾空格别名并列：旧看板最老等待时长误报 `40` 分钟，而真正合格候选最老仅 `10` 分钟。现三个看板指标、派发候选、加锁和最终派发状态写入共用精确应用内渠道、三种原样待派发状态及空确认/原样待确认资格；精确旧记录仍可派发，别名不得误计或绕过最终写门禁。追加红测复现别名最终写入曾影响一行，修复后均为零行；看板 `2` 待派发、`1` 失败、最老 `10` 分钟与候选对齐。任务中心 Mapper `53/53`、服务 `94/94`、控制器 `5/5`，合计 `152/152`，`git diff --check` 通过。九服务目前均 DOWN；本项未执行跨系统演练或后端全量套件，目标 MySQL 8 排序/PAD、真实历史告警和正式通知仍未验收；未发布。
+
+### 10.849 手工回执待处理数精确归属来源告警
+
+回执实际候选和认领已精确核对来源告警号及异常号，但任务中心的手工待处理数仍仅做宽松关联；H2 不敏感告警号红测显示别名来源通知在实际候选为 `0` 时错误计为 `1`。现手工计数补齐来源告警号、异常号的原长度和二进制精确关联，精确归属时仍为 `1`；进一步以大小写变体异常号验证别名排除、恢复后可计。Mapper `53/53`、相邻服务 `94/94`、控制器 `5/5` 定向通过，`git diff --check` 通过。按接口契约 14.328，回执总量与四类队列状态保留风险存量/调度状态语义，并不要求精确来源或与人工可执行候选相等，不能为“对齐”而错误删除孤儿待核记录；它们的历史状态精确性仍可单独核验。未运行后端全量，也未验收目标 MySQL 8 排序/PAD 或真实供应商回执；未发布。
+
+### 10.850 九服务隔离链路复验与回执风险存量契约复核
+
+在本地无目标服务、无相关环境覆盖且脚本写前 PID/端口门禁和演示身份验证下，执行 `bash tools/dev/local-stack.sh verify payment-chain`：九个 H2/demo 服务均由脚本本轮启动并通过 HTTP 冒烟，虚构订单支付、清分、结算、退款、账务事件和对账事实读回通过；对账为 `COMPLETED`、`4/4`，财务可关账标记为 true，退出码 0，脚本自动停服。回查接口文档 14.84、14.328，确认 `pendingIssueAlertReceiptCount` 是全部供应商已受理且待确认的风险存量、四类队列状态是调度状态，`manualIssueAlertReceiptCount` 才代表可人工批量认领的候选；两者不要求相等，故未改变前五项的孤儿记录统计语义。该演练只证明隔离 H2 模拟链路，不证明目标 MySQL 8、真实供应商送达、正式渠道资金或生产发布；后端全量套件仍未运行。
+
+### 10.851 事件重发候选与任务中心失败风险拒绝状态别名
+
+事件重发服务层按原样 `FAILED/PENDING` 与允许的事件类型再裁决，但 SQL 原按不敏感排序选出大小写或尾空格别名，虚增人工/自动批次和事件中心到期数；任务中心失败/死信按钮、超时异常及告警生成也可被别名事件抬高。两组 H2 红测分别复现 `failed` 进入人工重发名单、失败风险从应为 `0` 错计为 `1`。现事件 Mapper 的人工/自动候选及到期数要求原样失败或原样待派发加精确允许事件类型；任务中心失败、死信、超时和首次告警计数及实际告警候选复用精确状态片段。别名不改变基线，新增原样失败与死信后任务中心风险和告警候选各增加 `2`。事件 Mapper `14/14`、任务中心 Mapper `54/54`、退款 outbox Mapper `52/52`、事件重发服务 `6/6`、任务中心服务 `94/94`、控制器 `5/5`，合计 `225/225`。SQL 修改后九服务隔离 H2/demo `verify payment-chain` 再验 HTTP 冒烟与支付至退款、清分、结算、账务及对账读回，`COMPLETED`、`4/4`、退出码 0，九后端均自动停服，`git diff --check` 通过。事件中心其余状态汇总/列表筛选和其他原子状态写入仍待单独核验；未运行后端全量，未验收目标 MySQL 8 collation/PAD、真实渠道事件或生产发布。
+
+### 10.852 事件中心列表、导出和总览拒绝规范状态别名
+
+事件中心总览此前仍把 `failed` 当作规范失败，列表/计数/导出的 `FAILED_OR_DEAD_LETTER`、单状态和事件类型筛选也依赖默认不敏感比较，故与已收紧的重发批次口径分叉。H2 不敏感列红测复现失败总览应为 `1` 却计 `2`；现共用精确失败/死信片段、普通状态与事件类型参数核对原长度及二进制值，总览 `SUCCESS/PENDING/FAILED/DEAD_LETTER/UNKNOWN` 和支付成功事件数亦只统计原样值。用大小写/尾空格别名及规范待派发错绑事件类型验证：未筛选失败数 `1`、待派发数 `1`、支付成功事件数 `4`，联合失败筛选的列表、导出、计数和总览均只读 `1` 条，交叉的规范待派发+支付成功类型筛选为 `0`。事件 Mapper `14/14`、退款 outbox Mapper `52/52`、事件服务 `18/18`、控制器 `5/5`、重发任务 `6/6`，合计 `95/95`，`git diff --check` 通过。本项未重跑九服务、后端全量，目标 MySQL 8 collation/PAD、历史异常事件清理及正式渠道仍待验收；未发布。
+
+### 10.853 支付事件原子写入拒绝别名状态、类型及 HTTP 阶段
+
+事件 Mapper 的发布成功/失败/死信/未知迁移、支付成功 HTTP 两阶段以及成功重发审计原仍在数据库默认不敏感比较下接受 `failed`、`PENDING `、`payment_success` 或 `clearing_accepted` 等历史别名。H2 两项红测先复现别名失败状态可直接写成发布成功、别名事件类型可推进清分已受理。现原有集合资格之外复用精确原长度和二进制状态门禁，HTTP 两阶段另精确核对事件类型及当前阶段；审计只接受原样 `SUCCESS`。别名迁移均为零行，原样 `UNKNOWN` 人工复核收口、规范清分/HTTP 完成仍可成功。事件 Mapper `16/16`、退款 outbox Mapper `52/52`、事件派发服务 `84/84`、事件服务 `18/18`、重发任务 `6/6`，合计 `176/176`。九服务隔离 H2/demo `verify payment-chain` 通过 HTTP 冒烟与支付、清分、结算、退款、账务、对账读回，`COMPLETED`、`4/4`、退出码 0，九后端自动停服，`git diff --check` 通过。未运行后端全量套件，目标 MySQL 8 collation/PAD、历史别名修复、正式渠道资金与生产发布仍待验收。
+
+### 10.854 事件详情与导出诊断不借用编号别名支付事实
+
+事件列表、导出与详情的 `successFactIssue` 原只按宽松支付单号投影所属支付事实；详情的标准业务单也按宽松 `biz_no = order_no` 连接。H2 不敏感编号红测把事件改指向 `pay-001/ord-001`，原错误投影另一单的 `SUCCESS_FACT_MISMATCH`，且会在详情显示 `ORD-001`。现两个连接都要求原长度和二进制精确一致；大小写与尾空格别名只返回空诊断/空标准单号，恢复 `PAY-001/ORD-001` 后真实不一致仍返回 `SUCCESS_FACT_MISMATCH` 和精确标准单号。事件 Mapper `17/17`、事件服务 `18/18`、控制器 `5/5`、退款 outbox Mapper `52/52`，合计 `92/92`，`git diff --check` 通过。本项不改变事件投递或资金成功事实；未运行后端全量、九服务演练，目标 MySQL 8 collation/PAD、真实历史关联和正式渠道仍待验收；未发布。
+
+### 10.855 事件详情标准订单须验证业务来源归属
+
+`REFUND_SUBMIT` 的 `biz_no` 是退款尝试号，支付事件的 `biz_no` 也可能来自虚拟订单；旧详情只按 `biz_no = t_order.order_no` 连接，即使编号精确相等，退款尝试号与既有标准单号碰撞也会错误给出标准订单联查。H2 碰撞红测返回了 `ORD-001`。现详情仅对原样 `PAYMENT_` 前缀事件，经同支付单预付单 `source_kind = STANDARD_ORDER` 原样校验，且预付单订单号与事件业务号精确一致后返回标准订单号；退款事件、事件类型大小写别名、虚拟来源、来源别名或预付单订单号不一致均为空，恢复合法来源则仍返回 `ORD-001`。事件 Mapper `18/18`、事件服务 `18/18`、控制器 `5/5`、退款 outbox Mapper `52/52`，合计 `93/93`；`git diff --check` 通过。最终修改后 `bash tools/dev/local-stack.sh verify payment-chain` 九服务隔离 H2/demo HTTP 冒烟和支付到退款对账完成（`COMPLETED`、`4/4`），脚本已停服；首次沙箱启动进程即时退出且日志为空，按权限门禁在沙箱外重跑通过。未运行后端全量套件；目标 MySQL 8 collation/PAD、真实历史预付单来源、其他详情联查、正式渠道和真实资金仍未验收；未发布。
+
+### 10.856 支付流水、请求和处理日志详情标准订单来源联查
+
+沿事件详情复核相邻运营入口：`BUSINESS_EVENT` 流水仍把退款尝试号碰撞标准单号的 `biz_no` 当作标准订单；支付尝试、路由、回调流水及支付请求、处理日志则可把虚拟订单业务号碰巧同名误当成标准订单。逐一补 H2 红测确认旧投影错误返回 `ORD-DETAIL / ORD-STANDARD / ORD-001`。现支付尝试和路由以本次尝试精确归属的预付单核验原样 `STANDARD_ORDER` 和业务号；回调及日志须有同支付单、同业务号的标准来源预付单；业务事件额外要求原样 `PAYMENT_` 前缀，退款与别名保持空；请求用自身精确归属预付单校验。标准订单和业务号连接同时按长度及二进制原样匹配，虚拟来源、来源大小写别名、预付单订单号不一致返回空，恢复合法来源仍可联查。三类 Mapper `12/12`、`13/13`、`6/6`，对应服务 `8/8`、`11/11`、`11/11`，控制器 `3/3`、`4/4`、`4/4`，合计 `72/72`。最终修改后九服务隔离 H2/demo HTTP 冒烟和支付到退款对账 `COMPLETED`、`4/4`，脚本已停服；`git diff --check` 通过。**未关闭**账单/收银台详情同名联查审计、后端全量套件、目标 MySQL 8 collation/PAD 和历史数据来源、真实渠道与资金验收；本地模拟不是生产放行，未发布。
+
+### 10.857 账单与收银台详情同名虚拟业务号失败关闭
+
+虚拟预付单与虚拟账单均可能用业务号命中后续标准订单号；原收银台和账单详情只凭 `t_order.order_no` 存在便返回标准订单联查。H2 红测分别将虚拟预付单 `ORD-003` 与虚拟账单 `ORD-002` 加入同名标准订单，旧投影误返回订单号。现收银台要求自身预付单来源为原样 `STANDARD_ORDER` 且订单号精确匹配；账单无独立来源字段，仅在账单号、订单号均精确归属至少一张原样标准来源预付单时返回标准订单，缺失或仅虚拟来源则为空。来源大小写别名仍为空，恢复标准来源可联查。收银台旧 H2 fixture 缺失支付成功事实所需 `payment_method` 列与取值，已按现有投影补足，仅修改测试结构及数据。账单 Mapper/服务/控制器 `5/5 + 9/9 + 4/4`，收银台 `9/9 + 10/10 + 4/4`，连同 10.856 九类共 `113/113` 定向通过。最终修改后九服务隔离 H2/demo HTTP 冒烟、支付到退款对账 `COMPLETED`、`4/4`，已停服；`git diff --check` 通过。**未关闭**账单历史多预付单混合来源的归属核验、前端空联查文案、后端全量套件、目标 MySQL 8 与真实资金/渠道验收；未发布。
+
+### 10.858 管理端事件详情接受合法空标准订单归属
+
+后端事件详情现对退款、虚拟或来源不明业务号返回显式 `standardOrderNo: null`，但管理端 `normalizePaymentEventDetailResult` 原要求非空字符串，红测确认合法退款事件被整页拒绝。现显式 `null` 可保留完整事件事实，缺字段、空白字符串仍拒绝；订单入口只根据归属字段和当前快照启用。账单、收银台、请求、流水、事件与处理日志六个详情页将原“当前业务号不是标准订单/未命中标准订单”误断言改为中性“归属未确认，暂不可联查”，账单页同步展示归属字段和联查状态。API 红绿与六页门禁断言通过，管理端 `npm test` 全量 `283/283`、`npm run build` 通过，`git diff --check` 通过。**未关闭**后端全量、真实 HTTP 详情逐来源回环、账单混合来源历史事实、目标 MySQL 8 和真实资金/渠道验收；未发布。
+
+### 10.859 历史账单混合预付来源拒绝标准订单联查
+
+账单详情旧规则只要求存在一张精确匹配的 `STANDARD_ORDER` 来源预付单，若同账单旧预付单被改成 `VIRTUAL` 或订单号漂移，仍借另一张标准来源预付单返回 `standardOrderNo`。H2 红测在 `BILL-STABLE-001` 的两张预付单中制造虚拟/标准混合，旧投影错误返回 `ORD-001`。现保留至少一张标准来源的正向证据，并要求同账单号所有预付单均原样标准来源、订单号与账单精确一致；冲突或来源缺失时仅清空只读标准订单联查，不修改账单/资金事实，恢复一致后仍返回合法订单号。账单 Mapper `6/6`、服务 `9/9`、控制器 `4/4`，连同 10.856—10.857 相邻共 `114/114`；最终修改后九服务隔离 H2/demo 支付到退款对账 `COMPLETED`、`4/4` 且已停服，`git diff --check` 通过。**未关闭**历史真实混合来源清理、目标 MySQL 8 collation/PAD 与新增联查执行计划、其他支付单多预付来源一致性、后端全量、正式渠道与资金验收；未发布。
+
+### 10.860 退款出站事件脱敏占位符贯通管理端
+
+追查 10.858 的退款事件可读性时，发现 `RefundMapper.upsertRefundSubmitEvent` 原始 `event_payload` 是“退款渠道待下发”等纯文本；服务端 `PaymentSensitiveDataMasker.maskPayload` 对非 JSON 返回精确 `[REDACTED]`，而管理端事件列表/详情及 `BUSINESS_EVENT` 流水列表/详情只接受 JSON 对象/数组，旧逻辑仍会拒绝该退款事件。四类客户端红测复现；现只增加对固定 `[REDACTED]` 的接受，其他任意非 JSON、扩展伪占位符、空值仍拒绝，不放宽原始敏感载荷。前端全量 `283/283`、Vite 构建通过，后端脱敏/退款 outbox/事件/流水服务定向 `87/87`，`git diff --check` 通过。**未关闭**真实 HTTP 退款事件列表与详情逐入口回环、目标 MySQL 8/真实历史数据、后端全量和正式渠道资金验收；本轮仅只读兼容，不改写事件载荷或投递状态，未发布。
+
+### 10.861 独立 H2 HTTP 验证历史退款事件四入口
+
+尝试在九服务 `payment-chain` 演练中查找 payment-core `REFUND_SUBMIT` 时，隔离账本只出现该支付单的 `PAYMENT_SUBMIT/PAYMENT_SUCCESS`：该脚本调用的是 refund-center 退款，不会创建 payment-core 退款 outbox；演练拒绝继续并自动停服，错误断言已撤回，不把它当作支付核心退款验收。改为在 `PaymentDiagnosticHttpIntegrationTest` 的独立 `demo` H2 实例中插入一条与标准订单号碰撞的旧纯文本 `REFUND_SUBMIT` 事件，读取 payment-core 事件列表/详情及 `BUSINESS_EVENT` 流水列表/详情，逐项确认安全载荷 `[REDACTED]`、详情 `standardOrderNo: null`、事件归属与成功响应。沙箱首次拒绝绑定本机 HTTP 端口，按许可在本地回环重跑该单测 `1/1` 通过且上下文已关闭。**未关闭**经 payment-core 退款业务入口真实生成的完整 HTTP 链路、目标 MySQL 8/正式渠道与资金、后端全量验收；这条测试仅插入本地诊断 fixture，不执行真实退款或生产外部写入。
+
+### 10.862 支付核心退款业务入口生成 outbox 的隔离 HTTP 验证
+
+新增 `RefundOutboxHttpIntegrationTest`，在独立 `demo` H2 和本机随机端口上请求 payment-core `POST /api/refunds/apply`、`POST /api/refunds/approve`。先将 demo 中支付尝试完成时间修复为与支付成功事实一致；本测试仅替换 `PaymentEventDispatchService` 为 Mockito mock，避免提交后即时派发进入渠道或消息系统。验证申请为 `REVIEWING`、批准为 `PROCESSING`、数据库只生成一个退款尝试及对应 `REFUND_SUBMIT/PENDING` outbox，校验提交后 mock 恰好收到同一事件号、尝试号和审核操作人；进一步读取事件和业务流水列表/详情，确认纯文本载荷统一脱敏为 `[REDACTED]`、详情标准订单号为 `null`。定向回环测试 `1/1` 通过，Spring 上下文已停止；首次沙箱绑定受限后经许可重跑。**未关闭**真实渠道派发与退款资金、目标 MySQL 8/历史数据、后端全量及生产身份/发布验收；本地 mock 不构成渠道实际提交证据。
+
+### 10.863 退款事件锁定投影缺失导致渠道下发跳过
+
+继续运行未替换派发服务的 payment-core `demo` H2 HTTP 申请/批准：即便 `RefundChannelSubmitService` 明确为 `LocalRefundChannelSubmitServiceImpl`，原事务提交后退款尝试仍是 `PENDING`，出站事件也停在 `PENDING`。根因是 `PaymentEventMapper.findByEventNoForUpdate` 只投影事件类型、支付单、业务号和状态，未返回 `downstream_system/event_topic`；派发服务要求两字段均匹配 `gateway-access/payment.refund.submitted.v1`，因此直接拒绝处理而不调用本地渠道适配器。补齐锁定查询投影，Mapper 断言验证原值。现第二条隔离 HTTP 测试从 `apply/approve` 运行真实事件派发服务、demo 本地渠道受理到模拟 `wx_jsapi` 退款成功回调，检查 `ACCEPTED`、出站事件 `SUCCESS`、终态 `SUCCESS`、重复回调幂等且仅一轮尝试。两条 HTTP 测试 `2/2`、退款出站 Mapper `52/52`、事件审计 Mapper `18/18`、派发服务 `84/84`、重试服务 `6/6`，合计 `162/162` 通过；`git diff --check` 通过。demo 关闭验签且本地适配器不接触真实渠道，**未关闭**非 demo 签名回调、真实网关及资金闭环、目标 MySQL 8/历史数据、后端全量和生产发布验收。
+
+### 10.864 调用渠道前失败后按事件重发的 HTTP 事务验证
+
+在第三个独立 payment-core `demo` H2 实例中，把本地渠道提交服务替换为受控 mock，首次明确抛出“请求未发出、结果已知失败”的 `RefundChannelSubmitException`，确认批准后退款尝试与出站事件均为 `FAILED`，不伪造渠道受理。随后只对该 `REFUND_SUBMIT` 事件调用 `POST /api/payment-events/republish`，第二次 mock 返回本地受理事实，检查事件转为 `SUCCESS`、同一尝试转 `ACCEPTED`、退款单绑定渠道退款号、审核操作人写入重发审计，且只发生两次本地 mock 调用、一轮退款尝试；没有批量运行候选任务或调用其他 demo 支付成功事件的下游。`RefundOutboxHttpIntegrationTest` 当前 `3/3` 通过，`git diff --check` 通过。**未关闭**结果未知必须先查渠道、真实网关幂等/资金、非 demo 验签、MySQL 8 与后端全量验收；此测试只证明调用前拒绝的可重发分支。
+
+### 10.865 渠道结果未知禁止自动候选与手动盲目重发
+
+第四个独立 payment-core `demo` H2 回环使用受控 mock 模拟渠道请求已发出、响应未知。批准后只发生一次提交调用，退款尝试与出站事件均保持 `UNKNOWN`，退款单仍为 `PROCESSING`；Mapper 的自动到期失败事件候选不包含该事件。对指定事件调用 `POST /api/payment-events/republish` 返回 `REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED`，事务后事件仍 `UNKNOWN`、未写入重发审计且未二次提交，退款尝试数保持一。四条退款 HTTP 案例 `4/4` 通过；`git diff --check` 通过。**未关闭**取得真实渠道可信查单/回调结果后的未知状态收口、真实资金、非 demo 签名、目标 MySQL 8/历史数据、后端全量与生产发布；不能从阻止盲重发推出渠道实际退款状态。
+
+### 10.866 模拟可信查单恢复未知退款并收口
+
+在 10.865 同一隔离 H2 场景的防盲重发检查后，额外把 `RefundChannelQueryService` 替换为受控 mock，返回完整的 `SUCCESS`、渠道退款号和查单来源，调用 payment-core `POST /api/refunds/query`。真实业务服务在一个事务内恢复 `UNKNOWN` 退款尝试的渠道受理事实、将对应 outbox 确认为 `SUCCESS`、写一条 `CHANNEL_ACCEPTANCE_RECOVERED` 操作日志并把退款收口为 `SUCCESS`。终态重复查单直接读取可信终态事实，不再次调用 mock 查单或渠道提交；尝试仍只有一轮。局部及四条完整 HTTP 用例均通过，最终 `4/4`；`git diff --check` 通过。**边界**：模拟查单回执不是外部渠道的真实可信响应，demo 关闭回调签名；正式 gateway-access 查单、真实资金核验、非 demo 验签、MySQL 8/历史数据、后端全量与生产放行仍未验收。
+
+### 10.867 本地退款渠道回调严格验签与 nonce 防重
+
+把原 demo 渠道成功回调用例改为种子中具备 HMAC 配置的 `offline_bank` 支付来源，仅该测试实例显式启用 `payment.callback.require-signature=true`，并将 nonce TTL 配为 `3601` 秒以严格覆盖该渠道 `1800` 秒对称签名窗。先验证缺少签名、改动 `SUCCESS` 为 `FAIL` 但沿用原签名均被拒绝且不修改处理中退款，再按服务端同一规范签名提交成功回调；同一 nonce 重放返回 `PAYMENT_CALLBACK_NONCE_REPLAY`，换新 nonce 的合法重复终态回调保持幂等。四条完整 HTTP 用例 `4/4`，`git diff --check` 通过。**运行配置风险**：默认 nonce TTL `601` 只适用于不大于 `300` 秒的渠道签名窗，种子 `offline_bank` 为 `1800` 秒；正式部署启用该渠道验签时须显式满足 TTL `> 3600`，否则虽失败关闭但无法收口合法回调。仍未覆盖非 demo 网关真实密钥、真实资金和生产部署。
+
+### 10.868 payment-core 到 gateway-access 退款提交线缆契约
+
+在 payment-core 非 demo 网关适配器测试中新增仅绑定 `127.0.0.1` 随机端口的 HTTP 测试桩，以真实 `RestTemplate`/Jackson 发出退款提交请求。校验 `X-Gateway-App-Code`、`X-Gateway-Access-Key`、退款单/尝试/支付单/订单号、渠道与金额的 JSON 投影，确认访问密钥不进入请求业务体；读取与 gateway-access 文档一致的 `ApiResponse` 成功受理结构后，对 HTTP 200 的 `GATEWAY_UPSTREAM_NOT_CONFIGURED` 业务拒绝保持“调用真实上游前已知失败”，不误标记结果未知。payment-core 适配器 `9/9`，gateway-access 控制器 `2/2`、提交服务 `6/6`，合计 `17/17`，`git diff --check` 通过。**边界**：接收端为测试桩，未启动 gateway-access 真服务或真实上游，跨服务鉴权/治理、真实退款渠道与资金、MySQL 8/历史数据及生产发布仍未验收。
+
+### 10.869 gateway-access 真服务退款 HTTP 治理与本机上游
+
+在 gateway-access 模块独立 H2 上启动真实 Spring Boot 服务，配置共享访问密钥和仅指向 `127.0.0.1` 的退款上游。HTTP 请求分别验证错误密钥与已到期 `CERT_WX_2026` 证书在上游前失败，且失败事实入审计；一次性 H2 fixture 延长证书日期后同一业务请求被治理门禁允许，退款尝试号原样发送至本机上游测试桩，受理回执与成功审计落地。gateway-access HTTP/控制器/服务 `9/9` 通过，与 10.868 的 payment-core 出站 `9/9` 分别验证，总计定向 `18/18`，`git diff --check` 通过。**边界**：两个模块未在同一进程/同一次请求里连起来；真实证书已过期的种子问题只在 H2 中局部修复，生产证书、真实共享凭证/网络、渠道资金、MySQL 8/历史事实和全量套件仍未验收。
+
+### 10.870 payment-core 与 gateway-access 同请求退款提交回环
+
+新增 `tools/dev/payment-core-gateway-refund-smoke.mjs`：随机回环端口启动两个真实 Spring Boot 服务、独立临时 H2 和本机假上游，共用仅供本次运行的访问密钥。仅在临时 fixture 调整演示支付渠道、成功时间与过期网关证书，不改持久数据。通过 payment-core HTTP 申请及批准退款，确认 `REFUND_SUBMIT` outbox 为 `SUCCESS`、gateway-access 成功审计含回环客户端地址、假上游仅收到一次且退款单号/尝试号与出站事件一致。随后由 payment-core 主动查单，经同一 gateway-access 的鉴权/治理到假上游取得模拟 `SUCCESS`，退款单收口成功、网关查单成功审计落地；重复终态查单不再请求假上游，提交及查单各仅一次。脚本运行 `1/1` 通过，退出时停止两个服务和上游；`node --check` 与 `git diff --check` 通过。**边界**：本地假上游的受理与模拟成功回执均不代表真实渠道退款或资金完成；正式证书、共享密钥/网络、渠道可信查单与回调、MySQL 8/历史数据、后端全量及生产发布仍未验收。
+
+### 10.871 默认回调 nonce TTL 覆盖已启用渠道验签窗
+
+发现默认 `601` 秒 nonce TTL 只覆盖 `300` 秒签名窗，不能覆盖演示种子中已启用的 `offline_bank` `1800` 秒窗口；严格验签时合法回调也会失败闭合。把应用配置、回调验签服务和渠道配置服务的默认值统一为 `3601` 秒，保留 `TTL > 2W` 的运行时与候选/启用/回滚校验；显式配置小 TTL 仍会拒绝不安全窗口。回归边界为 `1800` 秒允许、`1801` 秒拒绝，并移除退款严格签名 HTTP 用例原先的 `3601` 秒特殊覆盖，使其使用真实默认值。三个定向单元/配置类 `51/51`、严格签名 HTTP 案例 `1/1`、`git diff --check` 通过。**边界**：已显式部署 `601` 秒的环境不会被默认值覆盖，启用 `offline_bank` 前仍需检查有效配置；更长的自定义签名窗仍需对应调整 TTL，增加保留时长亦须评估 nonce 表清理容量。真实渠道密钥、回调来源/资金结果、MySQL 8/历史数据与生产放行未验收。
+
+### 10.872 存量启用渠道的验签窗口启动校验
+
+新增 `PaymentCallbackWindowStartupVerifier`，在严格验签开启且 Web 端口接收请求前读取存量渠道；快照不可用或包含空记录失败关闭，除原样 `DISABLED` 外，缺失/非正窗口或 `TTL <= 2W` 均拒绝启动，状态大小写/尾随空格别名不能漏检；关闭验签的 demo 不查询渠道。单元测试覆盖默认 `3601`/`1800` 兼容、显式旧 `601` 拒绝、空/非正及 `1801` 边界、停用渠道、状态别名和不可验证快照，`6/6`。独立 H2/demo 真服务退款 HTTP 类 `5/5`，包含默认严格签名回环与显式旧 TTL 启动失败并释放数据源；配置解析 `2/2`，`git diff --check` 通过。**边界**：这是进程启动时检查，正式环境有效配置、配置热变更、目标 MySQL 8/历史渠道数据、清理吞吐、真实密钥和资金仍须验收；拒绝启动不等于生产配置已经纠正。
+
+### 10.873 双服务退款错号查单拒绝与恢复
+
+扩展 10.870 的隔离回环：payment-core 真实退款派发仍只向 gateway-access 提交一次，本机假上游首次查单故意返回与已受理退款号不符的模拟 `SUCCESS`。gateway-access 拒绝回执并记录失败审计，payment-core 返回 `PAYMENT-1046`、保持退款 `PROCESSING`，详情出现 `CHANNEL_QUERY_FAILED`，不把错号当终态；第二次假上游给出匹配退款号后正常收口。重复终态查询不再访问上游，最终提交一次、查单两次。脚本 `1/1`、`node --check`、`git diff --check` 通过且进程退出。**边界**：本机假上游及模拟成功并非真实可信渠道结果或资金事实；生产证书、网络、MySQL 8、历史数据及真实退款验收仍未关闭。
+
+### 10.874 双真实服务退款未知受理防盲重发与查单恢复
+
+在 10.873 同一隔离脚本中追加第二笔真实 payment-core 退款申请/批准，假上游收到 `REFUND_SUBMIT` 后立即断开连接，模拟请求已发出但回执未知。gateway-access 记录 `REFUND_SUBMIT/UNKNOWN` 审计，payment-core 同一退款的尝试与 outbox 均为 `UNKNOWN`、退款保持 `PROCESSING`；定点重发返回 `PAYMENT-1050`，假上游未收到第二次提交。随后跨真实 gateway-access 查单，从本机假上游取得该尝试的模拟成功结果，原尝试/outbox 恢复为 `SUCCESS` 并记录 `CHANNEL_ACCEPTANCE_RECOVERED`；重复终态查询不再访问上游。两笔合计提交两次、查单三次，完整脚本 `1/1`、`node --check`、`git diff --check` 通过并停服。**边界**：本机假上游可模拟任意结果，不能证明真实渠道受理、退款成功、资金到账或可信查单；真实证书/密钥、目标 MySQL 8、历史事实、后端全量及生产验收仍未关闭。
+
+### 10.875 管理端退款未知尝试的防盲重发建议
+
+退款详情原对所有 `PROCESSING` 统一提示关注“任务中心自动重试”，与 `UNKNOWN` 退款禁止直接重发的服务端事实易产生歧义。现基于已校验详情的最新尝试，`UNKNOWN` 明示优先主动查单/核对可信回调、未确认前不得重发；其他处理中退款也改为关注回调/主动查单并提醒勿重复提交。操作资格与事件列表原 `UNKNOWN` 禁用门禁不变。纯逻辑及页面绑定定向 `6/6`、管理端全量 `285/285`、Vite 构建、`git diff --check` 通过。**边界**：前端建议不是渠道证明或服务端授权，真实身份、渠道资金与发布未验收。
+
+### 10.876 用户端退款未知受理状态不再暗示渠道已受理
+
+App/H5/PC 共用退款进度页与小程序原对所有 `PROCESSING` 写“已进入渠道处理”，包含 `UNKNOWN` 提交回执未知的退款。现在只对原样 `PROCESSING` 且最新尝试原样 `UNKNOWN` 的详情显示“退款渠道结果待核查”，明确渠道是否受理尚未确认并禁止用户重复申请；其他处理中退款用中性受理待核对文案。快照过期提示由“自动重试”改为“自动刷新”，避免把页面轮询误解为再次退款。App `111/111`、小程序 `105/105`、H5/PC 各 `4/4`，App/H5/PC 构建及 `git diff --check` 通过。**边界**：仅展示已读取的服务端事实，不发渠道写请求；真实渠道资金、真机与浏览器渲染、目标 MySQL 8、可信身份和正式发布仍未验收。
+
+### 10.877 同支付单多预付的过期关闭门禁
+
+`PaymentMapper.findExpiredPayments`、`markExpiredUnsubmittedPaymentClosed` 原在多张精确关联预付单且最新一张也已过期时仍选入并关闭支付单，随后按支付单号更新预付状态会影响多行并回滚，形成反复失败/重试。任务中心三个过期积压计数也按最新一张计数。新增 H2/MySQL 模式用例，红灯分别是关闭候选 `1`、待处理积压 `2`（预期为 `0`）；修复后候选、原子状态迁移及总览/待处理/退避三个计数都只接受精确唯一预付绑定，存量重试标记在不再符合资格时可清理。定向新增用例 `2/2`，完整相邻 Mapper 类 `84+55=139/139`，过期服务/任务中心服务/调度 `11+94+1=106/106`，`git diff --check` 通过。**边界**：只对自动过期关闭路径失败关闭；多预付历史单仍须人工审计，其他投影尚未全面核查，MySQL 8 执行计划/真实历史数据、后端全量、真实渠道及资金、可信身份和生产放行均未验收。
+
+### 10.878 支付记录多预付来源诊断贯通
+
+记录列表/导出/计数/详情原以最新预付单推断场景和失效时间，新增 H2 回归先得到 `HOME_CLEAN` 而预期空值；唯一精确绑定门禁后，仅支付单原样关联数大于一时返回 `MULTIPLE_PREPAY_BINDINGS`，保留原支付及可信退款事实，空场景/过期时间/有效期和“未分类”类型，不按具体类型筛选。另一退款聚合测试原有两张精确预付的 fixture 同步按真实歧义调整预期，而不改退款金额口径。管理端 API 只接受诊断与空投影/未分类的一致组合，显示待核查并禁止基于该场景主动查单或跳转支付单详情；CSV 增加末列诊断，原有字段顺序不变。定向五个后端类 `21+12+10+4+5=52/52`、管理端全量 `287/287`、Vite 构建、`git diff --check` 通过。**边界**：只读归属防猜测，不修复历史多预付事实；其他入口、目标 MySQL 8/真实历史样本、完整后端套件、渠道资金、身份治理和生产放行未验收。
+
+### 10.879 支付记录缺失精确预付归属可诊断
+
+延续 10.878：将唯一预付的支付单仅改成小写编号别名，H2 回归红灯为列表/导出场景及有效期均空但 `prepayBindingIssue` 未返回诊断，前端因此拒绝整行。现在精确预付计数为零返回 `PREPAY_BINDING_MISSING`，不把大小写别名自动重新归属；管理端允许诊断与空来源字段/“未分类”一致组合，区分缺失与多预付提示并禁用来源依赖动作。后端五类定向 `22+12+10+4+5=53/53`、管理端 `287/287`、构建、`git diff --check` 通过。**边界**：仅只读诊断，缺失原因与历史归属须人工核实；目标 MySQL 8/PAD、其他入口、后端全量、真实渠道资金及生产放行未验收。
+
+### 10.880 支付主列表零/多预付归属防猜测
+
+原 Mapper 的重复预付用例明确期望从最新预付取 `HOME_CLEAN`，与同支付单多预付归属不确定事实冲突；零精确绑定仅有小写别名时主列表空场景会触发前端整行拒绝。现列表/导出按精确关联数唯一投影，零关联 `PREPAY_BINDING_MISSING`、多关联 `MULTIPLE_PREPAY_BINDINGS`，支付行/计数不丢失。H2 新旧用例覆盖重复和别名零归属；CSV 新尾列输出诊断；管理端验证诊断与空场景一致，区分提示，禁用依赖归属的详情跳转、查单和关闭，保留日志联查。相邻 Mapper `85/85`、服务导出定向 `1/1`、控制器 `11/11`、管理端全量 `288/288`、Vite 构建、`git diff --check` 通过。**边界**：主列表门禁不等于直接调用支付详情/渠道接口的服务端门禁，后者对异常历史非终态的最新预付投影仍待整改；目标 MySQL 8/PAD、历史样本、后端全量、真实渠道资金、可信身份和发布未验收。
+
+### 10.881 支付详情直接请求拒绝未验证预付绑定
+
+`PaymentServiceImpl.detail` 原对非成功状态不检查已经投影的 `prepayAmountBindingValid`，可绕过主列表从最新预付读取错误场景。先用 Mockito 逐状态覆盖 `PREPAY_CREATED`、`WAIT_CALLBACK`、`RISK_REVIEW`、`CLOSED`、`FAIL`，红灯为预期业务拒绝却返回详情；现在校验标志不为真时在轨迹读取前返回 `PAYMENT-1011`，成功单保留原有成功事实校验。隔离 Spring Boot/H2 HTTP 用现有正常待回调单做对照，插入第二张精确预付后列表仍返回 `MULTIPLE_PREPAY_BINDINGS`、详情拒绝；删除重复单并将原绑定改为大小写别名后列表返回 `PREPAY_BINDING_MISSING`、详情同样拒绝；CSV 两种异常均可导出诊断且进程停服。原支付成功异常 HTTP 用例因支付/收款 CSV 新尾列更新断言后重新通过。服务全类 `209/209`、Mapper `85/85`、新旧 HTTP 定向各 `1/1`、`git diff --check` 通过。**边界**：本机 H2/demo 不证明 MySQL 8 排序/PAD、真实渠道和资金；其他入口、后端全量、历史数据和正式发布仍待验收。
+
+### 10.882 非成功支付查单、关闭和回调直连失败关闭
+
+直接查单、关闭和回调初始读取及竞争回读原可绕开 10.881 的详情门禁，继续读取最新预付的猜测归属或触发渠道/状态写入。共用非成功支付的 `prepayAmountBindingValid=true` 校验，缺失/多张/金额或订单号漂移统一 `PAYMENT-1011`；回调先验证签名，已成功支付仍走既有成功事实校验。新增三条入口拒绝单测，并将旧正常路径 Mockito 夹具标明有效绑定；旧金额漂移用例改为验证渠道查询、成功迁移或回调日志之前失败。服务全类 `212/212`。扩展隔离 H2/HTTP 用例：正常待回调详情可读，多预付和仅别名绑定分别在详情、主动查单、关闭、成功回调处拒绝，回调 HTTP 503；旧成功事实异常 HTTP 回归各 `1/1`。相邻状态迁移 Mapper `85/85`，返回码快照 Mapper 补齐旧 H2 夹具缺失的 `payment_method` 后 `7/7`，补丁检查通过，测试进程停服。**边界**：本地 H2/demo 与 Mockito 不证明目标 MySQL 8 collation/PAD、真实历史归属、可信渠道/资金、其他写入口、后端全量、身份鉴权或生产发布。
+
+### 10.883 待回调补查任务排除预付归属异常单
+
+任务中心原人工/自动补查候选及待补查/已到期计数仅要求存在一张精确预付，即使同支付单多张预付、金额或订单号漂移，也会重复挑中服务端必然返回 `PAYMENT-1011` 的支付单，并占用渠道批次额度。H2 新用例插入第二张预付、制造金额漂移和仅别名预付，红灯显示积压 `5` 而应为 `3`；统一四个 SQL 入口的唯一精确预付、订单号及正数金额绑定条件后，两种计数与人工/自动候选同口径，补充订单号漂移断言。旧“重复预付不增加候选”测试改为直接排除该异常单。相邻 Mapper 全类 `56/56`、任务中心服务 `94/94`、补丁检查通过。**边界**：异常支付仍在主列表/记录中留待人工审计，排除自动补查不等于确认资金结果；目标 MySQL 8/PAD、真实历史样本、后端全量、可信渠道与正式发布未验收。
+
+### 10.884 自动过期关单排除金额和订单号漂移
+
+10.877 仅排除了多张精确预付，过期候选、原子关单和任务中心三个积压口径仍会接受唯一但金额/订单号不符或非正数预付；过期关闭可能改写该支付单并生成错误业务事件。两条 H2 红灯用例分别观测到预期零候选/积压时仍返回 `2`。现候选与原子更新均核对唯一精确预付、订单号原样及正数等额，失败重试清理同步移除已不合格标记，总览/待处理/退避三个计数统一口径；正常过期夹具补全真实金额和订单号，不靠缺失字段测试资格。相邻 Mapper `86+57=143/143`，过期服务/任务中心服务/调度 `11+94+1=106/106`，补丁检查通过。**边界**：历史异常支付不自动关闭或重绑定，仍须人工审计；本地 H2 不证明目标 MySQL 8 排序/PAD、真实历史数据、后端全量、可信渠道资金或生产放行。
+
+### 10.885 人工关闭在预付绑定漂移后不落库
+
+服务层已有初始详情门禁，但 `markUnsubmittedPaymentClosed` 原 SQL 只校验状态、成功时间、渠道交易号和无尝试；初始详情通过后若预付金额/订单号或数量漂移，仍可能把支付单置为关闭。H2 用例先观测金额漂移时更新 `1` 行，现 SQL 更新条件重新检查唯一精确预付、正数等额与原样订单号，金额/订单号漂移及多预付均更新 `0` 行，支付状态保持 `PREPAY_CREATED`。关闭更新未命中后，服务回读若发现非成功单绑定不可信，返回 `PAYMENT-1011`，不误报 `PAYMENT-1029`；Mockito 红绿验证错误码且不改预付状态/写事件。旧 RISK_REVIEW 正常关闭夹具补足有效预付事实。Mapper `87/87`、服务 `213/213`、补丁检查通过。**边界**：本地顺序竞态模拟不是目标 MySQL 8 多事务锁序证明；历史资金、后端全量、可信身份和发布仍未验收。
+
+### 10.886 运营收银台会话不借编号别名支付事实
+
+收银台会话详情原按宽松预付单号查单，列表/详情/总览/计数/导出又按宽松支付单号关联支付和末次尝试；宽松排序规则下，别名会话可直读原行，预付别名归属也会借来 `支付中` 和 `API` 终端。H2 将三类编号列设为大小写不敏感，新增两条用例先红灯：别名详情非空、预付别名仍返回 `API`（预期回退为 `H5`）。修复后详情号要求原长度与二进制一致，五处运营投影复用精确支付关联和精确末次尝试关联；预付别名时保留会话行而不借支付状态，尝试单独别名时保留真实支付状态但终端回退到会话场景。Mapper `11/11`、服务 `10/10`、控制器 `4/4`、补丁检查通过。**边界**：这是只读事实归属，不修复历史或改变模糊搜索语义；MySQL 8/PAD、真实身份/资金、后端全量和发布未验收。
+
+### 10.887 运营支付处理日志拒绝别名详情及异常归属
+
+日志详情原以宽松 `log_no` 返回原记录；列表/详情/导出内 `successFactIssue` 标量子查询也按宽松支付单号联查。H2 将日志号和支付单号设为大小写不敏感，新增两条回归先红灯：小写日志号返回原详情、仅小写关联的日志借来 `SUCCESS_TIME_MISSING`。现详情原长度/二进制精确匹配，三处异常投影只引用原样支付单；原日志仍保留在模糊筛选的列表、计数及导出，异常投影空值不代表归属已人工确认。Mapper `8/8`、服务 `11/11`、控制器 `4/4`、补丁检查通过。**边界**：不回写历史关联或提供可信资金结论；MySQL 8/PAD、历史样本、身份治理、后端全量和发布未验收。
+
+### 10.888 运营账单不借编号别名预付及支付事实
+
+账单详情原按宽松账单号可用大小写别名返回整行；最近预付、最近支付和所属预付又分别按宽松账单号/支付单号关联，列表及导出的最近支付场景也可能借用别名预付。H2 将账单、预付与支付编号设为大小写不敏感，四条红测复现了别名详情可读、新预付跨账单归属、支付单别名归属及所属预付别名顶替；新增独立账单号别名所属预付回归。现所有相关连接兼顾原长度和二进制原样，账单自身行、金额、状态与列表模糊搜索保持不变。Mapper `11/11`、服务 `9/9`、控制器 `4/4`，合计 `24/24`，`git diff --check` 通过。**边界**：只读投影拒绝串单，不修复历史或判定资金真相；目标 MySQL 8 collation/PAD、历史样本、后端全量、可信身份、真实渠道资金与发布未验收。
+
+### 10.889 支付主链姓名、账单详情和结清写入拒绝别名归属
+
+订单金额/已付额和账单订单号已原样校验，但预付创建客户姓名及支付成功事件服务人员姓名仍按宽松订单号查询；支付详情账单联查和成功收口的账单写入也只使用宽松账单号。H2 将订单及账单号设为大小写不敏感，三条新增用例先红灯：别名返回客户姓名、别名账单被更新 `1` 行、详情借用别名账单号。现姓名读取、详情账单联查和结清账单写入均追加原长度与二进制原样比较，保留真实编号的正常回环。Mapper 状态迁移 `88/88`、结清 `6/6`，服务支付 `213/213`、事件派发 `84/84`，合计 `391/391`；`git diff --check` 通过。**边界**：本地测试未证明真实下游事件投递或 MySQL 8 collation/PAD；历史异常账单、后端全量、可信身份、渠道资金和发布仍未验收。
+
+### 10.890 支付成功事件拒绝订单号首尾空白别名
+
+派发原通过裁剪后比较事件业务号与支付详情订单号，随后又以裁剪值查询服务人员及构造清分/账务载荷。两条 Mockito 红测证实仅详情带空白及事件/详情双方同带空白，均会进入服务人员查询与 HTTP 出站路径。现身份原样比对并要求无首尾空白；两种历史别名均在出站前进入既有失败状态机，合法订单号及客户/服务者名称规范化路径保持。事件派发服务 `86/86`、`git diff --check` 通过。**边界**：这不是清理历史事件或证明真实渠道/下游资金；后端全量、目标 MySQL 8、真实联调与发布未验收。
+
+### 10.891 路由不加载状态别名渠道与规则
+
+运行时渠道和规则原仅 `status = 'ENABLED'`，宽松排序规则下 `enabled` 或 `ENABLED ` 可进入实际路由候选。H2 将两表状态列设为大小写不敏感，红测先确认小写渠道仍返回两条；现两个运行态查询均增加长度与二进制原样比较。测试逐项将渠道、规则置为小写及尾随空白，再恢复原样，验证异常项不进入路由而正常项仍保留。路由规则 Mapper `6/6`、路由服务 `29/29`、补丁检查通过。**边界**：没有自动修复历史状态，不证明 MySQL 8/PAD、真实渠道可用或生产流量；后端全量与资金验收仍未完成。
+
+### 10.892 生效控制策略的鉴权与自检开关异常不放行
+
+支付提交只在 `tokenAuthRequired/strictMode` 原样为 `开启` 时执行令牌或自检门禁；已加载策略中的 `开启 ` 会绕过对应限制，收银台也会展示被自检阻断的支付方式。三条 Mockito 红测分别观察到提交进入其他业务门禁而非预期令牌/自检错误，以及收银台展示方式；绿灯又覆盖开关缺失。现策略存在时要求两开关均原样为 `开启/关闭`；异常令牌开关返回 `PAYMENT-1021`，异常严格模式返回 `PAYMENT-1019`，收银台异常严格模式不展示方式。旧夹具补全非空关闭值，服务全类 `213/213`、补丁检查通过。**边界**：无策略的兼容路径未改变，不修复历史配置；可信身份、目标 MySQL 8、后端全量、渠道资金和发布仍未验收。
+
+### 10.893 严格模式自检别名不当作通过
+
+开关原样为 `开启` 时，支付提交和收银台仍用忽略大小写比较自检 `PASS`；历史小写 `pass` 会跳过自检阻断。追加两处 Mockito 红测，分别确认提交不报 `PAYMENT-1019`、收银台仍展示方式。现仅原样 `PASS` 可放行；小写别名走原自检阻断及空方式路径。支付服务全类 `213/213`、补丁检查通过。**边界**：不更正历史自检、无策略兼容路径不变；目标 MySQL 8、后端全量、可信身份、真实渠道资金及发布仍未验收。
+
+### 10.894 退款持久化渠道尾空白不参与回调和查单
+
+退款服务原将已存渠道号裁剪后再与验签回调渠道忽略大小写比较，查单亦在裁剪、转小写后调用上游；同一尾空白历史快照甚至可作为既有终态事实重复返回。三条 Mockito 红测确认旧回调进入后续交易校验、处理中查单已触达外部服务、终态查询直接返回。现回调先要求持久化渠道号无首尾空白，处理中查询在限流和上游调用前拒绝，终态事实也要求原存渠道无首尾空白；大小写兼容不变。退款服务 `93/93`、控制器 `4/4`、补丁检查通过。**边界**：不修复历史快照或改写渠道资金事实；目标 MySQL 8、真实渠道查单/退款到账、后端全量及生产发布未验收。
+
+### 10.895 退款审批与重试不下发裁剪后的支付渠道
+
+退款审批和失败重试读取原支付单渠道后，原先直接 `trim()` 写入退款尝试，使尾空白历史渠道变成正常渠道并可创建提交事件、派发。两条 Mockito 红测证实旧路径不拒绝；现共用下发入口先要求渠道非空且原样无首尾空白，不写尝试或事件，也不派发；合法渠道原样写入。服务全类 `95/95`、`git diff --check` 通过。**边界**：Mockito 不验证数据库事务回滚或真实渠道提交；目标 MySQL 8、异常历史数据核对、后端全量及退款到账/发布仍未验收。
+
+### 10.896 退款旧事件派发拒绝尝试渠道尾空白
+
+历史退款尝试可独立于新申请门禁进入事件派发；原快照仅检查渠道非空，尾空白值可触达渠道服务并在受理或未知结果写入时被裁剪。新增待派发红测确认旧路径进入未知受理状态而非快照失败；现快照先校验渠道原样无首尾空白，后续受理/未知结果均直接使用已验证的原样渠道。另覆盖两处受理轨迹同带尾空白时不确认为成功。事件服务全类 `88/88`、`git diff --check` 通过。**边界**：Mock 不证明数据库死信/重试时序、目标 MySQL 8 或真实渠道退款；历史异常事件仍需人工核查，后端全量和发布未验收。
+
+### 10.897 退款异常渠道审批的实际事务回滚
+
+独立 H2/demo 应用启动在随机本机端口，通过 HTTP 申请退款后，同步把原支付和成功尝试的渠道号改成尾空白；正式 Mapper 回读确认 `paymentSuccessFactsValid=true`，排除支付成功事实门禁先行拒绝。HTTP 审批返回非成功，跨连接读回退款仍为 `REVIEWING`，仅保留申请日志，无退款尝试、`REFUND_SUBMIT` 事件和派发调用。定向 `RefundOutboxHttpIntegrationTest#shouldRollBackApprovalWhenPersistedPaymentChannelHasTrailingWhitespace` `1/1`、`git diff --check` 通过；服务在测试结束后关闭。**边界**：本地 H2/HTTP 不替代目标 MySQL 8/PAD、真实渠道/退款到账、后端全量及生产发布验收。
+
+### 10.898 旧事件异常渠道与既有受理事实的失败隔离
+
+已有渠道退款号的退款尝试若渠道号带尾空白，快照门禁先前又调用 `markRefundAttemptFailed`，正式 Mapper 仅允许无受理号的 `PENDING/FAILED` 尝试更新，导致零行异常和当前事件事务回滚。调整受理号已存在或状态不允许失败更新的分支：不碰尝试，只让普通事件进入失败/死信，`UNKNOWN` 仍转人工核查；红测先复现零行异常。事件服务全类 `88/88` 通过。另在已有 H2/demo HTTP 重发链路中把失败尝试的渠道改成尾空白，单笔人工重发返回 `PAYMENT-400`、不调用模拟上游，维持原 `FAILED` 状态；恢复渠道后相同事件成功受理。随后模拟历史已受理轨迹异常，直接调用独立派发事务，正式 Mapper 将事件转 `DEAD_LETTER` 而尝试仍为 `ACCEPTED`，渠道调用次数不变。定向 `1/1`、`git diff --check` 通过。**边界**：该轮 HTTP 证据早于外层受控失败事务修复；修复后的未知受理持久化见 10.899。本地证据不验证目标 MySQL 8、真实退款受理/到账或全量后端回归。
+
+### 10.899 人工重发结果未知不可被 HTTP 失败响应回滚
+
+正式 H2/demo HTTP 路径让审批后的首次渠道下发被明确拒绝，再于人工单笔重发中模拟渠道调用结果未知。新增测试先红灯：接口返回 `PAYMENT-400`，但退款事件仍为 `FAILED`，已写 `UNKNOWN` 因外层 `@Transactional` 的 `IllegalArgumentException` 回滚而丢失。现仅对派发器返回 `false` 后抛出的专用参数异常禁用外层回滚；HTTP 仍返回 `PAYMENT-400`，跨连接读回事件与尝试均为 `UNKNOWN`、退款保持 `PROCESSING` 并留待查渠道，不产生成功重发审计。再次人工重发返回 `PAYMENT-1050`，模拟渠道调用总数维持 2。相邻 H2/HTTP 重发测试也确认普通失败在 `PAYMENT-400` 后重试次数实际递增、修复数据后同一事件可成功。`PaymentEventServiceImplTest` `18/18`，退款 HTTP 定向两条 `2/2`，追加计数断言定向 `1/1`、`git diff --check` 通过。**边界**：真实渠道是否受理仍未知，必须查单；未运行后端全量或目标 MySQL 8，不能据此发布或认定到账。
+
+### 10.900 退款 HTTP 类回归及用户归属源审计
+
+在上轮事务变更后运行 `RefundOutboxHttpIntegrationTest` 全类，`7/7`、零错误、零失败、零跳过；所有 H2/demo 临时服务退出。审计发现 payment-core 用户端 `getRefundDetail` 仍请求 payment-core 自身退款详情，而跨系统 happy-path 使用 refund-center；退款中心支付成功投影 DTO、`t_refund_payment_source` 与 `t_refund_order` 均无可用于用户授权的可信主体键，两个详情控制器当前仅用路径退款号查详情。场景、客户姓名与支付号仅是业务展示/关联，不能代替授权。故没有将用户页直接改向退款中心；跨源来源标识、归属投影和认证服务端读接口的验收条件见差距清单 10.822。`git diff --check` 通过。**边界**：该轮不关闭可信归属、跨源用户进度、目标 MySQL 8、资金或发布；后端全量未运行。
+
+### 10.901 九服务本地支付链路与清理复核
+
+先读取本地启动脚本，确认 `payment-chain` 模式拒绝环境数据库覆盖、已有 PID/目标端口和非本轮进程，写入前校验九个演示服务的本地身份；退出 trap 只停止本轮脚本 PID。`status payment-chain` 九项 DOWN 后执行 `bash tools/dev/local-stack.sh verify payment-chain`；沙箱内进程立即退出且不进入写入阶段，按限制申请扩展权限重跑同一命令。九服务全部 READY，HTTP 冒烟通过，跨系统本地 happy-path 通过；订单号 `LOCAL-HAPPY-1791594219686-67836`，支付号 `PAY17915942201628b669244`，退款中心单号 `REF20261010090343653`，对账状态 `COMPLETED`、阶段 `4/4`、关账标记 true。命令退出码 0，九项停止日志齐全，再次 `status payment-chain` 全部 DOWN；`git diff --check` 通过。**边界**：仅隔离本地 H2/demo 与模拟下游，不证明生产退款渠道、资金到账、目标 MySQL 8、可信用户归属/跨源进度、payment-core 自身退款渠道 outbox 或正式发布。
+
+### 10.902 运营事件重发失败后重读持久化状态
+
+后端受控失败现会保留 `FAILED/DEAD_LETTER/UNKNOWN`，但管理端事件列表旧 catch 只显示 POST 错误，继续使用原 `FAILED` 快照，可能在用户未察觉未知受理时仍显示可重发。新增静态回归先红灯；现失败分支解除操作锁后按已加载查询条件重读列表与总览。若请求成功则替换快照并让 `UNKNOWN` 行呈现“待核查”、禁用重发；若读回失败则复用原 `loadEvents` 过期标记，所有依赖快照的动作失败关闭，同时保留原 POST 错误提示。视图定向 `2/2`、管理端 `npm test` `289/289`、`npm run build`、`git diff --check` 通过。**边界**：静态组件回归与构建未覆盖真实浏览器交互、可信运营身份、目标 MySQL 8、真实渠道受理或资金。
+
+### 10.903 退款运营列表和详情操作失败后重读
+
+`RefundsView` 的申请和通用退款动作、`RefundDetailView` 的审核/重试原先在 POST 失败或响应快照不一致时仅展示错误，沿用可继续操作的旧状态。列表与详情各新增静态红灯回归；失败分支现复用既有 `afterAction` 读回，保留错误与申请幂等键，成功时按服务端状态更新快照，失败时设置既有过期标记并禁用旧快照操作。详情页仍先核对当前路由退款号，避免旧动作刷新覆盖新单。新增及相邻视图定向 `3/3`，管理端 `npm test` `291/291`、`npm run build`、`git diff --check` 通过。**边界**：静态测试与构建没有覆盖真实浏览器失败请求、目标 MySQL 8、可信运营身份或渠道到账；退款中心跨源用户进度仍未关闭。
+
+### 10.904 管理端事件重发错误与读回失败的真实浏览器回归
+
+执行管理端 `npm run build` 后运行 `node tools/dev/payment-admin-action-refresh-browser-smoke.mjs`。脚本只绑定本机随机端口，托管管理端 `dist` 和隔离 mock API，不连接实际支付后端；无头 Chrome 依次验证：首次 `FAILED` 可重发；唯一 POST 返回 HTTP 400 / `PAYMENT-400`，同时 mock 状态变 `UNKNOWN`；列表和总览读回后保留失败提示、行变“待核查”且重发禁用。第二轮首次 GET 列表返回 `503`，旧 `FAILED` 行、重发和导出均失败关闭；后续手动刷新取得 `UNKNOWN`，仍不可重发。额外断言每轮恰好一次 POST 及至少两次事件列表/总览 GET。构建与脚本均通过；无真实后端写入，Chrome 和本机 HTTP 服务在退出时清理。**边界**：仅覆盖事件页 mock 交互，不等同退款动作浏览器回归、可信运营授权、目标 MySQL 8、真实渠道受理或资金核对。
+
+### 10.905 退款详情与列表审批失败读回浏览器验证
+
+同一 `payment-admin-action-refresh-browser-smoke.mjs` 扩展退款详情和退款列表两轮场景：已审核 `REVIEWING` 快照的审批 POST 返回 HTTP 400 / `PAYMENT-400`，mock 状态变 `PROCESSING`；成功 GET 读回后审核禁用，失败 GET `503` 时旧状态保留但按钮禁用，详情关联入口、列表导出和申请也禁用；手动刷新恢复新状态，两页每轮各仅一次 POST，至少两次对应 GET。首次回归揭示详情手动刷新会清除旧请求错误提示，因此把断言移至读回失败时，并保留手动刷新后以新事实为准的检查。两页原误称动作结果“已确认/已保留”的刷新失败文案修为“状态未经确认”，静态视图定向 `3/3`、管理端全量 `291/291`、构建及浏览器脚本通过，`git diff --check` 通过。脚本仅托管本机静态产物和 mock API，没有真实业务写入。**边界**：申请幂等重试尚待同类浏览器验证；真实身份、渠道、资金、目标 MySQL 8、后端全量与发布均未关闭。
+
+### 10.906 退款申请失败后幂等键保留的浏览器验证
+
+沿用本机 `dist` + mock API + 无头 Chrome：在退款列表填写独立支付单、金额 `12.00`、退款原因与操作人，浏览器把金额规范化为 `12` 并生成非空幂等键。mock 首次收到申请后仅落一笔退款但返回 HTTP 400 / `PAYMENT-400`，首次读回列表返回 `503`；错误提示与过期门禁生效，重复点击没有第二个 POST。手动刷新读到新退款后原输入仍在，用户再次提交时 mock 对比完整请求体与首次完全一致（包括幂等键），返回同一退款号与合法状态；成功提示出现，列表仅一条相应退款行，表单清空。`node tools/dev/payment-admin-action-refresh-browser-smoke.mjs` 通过，测试只在本机 mock 执行。**边界**：mock 的唯一行不等于服务端数据库幂等、目标 MySQL 8 并发/真实资金验收；真实渠道、可信运营身份、后端全量及发布仍未关闭。
+
+### 10.907 退款申请 HTTP 顺序重试与数据库唯一事实
+
+`RefundOutboxHttpIntegrationTest#shouldReplaySameRefundApplicationAfterClientLosesResponse` 使用本地随机端口 Spring + 独立 H2/demo 内存库；先修正演示支付成功尝试完成时间，再通过真实 HTTP 申请金额 `12`。模拟客户端丢弃首个成功响应并原样再次请求，返回相同退款号和 `REVIEWING`；跨连接 SQL 确认同支付单/幂等键仅一笔退款、申请操作日志仅一条。同键修改金额，接口返回业务码 `PAYMENT-1053`，仍无新退款。随后审批进入 `PROCESSING`，原样申请再次 HTTP 重放仍返回同一退款号与最新状态，SQL 证实退款仅一笔、退款尝试一笔、`REFUND_SUBMIT` 事件一笔。沙箱内 Tomcat 因 Socket `Operation not permitted` 无法绑定端口；按权限规则仅对该定向离线测试申请扩展权限后通过，补充阶段断言重跑 Surefire `1/1`。相邻既有 H2 并发同键和大小写别名测试在沙箱内 `2/2`，`git diff --check` 通过。所有本地服务已随测试上下文退出。**边界**：HTTP 首次实际返回成功，本测试模拟客户端丢弃响应而非真实断线；目标 MySQL 8 并发事务、真实退款渠道和资金、可信身份、后端全量与发布均未关闭。
+
+### 10.908 支付运营动作失败读回及真实浏览器回环
+
+发现 `PaymentsView` 和 `PaymentDetailView` 的主动查单及关闭操作 catch 仅展示 POST 错误，未读回可能已变化的支付状态。修改为分别按已加载查询条件和当前路由支付号刷新，错误提示保留；读回失败沿既有 `actionRefreshErrorMessage` 门禁锁定快照，刷新失败提示改为“状态未经确认”。两个视图定向 `8/8`、全量管理端 `293/293`、构建通过。扩展 `payment-admin-action-refresh-browser-smoke.mjs`：隔离 mock 中旧 `PREPAY_CREATED` 关闭 POST 返回 HTTP 400 / `PAYMENT-400`，但状态改为 `CLOSED`；列表与详情分别测试成功读回、GET `503` 使旧快照和导出/关闭按钮禁用、手动刷新恢复，每轮仅一次 POST、至少两次相应 GET。脚本通过，仅本机静态产物和 mock API；`git diff --check` 通过。**边界**：查单分支仅静态断言，尚无浏览器回环；本验证不证明真实渠道、目标 MySQL 8、可信身份或资金结果，后端全量及发布未完成。
+
+### 10.909 支付运营查单错误读回浏览器覆盖
+
+复用 `payment-admin-action-refresh-browser-smoke.mjs` 本机静态构建产物与 mock API，新增待回调支付单：存在原样渠道、受理交易号和未完成的“处理中”尝试，可执行主动查单。POST 返回 HTTP 400 / `PAYMENT-400` 且 mock 状态变为 `FAIL`、“失败”尝试；列表与详情分别验证成功 GET 后新失败态不可继续查单，仍显示原请求错误。首次 GET `503` 的两种场景保留旧 `WAIT_CALLBACK` 但禁用查单及快照相关入口，手动刷新恢复后仍不可重复提交。四轮各只有一次 POST、列表或详情至少两次 GET；浏览器脚本通过。**边界**：测试不触达真实渠道，也不等同支付服务真实 HTTP 状态机/目标 MySQL 8、可信身份或资金结算；后端全量和发布未关闭。
+
+### 10.910 支付单运营关闭的本地真实 HTTP 与持久化回读
+
+`PaymentDiagnosticHttpIntegrationTest#shouldReturnSingleClosedPaymentAndEventAfterRepeatedAdminClose` 使用独立内存 H2/demo 库及本地随机端口：复制演示支付/标准来源预付单但不复制渠道尝试，构造一笔精确归属、金额一致的 `PREPAY_CREATED` 支付。首次 `POST /api/payments/admin/close` 成功返回 `CLOSED`，重复同一请求仍为 `CLOSED`；真实 GET 支付详情和列表均读到关闭态，数据库预付单为“已关闭”，同支付单 `PAYMENT_CLOSED` 事件仅一笔。离线 JDK 8 定向 Surefire `1/1`、零失败、零错误，服务和连接池按测试上下文关闭；`git diff --check` 通过。**边界**：这是本地合法无渠道尝试的关闭场景，不证明实际渠道查询/资金、目标 MySQL 8、可信身份、后端全量或生产发布，也未把 mock 错误响应误认成服务端行为。
+
+### 10.911 运营支付查单失败的 HTTP 事实与审计
+
+`PaymentDiagnosticHttpIntegrationTest#shouldPersistAdminQueryFailureAuditWithoutChangingPaymentStatusOverHttp` 在独立随机端口 H2/demo Spring 环境中替换渠道查询服务为本机受控业务异常，不连接外部渠道。演示 `PAY202607190002` 原为 `WAIT_CALLBACK`；运营 POST 显式传操作人，HTTP 返回现有响应契约中的 `PAYMENT-1026`，详情与列表仍为 `WAIT_CALLBACK`。SQL 核对一条 `QUERY_FAILED` 通知日志，载荷含操作人、结果含错误码，未新增 `PAYMENT_SUCCESS` 事件。定向 Surefire `1/1`、零失败、零错误，本地服务与 Hikari 在退出时停服，`git diff --check` 通过。**边界**：前端隔离 mock 的“错误响应但状态变 FAIL”用于验证未知结果读回门禁，不等于本例服务端状态机；真实渠道成功/失败、资金、目标 MySQL 8、可信身份、后端全量和发布均未完成。
+
+### 10.912 运营成功查单 HTTP 跨表事实回归
+
+`PaymentDiagnosticHttpIntegrationTest#shouldSettleAdminQuerySuccessAcrossPaymentBillAndEventOverHttp` 使用独立随机端口 H2/demo Spring，替换渠道查询服务为返回匹配 `ALI77665544` 的本机成功结果、替换即时事件派发器为本机 mock。演示 `PAY202607190002` 从 `WAIT_CALLBACK` 发起运营查单，接口返回 `SUCCESS` 和查询来源；真实 GET 详情/列表均为成功，SQL 读回预付单“支付成功”、支付尝试“成功”、支付成功时间非空、账单“已结清”且已付金额等于账单金额、带操作人的成功查单通知日志及一条 `PAYMENT_SUCCESS` 事件。再次查单仍返回成功，不新增事件，即时派发 mock 合计一次。JDK 8 离线定向 Surefire `1/1`、零失败、零错误，测试上下文退出后本地服务与连接池已停，`git diff --check` 通过。**边界**：mock 仅证明 payment-core 本地收口，不等于真实渠道验签/查单结果、资金到账或九服务账务/清分/结算；目标 MySQL 8、可信身份、后端全量与发布未关闭。
+
+### 10.913 payment-core→gateway-access 支付主动查单双服务 HTTP 回环
+
+新增 `tools/dev/payment-core-gateway-query-smoke.mjs`，随机回环端口启动真实 payment-core 与 gateway-access，分别强制精确 H2/demo 和 H2/local-payment-chain 身份；网关查询上游、成功事件清分/账务回执仅指向本机受控桩，演示支付宝证书只在当次 H2 fixture 续期。演示 `PAY202607190002` 三次运营 HTTP 查单：未知 `PAID` 经网关拒绝，错绑流水 `ALI-WRONG` 经支付核心拒绝，精确 `ALI77665544` 才收口 `SUCCESS`。前两次保持 `WAIT_CALLBACK`、支付失败处理日志各一条且无下游派发，网关失败/成功查单审计分别 `1/2`；成功后预付单、尝试、账单、唯一成功事件读回收口，本机模拟清分/账务各收一次；终态重放不再查上游或产生第二条事件。隔离脚本 `1/1`、`node --check`、`git diff --check` 通过，退出清理两服务和临时数据。
+
+**边界**：下游清分/账务为受控 mock 而非九服务实链；渠道返回、种子单和密钥均为本地模拟，不能证明真实资金。正式渠道及证书、目标 MySQL 8、可信运营身份、后端全量和发布仍未验收。
+
+### 10.914 九服务主动查单驱动支付到对账回环
+
+新增 `local-stack.sh verify payment-query-chain` 独立隔离模式：沿用九服务 H2/demo 身份、端口、PID 和环境覆盖写前门禁，另在 `127.0.0.1:18190` 托管本机上游；gateway-access 使用一次性本地访问密钥和仅应用于当次 H2 的样例微信证书续期 SQL，payment-core 显式启用网关查单适配器。原 happy-path 在支付提交和 `WAIT_CALLBACK` 后仅在此模式先绑定本机上游查询事实，再以运营 `POST /api/payments/admin/query` 经真实支付核心、网关鉴权和本机桩收口 `SUCCESS`；终态重放不再次调用上游，网关只有一条成功 `PAYMENT_QUERY` 审计。默认 `payment-chain` 仍走原回调分支。
+
+隔离查询模式实测支付单 `PAY17915989466695ddb85e8`，真实下游清分、结算出款、退款中心、账务三类事件及对账事实闭环：`COMPLETED`、阶段 `4/4`、`financialCloseable=true`。命令退出码 `0`，九服务与本机上游均 STOP；`status payment-query-chain` 九服务 DOWN。Node 静态契约 `76/76`、语法和 `git diff --check` 通过。**边界**：上游交易事实、证书续期和访问密钥仅限本机 H2/mock；退款仍由独立 refund-center 驱动。本地对账可关账标记不是正式资金关账、真实渠道/可信身份/目标 MySQL 8/生产发布验收，payment-core 后端全量仍待单独授权。
+
+默认回调链路回归首次发现 Bash `set -u` 下空查询环境数组展开报错，启动支付核心前失败且脚本清理其余服务；改为仅在数组有值时展开。再次 `verify payment-chain` 返回退出码 `0`，支付单 `PAY17915993734874cd16bac` 标记 `paymentCompletion=CALLBACK`，九服务仍达 `COMPLETED`、`4/4`、本地 `financialCloseable=true`，退出时全部 STOP。该回归与上面的查询模式是两笔不同演示订单，不将回调结果混为查询证据。
+
+在查询桩写入前补精确 `/health` 身份读回和上游订单/渠道绑定断言后，最终再次 `verify payment-query-chain` 返回 `0`：支付单 `PAY17915995740595a15359b` 标记 `paymentCompletion=GATEWAY_QUERY`，对账 `COMPLETED`、`4/4`，九服务与上游全部 STOP。此结果覆盖最终脚本版本，而非仅沿用早前那次通过记录。
+
+### 10.915 九服务主动查单先拒绝无效状态再恢复
+
+将隔离查询桩的首个精确绑定上游回执设为未知 `PAID`，第二次才为模拟 `SUCCESS`。同一演示支付在第一次 `POST /api/payments/admin/query` 收到 `PAYMENT-1026` 后，真实详情仍 `WAIT_CALLBACK`、账单已付 `0`、未付 `88` 且没有 `PAYMENT_SUCCESS` 事件；随后原订单与渠道交易号再次查单成功，终态重放不请求第三次上游。网关分别只有一条失败与一条成功 `PAYMENT_QUERY` 审计；清分、账务、结算、退款中心及对账链继续沿成功事件收口。`verify payment-query-chain` 返回 `0`，支付单 `PAY17915999007646ed41f00` 对账 `COMPLETED`、阶段 `4/4`、本地 `financialCloseable=true`，九服务和查询桩全部 STOP；Node 契约 `76/76`、语法及 `git diff --check` 通过。
+
+**边界**：失败码和恢复路径是 H2/demo 与本机受控渠道 mock 的运行证据，不能证明正式渠道故障恢复、真实资金或目标 MySQL 8 多实例竞态；可信用户/运营身份和发布仍需独立验收。
+
+### 10.916 回调先于延迟查单返回的同单竞态
+
+补充 `PaymentDiagnosticHttpIntegrationTest#shouldReturnCallbackWinnerWhenQueryResponseArrivesAfterCallbackOverHttp`：用锁存器暂停渠道查单，在真实 payment-core HTTP 回调收口 `SUCCESS` 后才放行查单；查单返回同一回调赢家，预付单、尝试、账单成功，`PAYMENT_SUCCESS` 仅一条、即时派发仅一次。直接读本次 H2 出站载荷为回调路径的渠道和场景字段，未被晚到的 `ACTIVE_QUERY` 事件替换。JDK 8 离线定向测试 `1/1`，零失败、零错误，退出停服。
+
+双服务 `payment-core-gateway-query-smoke.mjs` 第三次查单也在 gateway-access 已请求本机上游后暂停其响应：真实支付回调先成功，再释放网关响应；支付核心查单返回回调赢家，仍只有一条成功事件和本机清分/账务各一次投递。前两次未知状态、错绑流水的拒绝及审计断言保留；为尚未等待的请求立即附加拒绝处理，超时不再产生游离的未处理 Promise 拒绝。脚本返回 `0`、两服务清理，`node --check`、`git diff --check` 通过。
+
+**边界**：这是 H2/demo、本机 mock 和单进程受控时序；不代表目标 MySQL 8 多实例锁竞争、正式渠道回调验签/资金事实、真实下游处理或生产发布，后端全量套件仍待单独授权。
+
+### 10.917 查单先成功后同渠道回调重放
+
+扩展真实 HTTP 成功查单定向测试：第一次 `ACTIVE_QUERY` 将支付、预付单、尝试和账单收口后，先重放运营查单，再以同一 `alipay_h5/ALI77665544` 发送成功回调。两次重放仍返回 `SUCCESS`，数据库只有一条 `PAYMENT_SUCCESS`，事件载荷仍是原查单操作人和 `ACTIVE_QUERY` 来源，成功通知日志一条，模拟即时派发一次。JDK 8 离线定向测试 `1/1` 通过、零失败，退出停服。
+
+双服务脚本在前一节**回调先成功**的受控竞态之后额外重放同渠道成功回调；仍只产生一条事件、本机清分和账务各一次，上游查询次数不增加。脚本退出码 `0`、停服，Node 语法及补丁检查通过。这条双服务重放仅是回调赢家的重复投递，与单服务定向测试的查单赢家顺序不同，不能合并宣称两种双服务竞态均已覆盖。
+
+**边界**：演示签名/查单结果和下游回执为本机 H2/mock；目标 MySQL 8 多实例、正式渠道资金、可信身份、全量后端套件及发布未验收。
+
+### 10.918 回调赢家后的冲突查单拒绝
+
+将 10.916 的锁存器 HTTP 测试扩为两种独立 H2 上下文：匹配 `ALI77665544` 的晚到查单返回回调赢家，冲突 `ALI-WRONG` 的晚到查单返回 `PAYMENT-1026`、无成功响应数据，并持久化含操作人和错误码的 `QUERY_FAILED` 通知。两种时序均核验原支付、预付单、尝试、账单的回调成功事实、唯一回调来源 `PAYMENT_SUCCESS` 和一次模拟派发；JDK 8 离线定向 `2/2`，零失败、零错误。首次新增断言误将错误码查在请求载荷，按现有协议修正为回执列后两项通过，未改生产逻辑。
+
+双服务脚本增加 `HSP_QUERY_RACE_MODE=conflicting`：前两次未知状态/错绑流水仍拒绝，第三次网关上游查询暂停后由真实支付回调抢先收口，释放的 `SUCCESS/ALI-WRONG` 虽通过网关代理仍由支付核心拒绝并形成第三条失败日志；终态查询和回调重放保留唯一成功事件，清分/账务本机桩各一次。默认匹配变体随后复跑，查询返回回调赢家。两次脚本各退出码 `0` 并停服，`node --check`、`git diff --check` 通过。
+
+**边界**：H2/demo 和本机受控网关/渠道/下游桩的单实例时序不证明目标 MySQL 8 多实例隔离锁、正式渠道签名与资金、真实下游消费或生产授权；payment-core 全量后端套件和发布仍未关闭。
+
+### 10.919 用户支付结果页动作报错后读回
+
+`app-web` 结果页原先在主动查单或本地关闭 POST 报错时直接清空已读详情，只显示请求错误；若同一时刻回调已成功或关单已经落库，用户无法立即看见真实状态。现两种动作共用按当前支付号和业务场景只读 GET 读回，重新核对支付单、预付单、业务链、金额及保留字段后更新状态并保留原 POST 错误；GET 失败或归属不符时清空旧快照，明确“支付状态未经确认”，仅提供重试加载，不允许凭旧状态再次查单/关单。
+
+新增 `payment-result-action-refresh-browser-smoke.mjs`，本机静态构建与 mock API 模拟查询 POST 400 但状态成功、关闭 POST 400 但状态关闭，分别覆盖 GET 成功读回及 GET 首次 503 后禁用旧操作、手动重试恢复。四轮各只发送一次 POST，至少两次对应详情 GET；浏览器回归 `[PASS]`。结果页定向 `21/21`、用户端全量 `111/111`、Vite 构建、Node 语法和补丁检查通过。
+
+**边界**：浏览器使用本机 mock 和静态产物，不证明真实支付核心在某次 POST 报错后必然已迁移、真实渠道回调/资金、可信用户身份或目标 MySQL 8；后端全量与发布仍未关闭。
+
+### 10.920 收银台查单/关单动作失败的可信读回
+
+`CashierView` 原本在主动查单或本地关闭 POST 报错时仅显示错误，仍保留可操作的旧收银台快照。现在两种动作失败先将快照标为未核实，再按原预付单号、终端和业务场景 GET 收银台并校验支付单、预付单、业务链、订单、金额及保留字段；读回成功则更新快照、清除旧查询结果，若已成功/关闭进入支付结果页。GET 失败或归属不符时保持旧快照禁用支付提交、查单、关单、渠道选择及幂等键重置；手动刷新确认终态后也进入结果页，避免再次用旧状态发起动作。
+
+在 10.919 的隔离 Chrome 脚本追加四轮收银台回归：查询/关闭 POST 返回 HTTP 400 但本机 mock 状态分别改为 `SUCCESS/CLOSED`；读回成功直接进入结果页，首次 GET 503 则展示未经确认并禁用旧操作，手动刷新后进入结果页。新旧共八轮，每轮一次 POST、对应详情/收银台至少两次 GET；脚本 `[PASS]`。收银台定向 `18/18`、用户端全量 `112/112`、Vite 构建、Node 语法与补丁检查通过。
+
+**边界**：本机静态浏览器/mock 验证前端读回与门禁，不代表真实支付核心在 POST 失败时已成功、真实渠道资金、目标 MySQL 8、多终端可信身份或生产放行；后端全量仍待授权。
+
+### 10.921 支付提交响应丢失后的待回调恢复
+
+在收银台提交失败后的既有收银台读回上，补充 GET 也失败时的明确提示：同时保留原支付提交错误与刷新错误，声明“支付状态未经确认，请刷新收银台，勿重复付款”；旧快照继续由 10.920 的提交、查单、关闭、渠道选择及幂等键门禁锁住，不以 HTTP 异常推断支付失败或更换请求键。
+
+扩展 `payment-result-action-refresh-browser-smoke.mjs` 两轮受控提交：虚构预付单带本机模拟访问令牌，支付 POST 返回 HTTP 400 但本机 mock 状态变 `WAIT_CALLBACK`、附原支付宝渠道和受理交易号；成功读回后仍留收银台，待回调可查单但不能重复提交或重置幂等键。首次 GET 503 时明确未知并锁定动作，手动刷新恢复后才允许查单。两轮各仅一次 POST，预付 GET 至少 `2/3` 次；总计结果页四轮、收银台查单/关闭四轮、提交两轮共十轮浏览器 `[PASS]`。收银台定向 `19/19`、用户端全量 `113/113`、Vite 构建、语法与补丁检查通过。浏览器桩的到期时间相对运行日生成，避免固定演示日期使回归误报过期。
+
+**边界**：模拟 HTTP 400 后变待回调只是前端恢复压力场景，不能证明真实渠道已受理、正式令牌有效、真实资金、同键再次提交的服务端幂等或目标 MySQL 8 多实例；完整后端套件和生产发布仍未关闭。
+
+### 10.922 小程序结果页查单/关单报错后只读核实
+
+小程序结果页原先在主动查单或关闭支付单请求报错时只把旧详情标记为待核查、等待手动刷新。现在错误路径先锁定旧动作，再按当前支付号和业务场景 GET 详情，用原预付、业务链、订单、金额、渠道及已建立的时间事实校验连续性；匹配时更新为实际成功/关闭状态，保留原动作错误与已重新读取提示。GET 失败或错绑身份时仍显示“支付结果待核查”，禁用查单/关单并明确不要重复付款；页面隐藏或请求版本变化后，晚到读回不得回写当前页面。
+
+单测新增模拟成功或关闭详情读回、GET 异常/错预付的失败关闭、页面隐藏竞态；旧错误路径用例明确指定不可用的读回 mock，避免跨用例共享 mock 导致误判。结果页定向 `36/36`、小程序全量 `108/108`、`node --check` 与 `git diff --check` 通过。未运行微信开发者工具或真机，也未调用正式渠道。
+
+**边界**：这是模拟小程序 Page/请求适配器的本地用例，不等于微信原生支付、真实渠道回调/验签、资金到账、可信用户身份、目标 MySQL 8 或生产发布；payment-core 后端全量仍未关闭。
+
+### 10.923 小程序提交响应丢失后的收银台恢复
+
+小程序收银台原本在提交或原生支付步骤报错后只 GET 更新旧收银台：若已进入 `WAIT_CALLBACK`，用户仍停在无法提交、也没有主动查单入口的收银台；GET 失败则原“待支付”标签仍可见且刷新错误覆盖原提交错误。现在同预付/支付/业务链/订单/金额绑定的读回为待回调、风控复核、成功或关闭时，按实际支付方式进入结果页；首次读回失败或归属不符时保留旧快照但显式标为“待核查”，同时展示原提交与刷新错误、禁止重复提交。手动刷新确认已受理或终态后进入结果页；页面卸载后晚到读回不更新或跳转。结果页地址构造复用同一方法，原有效提交路径不变。
+
+定向 Page 用例覆盖模拟提交响应丢失后待回调/成功读回、GET 失败后手动刷新、错支付单拒绝、风控复核保持原支付方式、卸载后晚到响应；收银台 `16/16`、小程序全量 `112/112`、语法与补丁检查通过。未运行微信开发者工具/真机，也未对真实渠道发起支付。
+
+**边界**：本地 mock 并不证明微信原生支付参数、渠道受理/扣款、生产访问令牌、目标 MySQL 8 幂等或真实资金；payment-core 后端全量及发布仍未关闭。
+
+### 10.924 管理端死信任务动作报错后的状态复核
+
+管理端死信任务列表此前在准备重放、人工结案或定向重放的 POST 报错后，只显示请求错误，仍使用原 `READY_TO_REPLAY` 等可操作快照；如果消息已发布但响应丢失，运营人员可能据旧状态重复尝试。现在三种动作的异常路径沿原查询条件 GET 列表读回，只有成功读回后才允许根据最新状态重新操作，并保留原请求错误以提醒人工核对。GET 失败时显示请求与复核错误，旧列表仅供查看，行操作、详情导航和翻页均受过期快照门禁限制，手动刷新成功后才解锁；整个恢复路径不自动重发死信消息。
+
+定向静态视图测试 `2/2`、管理端全量 `294/294`、Vite 构建与 `git diff --check` 通过。**边界**：这是前端源码门禁回归与构建，未执行真实浏览器操作、RabbitMQ 发布、目标消费者幂等消费、目标 MySQL 8 多实例、可信运营身份或生产资金核对；payment-core 后端全量套件与发布仍待授权。
+
+### 10.925 管理端任务执行报错后的双快照复核
+
+支付任务中心人工执行 POST 报错时，原页面只显示错误，旧总览候选数和执行日志仍可能允许再次执行；如果任务已运行但响应丢失，继续按旧候选数操作不安全。现在异常路径保持操作锁，按本次已加载的日志筛选条件并行只读刷新总览与执行日志，完成后保留原请求错误并提示核对最新候选。任一 GET 失败时对应快照标记为过期，人工任务、日志导出和详情下钻均受双快照门禁限制；只有两份快照重新可用后才解锁。首次加载和已确认执行成功后的独立日志刷新不变，恢复路径不重复触发任何任务。
+
+定向静态视图测试 `2/2`、管理端全量 `295/295`、Vite 构建、`git diff --check` 通过。**边界**：本轮没有真实浏览器或服务端任务执行压测；不能证明渠道受理、数据库多实例租约、外部派发、资金事实或生产可信身份。payment-core 后端全量套件及发布仍未关闭。
+
+### 10.926 任务中心与死信动作错误读回的隔离浏览器回归
+
+检查发现任务中心十个人工执行按钮仍只按总览快照决定 `disabled`：执行日志 GET 失败时虽然 `runTask` 会阻止 POST，界面仍显示可点击按钮。现统一按总览与日志双快照门禁禁用按钮，与动作处理器的约束一致；静态用例同时断言十个入口。
+
+扩展 `payment-admin-action-refresh-browser-smoke.mjs` 的本机静态构建/mock API：任务中心两轮模拟超时关单 POST 返回 400、服务端候选变更；一轮总览与日志均成功读回，另一轮日志首次 503 且总览候选暂滞留，确认旧按钮仍显示候选但实际禁用，手动刷新后恢复为无候选。死信任务两轮模拟重放 POST 返回 400、任务已变 `REPLAYED`；GET 成功立即显示新状态，首次 503 时旧待重放行禁用，手动刷新后显示已重放。新增四轮每轮仅一次 POST，读回至少两次 GET；既有事件、退款、支付关闭/查单浏览器场景一并 `[PASS]`。管理端 `295/295`、Vite 构建、脚本语法与补丁检查通过，脚本退出时关闭本机 Chrome 与 mock 服务。
+
+**边界**：浏览器只访问本机隔离服务，不连接实际 payment-core 后端，不发送 RabbitMQ 或渠道请求；模拟 POST 响应丢失不证明真实任务执行、消费者幂等、目标 MySQL 8 多实例、可信运营身份或资金事实。后端全量套件和正式发布仍未验收。
+
+### 10.927 异常批量动作返回全部目标而非默认第一页
+
+支付交易异常批量 POST 最多接受 100 条，但服务原本在逐条写入后返回无筛选 `list(new PaymentIssueQueryDTO())` 默认第一页；前端已要求响应包含本次全部异常号，因此选中的异常不在全局前 20 行、或一次处理超过 20 条时会把已写入的动作误判为失败，易诱导重复提交。现在同一事务内回读原请求顺序中的每条异常，校验异常号、支付单与异常类型连续性，返回仅含本次目标的分页 DTO；读回缺失或错绑抛异常以回滚处理动作，出站名称仍按原敏感信息遮罩处理，不把动作结果当作当前筛选页。
+
+服务单测新增 25 条跨默认分页目标及动作后归属漂移拒绝，并删除三个旧的默认列表桩；`PaymentIssueServiceImplTest` `39/39`、`PaymentIssueControllerTest` `8/8`，定向合计 `47/47`、`git diff --check` 通过。初次 Maven 调用落在系统 JRE 无编译器，改用本机 JDK 8/Maven 3.9.16 后通过；未运行 payment-core 全量后端套件。**边界**：Mockito 单测不验证 Mapper 真实 SQL、MySQL 8 事务与并发、不解决请求幂等或 POST 响应丢失的人工恢复；可信运营身份与生产资金仍未验收。
+
+### 10.928 异常批量目标回读的 H2 正式 Mapper 验证
+
+新增独立 demo/H2 Spring 集成测试，加载现有 `schema.sql`、样例数据和正式 MyBatis Mapper，额外插入 25 张待回调支付单形成 25 个可处理异常。先确认默认列表页容不下所有目标，再调用真实 `PaymentIssueService` 批量分派，核对响应按请求顺序含全部 25 条、页码与总数一致、每条处理状态与处理人已由 Mapper 读回、客户名称仍脱敏，且动作日志实际写入 25 条。随后将已处理目标与不存在的目标组成新批次，确认抛错并回滚该批次先前插入的动作日志。仅对测试内存库写入，无外部端口、RabbitMQ 派发或渠道调用；上下文退出关闭 Hikari 连接池。
+
+`PaymentIssueBatchActionIntegrationTest` `1/1`、原服务 `39/39`、控制器 `8/8`，联合定向 `48/48`，`git diff --check` 通过。**边界**：H2 的 MySQL 模式不是目标 MySQL 8，不证明生产并发、实际告警确认、响应丢失后幂等补偿或可信运营权限；payment-core 后端全量套件及正式发布仍待授权。
+
+### 10.929 异常批量动作报错后的双读回与旧选择门禁
+
+管理端异常中心原本在批量 POST 报错后只显示错误，仍保留已勾选目标和旧列表；即使服务端动作已写入但响应丢失，也可能直接重复提交。现在异常分支先清空勾选、保持操作锁，按原查询条件并行只读刷新异常列表和责任组统计，保留 POST 错误提示；两项成功时只根据最新事实重新选择，任何一项失败则旧快照不可进行批量处理、选择、下钻与翻页。责任组单独失败此前未参与过期门禁，现与列表失败一致；原“结果已确认”刷新失败提示改为中性“状态未经确认”，不自动重发请求。
+
+定向静态视图 `2/2`、管理端全量 `297/297`、Vite 构建、`node --check` 与 `git diff --check` 通过。本机 Chrome/mock 新增三轮：模拟 POST 返回 400 但处理状态已变 `已分派`，分别让列表与责任组都成功、责任组首轮 503、列表首轮 503；确认原勾选清空、单侧故障时按钮禁用、手动刷新恢复，每轮仅一次 POST、两类 GET 各至少 `2/3` 次，连同既有事件/退款/支付/任务/死信场景全部 `[PASS]`。**边界**：浏览器只连接本机 mock，不证明真实支付后端的受理结果；尚未建立批量请求幂等键、可信运营身份、目标 MySQL 8 并发或资金验收。payment-core 后端全量套件和发布仍未关闭。
+
+### 10.930 异常批量动作幂等请求与提交响应重放
+
+新增独立 `t_payment_issue_action_request` 唯一键表及增量迁移；服务在同一事务内以规范化目标集合、动作、处理人、操作人和备注生成 SHA-256 指纹并占用请求键，再写动作、确认待确认告警并保存首次脱敏响应。重复同键同内容只重放首次结果，不重复写入；不同目标或内容返回 `PAYMENT-1070`。H2/正式 Mapper 定向覆盖 25 条跨页首次响应、目标顺序变化重放、聚合异常消失后重放、同键换处理人/目标冲突、失败回滚请求占位、两线程同键竞争仅写一次；旧请求不传键仍按原行为执行。
+
+管理端每次新动作生成键，POST 报错后仍清选择并双读回，若用户在同一页面重新选择相同目标与内容则沿用键；提交成功清除未决键，变更请求生成新键。本机隔离 Chrome/mock 核验请求含键、三轮失败门禁，以及读回成功后人工重新选择重放仍携带**完全相同的请求体**；管理端 `298/298`、构建通过。后端服务 `39/39`、控制器 `8/8`、H2 集成 `1/1`，联合定向 `48/48`，补丁检查通过。**边界**：刷新页面后未决键丢失，必须人工核对；H2 并发不等于目标 MySQL 8 多实例，真实告警、运营身份、资金链路、后端全量套件与发布均未验收。
+
+### 10.931 异常批量动作跨页面刷新恢复未决键
+
+管理端原先只用组件内存保存待复核批量动作的键；若 POST 响应丢失后刷新当前页，操作人重新输入相同内容时会创建新键，服务端无法识别为同一次动作。现在 POST 前仅将当前目标集合与业务字段的 SHA-256 摘要、随机键存入当前标签页 `sessionStorage`；刷新后同一内容恢复原键，目标集合顺序变化也可恢复，变更内容创建新键。成功后按键清除；存储或 Web Crypto 不可用时仍可在同一页面保留内存键，不存原文。错误后仍清空选择、双读回，不能自动重试或基于旧快照操作。
+
+工具单测覆盖刷新恢复、目标变化、只存摘要、存储拒绝、摘要不可用与畸形存储键拒绝；管理端 `302/302`、Vite 构建、补丁检查通过。本机隔离 Chrome/mock 在 POST 返回错误且列表读回成功后执行真正页面刷新，再输入同一操作人并人工重新选择，断言第二次 POST 请求体与首次**完全相同**并取得重放响应，其余两轮 GET 故障门禁仍通过。**边界**：跨标签页、会话关闭或存储禁用无法恢复键；本机 mock 不替代目标 MySQL 8、多实例、可信身份、真实资金和全量套件验收。
+
+### 10.932 异常批量动作真实 HTTP 到正式 Mapper 的重放
+
+新增 H2/demo Spring 随机回环端口测试，用实际 JSON HTTP 首次分派两条新异常，确认目标完整、姓名遮罩、日志只写两条。随后删除第一条聚合异常来源，以相同键和逆序目标重发，比较首次与重放的完整 `data` 相同、`requestId` 不同，日志不增；同键更换备注收到 `PAYMENT-1070`，空白键收到 `PAYMENT-400`，均不写新日志。后续另以大小写不同的两个新键分别提交，预期新增两条日志。仅定向 `PaymentIssueBatchActionHttpIntegrationTest` `1/1` 通过，隔离服务和 H2 数据库随测试结束停止；`git diff --check` 通过。
+
+**边界**：这是本机 HTTP、正式 Mapper 与 H2 事务接线，不模拟真实网络丢包，不替代 MySQL 8 多实例、可信身份、实际渠道与后端全量套件验收。沙箱内首次因回环监听被拒而失败，获准仅运行此定向用例后通过；此前后端全量套件的拒绝未重试。
+
+### 10.933 异常动作键不受数据库文本排序规则折叠
+
+批量请求去重表原以原始 `VARCHAR(128)` 为主键，MySQL 默认文本排序规则可能把大小写或重音不同的键判为重复：相同动作指纹会错误重放对方结果，不同内容则错误冲突。现入库的是规范化键的 UTF-8 SHA-256 摘要（固定小写十六进制），原始键不持久化；原键中不完整 Unicode 代理项先拒绝，避免字节替换别名。增量脚本与两份全量 schema、正式 Mapper 均切换为 `idempotency_key_hash`。服务测试在 H2 全量初始化后主动删除请求表、执行**真正增量脚本**，再验证 25 条目标、同键并发、失败回滚与 `Case-Key`/`case-key` 独立写入；HTTP 测试亦检验两键均成功且请求行分离。
+
+服务 `39/39`、控制器 `8/8`、H2 Mapper `1/1`、本机 HTTP `1/1`，联合相关定向 `49/49` 通过，`git diff --check` 通过。**边界**：H2 验证迁移 SQL 的本地语法与业务接线，不等于目标 MySQL 8 排序规则、多实例事务或实际数据迁移；正式部署前应先应用**更新后的**增量脚本。后端全量套件、可信身份、渠道资金和发布仍未关闭。
+
+### 10.934 管理端异常动作响应目标集合与分页元数据精确校验
+
+批量 POST 的服务端契约已返回仅包含本次目标的分页 DTO，但管理端原校验只要求每个请求异常号至少出现一次，未拒绝额外行、重复行、空行被普通分页函数过滤，或 `total/pageSize/pageNo` 与目标数量不符。现先检查原始响应的页码、计数、数组长度和提交目标唯一性，再通过既有异常行事实校验，并精确比较规范化后的响应/请求目标集合；保留同键重放时首次响应顺序可与本次请求相反。任何不可信响应继续进入 POST 错误后的双读回门禁，不显示成功。
+
+API 定向 `169/169`、管理端 `302/302`、Vite 构建通过；本机隔离 Chrome/mock 中刷新后同键重放成功，列表或责任组 GET 单侧失败仍锁定旧快照，`git diff --check` 通过。**边界**：本机 Docker 客户端存在但 daemon socket 不存在，无法使用它验证目标 MySQL 8；未启动或写入外部数据库。真实渠道、可信身份、迁移部署、后端全量及生产发布仍未验收。
+
+### 10.935 用户收银台提交响应不明后的跨刷新同键恢复
+
+App/H5/PC 共用收银台原先每次刷新页面生成新支付幂等键；当 POST 结果不明且短暂 GET 仍为 `PREPAY_CREATED` 时，用户重复操作无法保证沿用原请求键。现发送前计算完整提交 payload 的 SHA-256 摘要，当前标签页只存摘要与 UUID；同内容跨刷新恢复原键，字段或访问令牌变化使用新键。响应通过原支付快照校验后才清理；手动重置清理旧键。随机键仅用 Web Crypto，缺能力失败闭合；异步摘要完成后再次核对路由/支付快照，避免旧页晚到请求。存储或摘要不可用退回同页内存重试。
+
+新增工具单测覆盖跨刷新恢复、不存原文与令牌、各请求字段变化、畸形键、无 `randomUUID` 的安全随机源和摘要不可用退化；用户端全量 `117/117`、Vite 构建、补丁检查通过。本机隔离 Chrome/mock 保留原结果页/收银台错误读回场景，并新增一次 POST 返回错误但 GET 仍待支付、真正页面刷新后用户第二次提交**完全相同的请求体**且获得可信待回调响应，脚本 `[PASS]`。**边界**：模拟待支付读回不能证明真实渠道未受理；显式重置键或切换方式后若前次渠道副作用尚未显现，仍有未闭合风险。跨标签页、关闭会话、正式身份/资金、目标 MySQL 8 和后端全量套件也未验收。
+
+### 10.936 未决用户支付不得换渠道或重置请求键
+
+上轮虽然跨刷新恢复相同请求键，但收银台在异常 POST 后若 GET 一时仍为 `PREPAY_CREATED`，用户可立即选另一渠道或显式重置键，绕开同键重试。现在待核实记录带预付号摘要作用域和原支付方式；收银台每次可信 GET 后恢复到当前预付单，保留原键并锁定渠道选择和重置按钮。请求完整指纹变化时工具层在 POST 前拒绝，旧渠道副作用未核实不能产生新的请求键。同内容重试仍允许；可信提交响应才清理记录，错误或 GET 失败不清。异步恢复后再次验证路由身份，旧页面晚到不能覆盖新支付。
+
+工具单测覆盖同预付单各业务字段变化拒绝、预付作用域恢复、畸形记录、安全随机源及存储拒绝时的同页内存键；手动刷新同一预付单在存储不可用时继续保留原内存门禁。用户端 `119/119`、Vite 构建与补丁检查通过。本机隔离 Chrome/mock 在首次 POST 错误、GET 仍待支付时显示第二可用渠道，断言两个渠道按钮和重置键在刷新前后都禁用；原内容同键重试并取得待回调响应，脚本 `[PASS]`。**边界**：会话存储目前仅保留一条最近未决记录，跨不同预付单导航可能覆盖旧键；跨标签页、关会话、真实渠道资金、可信身份、目标 MySQL 8 与后端全量仍未验收。
+
+### 10.937 多张预付单未决键独立保存及定向清理
+
+上轮未决提交只保存一条，会在同一标签页处理另一张预付单时覆盖前一张键，回到第一张便失去同键恢复。现在使用预付号 SHA-256 摘要构造会话存储分区键，不保留预付号原文；每个分区仍仅记录请求摘要、原支付方式和 UUID。读取、可信响应删除与显式重置均只作用于当前预付单，不误删另一未决键。重置键涉及异步摘要计算，现占用动作锁并绑定路由版本，阻止同页提交与旧路由重置竞态。
+
+工具单测验证两张预付单记录同时存在、返回第一张仍能恢复原键、清理第一张不影响第二张、只重置指定分区；视图静态测试覆盖重置动作锁。用户端全量 `119/119`、Vite 构建、`git diff --check`。本机隔离 Chrome/mock 新增同一标签页两张预付单分别 POST 报错且 GET 仍待支付：第一张未决键在第二张写入后仍可刷新恢复，并以原请求体重试成功；第一张成功清理后返回第二张，原键仍在且重置按钮禁用，三次 POST 无额外提交，脚本 `[PASS]`。**边界**：浏览器只连本机 mock，不证明真实渠道、资金、可信身份、目标 MySQL 8、跨标签页/关会话或后端全量套件与发布。
+
+### 10.938 损坏的未决提交记录失败闭合
+
+原工具层把存在但畸形的会话记录视为未保存，会生成新键；若旧支付已到渠道却尚未反映在短暂的收银台 GET 中，会绕开同键重试门禁。现在损坏 JSON、摘要或 UUID 均保留原值并拒绝读回和新提交；`CashierView` 在加载时锁定快照，在提交前发现损坏则跳过 POST 后读回解锁分支，提示人工核对。另一预付单不受影响，存储 API 拒绝读取时继续保持原同页内存退化。
+
+工具与视图定向 `26/26`，用户端全量 `120/120`、Vite 构建通过。隔离 Chrome/mock 在第二张预付单仍未决时篡改其会话记录，当前页点击提交及重新加载都被锁住，原三次支付 POST 未增加；脚本 `[PASS]`。本机 mock 和人为损坏场景不证明跨标签页、会话关闭、可信用户、正式渠道资金、MySQL 8 或后端全量；损坏记录的原请求键不可从摘要恢复，须由运营核对而非自动清除。
+
+### 10.939 损坏未决记录下的可信终态展示
+
+上轮失败闭合会在服务端已返回 `SUCCESS` 或 `CLOSED` 时，仍因本地会话记录损坏而阻止进入结果页。现收银台先核对当前预付、业务场景及已有支付快照，再读本地未决记录；仅在本地记录损坏且服务端已确认终态时，跳转结果页独立 GET 详情，不清理损坏记录。未终态仍锁定提交和重置。视图定向 `27/27`、用户端全量 `121/121`、Vite 构建与隔离 Chrome/mock 通过：损坏记录下 `PREPAY_CREATED` 无新 POST，mock 改为 `SUCCESS` 后重新读取并展示结果，支付 POST 数量仍为三次。**边界**：该终态仅来自本机 mock，未证明真实渠道到账、跨标签页/会话、可信身份、目标 MySQL 8、后端全量或生产发布。
+
+### 10.940 支付及退款幂等键拒绝不完整 Unicode
+
+支付提交和退款申请原先只检查长度与 ISO 控制字符，不成对的 UTF-16 代理字符可能继续到数据库编码层。复用异常批量动作已有的 JDK UTF-8 编码能力门禁；显式支付键按 `PAYMENT-1028`、退款申请键按 `PAYMENT-1052` 在首次 Mapper 前拒绝，支付未传键时生成的最终组合键也在持久化前受同一校验。红色定向用例分别得到其他错误/数据库读取，修复后两类服务类 `214+95=309/309` 通过（本次只运行这两个类），`git diff --check` 通过。**未关闭**目标 MySQL 8 排序规则和唯一键真实行为、多实例并发、同键同支付不同内容重放指纹、正式身份与资金、后端全量套件和生产发布。
+
+### 10.941 支付提交同键内容精确复核
+
+隔离 H2/demo 红色回归先以同一预付单和幂等键提交，再改付款手机号重放，原服务错误地返回已有支付单。现支付尝试在同一预处理事务持久化长度分隔的规范请求 SHA-256 摘要；同键重放还需校验摘要，覆盖支付归属、金额、方式、实际渠道、来源、商户、令牌、终端、设备和手机号，忽略可变的连接 IP。新尝试同内容换 IP 重放成功；改手机号或设备号返回 `PAYMENT-1069`，无第二条尝试；请求快照不含令牌原文。并发赢家落库后的重查走同一门禁。旧记录无法从历史快照反推完整内容，迁移后摘要仍为 `NULL`，同键重放拒绝并要求核对原支付事实。
+
+`PaymentServiceImplTest`、`PaymentSubmitReplayIntegrationTest` 定向 `218/218`；含风控提交、demo 提交、Mapper 状态和 schema 合同的相邻 `97/97`，合计 `315/315`。本机 H2 实际删列后执行 `2026-10-10-add-payment-attempt-request-fingerprint.sql`，旧行留空并拒绝重放，新增行摘要非空且长 64 字符；`git diff --check` 通过。**未关闭**目标 MySQL 8 增量迁移与历史订单处置、真实渠道并发及资金、可信身份、后端全量套件和生产发布。
+
+### 10.942 新支付尝试 schema 下九服务两条主路径复验
+
+在九服务目标端口空闲、无数据库覆盖环境变量的隔离 H2/demo 栈中，依次运行 `bash tools/dev/local-stack.sh verify payment-chain` 与 `bash tools/dev/local-stack.sh verify payment-query-chain`。回调支付 `PAY1791610810378388267ed` 与主动查单支付 `PAY1791610994207deb1b3b9` 各自通过本轮 HTTP 冒烟、写前身份核验和跨系统 happy-path，均产生清分、结算、退款、三类账务事件及七项对账事实；对账 `COMPLETED`、阶段 `4/4`、`reconciliationFinancialCloseable=true`。两条命令退出码均为 `0`，九服务及查询桩自动停止，随后九项状态 `DOWN`、十个端口无监听。该结果只证实本机新 schema 主路径，不代替生产历史增量迁移、MySQL 8 多实例幂等争用、可信身份、正式渠道资金或后端全量套件验收。
+
+### 10.943 支付提交文本字段无效 Unicode 拒绝
+
+在既有支付提交字段规范化处补 UTF-8 可编码门禁，同时让解析后的必填字段（包括路由返回渠道）复用该门禁。定向红测先证实不成对代理字符绕过校验而触发后续支付读取错误；修复后高、低代理字符分别覆盖预付号、方式、渠道、来源、商户、令牌、终端、IP、设备、手机号十类输入，全部在首次 Mapper/路由/渠道调用前按 `PAYMENT-1035` 拒绝。`PaymentServiceImplTest` 与 `PaymentSubmitReplayIntegrationTest` 共 `219/219`（零失败、零错误、零跳过），`git diff --check` 通过。未运行此前未获批准的后端全量套件；目标 MySQL 8、多实例、真实资金及正式身份仍待独立验收。
+
+### 10.944 并发赢家已占收银台时的同键内容重查
+
+新增 H2/demo 双线程同一预付、同一幂等键但不同手机号的真实服务/Mapper 测试，启动屏障后原实现错误地让两个请求都成功返回。根因是后到请求在独立事务读取时尚未看到尝试，等待订单锁后 `updatePrepayToPaying=0` 便直接复用最新收银台；没有验证赢家的请求摘要。现在该分支保留支付事实核验，并以 `FOR UPDATE` 当前读核对赢家预付、支付归属及规范摘要；不同内容按 `PAYMENT-1069` 拒绝，匹配内容可复用，且不再释放赢家令牌。红绿用例证实仅一个成功、一个冲突、一条尝试和路由、提交令牌仍 `ACTIVE`。原有成功/异常事实单测补全赢家尝试夹具，缺尝试时不再把“支付中”误报为同键成功。服务、H2 重放和 Mapper 状态三类定向合计 `309/309`，零失败/错误/跳过，`git diff --check` 通过。**未关闭**目标 MySQL 8 的真实隔离级别、跨服务实例/不同预付共键争用、生产历史迁移、可信身份、正式渠道资金与后端全量套件。
+
+### 10.945 不同预付并发共键冲突回查
+
+新增两张虚构预付单双线程同时使用同一幂等键的 H2/demo 服务/Mapper 回归。红测中唯一索引确实阻止第二条尝试，但输家得到脱敏事务失败 `DuplicateKeyException` 而非可操作的归属冲突。现只对准备事务的唯一键冲突，在回滚完成后重读精确幂等键并核对支付归属和请求摘要；跨预付赢家返回 `PAYMENT-1069`，其余失败继续保留原脱敏异常。绿测仅一笔成功、一笔业务冲突、一条尝试；输家收银台仍待支付且无提交令牌。`PaymentServiceImplTest`、`PaymentSubmitReplayIntegrationTest`、`PaymentMapperStateTransitionIntegrationTest` 定向共 `310/310`（零失败/错误/跳过），`git diff --check` 通过。**未关闭**目标 MySQL 8 索引排序规则和多实例事务时序、正式渠道资金、可信身份、后端全量套件与生产发布。
+
+### 10.946 支付幂等键宽松排序规则别名的唯一键冲突
+
+隔离 H2/demo 将支付尝试幂等键列改为大小写不敏感的 `VARCHAR_IGNORECASE`，先为一张虚构预付单提交 `Case-Sensitive-Key`，再为另一张提交 `case-sensitive-key`。红测确认精确查询拒绝借用前单，但唯一键碰撞落入脱敏 `DuplicateKeyException`；绿测在回滚后发现精确键不存在、排序规则别名存在，返回 `PAYMENT-1069`，旧单仍唯一、输家收银台仍待支付。Mapper 单测同时证实精确查询为假、别名碰撞查询为真。支付服务、重放集成和状态 Mapper 定向 `311/311`，零失败/错误/跳过，`git diff --check` 通过。**未关闭**目标 MySQL 8 的真实 collation/PAD、原键独立落库策略、多实例竞态、生产历史、可信身份、正式资金及后端全量套件。
+
+### 10.947 支付尝试按完整 UTF-8 字节唯一及历史迁移
+
+14.485 的旧原文唯一索引别名冲突策略已被新精确唯一索引替代。两份基线 schema 为 `t_payment_attempt` 新增 `VARBINARY(512)` 自动生成列，以该列唯一、原文键非唯一；增量迁移先建新唯一索引再移除旧索引。H2/demo 在宽松原文列下提交两张预付单的 87 字符多字节同前缀键（末位 `A/a`），分别落库且精确归属。将独立内存库退回旧唯一索引后，旧行大小写别名插入先失败；运行正式增量脚本，旧行生成值 512 字节且别名新行可插入，两行字节唯一值不同。另一个 H2 宽松 Mapper 红测证实原 256 字节截断会错误命中长键别名，改 512 后拒绝借用。支付服务、重放集成、状态 Mapper、demo 与 schema 契约定向 `321/321`（零失败/错误/跳过），`git diff --check` 通过；**未关闭**目标 MySQL 8 DDL/真实 collation/PAD、历史含控制字符的数据核查、多实例事务、正式资金、可信身份、后端全量与发布。
+
+### 10.948 精确幂等键 schema 下回调及主动查单联调
+
+随后运行九服务隔离 H2/demo 的回调链与网关主动查单链，写前身份核验、HTTP 冒烟及跨系统 happy-path 均 `[PASS]`。两笔支付 `PAY179161493267645a7b8aa`、`PAY1791615107577737f160c` 分别收口清分、结算、退款、三类账务事件和对账 `COMPLETED/4/4`，本地 `reconciliationFinancialCloseable=true`。命令退出码均 `0`，服务与本机查询桩全部 STOP，复核九项 `DOWN` 和十端口无监听。仅说明本地新基线未破坏两条主路径；目标 MySQL 8 DDL、多实例资金时序及后端全量套件仍未验收。
+
+### 10.949 自动支付幂等键超长组合收口
+
+在各字段自身合法的边界值（64 字符预付号、32 字符方式、64 字符渠道）下，原默认拼接键会超过 128 字符并被服务自身拒绝。红测复现后，短组合继续使用原文，超长组合改为按 UTF-8 字节长度分隔三字段并计算 SHA-256，输出 69 字符 `AUTO:` 键；显式键仍按原校验。单测覆盖稳定性、字段差异、分隔符歧义与短键兼容；模拟提交路径确认生成键用于两次尝试查重。隔离 H2/demo 使用 64 字符预付号、64 字符路由渠道及测试专用模拟渠道适配器，真实服务提交生成 `AUTO:` 尝试并落库，同请求重放仍仅一条尝试。`PaymentServiceImplTest`、`PaymentSubmitReplayIntegrationTest`、`PaymentMapperStateTransitionIntegrationTest`、`PaymentSchemaBaselineContractTest`、`PaymentDemoProfileIntegrationTest` 五类离线定向回归 `324/324`，零失败/错误/跳过。10.948 的九服务联调发生在本次修改前，不代表本次全链回归。目标 MySQL 8、历史特殊键、多实例、正式资金、可信身份及未获批准的后端全量套件仍未关闭。
+
+### 10.950 自动键修改后的九服务回调及主动查单联调
+
+10.949 后分别运行九服务隔离 H2/demo 的回调链与网关主动查单链，写前身份门禁、HTTP 冒烟及 happy-path 均 `[PASS]`。回调支付 `PAY1791616608977f60b7efd` 与主动查单支付 `PAY179161677666883bc4ad4` 分别收口清分、结算、退款、三类账务事件和对账 `COMPLETED/4/4`，本地 `reconciliationFinancialCloseable=true`，两命令退出码 `0`。九服务与本机查询桩自动停止，九项 `DOWN`、十端口无监听。跨系统回归使用常规渠道；长自动键的 H2 落库与重放由 10.949 的单服务隔离测试覆盖，不应混称为九服务长键全链。目标 MySQL 8、多实例、正式渠道资金、可信身份、后端全量套件和发布仍未关闭。详见跨系统记录第 48 节。
+
+### 10.951 长自动键同键异内容重放门禁
+
+在 10.949 的隔离 H2/demo 长渠道用例中，首次不传显式键提交并同内容重放后，仅修改付款手机号再提交。服务保留由预付号、支付方式和实际渠道生成的同一 `AUTO:` 键，通过规范请求摘要拒绝异内容重放为 `PAYMENT-1069`，尝试数仍为一。单个定向用例与完整 `PaymentSubmitReplayIntegrationTest` 回归通过；这里仅验证本机模拟渠道，不代替目标 MySQL 8 多实例并发或正式渠道资金验收。
+
+### 10.952 用户端支付摘要失效的未决键保护
+
+收银台原先在 Web Crypto 摘要调用失败时把预付单作用域和请求摘要视为空，刷新后即使会话存储仍有未决键，也可能产生新的支付键。红测保存一笔未决提交后模拟摘要失败，原读取未拒绝。现在读取、提交前恢复和显式重置均抛出不可核实错误，不删除原记录、不发送新请求；收银台重置入口展示错误，可信终态仍只读进结果页。仅存储 API 不可用而摘要正常时仍允许同页内存门禁。用户端 `121/121`、Vite 构建与补丁检查通过。隔离 Chrome/mock 在已有未决键的标签页注入 `SubtleCrypto.digest` 失败，刷新后无支付按钮、无第二笔 POST，记录未被删除；恢复摘要能力后原键重新显示，随后畸形记录与可信成功终态的原场景仍 `[PASS]`。未连接真实支付核心；跨标签页、目标 MySQL 8、正式资金和可信身份仍待验收。详见跨系统记录第 49 节。
+
+### 10.953 用户端会话存储不可用时拒绝新支付键
+
+继续检查 10.952 的同页内存降级：当存储读取失败或根本无法访问时，原逻辑把未知未决记录当作不存在；写入失败时仍可能先发送 POST、刷新后丢失原键。红测分别复现读取不可用和写入失败仍返回新键。现当前预付单的存储读取异常、存储入口不可用、提交前保存失败与重置删除失败均拒绝继续，不生成新键或支付 POST；可信成功后清理仍不影响结果页。用户端 `122/122`、Vite 构建通过；隔离 Chrome/mock 在保存未决记录后注入 `Storage.getItem` 故障，刷新时无提交动作、无第二次 POST，存储原值仍在，恢复读取后原键重新显示；摘要失效、畸形记录及可信终态场景继续 `[PASS]`。此变更以支付安全优先，替代 10.952 的存储不可用同页内存降级；不能代替真实渠道或跨标签页/会话验收。详见接口文档 14.488 与跨系统记录第 50 节。
+
+### 10.954 管理端异常批量动作未决键失败闭合
+
+检查异常中心批量处理发现：畸形 `sessionStorage` 记录原被吞掉并换新键，存储读取/写入或摘要失败也会继续 POST。红测覆盖不可读、不可写、摘要失败和损坏 UUID。现无同页已知同内容尝试时，以上情况统一拒绝生成新键，页面明确显示“批量处理未发送”，刷新异常列表后仍需人工核对原处理记录；原记录不被删除。同页已有匹配尝试可沿用原键，合法不同内容仍保持既有独立键语义。管理端 `302/302`、Vite 构建通过；隔离 Chrome/mock 保留原动作响应丢失与刷新同键重放场景，另注入损坏记录确认无异常处理 POST 且原值保留，脚本 `[PASS]`。本机只有 MySQL `5.7.17`，Docker daemon 未运行，不能充当目标 MySQL 8 迁移/隔离级别验收；可信运营身份、正式通知/资金与后端全量仍待关闭。详见接口文档 14.489 与跨系统记录第 51 节。
+
+### 10.955 管理端不同异常批量动作的未决键分区
+
+原单个 `payment-issue-action-attempt:v1` 存储槽在动作 A 未明时，动作 B 的合法不同内容会覆盖 A；刷新后回到 A 便产生新键。红测固定两个内容的并存与旧单键数据读取。现以请求摘要为后缀分区保存；同内容重放仍取原键，清理一条不会删除另一条，旧单键记录保持可读可清理。旧格式与同摘要新分区键冲突、损坏的本分区记录均失败闭合，其他有效分区可独立恢复；同页已知相同内容仍沿用内存原键。管理端 `305/305`、Vite 构建、隔离 Chrome/mock 的原响应丢失/畸形旧键场景与新增双动作并存重放均通过：两种不同备注各收到一次模拟响应丢失，存储保留两个摘要分区；刷新后分别以原请求体和原键重放。跨标签页、可信运营身份、正式资金/通知、MySQL 8 与后端全量仍未关闭。详见接口文档 14.490 与跨系统记录第 52 节。
+
+### 10.956 管理端退款申请刷新后的幂等键恢复
+
+退款申请原仅在组件内存保存键和请求指纹，响应丢失后刷新会重新生成键；原 `randomUUID` 缺失时还退化为时间戳加普通伪随机数。红测复现缺少会话恢复接口。现先按完整规范化请求计算 SHA-256 摘要并分区保存随机 UUID，持久化成功且读回一致才提交；仅保存摘要与键。摘要计算期间禁用重复提交。失败保留原键，可信成功仅清理当前分区；同一申请刷新后重输原内容复用键，不同支付单或任一字段变化分别保留未决键。当前分区损坏、存储读写、摘要或安全随机源失败均拒绝申请，安全随机字节可作为 `randomUUID` 缺失时的替代。管理端工具定向 `5/5`、全量前端 `307/307` 和 Vite 构建通过；隔离 Chrome/mock 模拟首次响应丢失及列表读回失败，刷新后重输原内容、畸形存储拒绝 POST、恢复记录后同请求体和原键重放成功并清理记录，脚本 `[PASS]`。不证明不同标签页/会话、真实退款资金、目标 MySQL 8、可信身份或未经批准的后端全量。详见接口文档 14.491 与跨系统记录第 53 节。
+
+### 10.957 用户端未决支付存储静默失败门禁
+
+红测证实三处缺口：存储 `setItem` 静默无效仍允许新键进入支付 POST；`removeItem` 静默无效仍提示重置成功；JSON 数组中的 UUID 经正则隐式转型被当作合法键。现提交前写入必须读回完全一致的未决记录，显式重置后必须读回空分区，UUID 严格限定字符串；失败统一提示未决支付不可核实，不发送新请求或宣称键已更换。安全随机源失效也转为相同的失败闭合提示。工具定向 `8/8`、用户端全量 `125/125`、Vite 构建及隔离 Chrome/mock 原查询/关闭/结果读回与未决键重放回归均通过；新浏览器场景仅对当前虚构预付单的未决键拦截 `Storage.setItem` 为静默无效，页面提示不可核实，支付 POST 数为零，存储未增加该键。删除无效与畸形 UUID 由单测覆盖。本机 mock 不证明跨标签页、真实渠道资金、可信身份、目标 MySQL 8 或未获准的后端全量套件。详见接口文档 14.492 与跨系统记录第 54 节。
+
+### 10.958 管理端异常批量动作静默丢写门禁
+
+在 10.954–10.955 的异常批量动作恢复基础上，红测证明存储静默忽略 `setItem` 后原逻辑仍返回新键，JSON 数组型 UUID 通过正则隐式转型，安全随机源缺失抛裸 `TypeError`。现新键落地后读回与写入字符串必须完全一致；已存摘要、UUID 类型严格校验，摘要长度异常与随机源故障统一提示未决动作不可核实，不发送动作 POST。保留旧单键与同页已知同内容重放语义。工具定向 `11/11`、管理端全量 `311/311`、Vite 构建及隔离 Chrome/mock 脚本通过：已有两笔不同内容的未决批量动作时，第三笔新内容的分区写入被静默丢弃，页面明确提示未发送、动作 POST 仍为两次且原两键保留；移除故障后两笔原动作刷新同键重放继续通过。此为本机门禁，不替代正式审批身份、跨标签页/会话、后端全量、MySQL 8 或真实资金/通知验收。详见接口文档 14.493、跨系统记录第 55 节。
+
+### 10.959 退款申请已受理后清键失败的事实区分
+
+原 `clearRefundApplicationAttempt` 吞掉 `removeItem` 抛错或静默无效；受理成功后若同一内容再次申请，旧键仍被当作未决重放，页面可能误示新的退款受理。红测覆盖静默删除、删除与写入同时失败。现成功响应仍显示退款单号及真实状态，清理必须读回确认；原键仍在且可写时标记 `confirmed` 并再次读回，后续同内容刷新后拒绝提交；若标记也失败，页面明确告警已受理但键未清理，要求人工核对。管理端工具定向 `7/7`、全量 `313/313`、Vite 构建及隔离 Chrome/mock 回归通过：模拟第一次响应丢失后同键重放成功，第二次响应受理但 `removeItem` 静默无效，原记录标为已确认；页面显示成功事实及清键故障，刷新重输同内容无第三次退款 POST。**限制**：若存储删写均失败，刷新后无法恢复已确认标记；必须人工核对，不把本机门禁视作退款到账或服务端事实证明。跨标签页/会话、可信身份、真实资金、MySQL 8 和后端全量仍未关闭。详见接口文档 14.494 与跨系统记录第 56 节。
+
+### 10.960 小程序同预付单刷新不换支付键
+
+小程序原收银台在 `onLoad` 调用 `Date.now() + Math.random()` 生成一次性键，页面销毁重进后相同预付单产生新键，用户在响应丢失而仍可提交时可能绕过原键；“重新生成”按钮还允许同页人工换键。红测复现新页面键不相同。现对固定微信方式使用 `MINI-${prepayOrderNo}`，与预付单唯一身份绑定；删除手动换键入口，并提示未知结果先核对原支付事实。页面级回归用两次独立实例模拟同一预付单提交响应丢失，第二次请求体（含键）与第一次完全一致；64 字符预付号得到 69 字符键。小程序全量 `113/113`、语法检查与补丁检查通过。**边界**：未运行真实微信开发者工具/原生支付或目标 MySQL 8；升级前随机键不可恢复，仍需服务端归属/摘要校验与可信渠道状态兜底。详见接口文档 14.495。
+
+### 10.961 2026-10-11 小程序固定键的支付核心落库重放
+
+在现有 `PaymentDemoProfileIntegrationTest` 小程序微信来源路径，将显式键改为与前端相同的 `MINI-${prepayOrderNo}`。隔离 H2/demo 中第一次提交收口 `WAIT_CALLBACK`；同请求再提交返回同一支付单和预付单，按键与支付单查询仅一条支付尝试；随后保持键不变只改付款手机号，服务拒绝 `PAYMENT-1069`，尝试数仍为一。离线 Maven `-Pdemo -Dtest=PaymentDemoProfileIntegrationTest` 定向 `1/1`、零失败/错误/跳过，前端 `113/113`、`git diff --check` 通过。该用例验证服务端归属/请求摘要与前端固定键兼容，但不是微信小程序真机、真实渠道资金、MySQL 8、多实例或获准的后端全量验收；演示 Spring 上下文自动关闭。详见接口文档 14.495。
+
+### 10.962 2026-10-11 API 调用端时间戳默认键收口
+
+原 `payment-api.mjs` 对支付提交默认使用 `API-${prepayOrderNo}-${Date.now()}`、对退款申请默认使用 `API-REFUND-${paymentOrderId}-${Date.now()}`；命令重跑可能为结果未知的原意图换键。红测复现同支付命令时钟变化后键不同，以及缺退款键仍会生成 POST。现提交默认按预付号稳定派生，退款申请强制调用方提供可持久保存的业务意图键；缺键或纯空白键在本地参数构建时即拒绝。CLI 全量 `14/14`、无服务命令实测缺退款键退出码 `1` 且只输出参数错误。扩展 H2/demo API 来源提交两次同内容只落一条尝试，同键换客户端设备号返回 `PAYMENT-1069` 且尝试不增加；`PaymentDemoProfileIntegrationTest` 离线定向 `1/1`、零失败/错误/跳过，补丁检查通过。旧版时间戳键无法仅凭当前调用端恢复，仍须核对服务端事实；不代表正式商户认证、真实资金、MySQL 8、多实例或未获准的后端全量验收。详见接口文档 14.496 与 API 客户端 README。
+
+### 10.963 2026-10-11 API 退款申请方式响应门禁
+
+盘点 `refund-apply` 成功响应校验时发现已核对支付单、金额、原支付金额和状态，却未确认返回的退款方式与申请相同；调用方可能将错误方式的受理响应当作可信结果。现要求响应包含 `refundMethod` 并与请求规范化值一致，未显式指定时核对“原路退款”；缺失或不一致报 `PAYMENT-API-CLIENT-INVALID-RESPONSE`，自定义“线下打款”匹配值可通过。API CLI 定向全量 `14/14`、`git diff --check` 通过。仅验证客户端契约及模拟响应，未复跑后端全量，不代表目标 MySQL 8、可信身份或正式退款渠道到账。
+
+### 10.964 2026-10-11 API 退款摘要字段误判修正与后端补证
+
+对照 `RefundController`、`RefundListItemDTO` 和 `RefundDetailDTO` 发现 10.963 所述“原支付金额校验”仅在带 `paidAmount` 的模拟摘要中成立：真实申请、审核、查单、重试返回的摘要没有该字段，CLI 会把合法响应错误拒绝。先用不含 `paidAmount` 的申请与动作摘要红测复现 `PAYMENT-API-CLIENT-INVALID-RESPONSE`；现摘要只要求退款金额为正并按请求核验，若响应确有 `paidAmount` 仍校验其有效性与金额关系，退款详情则必须有该字段。CLI `14/14`、补丁检查通过。退款服务层同键同内容及不同退款方式冲突定向 `2/2`、零错误/失败；现有 HTTP 申请测试增补首次/重放/审批后退款方式及同键异方式冲突断言，并完成编译。该 HTTP 用例在沙箱内启动 Tomcat 因 Socket `Operation not permitted` 失败，定向扩展权限申请两次均审批超时，故**未宣称 HTTP 测试通过**，待许可后重跑。后端全量、目标 MySQL 8、多实例、真实资金、可信身份与发布均未关闭。详见接口文档 14.498。
+
+### 10.965 2026-10-11 API 退款终态摘要时间门禁
+
+核对后端 `RefundListItemDTO` 与终态事实校验发现摘要已具备 `terminalAt`，但 CLI 过去仅对 `refund-detail` 要求终态时间。红测显示审核/查单/重试或退款申请同键重放返回 `SUCCESS` 且缺终态时间时原校验仍会放行。现所有退款命令均核对终态 `terminalAt` 与申请、渠道受理及成功时间顺序；非终态不允许提前带终态时间。CLI `14/14`、`git diff --check` 通过。仅客户端模拟响应，HTTP 用例仍受 10.964 所述本机监听审批超时限制，目标 MySQL 8、真实资金、可信身份、后端全量与发布未关闭。详见接口文档 14.499。
+
+### 10.966 2026-10-11 API 未派发退款尝试时间契约
+
+对照 `RefundAttemptItemDTO` 与正式 Mapper 发现 `PENDING` 尝试插入时 `submitted_at` 为 `NULL`，渠道前失败的 `FAILED` 也不补该时间，查询映射为 `-`；CLI 原逻辑对所有尝试一律要求合法 `submittedAt`，把实际合法的审核后未派发详情判为坏响应。红测将详情尝试设为 `PENDING/submittedAt=-` 复现拒绝；现 `PENDING`/`FAILED` 要求无提交时间，`UNKNOWN`/`ACCEPTED`/终态尝试要求合法提交时间，完成时间与排序门禁不变。补充 H2 Mapper 定向用例验证真实 `PENDING` 与 `FAILED` 均返回 `-`，Surefire `1/1`、零失败/错误/跳过；CLI `14/14`、`git diff --check` 通过。本轮不运行需端口的 HTTP 测试或未获准后端全量；不替代目标 MySQL 8、正式渠道资金、可信身份或发布。详见接口文档 14.500。
+
+### 10.967 2026-10-11 API 显式空支付键失败闭合
+
+支付 CLI 使用 `optionalOption` 处理提交键时，调用方显式传空字符串或空白字符串会静默改用 `API-${prepayOrderNo}`，在原键丢失的恢复场景改变请求身份。红测复现两种显式空键未报错；现仅完全省略参数时使用固定默认键，显式空键用必填参数校验在 POST 前拒绝。CLI `14/14`；无服务命令实测错误响应 `PAYMENT-API-CLIENT`、提示缺少 `--idempotency-key`、退出码 `1`，未发网络请求；`git diff --check` 通过。仅调用端防误操作，不代表跨标签页历史恢复、目标 MySQL 8、多实例、真实渠道资金、后端全量或发布。详见接口文档 14.501。
+
+### 10.968 2026-10-11 API 拼错支付键不再静默忽略
+
+参数解析原先仅验证 `--` 格式及重复值，不核对当前命令允许的键；例如 `submit --idempotency-ke original-key` 被忽略，实际请求带默认 `API-${prepayOrderNo}`。先以拼写错误和跨命令参数红测复现；现按 11 条命令的参数白名单校验，`--base-url` 保持通用，未知参数在发请求前拒绝。CLI 回归 `15/15`，真实命令无服务实测返回 `PAYMENT-API-CLIENT` 与“不支持参数 --idempotency-ke”、退出码 `1`；`git diff --check` 通过。仅调用端门禁，不代表服务端多实例幂等、目标 MySQL 8、正式资金、可信身份、后端全量或发布。详见接口文档 14.502。
+
+### 10.969 2026-10-11 demo 退款失败重试渠道号隔离
+
+本地 `demo` 退款适配器原将 `refundOrderId` 转成渠道退款号，同一退款单两次不同尝试会收到相同 `RCH-` 编号，违背尝试号作为渠道商户请求号的契约，可能影响历史失败尝试与重试回调归属。红测证实不同 `RFA` 仍返回同号且缺尝试号照样受理；现改为 `RCH-${refundAttemptNo}`，同尝试稳定、不同尝试不同号，缺尝试号失败闭合并在模拟响应中保留尝试身份。`RefundOutboxHttpIntegrationTest` 的 demo 渠道号预期同步更新；离线 `LocalRefundChannelSubmitServiceImplTest` 与 demo profile 绑定测试合计 Surefire `4/4`，零失败/错误/跳过，`git diff --check` 通过。**HTTP 用例本轮未运行**：本机沙箱回环监听及前轮扩展审批超时，不能将单测视作端到端退款重试验收。正式渠道/资金、目标 MySQL 8、多实例、可信身份、后端全量与发布仍未关闭。详见接口文档 14.503。
+
+### 10.970 2026-10-11 demo 双退款尝试渠道号落库归属
+
+扩展 `RefundSubmitOutboxMapperIntegrationTest`：同一退款单的原尝试及后续新尝试分别从正式 Mapper 读取请求、经本地 demo 适配器生成 `RCH-${refundAttemptNo}`，写入退款尝试表后按渠道号分别查回精确 `RFA`。新用例离线 H2/demo 定向 `1/1`，所在 Mapper 类定向全集 Surefire `54/54`、零失败/错误/跳过，`git diff --check` 通过；测试事务回滚，不写目标库。本验证不构造真实失败终态、重试审批或签名回调，也不替代前述因沙箱监听限制待执行的 HTTP 用例、目标 MySQL 8、多实例、正式渠道资金、可信身份、后端全量或发布。详见接口文档 14.504。
+
+### 10.971 2026-10-11 demo 退款失败回调到新尝试成功收口
+
+新增 `RefundDemoRetryIntegrationTest`，沿用项目无 Web 监听的 Spring/H2/demo 启动方式和隔离内存库，不替换真实退款派发服务。对演示成功支付单申请/审核退款，本地渠道首次受理并落 `RCH-${firstAttemptNo}`；演示密钥签名 `FAIL` 回调将首轮收为终态失败，服务重试产生不同 `RCH-${nextAttemptNo}` 并受理。旧尝试新签名 `SUCCESS` 回调返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH` 且退款单保持处理中；新尝试签名成功回调收口退款 `SUCCESS`，两条尝试分别保留 `FAIL/SUCCESS` 及各自渠道号，两条 `REFUND_SUBMIT` 事件为 `SUCCESS`。离线定向 Surefire `1/1`、零失败/错误/跳过，Spring 上下文与 H2 在测试结束后关闭，`git diff --check` 通过。该测试不绑定 HTTP 端口，不能替代待许可的真实 HTTP 回归、正式渠道/资金、目标 MySQL 8、多实例、可信身份、后端全量或发布。详见接口文档 14.505。
+
+### 10.972 2026-10-11 正式网关适配器可选字段长度门禁
+
+支付提交/查单及退款提交/查单四个 payment-core 正式 gateway-access 适配器均先判断可选字段是否有文字，再校验长度；超长纯空白的请求渠道、渠道交易号、退款原因、渠道退款号会被静默转空，尤其后两类查单可能从“按已知渠道号”退化成“仅按平台单号”。四个既有输入门禁测试先新增红测复现，再调整为先校验 ISO 控制字符和原文长度，再对合法纯空白回退。无监听定向 Surefire `30/30`，零失败/错误/跳过，`git diff --check` 通过。第一次误选包含一个回环 HTTP 用例的整类运行时该用例因沙箱 `SocketException: Operation not permitted` 未执行成功，后续仅选择同类其余八个无监听用例；不把此结果计入通过或冒充 HTTP 验收。后端全量、双服务 HTTP、目标 MySQL 8、多实例、真实渠道资金、可信身份及发布仍未完成。详见接口文档 14.506。
+
+### 10.973 2026-10-11 支付查单结果可选字段原文长度
+
+`PaymentChannelQueryResultValidator` 过去先以 `hasText` 将纯空白结果置空，再执行长度门禁；适配器上游的超长纯空白渠道交易号会越过标准化前校验，标准化映射追加的超长纯空白文案也能越过最终校验。两例红测分别复现原始结果与映射后结果被错误接受；现控制字符、原文长度均先于空白规范化处理。无端口 `PaymentChannelQueryServiceImplTest` 定向 `17/17`、零失败/错误/跳过，`git diff --check` 通过；未替代目标 MySQL 8、真实渠道查单/资金、后端全量与双服务 HTTP。详见接口文档 14.507。
+
+### 10.974 2026-10-11 同步成功退款提交到同尝试查单收口
+
+新增 `RefundSynchronousSubmitQueryIntegrationTest`，在隔离 H2/demo 的无监听真实 Spring 服务事务中仅以测试 Bean 模拟渠道同步返回 `SUCCESS / success` 与按原退款尝试号查单返回成功，不改生产渠道适配器。退款申请、审核后的同步终态响应被出站派发安全隔离为 `UNKNOWN`：退款单仍 `PROCESSING`、尝试号存在但渠道号未绑定、事件为 `UNKNOWN`，直接重试被拒且没有新尝试。同一退款单主动查单从原尝试号取得渠道号后收口 `SUCCESS`，原事件确认为 `SUCCESS`，终态重查保持单一尝试。离线 Surefire `1/1`、零失败/错误/跳过，`git diff --check` 通过。此证据不证明 gateway-access→真实渠道支持按尝试号查询、双服务 HTTP、目标 MySQL 8、多实例、正式到账、可信身份、后端全量或发布。详见接口文档 14.508。
+
+### 10.975 2026-10-11 两组退款服务级回归真正隔离 H2 库
+
+同步终态测试加入后，与原 `RefundDemoRetryIntegrationTest` 同 Maven 进程并跑曾因 H2 `t_payment_protocol_version already exists` 失败：两测试使用 `SpringApplicationBuilder.properties` 注入自定义 URL，但 `application-demo.yml` 的默认 `payment_core` 数据源优先，首个上下文留下 `DB_CLOSE_DELAY=-1` 库，第二个重复执行 schema。现将两测试的 `spring.datasource.url` 改为各自 `.run` 命令行参数，并为新增测试 Bean 增加专用 profile，防止被其他 demo 上下文扫描生效；同进程两组 Surefire `2/2`，零失败/错误/跳过，补丁检查通过。此前单独运行成功只能证明行为分支，不能反证库隔离；这一修正只保证两组本机 H2 测试互不复用数据库，不代表目标 MySQL 8、HTTP、真实资金或后端全量验收。
