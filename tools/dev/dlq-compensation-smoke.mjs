@@ -8,12 +8,12 @@
  */
 
 const suffix = requiredEnv("HSP_DLQ_SUFFIX");
-const managementBaseUrl = process.env.HSP_RABBIT_MANAGEMENT_URL || "http://127.0.0.1:15672/api";
+const managementBaseUrl = process.env.HSP_RABBIT_MANAGEMENT_URL || "http://localhost:15672/api";
 const managementUser = process.env.HSP_RABBIT_MANAGEMENT_USER || "hsp";
 const managementPassword = process.env.HSP_RABBIT_MANAGEMENT_PASSWORD || "hsp-local-drill-20260801";
-const paymentCoreBaseUrl = process.env.HSP_PAYMENT_CORE_BASE_URL || "http://127.0.0.1:18081";
-const accountingBaseUrl = process.env.HSP_ACCOUNTING_BASE_URL || "http://127.0.0.1:18110";
-const settlementBaseUrl = process.env.HSP_SETTLEMENT_BASE_URL || "http://127.0.0.1:18130";
+const paymentCoreBaseUrl = process.env.HSP_PAYMENT_CORE_BASE_URL || "http://localhost:18081";
+const accountingBaseUrl = process.env.HSP_ACCOUNTING_BASE_URL || "http://localhost:18110";
+const settlementBaseUrl = process.env.HSP_SETTLEMENT_BASE_URL || "http://localhost:18130";
 const targetSystem = process.env.HSP_DLQ_TARGET_SYSTEM || "accounting";
 const eventKind = process.env.HSP_DLQ_EVENT_KIND || "payment-success";
 const timeoutMs = positiveEnvNumber("HSP_DLQ_TIMEOUT_MS", 30000);
@@ -32,7 +32,7 @@ const targetConfig = {
     clearing: {
       routingKey: `payment.success.clearing.dlq.${suffix}.v1`,
       replayRoutingKey: `payment.success.clearing.replay.${suffix}.v1`,
-      downstreamBaseUrl: process.env.HSP_CLEARING_BASE_URL || "http://127.0.0.1:18120",
+      downstreamBaseUrl: process.env.HSP_CLEARING_BASE_URL || "http://localhost:18120",
       downstreamPath: "clearing"
     }
   },

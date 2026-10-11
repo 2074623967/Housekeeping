@@ -222,3 +222,13 @@ test("reports unavailable RabbitMQ management clearly", async () => {
   assert.notEqual(result.exitCode, 0);
   assert.match(result.stderr, /request failed/);
 });
+
+test("uses localhost defaults for IPv6-compatible local services", async () => {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(scriptPath, "utf8"));
+  assert.match(source, /HSP_RABBIT_MANAGEMENT_URL \|\| "http:\/\/localhost:15672\/api"/);
+  assert.match(source, /HSP_PAYMENT_CORE_BASE_URL \|\| "http:\/\/localhost:18081"/);
+  assert.match(source, /HSP_ACCOUNTING_BASE_URL \|\| "http:\/\/localhost:18110"/);
+  assert.match(source, /HSP_SETTLEMENT_BASE_URL \|\| "http:\/\/localhost:18130"/);
+  assert.match(source, /HSP_CLEARING_BASE_URL \|\| "http:\/\/localhost:18120"/);
+});
