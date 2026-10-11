@@ -17,6 +17,8 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer backingOffExpiredPaymentCount;
     /** 活跃提交令牌阻断自动关单、需要人工核对的超时支付单数。 */
     private Integer blockedExpiredPaymentCount;
+    /** TTL 已过但状态仍为 ACTIVE 的历史提交令牌数，不限支付单状态。 */
+    private Integer expiredActiveSubmitTokenCount;
     /** 待收口支付中单数。 */
     private Integer pendingCallbackCount;
     /** 已达到主动补查阈值的支付单数。 */

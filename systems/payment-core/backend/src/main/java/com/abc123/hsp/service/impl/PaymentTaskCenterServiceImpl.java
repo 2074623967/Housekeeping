@@ -318,6 +318,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setDueExpiredPaymentCount(paymentTaskCenterMapper.countDueExpiredPayments());
         overview.setBackingOffExpiredPaymentCount(paymentTaskCenterMapper.countBackingOffExpiredPayments());
         overview.setBlockedExpiredPaymentCount(paymentTaskCenterMapper.countBlockedExpiredPayments());
+        overview.setExpiredActiveSubmitTokenCount(paymentTaskCenterMapper.countExpiredActiveSubmitTokens());
         overview.setUnknownRefundSubmitEventCount(
                 paymentTaskCenterMapper.countUnknownRefundSubmitEvents());
         overview.setPendingQueryBacklogCount(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(
@@ -1800,6 +1801,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int dueExpiredPaymentCount = valueOrZero(overview.getDueExpiredPaymentCount());
         int backingOffExpiredPaymentCount = valueOrZero(overview.getBackingOffExpiredPaymentCount());
         int blockedExpiredPaymentCount = valueOrZero(overview.getBlockedExpiredPaymentCount());
+        int expiredActiveSubmitTokenCount = valueOrZero(overview.getExpiredActiveSubmitTokenCount());
         int pendingCallbackCount = valueOrZero(overview.getPendingCallbackCount());
         int pendingQueryBacklogCount = valueOrZero(overview.getPendingQueryBacklogCount());
         int duePendingQueryCount = valueOrZero(overview.getDuePendingQueryCount());
@@ -1850,6 +1852,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 expiredPaymentCount == 0 ? "success"
                         : blockedExpiredPaymentCount > 0 || expiredPaymentCount > 10 ? "danger" : "warn"
         ));
+        PaymentAlertItemDTO expiredTokenAlert = buildAlert(
+                "PAYMENT_SUBMIT_TOKEN_EXPIRY",
+                "过期活跃提交令牌待核对",
+                expiredActiveSubmitTokenCount,
+                expiredActiveSubmitTokenCount > 0
+                        ? String.format("有 %d 条提交令牌 TTL 已过但仍处于 ACTIVE；须核对原支付与渠道事实，勿按 TTL 自动释放或关单",
+                        expiredActiveSubmitTokenCount)
+                        : "暂无过期但仍活跃的提交令牌",
+                "/payment-task-center",
+                expiredActiveSubmitTokenCount > 0 ? "P1" : "P3",
+                expiredActiveSubmitTokenCount > 0 ? "danger" : "success"
+        );
+        expiredTokenAlert.setSuggestedAction("只读盘点并人工核对渠道事实，禁止仅凭 TTL 释放令牌或关单");
+        alerts.add(expiredTokenAlert);
         alerts.add(buildAlert(
                 "PAYMENT_CALLBACK",
                 "待收口支付中",

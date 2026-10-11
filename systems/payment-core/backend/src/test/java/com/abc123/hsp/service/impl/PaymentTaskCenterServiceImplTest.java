@@ -176,6 +176,11 @@ class PaymentTaskCenterServiceImplTest {
 
         Assertions.assertNotNull(overview);
         Assertions.assertNotNull(overview.getFocusAlerts());
+        Assertions.assertEquals(0, overview.getExpiredActiveSubmitTokenCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_SUBMIT_TOKEN_EXPIRY".equals(alert.getAlertType())
+                        && "P3".equals(alert.getAlertLevel())
+                        && alert.getAffectedCount() == 0));
     }
 
     @Test
@@ -289,6 +294,24 @@ class PaymentTaskCenterServiceImplTest {
                         && "P1".equals(alert.getAlertLevel())
                         && alert.getAlertMessage().contains("活跃提交令牌阻断 1 笔")
                         && alert.getAlertMessage().contains("人工核对")));
+    }
+
+    @Test
+    void shouldEscalateExpiredActiveTokensWithoutAssumingCloseEligibility() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countExpiredActiveSubmitTokens()).thenReturn(2);
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(0, overview.getBlockedExpiredPaymentCount());
+        Assertions.assertEquals(2, overview.getExpiredActiveSubmitTokenCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_SUBMIT_TOKEN_EXPIRY".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && "danger".equals(alert.getAlertLevelType())
+                        && alert.getAffectedCount() == 2
+                        && alert.getAlertMessage().contains("勿按 TTL 自动释放或关单")
+                        && alert.getSuggestedAction().contains("核对渠道事实")));
     }
 
     @Test

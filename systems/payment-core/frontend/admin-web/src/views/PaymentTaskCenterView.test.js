@@ -46,4 +46,6 @@ test("invalidates historical token inventory on overview refresh and task execut
   assert.match(source, /const canUseExpiredTokens = computed\(\(\) => canUseOverview\.value/);
   assert.match(source, /router\.push\(paymentDetailRoute\(paymentOrderId\)\)/);
   assert.match(source, /过期不代表渠道未受理/);
+  assert.match(source, /overview\.expiredActiveSubmitTokenCount/);
+  assert.match(source, /alert\.alertType === 'PAYMENT_SUBMIT_TOKEN_EXPIRY' \? loadExpiredTokens\(\)/);
 });

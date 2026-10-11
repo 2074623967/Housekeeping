@@ -1032,6 +1032,10 @@ class PaymentDiagnosticHttpIntegrationTest {
                             + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
                             + "('PRE-ORPHAN-HTTP', 'PAY-ORPHAN-HTTP', 'app', 'ACTIVE', 'secret-key', 'APP', "
                             + "'secret-ip', NOW(), TIMESTAMPADD(MINUTE, -1, NOW()), NOW(), NOW())"));
+            JsonNode overview = get(objectMapper, port, "/api/payment-task-center/overview").path("data");
+            assertEquals(1, overview.path("expiredActiveSubmitTokenCount").asInt());
+            assertEquals(0, overview.path("blockedExpiredPaymentCount").asInt());
+            assertTrue(overview.path("focusAlerts").toString().contains("PAYMENT_SUBMIT_TOKEN_EXPIRY"));
             JsonNode page = get(objectMapper, port,
                     "/api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=1");
             assertEquals("0", page.path("code").asText());
@@ -1051,6 +1055,8 @@ class PaymentDiagnosticHttpIntegrationTest {
             assertEquals(0, get(objectMapper, port,
                     "/api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=1")
                     .path("data").path("total").asInt());
+            assertEquals(0, get(objectMapper, port, "/api/payment-task-center/overview")
+                    .path("data").path("expiredActiveSubmitTokenCount").asInt());
         }
     }
 

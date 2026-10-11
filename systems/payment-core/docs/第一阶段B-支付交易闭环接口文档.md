@@ -5775,6 +5775,10 @@ App/H5/PC 支付提交响应与当前支付单核对成功后，先保留当前�
 
 `GET /api/payment-task-center/expired-active-submit-tokens?pageNo=1&pageSize=10` 只读返回 `{ items, total, pageNo, pageSize }`，每条仅含 `paymentOrderId / prepayOrderNo / sourceAppId / expireAt`，不返回占用幂等键、终端、客户端 IP 或令牌原文。页码/页大小分别规范化至 `1..1000`、`1..100`。查询筛选当前状态按系统活跃语义归一为 `ACTIVE`、但令牌 TTL 已过的行，不关联支付单或预付单，因此也能盘点孤儿、终态及不在超时关单候选中的历史令牌；按过期时间和令牌主键排序。管理端手动读取，刷新总览或执行任务后旧盘点失效；行仅可跳转支付详情尝试核对。过期不等于渠道未受理，不能仅据此释放令牌、关闭支付或重发渠道提交；计数和列表不是事务快照，正式处置仍需可信身份、渠道与资金事实复核及审批。
 
+### 14.553 过期活跃提交令牌总览告警
+
+`GET /api/payment-task-center/overview` 新增 `expiredActiveSubmitTokenCount`，按历史令牌盘点同一状态和 TTL 口径计数，不要求属于 `expiredPaymentCount` 或 `blockedExpiredPaymentCount`：孤儿令牌或终态支付关联令牌同样纳入。数量非零时重点告警 `PAYMENT_SUBMIT_TOKEN_EXPIRY` 为 `P1`，零时为 `P3`；告警仅引导管理端读取只读盘点，提示核对原支付与渠道事实，不把 TTL 过期视为释放、关单或渠道重发的充分条件。多项总览指标分别读取，实时状态变化下并非同一事务快照。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

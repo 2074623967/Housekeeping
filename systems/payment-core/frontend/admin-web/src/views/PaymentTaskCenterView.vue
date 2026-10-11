@@ -14,6 +14,7 @@ const overview = ref({
   dueExpiredPaymentCount: 0,
   backingOffExpiredPaymentCount: 0,
   blockedExpiredPaymentCount: 0,
+  expiredActiveSubmitTokenCount: 0,
   pendingCallbackCount: 0,
   pendingQueryBacklogCount: 0,
   duePendingQueryCount: 0,
@@ -466,7 +467,7 @@ onMounted(loadOverview);
             <div class="detail-label">{{ alert.alertTitle }}</div>
             <div class="detail-value">{{ alert.affectedCount }}</div>
             <div class="detail-hint">{{ alert.alertMessage }}</div>
-            <button v-if="alert.actionRoute" class="link-button" :disabled="!canUseOverview" @click="openOverviewRoute(alert.actionRoute)">查看处置入口</button>
+            <button v-if="alert.actionRoute" class="link-button" :disabled="!canUseOverview" @click="alert.alertType === 'PAYMENT_SUBMIT_TOKEN_EXPIRY' ? loadExpiredTokens() : openOverviewRoute(alert.actionRoute)">{{ alert.alertType === 'PAYMENT_SUBMIT_TOKEN_EXPIRY' ? '读取只读盘点' : '查看处置入口' }}</button>
           </div>
         </div>
 
@@ -475,6 +476,11 @@ onMounted(loadOverview);
             <div class="detail-label">待超时关单</div>
             <div class="detail-value">{{ overview.expiredPaymentCount }}</div>
             <div class="meta">可执行 {{ overview.dueExpiredPaymentCount }} · 失败退避中 {{ overview.backingOffExpiredPaymentCount }} · 令牌阻断待核对 {{ overview.blockedExpiredPaymentCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">过期但仍活跃的提交令牌</div>
+            <div class="detail-value">{{ overview.expiredActiveSubmitTokenCount }}</div>
+            <div class="meta">不限支付单状态，须核对渠道事实；不可仅凭 TTL 释放或关单</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">待收口支付中</div>
@@ -855,6 +861,11 @@ onMounted(loadOverview);
                   <td>超时支付令牌阻断待核对</td>
                   <td>{{ overview.blockedExpiredPaymentCount }}</td>
                   <td>提交令牌仍活跃，不进入自动关单；需人工核对原支付及渠道事实。<button class="link-button" :disabled="!canUseOverview || overview.blockedExpiredPaymentCount === 0" @click="loadBlockedPayments()">查看阻断明细</button></td>
+                </tr>
+                <tr>
+                  <td>过期活跃提交令牌待核对</td>
+                  <td>{{ overview.expiredActiveSubmitTokenCount }}</td>
+                  <td>覆盖非关单候选的历史异常；不代表渠道未受理。<button class="link-button" :disabled="!canUseOverview" @click="loadExpiredTokens()">读取盘点</button></td>
                 </tr>
                 <tr>
                   <td>支付中待收口</td>
