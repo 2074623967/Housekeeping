@@ -938,6 +938,79 @@ class PaymentDiagnosticHttpIntegrationTest {
     }
 
     @Test
+    void shouldRejectCloseOverHttpWhileSubmitTokenIsActiveWithoutAnAttempt() throws Exception {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        String databaseUrl = "jdbc:h2:mem:payment_close_token_http_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--server.address=127.0.0.1",
+                "--server.port=0",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
+            String paymentOrderId = "PAY-CLOSE-TOKEN-HTTP-001";
+            String prepayOrderNo = "PRE-CLOSE-TOKEN-HTTP-001";
+            assertEquals(1, jdbcTemplate.update(
+                    "INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, "
+                            + "payment_method, channel_code, channel_transaction_no, status, status_type, "
+                            + "success_at, created_at) SELECT ?, order_no, customer_name, amount, "
+                            + "payment_method, channel_code, NULL, 'PREPAY_CREATED', 'info', NULL, created_at "
+                            + "FROM t_payment_order WHERE payment_order_id = 'PAY202607190002'",
+                    paymentOrderId));
+            assertEquals(1, jdbcTemplate.update(
+                    "INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, amount, "
+                            + "pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, "
+                            + "source_kind, created_at, expires_at) SELECT ?, bill_no, order_no, customer_name, "
+                            + "amount, pay_scene, cashier_title, '待支付', 'warn', ?, source_kind, "
+                            + "created_at, expires_at FROM t_prepay_order "
+                            + "WHERE prepay_order_no = 'PRE202607190002'",
+                    prepayOrderNo, paymentOrderId));
+            assertEquals(1, jdbcTemplate.update(
+                    "INSERT INTO t_payment_submit_concurrency_token (prepay_order_no, payment_order_id, "
+                            + "source_app_id, token_status, holder_idempotency_key, holder_terminal, holder_client_ip, "
+                            + "last_occupied_at, expire_at, created_at, updated_at) VALUES "
+                            + "(?, ?, 'app', 'ACTIVE', 'pending-key', 'APP', '127.0.0.1', "
+                            + "NOW(), TIMESTAMPADD(MINUTE, 1, NOW()), NOW(), NOW())",
+                    prepayOrderNo, paymentOrderId));
+
+            String body = "{\"paymentOrderId\":\"" + paymentOrderId + "\"}";
+            for (String path : new String[] { "/api/payments/close", "/api/payments/admin/close" }) {
+                String requestBody = path.contains("admin")
+                        ? "{\"paymentOrderId\":\"" + paymentOrderId + "\",\"operator\":\"local-operator\"}"
+                        : body;
+                JsonNode response = post(objectMapper, port, path, requestBody, 200);
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, response.path("code").asText());
+                assertTrue(response.path("message").asText().contains("刷新"));
+            }
+            assertEquals("PREPAY_CREATED", jdbcTemplate.queryForObject(
+                    "SELECT status FROM t_payment_order WHERE payment_order_id = ?", String.class, paymentOrderId));
+            assertEquals("待支付", jdbcTemplate.queryForObject(
+                    "SELECT cashier_status FROM t_prepay_order WHERE prepay_order_no = ?", String.class, prepayOrderNo));
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
+                            + "AND event_type = 'PAYMENT_CLOSED'", Integer.class, paymentOrderId));
+            assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+                    "SELECT token_status FROM t_payment_submit_concurrency_token WHERE prepay_order_no = ?",
+                    String.class, prepayOrderNo));
+
+            assertEquals(1, jdbcTemplate.update(
+                    "UPDATE t_payment_submit_concurrency_token SET token_status = 'RELEASED' "
+                            + "WHERE prepay_order_no = ?", prepayOrderNo));
+            JsonNode closed = post(objectMapper, port, "/api/payments/close", body, 200);
+            assertEquals("0", closed.path("code").asText());
+            assertEquals("CLOSED", closed.path("data").path("status").asText());
+            assertEquals(1, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
+                            + "AND event_type = 'PAYMENT_CLOSED'", Integer.class, paymentOrderId));
+        }
+    }
+
+    @Test
     void shouldKeepAmbiguousPaymentListReadableButRejectDetailOverHttp() throws Exception {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
         String databaseUrl = "jdbc:h2:mem:payment_binding_http_" + System.nanoTime()
