@@ -631,11 +631,17 @@ public class PaymentServiceImpl implements PaymentService {
                 && (latestDetail == null || !"SUCCESS".equalsIgnoreCase(latestDetail.getStatus()))) {
             throw new IllegalStateException("payment success facts are inconsistent");
         }
+        boolean pending = latestDetail != null && "WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus());
+        boolean success = latestDetail != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus());
+        if (!pending && !success
+                && ("PAYING".equalsIgnoreCase(latestPrepay.getPaymentStatus())
+                    || "支付中".equals(latestPrepay.getCashierStatus())
+                    || (latestDetail != null && "PAYING".equalsIgnoreCase(latestDetail.getStatus())))) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
+        }
         if (latestDetail == null) {
             return latestPrepay;
         }
-        boolean pending = "WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus());
-        boolean success = "SUCCESS".equalsIgnoreCase(latestDetail.getStatus());
         if (pending || success) {
             if (!paymentOrderId.equals(latestDetail.getPaymentOrderId())) {
                 throw new IllegalStateException("payment success facts are inconsistent");
@@ -1153,9 +1159,6 @@ public class PaymentServiceImpl implements PaymentService {
             if (latestDetail != null && ("WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus())
                     || "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
                     || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
-                return latestPrepay;
-            }
-            if ("支付中".equals(latestPrepay.getCashierStatus())) {
                 return latestPrepay;
             }
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");

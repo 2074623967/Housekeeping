@@ -3998,6 +3998,55 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectSameKeyReplayWhileChannelSubmitIsStillPaying() {
+        PrepayOrderDTO prepay = boundPrepay();
+        prepay.setPrepayOrderNo("PRE-PAYING-REPLAY");
+        prepay.setPaymentOrderId("PAY-PAYING-REPLAY");
+        prepay.setAmount("¥88.00");
+        PrepayOrderDTO latestPrepay = boundPrepay();
+        latestPrepay.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        latestPrepay.setPaymentOrderId(prepay.getPaymentOrderId());
+        latestPrepay.setAmount(prepay.getAmount());
+        latestPrepay.setPaymentStatus("PAYING");
+        latestPrepay.setCashierStatus("支付中");
+        when(paymentMapper.findPrepay(prepay.getPrepayOrderNo())).thenReturn(prepay, latestPrepay);
+
+        PaymentDetailDTO initialDetail = new PaymentDetailDTO();
+        initialDetail.setPaymentOrderId(prepay.getPaymentOrderId());
+        initialDetail.setAmount(prepay.getAmount());
+        initialDetail.setStatus("PREPAY_CREATED");
+        PaymentDetailDTO payingDetail = new PaymentDetailDTO();
+        payingDetail.setPaymentOrderId(prepay.getPaymentOrderId());
+        payingDetail.setStatus("PAYING");
+        when(paymentMapper.findDetail(prepay.getPaymentOrderId())).thenReturn(initialDetail, payingDetail);
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-PAYING-REPLAY")).thenReturn(true);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setIdempotencyKey("IDEMP-PAYING-REPLAY");
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService);
+        PaymentAttemptIdempotencyDTO existingAttempt = new PaymentAttemptIdempotencyDTO();
+        existingAttempt.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        existingAttempt.setPaymentOrderId(prepay.getPaymentOrderId());
+        existingAttempt.setRequestFingerprint(service.submitRequestFingerprint(
+                request, prepay, prepay.getPaymentOrderId(), "default-app", "wx_h5", "UNKNOWN"));
+        when(paymentMapper.findPaymentAttemptIdempotency(request.getIdempotencyKey()))
+                .thenReturn(existingAttempt);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
+
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, exception.getCode());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldRejectIdempotencyKeyOwnedByAnotherPayment() {
         PrepayOrderDTO prepay = boundPrepay();
         prepay.setPrepayOrderNo("PRE-201");
@@ -4266,7 +4315,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void shouldReturnLatestPrepayWhenConcurrentSubmitAlreadyOccupiedCashier() {
+    void shouldRejectConcurrentSubmitWhileCashierIsStillPaying() {
         PrepayOrderDTO prepay = boundPrepay();
         prepay.setPrepayOrderNo("PRE-250");
         prepay.setPaymentOrderId("PAY-250");
@@ -4309,17 +4358,10 @@ class PaymentServiceImplTest {
                 paymentChannelRoutingService,
                 paymentChannelQueryService,
                 paymentChannelSubmitService);
-        PaymentAttemptIdempotencyDTO winningAttempt = new PaymentAttemptIdempotencyDTO();
-        winningAttempt.setPrepayOrderNo(prepay.getPrepayOrderNo());
-        winningAttempt.setPaymentOrderId(prepay.getPaymentOrderId());
-        winningAttempt.setRequestFingerprint(service.submitRequestFingerprint(
-                request, prepay, prepay.getPaymentOrderId(), "default-app", "wx_h5", "UNKNOWN"));
-        when(paymentMapper.findPaymentAttemptIdempotency(request.getIdempotencyKey()))
-                .thenReturn(winningAttempt);
-        PrepayOrderDTO result = service.submit(request);
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
 
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
-        org.junit.jupiter.api.Assertions.assertEquals("支付中", result.getCashierStatus());
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, exception.getCode());
         verify(paymentMapper, never()).releaseSubmitConcurrencyToken(anyString(), anyString());
     }
 
