@@ -267,6 +267,8 @@ class RefundServiceImplTest {
         result.setPayScene("HOME_CLEAN");
         result.setRefundAmount(new BigDecimal("10.00"));
         when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
+        when(refundDao.insertSuccessOutbox("REF-1", "PAY-1", "HOME_CLEAN", new BigDecimal("10.00")))
+                .thenReturn(1);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId("REF-1");
         request.setResult("SUCCESS");
@@ -274,6 +276,22 @@ class RefundServiceImplTest {
 
         assertEquals("SUCCESS", service.callback(request).getStatus());
         verify(refundDao).insertSuccessOutbox("REF-1", "PAY-1", "HOME_CLEAN", new BigDecimal("10.00"));
+    }
+
+    @Test
+    void shouldRejectSuccessCallbackWhenOutboxInsertAffectsNoRows() {
+        when(refundDao.updateCallback("REF-1", "SUCCESS", "CH-1", null)).thenReturn(1);
+        RefundListItemDTO result = new RefundListItemDTO();
+        result.setPaymentOrderId("PAY-1");
+        result.setRefundAmount(new BigDecimal("10.00"));
+        when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-1");
+        request.setResult("SUCCESS");
+        request.setChannelRefundId("CH-1");
+
+        assertThrows(IllegalStateException.class, () -> service.callback(request));
+        verify(refundDao).insertSuccessOutbox("REF-1", "PAY-1", null, new BigDecimal("10.00"));
     }
 
     @Test

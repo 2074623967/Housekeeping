@@ -346,8 +346,10 @@ public class RefundServiceImpl implements RefundService {
                 StringUtils.hasText(request.getRawMessage()) ? request.getRawMessage().trim() : target);
         if (SUCCESS.equals(target)) {
             RefundListItemDTO refund = refundDao.findByRefundOrderId(id);
-            refundDao.insertSuccessOutbox(id, refund.getPaymentOrderId(), refund.getPayScene(),
-                    refund.getRefundAmount());
+            if (refundDao.insertSuccessOutbox(id, refund.getPaymentOrderId(), refund.getPayScene(),
+                    refund.getRefundAmount()) != 1) {
+                throw new IllegalStateException("refund success outbox was not created atomically");
+            }
             return refund;
         }
         return refundDao.findByRefundOrderId(id);
