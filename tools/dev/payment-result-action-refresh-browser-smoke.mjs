@@ -376,7 +376,8 @@ async function main() {
     status = "PREPAY_CREATED";
     await send("Page.navigate", { url: cleanupUrl });
     await waitFor(() => evaluate(`document.body.innerText.includes('本机未决记录未能清理')
-      && ${actionButton('确认支付')}.disabled && ${actionButton('重置幂等键')}.disabled`),
+      && ${actionButton('确认支付')}.disabled && ${actionButton('重置幂等键')}.disabled
+      && ${actionButton('关闭本次支付')}.disabled`),
       "stale cashier reload after confirmed submit cleanup failure");
     assert.equal(requests.slice(ignoredRemovalStart).filter((item) => item.method === "POST").length, 1);
     status = "WAIT_CALLBACK";
@@ -412,7 +413,8 @@ async function main() {
     status = "PREPAY_CREATED";
     await evaluate(`${actionButton('刷新收银台')}.click()`);
     await waitFor(() => evaluate(`document.body.innerText.includes('待支付')
-      && ${actionButton('确认支付')}?.disabled && ${actionButton('重置幂等键')}?.disabled`),
+      && ${actionButton('确认支付')}?.disabled && ${actionButton('重置幂等键')}?.disabled
+      && ${actionButton('关闭本次支付')}?.disabled`),
       "in-memory confirmed submit remains locked after cashier refresh");
     assert.equal(requests.slice(blockedWriteStart).filter((item) => item.method === "POST").length, 1);
     await evaluate(`Object.defineProperty(Storage.prototype, 'removeItem', { configurable: true, value: window.__originalSubmitRemoveItem });
@@ -432,10 +434,12 @@ async function main() {
     const staleSubmitKey = retrySubmitBodies.get(`PRE-${paymentIds[kind]}`)[0].idempotencyKey;
     assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('${staleSubmitKey}'))`), true);
     assert.equal(await evaluate(`${actionButton('重置幂等键')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('关闭本次支付')}.disabled`), true);
     await send("Page.navigate", { url: staleUrl });
     await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
       "cashier after stale submit response");
     assert.equal(await evaluate(`document.body.innerText.includes('${staleSubmitKey}')`), true);
+    assert.equal(await evaluate(`${actionButton('关闭本次支付')}.disabled`), true);
     await evaluate(`${actionButton('确认支付')}.click()`);
     await waitFor(() => evaluate(`location.pathname === '/payment-result/${paymentIds[kind]}'`),
       "replayed stale submit response");

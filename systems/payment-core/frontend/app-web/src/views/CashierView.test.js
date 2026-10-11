@@ -71,6 +71,11 @@ test("keeps confirmed cleanup failures read-only after a cashier reload", () => 
   assert.match(source, /pendingSubmitAttempt\.value\?\.confirmed[\s\S]*\? pendingSubmitAttempt\.value\s*: savedAttempt/);
 });
 
+test("blocks local close while a payment submit key still needs reconciliation", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /const canClose = computed\(\(\) => hasValidCashierSnapshot\.value\s+&& !cashierSnapshotStale\.value\s+&& !pendingSubmitAttempt\.value/);
+});
+
 test("rechecks the cashier after a failed query or close and blocks unverified actions", () => {
   const source = readFileSync(viewPath, "utf8");
   for (const action of ["queryCurrentPayment", "closeCurrentPayment"]) {

@@ -429,6 +429,7 @@ const countdownLabel = computed(() => {
 });
 const canClose = computed(() => hasValidCashierSnapshot.value
   && !cashierSnapshotStale.value
+  && !pendingSubmitAttempt.value
   && Boolean(cashier.value?.paymentOrderId)
   && canClosePaymentLocally(
     cashier.value?.status,
