@@ -63,6 +63,8 @@
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
         WHERE t_refund_order.idempotency_key = #{idempotencyKey}
+          AND CHAR_LENGTH(t_refund_order.idempotency_key) = CHAR_LENGTH(#{idempotencyKey})
+          AND CAST(t_refund_order.idempotency_key AS BINARY(512)) = CAST(#{idempotencyKey} AS BINARY(512))
     </select>
 
     <select id="findLogs" resultType="com.abc123.refund.dto.RefundOperationLogDTO">

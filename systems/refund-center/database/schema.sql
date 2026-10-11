@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     channel_refund_id VARCHAR(128) NULL COMMENT '渠道退款流水号',
     failure_code VARCHAR(64) NULL COMMENT '渠道失败码',
     idempotency_key VARCHAR(128) NOT NULL COMMENT '幂等键',
+    idempotency_key_bytes VARBINARY(512) GENERATED ALWAYS AS (CAST(idempotency_key AS BINARY(512))) COMMENT '幂等键 UTF-8 字节及补零精确唯一值',
     applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '申请时间',
     approved_at DATETIME NULL COMMENT '审核时间',
     submitted_at DATETIME NULL COMMENT '提交渠道时间',
@@ -39,7 +40,8 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_order_id (refund_order_id),
-    UNIQUE KEY uk_refund_idempotency (idempotency_key),
+    UNIQUE KEY uk_refund_idempotency_bytes (idempotency_key_bytes),
+    KEY idx_refund_idempotency (idempotency_key),
     KEY idx_refund_order_payment (payment_order_id),
     KEY idx_refund_order_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单主表';

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     channel_refund_id VARCHAR(128) COMMENT '渠道退款流水号',
     failure_code VARCHAR(64) COMMENT '渠道失败码',
     idempotency_key VARCHAR(128) NOT NULL COMMENT '幂等键',
+    idempotency_key_bytes VARBINARY(512) GENERATED ALWAYS AS (CAST(idempotency_key AS BINARY(512))) COMMENT '幂等键 UTF-8 字节及补零精确唯一值',
     applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '申请时间',
     approved_at TIMESTAMP NULL COMMENT '审核时间',
     submitted_at TIMESTAMP NULL COMMENT '提交渠道时间',
@@ -35,9 +36,10 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT uk_refund_order_id UNIQUE (refund_order_id),
-    CONSTRAINT uk_refund_idempotency UNIQUE (idempotency_key)
+    CONSTRAINT uk_refund_idempotency_bytes UNIQUE (idempotency_key_bytes)
 );
 
+CREATE INDEX idx_refund_idempotency ON t_refund_order(idempotency_key);
 CREATE INDEX idx_refund_order_payment ON t_refund_order(payment_order_id);
 CREATE INDEX idx_refund_order_status ON t_refund_order(status);
 
