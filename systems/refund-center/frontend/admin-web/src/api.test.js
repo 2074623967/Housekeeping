@@ -1,5 +1,58 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { formatRefundTime, normalizeRefundOutboxResult, normalizeRefundResult } from "./api.js";
+
+const validRefund = {
+  refundOrderId: "REF-001",
+  paymentOrderId: "PAY-001",
+  businessChainId: "CHAIN-PAY-001",
+  orderNo: "ORDER-001",
+  paidAmount: "68.00",
+  refundAmount: "18.00",
+  status: "REVIEWING",
+  statusType: "warn",
+  appliedAt: "2026-09-29 06:03:17",
+  successAt: null,
+  terminalAt: null
+};
+
+test("formats refund lifecycle timestamps for the operations desk", () => {
+  assert.equal(formatRefundTime("2026-09-29T06:03:17.693"), "2026-09-29 06:03:17.693");
+  assert.equal(formatRefundTime("2026-09-29 06:03:17"), "2026-09-29 06:03:17");
+  assert.equal(formatRefundTime(null), "-");
+});
+
+test("requires refund and outbox business keys on management responses", () => {
+  assert.equal(normalizeRefundResult(validRefund, "REF-001").refundOrderId, "REF-001");
+  assert.equal(normalizeRefundOutboxResult({ eventId: "EVT-001" }, "EVT-001").eventId, "EVT-001");
+  assert.throws(
+    () => normalizeRefundResult({ ...validRefund, refundOrderId: "REF-002" }, "REF-001"),
+    (error) => error.code === "REFUND-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizeRefundResult({ ...validRefund, status: "SUCCESS", statusType: "warn" }),
+    (error) => error.code === "REFUND-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  for (const invalidRefund of [
+    { ...validRefund, businessChainId: "CHAIN-OTHER" },
+    { ...validRefund, paidAmount: "" },
+    { ...validRefund, refundAmount: "68.01" },
+    { ...validRefund, appliedAt: "2026-02-30 06:03:17" },
+    { ...validRefund, status: "SUCCESS", statusType: "success", successAt: null, terminalAt: "2026-09-29 06:04:17" },
+    { ...validRefund, status: "SUCCESS", statusType: "success", successAt: "2026-09-29 06:04:17", terminalAt: "2026-09-29 06:03:17" },
+    { ...validRefund, status: "FAIL", statusType: "danger", terminalAt: null },
+    { ...validRefund, status: "PROCESSING", statusType: "warn", terminalAt: "2026-09-29 06:04:17" }
+  ]) {
+    assert.throws(
+      () => normalizeRefundResult(invalidRefund),
+      (error) => error.code === "REFUND-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+  assert.throws(
+    () => normalizeRefundOutboxResult({ eventId: "EVT-002" }, "EVT-001"),
+    (error) => error.code === "REFUND-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+});
 
 test("normalizes null refund page items", async () => {
   const originalFetch = globalThis.fetch;
@@ -20,12 +73,12 @@ test("normalizes array refund pages without leaking array indexes", async () => 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
     code: "0",
-    data: [{ refundOrderId: "REF-001" }]
+    data: [validRefund]
   }), { status: 200, headers: { "Content-Type": "application/json" } });
   try {
     const { getRefunds } = await import(`./api.js?array-page=${Date.now()}`);
     assert.deepEqual(await getRefunds({ pageNo: 2, pageSize: 10 }), {
-      items: [{ refundOrderId: "REF-001" }],
+      items: [validRefund],
       total: 1,
       pageNo: 2,
       pageSize: 10
@@ -73,12 +126,12 @@ test("normalizes null refund detail operation logs", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
     code: "0",
-    data: { refundOrderId: "REF-001", operationLogs: null }
+    data: { ...validRefund, operationLogs: null }
   }), { status: 200, headers: { "Content-Type": "application/json" } });
   try {
     const { getRefundDetail } = await import(`./api.js?detail-empty=${Date.now()}`);
     assert.deepEqual(await getRefundDetail("REF-001"), {
-      refundOrderId: "REF-001",
+      ...validRefund,
       operationLogs: []
     });
   } finally {
@@ -93,7 +146,7 @@ test("submits a refund application through the refund API", async () => {
     request = { url, options };
     return new Response(JSON.stringify({
       code: "0",
-      data: { refundOrderId: "REF-NEW-001", status: "REVIEWING" }
+      data: { ...validRefund, refundOrderId: "REF-NEW-001" }
     }), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   try {
@@ -102,7 +155,7 @@ test("submits a refund application through the refund API", async () => {
       paymentOrderId: "PAY-001",
       refundAmount: 12.5,
       refundMethod: "ORIGINAL"
-    }), { refundOrderId: "REF-NEW-001", status: "REVIEWING" });
+    }), { ...validRefund, refundOrderId: "REF-NEW-001" });
     assert.equal(request.url, "/api/refunds/apply");
     assert.equal(request.options.method, "POST");
     assert.deepEqual(JSON.parse(request.options.body), {
@@ -159,5 +212,71 @@ test("reports refund network failures with a stable client error", async () => {
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("aborts slow refund requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "refund-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "refund-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    const { getOverview } = await import(`./api.js?timeout=${Date.now()}`);
+    await assert.rejects(
+      getOverview(),
+      (error) => error.code === "REFUND-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("aborts slow refund exports and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "refund-export-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "refund-export-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    const { downloadRefundDetail } = await import(`./api.js?export-timeout=${Date.now()}`);
+    await assert.rejects(
+      downloadRefundDetail("REF-TIMEOUT"),
+      (error) => error.code === "REFUND-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });

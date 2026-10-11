@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,6 +52,8 @@ public class RefundServiceImpl implements RefundService {
     private static final String OUTBOX_SENT = "SENT";
     private static final String OUTBOX_DISPATCH_FAIL = "FAIL";
     private static final DateTimeFormatter ID_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final RefundDao refundDao;
     private final String operator;
@@ -114,6 +117,7 @@ public class RefundServiceImpl implements RefundService {
         RefundDetailDTO detail = new RefundDetailDTO();
         detail.setRefundOrderId(item.getRefundOrderId());
         detail.setPaymentOrderId(item.getPaymentOrderId());
+        detail.setPayScene(item.getPayScene());
         detail.setOrderNo(item.getOrderNo());
         detail.setCustomerName(item.getCustomerName());
         detail.setPaidAmount(item.getPaidAmount());
@@ -122,8 +126,12 @@ public class RefundServiceImpl implements RefundService {
         detail.setRefundReason(item.getRefundReason());
         detail.setStatus(item.getStatus());
         detail.setChannelRefundId(item.getChannelRefundId());
+        detail.setChannelCode(item.getChannelCode());
+        detail.setFailureCode(item.getFailureCode());
+        detail.setChannelSubmittedAt(item.getChannelSubmittedAt());
         detail.setAppliedAt(item.getAppliedAt());
         detail.setSuccessAt(item.getSuccessAt());
+        detail.setTerminalAt(item.getTerminalAt());
         detail.setOperationLogs(safeList(refundDao.findLogs(id)));
         return detail;
     }
@@ -133,7 +141,7 @@ public class RefundServiceImpl implements RefundService {
         RefundDetailDTO detail = detail(refundOrderId);
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("退款单号,原支付单号,业务订单号,客户名称,原支付金额,退款金额,退款方式,退款原因,状态,渠道退款号,申请时间,成功时间\n");
+        builder.append("退款单号,原支付单号,业务订单号,客户名称,原支付金额,退款金额,退款方式,退款原因,状态,状态样式,渠道退款号,失败码,申请时间,成功时间,终态时间\n");
         builder.append(csv(detail.getRefundOrderId())).append(',')
                 .append(csv(detail.getPaymentOrderId())).append(',')
                 .append(csv(detail.getOrderNo())).append(',')
@@ -143,9 +151,12 @@ public class RefundServiceImpl implements RefundService {
                 .append(csv(detail.getRefundMethod())).append(',')
                 .append(csv(detail.getRefundReason())).append(',')
                 .append(csv(detail.getStatus())).append(',')
+                .append(csv(detail.getStatusType())).append(',')
                 .append(csv(detail.getChannelRefundId())).append(',')
+                .append(csv(detail.getFailureCode())).append(',')
                 .append(csv(time(detail.getAppliedAt()))).append(',')
-                .append(csv(time(detail.getSuccessAt()))).append('\n');
+                .append(csv(time(detail.getSuccessAt()))).append(',')
+                .append(csv(time(detail.getTerminalAt()))).append('\n');
         builder.append('\n');
         builder.append("操作日志\n");
         builder.append("日志号,动作编码,动作名称,原状态,新状态,操作人,备注,操作时间\n");
@@ -206,12 +217,22 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("退款申请不能为空");
         }
         String paymentOrderId = required(request.getPaymentOrderId(), "原支付单号不能为空");
-        if (request.getRefundAmount() == null || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("退款金额必须大于0");
-        }
-        PaymentSuccessProjectionEntity source = refundDao.findPaymentSource(paymentOrderId);
+        validateMoneyAmount(request.getRefundAmount(), "退款金额必须大于0且最多保留2位小数");
+        String refundMethod = StringUtils.hasText(request.getRefundMethod())
+                ? request.getRefundMethod().trim() : "ORIGINAL";
+        String refundReason = StringUtils.hasText(request.getRefundReason())
+                ? request.getRefundReason().trim() : "客户申请退款";
+        String idempotencyKey = StringUtils.hasText(request.getIdempotencyKey())
+                ? request.getIdempotencyKey().trim() : UUID.randomUUID().toString();
+        PaymentSuccessProjectionEntity source = refundDao.findPaymentSourceForUpdate(paymentOrderId);
         if (source == null) {
             throw new BusinessException("未找到支付成功事实，禁止发起退款");
+        }
+        RefundListItemDTO existing = refundDao.findByIdempotencyKey(idempotencyKey);
+        if (existing != null) {
+            assertSameRefundRequest(existing, paymentOrderId, request.getRefundAmount(),
+                    refundMethod, refundReason);
+            return existing;
         }
         BigDecimal refunded = refundDao.sumActiveRefundAmount(paymentOrderId);
         if (refunded == null) {
@@ -227,21 +248,34 @@ public class RefundServiceImpl implements RefundService {
         entity.setCustomerName(source.getCustomerName());
         entity.setPaidAmount(source.getPaidAmount());
         entity.setRefundAmount(request.getRefundAmount());
-        entity.setRefundMethod(StringUtils.hasText(request.getRefundMethod()) ? request.getRefundMethod().trim() : "ORIGINAL");
-        entity.setRefundReason(StringUtils.hasText(request.getRefundReason()) ? request.getRefundReason().trim() : "客户申请退款");
+        entity.setRefundMethod(refundMethod);
+        entity.setRefundReason(refundReason);
         entity.setStatus(REVIEWING);
-        entity.setIdempotencyKey(StringUtils.hasText(request.getIdempotencyKey())
-                ? request.getIdempotencyKey().trim() : UUID.randomUUID().toString());
-        RefundListItemDTO existing = refundDao.findByIdempotencyKey(entity.getIdempotencyKey());
-        if (existing != null) {
-            return existing;
-        }
+        entity.setIdempotencyKey(idempotencyKey);
         if (refundDao.insertRefund(entity) != 1) {
+            existing = refundDao.findByIdempotencyKey(idempotencyKey);
+            if (existing != null) {
+                assertSameRefundRequest(existing, paymentOrderId, request.getRefundAmount(),
+                        refundMethod, refundReason);
+                return existing;
+            }
             throw new BusinessException("退款申请重复或写入失败");
         }
         refundDao.insertLog(entity.getRefundOrderId(), "APPLY", "发起退款申请",
                 "INIT", REVIEWING, operator, entity.getRefundReason());
         return refundDao.findByRefundOrderId(entity.getRefundOrderId());
+    }
+
+    private void assertSameRefundRequest(RefundListItemDTO existing, String paymentOrderId,
+                                         BigDecimal refundAmount, String refundMethod,
+                                         String refundReason) {
+        if (!paymentOrderId.equals(trim(existing.getPaymentOrderId()))
+                || existing.getRefundAmount() == null
+                || existing.getRefundAmount().compareTo(refundAmount) != 0
+                || !refundMethod.equals(trim(existing.getRefundMethod()))
+                || !refundReason.equals(trim(existing.getRefundReason()))) {
+            throw new BusinessException("退款幂等键与已存在退款申请不一致");
+        }
     }
 
     @Override
@@ -263,7 +297,14 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("退款回调不能为空");
         }
         String id = required(request.getRefundOrderId(), "退款单号不能为空");
-        String target = "SUCCESS".equalsIgnoreCase(request.getResult()) ? SUCCESS : FAIL;
+        String result = trim(request.getResult());
+        if (!SUCCESS.equalsIgnoreCase(result) && !FAIL.equalsIgnoreCase(result)) {
+            throw new BusinessException("退款回调结果必须为 SUCCESS 或 FAIL");
+        }
+        String target = SUCCESS.equalsIgnoreCase(result) ? SUCCESS : FAIL;
+        if (SUCCESS.equals(target) && !StringUtils.hasText(request.getChannelRefundId())) {
+            throw new BusinessException("退款成功回调缺少渠道退款流水号");
+        }
         int affected = refundDao.updateCallback(id, target, trim(request.getChannelRefundId()),
                 trim(request.getFailureCode()));
         if (affected == 0) {
@@ -272,9 +313,11 @@ public class RefundServiceImpl implements RefundService {
                 throw new BusinessException("退款单不存在");
             }
             if (SUCCESS.equals(target) && SUCCESS.equals(existing.getStatus())) {
+                assertSameSuccessfulCallback(existing, trim(request.getChannelRefundId()));
                 return existing;
             }
             if (FAIL.equals(target) && FAIL.equals(existing.getStatus())) {
+                assertSameFailedCallback(existing, trim(request.getFailureCode()));
                 return existing;
             }
             throw new BusinessException("退款单不在可回调状态，或回调已处理");
@@ -284,10 +327,23 @@ public class RefundServiceImpl implements RefundService {
                 StringUtils.hasText(request.getRawMessage()) ? request.getRawMessage().trim() : target);
         if (SUCCESS.equals(target)) {
             RefundListItemDTO refund = refundDao.findByRefundOrderId(id);
-            refundDao.insertSuccessOutbox(id, refund.getPaymentOrderId(), refund.getRefundAmount());
+            refundDao.insertSuccessOutbox(id, refund.getPaymentOrderId(), refund.getPayScene(),
+                    refund.getRefundAmount());
             return refund;
         }
         return refundDao.findByRefundOrderId(id);
+    }
+
+    private void assertSameSuccessfulCallback(RefundListItemDTO existing, String channelRefundId) {
+        if (!Objects.equals(trim(existing.getChannelRefundId()), channelRefundId)) {
+            throw new BusinessException("退款成功回调与已存在渠道退款事实不一致");
+        }
+    }
+
+    private void assertSameFailedCallback(RefundListItemDTO existing, String failureCode) {
+        if (!Objects.equals(trim(existing.getFailureCode()), failureCode)) {
+            throw new BusinessException("退款失败回调与已存在失败事实不一致");
+        }
     }
 
     @Override
@@ -340,12 +396,13 @@ public class RefundServiceImpl implements RefundService {
         if (refund == null || !SUCCESS.equals(refund.getStatus())) {
             throw new BusinessException("退款成功事实不存在或状态异常");
         }
-        String businessChainId = "CHAIN-" + refund.getPaymentOrderId();
+        String businessChainId = refund.getBusinessChainId();
         postForSuccess(accountingRefundSuccessUrl, new AccountingRefundSuccessPayload(
                 businessChainId,
                 accountingRefundSuccessAccountNo,
                 refund.getRefundOrderId(),
                 refund.getPaymentOrderId(),
+                refund.getPayScene(),
                 refund.getRefundAmount(),
                 "退款成功后冲回原支付入账"));
         postForSuccess(reconciliationFactUrl, new ReconciliationFactPayload(
@@ -356,7 +413,9 @@ public class RefundServiceImpl implements RefundService {
                 refund.getRefundOrderId(),
                 SUCCESS,
                 refund.getRefundAmount(),
-                "退款成功事实，原支付单号=" + refund.getPaymentOrderId()));
+                refund.getPayScene(),
+                "退款成功事实，原支付单号=" + trim(refund.getPaymentOrderId())
+                        + "，支付场景=" + trim(refund.getPayScene())));
     }
 
     private void postForSuccess(String url, Object payload) {
@@ -373,19 +432,52 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional
     public void projectPaymentSuccess(PaymentSuccessProjectionDTO request) {
-        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())
-                || request.getPaidAmount() == null
-                || request.getPaidAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())) {
             throw new BusinessException("支付成功事实缺少必要字段");
         }
+        validateMoneyAmount(request.getPaidAmount(), "支付成功事实金额必须大于0且最多保留2位小数");
         PaymentSuccessProjectionEntity entity = new PaymentSuccessProjectionEntity();
         entity.setPaymentOrderId(request.getPaymentOrderId().trim());
-        entity.setOrderNo(trim(request.getOrderNo()));
+        entity.setOrderNo(required(request.getOrderNo(), "业务订单号不能为空"));
         entity.setCustomerName(trim(request.getCustomerName()));
         entity.setPaidAmount(request.getPaidAmount());
         entity.setChannelCode(trim(request.getChannelCode()));
+        entity.setPayScene(trim(request.getPayScene()));
         entity.setPaidAt(LocalDateTime.now());
-        refundDao.insertPaymentSource(entity);
+        PaymentSuccessProjectionEntity existing = refundDao.findPaymentSource(entity.getPaymentOrderId());
+        if (existing != null) {
+            assertSamePaymentSource(entity, existing);
+            return;
+        }
+        int affected = refundDao.insertPaymentSource(entity);
+        if (affected == 1) {
+            return;
+        }
+        existing = refundDao.findPaymentSource(entity.getPaymentOrderId());
+        if (existing == null) {
+            throw new BusinessException("支付成功事实写入失败");
+        }
+        assertSamePaymentSource(entity, existing);
+    }
+
+    private void assertSamePaymentSource(
+            PaymentSuccessProjectionEntity expected,
+            PaymentSuccessProjectionEntity actual) {
+        if (!Objects.equals(expected.getOrderNo(), actual.getOrderNo())
+                || !Objects.equals(expected.getCustomerName(), actual.getCustomerName())
+                || expected.getPaidAmount().compareTo(actual.getPaidAmount()) != 0
+                || !Objects.equals(expected.getChannelCode(), actual.getChannelCode())
+                || (expected.getPayScene() != null
+                    && !Objects.equals(expected.getPayScene(), actual.getPayScene()))) {
+            throw new BusinessException("支付成功事实与已存在投影不一致");
+        }
+    }
+
+    private void validateMoneyAmount(BigDecimal amount, String message) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new BusinessException(message);
+        }
     }
 
     private RefundListItemDTO transition(RefundActionRequestDTO request, String from, String to,
@@ -460,8 +552,14 @@ public class RefundServiceImpl implements RefundService {
         if (value == null) {
             return "";
         }
-        String escaped = value.replace("\"", "\"\"");
-        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+        char firstCharacter = value.isEmpty() ? '\0' : value.charAt(0);
+        boolean formulaPrefix = firstCharacter == '=' || firstCharacter == '+' || firstCharacter == '-'
+                || firstCharacter == '@' || firstCharacter == '\t' || firstCharacter == '\r'
+                || firstCharacter == '\n' || firstCharacter == '\uFF1D' || firstCharacter == '\uFF0B'
+                || firstCharacter == '\uFF0D' || firstCharacter == '\uFF20';
+        String escaped = (formulaPrefix ? "'" + value : value).replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"")
+                || escaped.contains("\n") || escaped.contains("\r")) {
             return "\"" + escaped + "\"";
         }
         return escaped;
@@ -481,15 +579,17 @@ public class RefundServiceImpl implements RefundService {
         private final String accountNo;
         private final String refundOrderId;
         private final String paymentOrderId;
+        private final String payScene;
         private final BigDecimal amount;
         private final String summary;
 
         AccountingRefundSuccessPayload(String businessChainId, String accountNo, String refundOrderId,
-                                       String paymentOrderId, BigDecimal amount, String summary) {
+                                       String paymentOrderId, String payScene, BigDecimal amount, String summary) {
             this.businessChainId = businessChainId;
             this.accountNo = accountNo;
             this.refundOrderId = refundOrderId;
             this.paymentOrderId = paymentOrderId;
+            this.payScene = payScene;
             this.amount = amount;
             this.summary = summary;
         }
@@ -510,6 +610,10 @@ public class RefundServiceImpl implements RefundService {
             return paymentOrderId;
         }
 
+        public String getPayScene() {
+            return payScene;
+        }
+
         public BigDecimal getAmount() {
             return amount;
         }
@@ -528,10 +632,11 @@ public class RefundServiceImpl implements RefundService {
         private final String businessNo;
         private final String factStatus;
         private final BigDecimal amount;
+        private final String payScene;
         private final String payload;
 
         ReconciliationFactPayload(String businessChainId, String systemCode, String factType, String factNo,
-                                  String businessNo, String factStatus, BigDecimal amount, String payload) {
+                                  String businessNo, String factStatus, BigDecimal amount, String payScene, String payload) {
             this.businessChainId = businessChainId;
             this.systemCode = systemCode;
             this.factType = factType;
@@ -539,6 +644,7 @@ public class RefundServiceImpl implements RefundService {
             this.businessNo = businessNo;
             this.factStatus = factStatus;
             this.amount = amount;
+            this.payScene = payScene;
             this.payload = payload;
         }
 
@@ -568,6 +674,10 @@ public class RefundServiceImpl implements RefundService {
 
         public BigDecimal getAmount() {
             return amount;
+        }
+
+        public String getPayScene() {
+            return payScene;
         }
 
         public String getPayload() {

@@ -24,7 +24,7 @@ refund-center:
   outbox-dispatch-mode: ${REFUND_CENTER_OUTBOX_DISPATCH_MODE:HTTP}
   downstream:
     accounting:
-      refund-success-url: ${REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_URL:http://127.0.0.1:18110/api/accounting/events/refunds/success}
+      refund-success-url: ${REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_URL:http://localhost:18110/api/accounting/events/refunds/success}
       refund-success-account-no: ${REFUND_CENTER_ACCOUNTING_REFUND_SUCCESS_ACCOUNT_NO:ACT10003}
     reconciliation:
       fact-url: ${REFUND_CENTER_RECONCILIATION_FACT_URL:}

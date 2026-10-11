@@ -60,6 +60,11 @@ public class RefundDaoImpl implements RefundDao {
     }
 
     @Override
+    public PaymentSuccessProjectionEntity findPaymentSourceForUpdate(String paymentOrderId) {
+        return refundMapper.findPaymentSourceForUpdate(paymentOrderId);
+    }
+
+    @Override
     public BigDecimal sumActiveRefundAmount(String paymentOrderId) {
         return refundMapper.sumActiveRefundAmount(paymentOrderId);
     }
@@ -92,8 +97,9 @@ public class RefundDaoImpl implements RefundDao {
     }
 
     @Override
-    public int insertSuccessOutbox(String refundOrderId, String paymentOrderId, BigDecimal refundAmount) {
-        return refundMapper.insertSuccessOutbox(refundOrderId, paymentOrderId, refundAmount);
+    public int insertSuccessOutbox(String refundOrderId, String paymentOrderId, String payScene,
+                                   BigDecimal refundAmount) {
+        return refundMapper.insertSuccessOutbox(refundOrderId, paymentOrderId, payScene, refundAmount);
     }
 
     @Override

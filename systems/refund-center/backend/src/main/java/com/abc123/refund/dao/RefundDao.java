@@ -29,6 +29,8 @@ public interface RefundDao {
 
     PaymentSuccessProjectionEntity findPaymentSource(String paymentOrderId);
 
+    PaymentSuccessProjectionEntity findPaymentSourceForUpdate(String paymentOrderId);
+
     BigDecimal sumActiveRefundAmount(String paymentOrderId);
 
     int insertPaymentSource(PaymentSuccessProjectionEntity source);
@@ -42,7 +44,8 @@ public interface RefundDao {
     int insertLog(String refundOrderId, String actionCode, String actionName,
                   String fromStatus, String toStatus, String operatorName, String remark);
 
-    int insertSuccessOutbox(String refundOrderId, String paymentOrderId, BigDecimal refundAmount);
+    int insertSuccessOutbox(String refundOrderId, String paymentOrderId, String payScene,
+                            BigDecimal refundAmount);
 
     RefundOverviewDTO overview();
 

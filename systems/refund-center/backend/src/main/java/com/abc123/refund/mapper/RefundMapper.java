@@ -32,6 +32,8 @@ public interface RefundMapper {
 
     PaymentSuccessProjectionEntity findPaymentSource(@Param("paymentOrderId") String paymentOrderId);
 
+    PaymentSuccessProjectionEntity findPaymentSourceForUpdate(@Param("paymentOrderId") String paymentOrderId);
+
     BigDecimal sumActiveRefundAmount(@Param("paymentOrderId") String paymentOrderId);
 
     int insertPaymentSource(PaymentSuccessProjectionEntity source);
@@ -58,6 +60,7 @@ public interface RefundMapper {
 
     int insertSuccessOutbox(@Param("refundOrderId") String refundOrderId,
                             @Param("paymentOrderId") String paymentOrderId,
+                            @Param("payScene") String payScene,
                             @Param("refundAmount") BigDecimal refundAmount);
 
     RefundOverviewDTO overview();

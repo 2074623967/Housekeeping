@@ -44,7 +44,8 @@ public class RefundOrderEntity {
     private LocalDateTime submittedAt;
     /** 成功时间。 */
     private LocalDateTime successAt;
+    /** 退款终态时间。 */
+    private LocalDateTime terminalAt;
     /** 乐观锁版本。 */
     private Integer version;
 }
-

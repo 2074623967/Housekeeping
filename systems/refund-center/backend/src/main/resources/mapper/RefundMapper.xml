@@ -5,22 +5,23 @@
 <mapper namespace="com.abc123.refund.mapper.RefundMapper">
 
     <select id="findList" resultType="com.abc123.refund.dto.RefundListItemDTO">
-        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
-               refund_amount, refund_method, refund_reason, status, channel_refund_id,
-               applied_at, success_at
+        SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
+               t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
+               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
+        LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
         <where>
             <if test="refundOrderId != null and refundOrderId != ''">
-                AND refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
+                AND t_refund_order.refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
             </if>
             <if test="paymentOrderId != null and paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
+                AND t_refund_order.payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
             </if>
             <if test="status != null and status != ''">
-                AND status = #{status}
+                AND t_refund_order.status = #{status}
             </if>
             <if test="refundMethod != null and refundMethod != ''">
-                AND refund_method = #{refundMethod}
+                AND t_refund_order.refund_method = #{refundMethod}
             </if>
         </where>
         ORDER BY applied_at DESC
@@ -47,19 +48,21 @@
     </select>
 
     <select id="findByRefundOrderId" resultType="com.abc123.refund.dto.RefundListItemDTO">
-        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
-               refund_amount, refund_method, refund_reason, status, channel_refund_id,
-               applied_at, success_at
+        SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
+               t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
+               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
-        WHERE refund_order_id = #{refundOrderId}
+        LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
+        WHERE t_refund_order.refund_order_id = #{refundOrderId}
     </select>
 
     <select id="findByIdempotencyKey" resultType="com.abc123.refund.dto.RefundListItemDTO">
-        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
-               refund_amount, refund_method, refund_reason, status, channel_refund_id,
-               applied_at, success_at
+        SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
+               t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
+               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
-        WHERE idempotency_key = #{idempotencyKey}
+        LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
+        WHERE t_refund_order.idempotency_key = #{idempotencyKey}
     </select>
 
     <select id="findLogs" resultType="com.abc123.refund.dto.RefundOperationLogDTO">
@@ -71,9 +74,16 @@
     </select>
 
     <select id="findPaymentSource" resultType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
-        SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, paid_at
+        SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, pay_scene, paid_at
         FROM t_refund_payment_source
         WHERE payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="findPaymentSourceForUpdate" resultType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
+        SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, pay_scene, paid_at
+        FROM t_refund_payment_source
+        WHERE payment_order_id = #{paymentOrderId}
+        FOR UPDATE
     </select>
 
     <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">
@@ -85,16 +95,11 @@
 
     <insert id="insertPaymentSource" parameterType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
         INSERT INTO t_refund_payment_source
-        (payment_order_id, order_no, customer_name, paid_amount, channel_code, paid_at, updated_at)
+        (payment_order_id, order_no, customer_name, paid_amount, channel_code, pay_scene, paid_at, updated_at)
         VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{paidAmount},
-                #{channelCode}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                #{channelCode}, #{payScene}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON DUPLICATE KEY UPDATE
-            order_no = VALUES(order_no),
-            customer_name = VALUES(customer_name),
-            paid_amount = VALUES(paid_amount),
-            channel_code = VALUES(channel_code),
-            paid_at = VALUES(paid_at),
-            updated_at = CURRENT_TIMESTAMP
+            id = id
     </insert>
 
     <insert id="insertRefund" parameterType="com.abc123.refund.entity.RefundOrderEntity">
@@ -124,6 +129,7 @@
             channel_refund_id = COALESCE(#{channelRefundId}, channel_refund_id),
             failure_code = #{failureCode},
             success_at = CASE WHEN #{targetStatus} = 'SUCCESS' THEN CURRENT_TIMESTAMP ELSE success_at END,
+            terminal_at = CASE WHEN #{targetStatus} IN ('SUCCESS', 'FAIL') THEN CURRENT_TIMESTAMP ELSE terminal_at END,
             version = version + 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE refund_order_id = #{refundOrderId}
@@ -146,6 +152,7 @@
         (CONCAT('REVT-', REPLACE(UUID(), '-', '')), 'REFUND_SUCCESS', #{refundOrderId},
          CONCAT('{"refundOrderId":"', #{refundOrderId},
                 '","paymentOrderId":"', #{paymentOrderId},
+                '","payScene":"', COALESCE(#{payScene}, ''),
                 '","refundAmount":"', #{refundAmount}, '"}'), 'PENDING')
     </insert>
 

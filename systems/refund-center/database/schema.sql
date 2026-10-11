@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS t_refund_payment_source (
     customer_name VARCHAR(128) NULL COMMENT '客户名称',
     paid_amount DECIMAL(18,2) NOT NULL COMMENT '已支付金额',
     channel_code VARCHAR(64) NULL COMMENT '支付渠道',
+    pay_scene VARCHAR(64) NULL COMMENT '支付业务场景',
     paid_at DATETIME NOT NULL COMMENT '支付成功时间',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

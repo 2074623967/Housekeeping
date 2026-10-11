@@ -8,7 +8,8 @@ import {
   getRefundDetail,
   getRefundOutbox,
   getRefunds,
-  postRefundAction
+  postRefundAction,
+  formatRefundTime
 } from "./api";
 
 const activeView = ref("dashboard");
@@ -72,7 +73,7 @@ const outboxStatusLabel = {
   FAIL: "派发失败"
 };
 
-const statusClass = (status) => `status-${status.toLowerCase()}`;
+const statusClass = (status, statusType) => `status-${statusType || String(status || "").toLowerCase()}`;
 const outboxStatusClass = (status) => `status-${String(status || "").toLowerCase()}`;
 const selectedStatus = computed(() =>
   selectedRefund.value ? statusLabel[selectedRefund.value.status] || selectedRefund.value.status : ""
@@ -346,15 +347,16 @@ async function refreshCurrentView() {
         <div v-if="loading" class="empty-state">正在加载退款单...</div>
         <div v-else-if="!page.items.length" class="empty-state">暂无符合条件的退款单</div>
         <table v-else class="data-table">
-          <thead><tr><th>退款单号</th><th>原支付单</th><th>客户 / 订单</th><th>退款金额</th><th>方式</th><th>状态</th><th>申请时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>退款单号</th><th>原支付单</th><th>支付场景</th><th>客户 / 订单</th><th>退款金额</th><th>方式</th><th>状态</th><th>申请时间</th><th>操作</th></tr></thead>
           <tbody><tr v-for="item in page.items" :key="item.refundOrderId">
             <td><button class="link-button" @click="openDetail(item)">{{ item.refundOrderId }}</button></td>
             <td>{{ item.paymentOrderId }}</td>
+            <td>{{ item.payScene || "-" }}</td>
             <td><strong>{{ item.customerName }}</strong><small>{{ item.orderNo }}</small></td>
             <td class="money">¥{{ Number(item.refundAmount).toFixed(2) }}</td>
             <td>{{ item.refundMethod === "ORIGINAL" ? "原路退款" : "退转付" }}</td>
-            <td><span class="status-pill" :class="statusClass(item.status)">{{ statusLabel[item.status] || item.status }}</span></td>
-            <td>{{ item.appliedAt?.replace("T", " ") }}</td>
+            <td><span class="status-pill" :class="statusClass(item.status, item.statusType)">{{ statusLabel[item.status] || item.status }}</span></td>
+            <td>{{ formatRefundTime(item.appliedAt) }}</td>
             <td><button class="link-button" @click="openDetail(item)">查看详情</button></td>
           </tr></tbody>
         </table>
@@ -407,14 +409,19 @@ async function refreshCurrentView() {
 
       <section v-else class="detail-layout">
         <section v-if="selectedRefund" class="panel detail-panel">
-          <div class="section-header"><div><span class="section-kicker">REFUND DETAIL</span><h2>{{ selectedRefund.refundOrderId }}</h2></div><span class="status-pill" :class="statusClass(selectedRefund.status)">{{ selectedStatus }}</span></div>
+          <div class="section-header"><div><span class="section-kicker">REFUND DETAIL</span><h2>{{ selectedRefund.refundOrderId }}</h2></div><span class="status-pill" :class="statusClass(selectedRefund.status, selectedRefund.statusType)">{{ selectedStatus }}</span></div>
           <div class="detail-grid">
             <div><span>原支付单号</span><strong>{{ selectedRefund.paymentOrderId }}</strong></div>
+            <div><span>支付场景</span><strong>{{ selectedRefund.payScene || "-" }}</strong></div>
             <div><span>业务订单号</span><strong>{{ selectedRefund.orderNo }}</strong></div>
             <div><span>客户名称</span><strong>{{ selectedRefund.customerName }}</strong></div>
             <div><span>原支付金额</span><strong>¥{{ Number(selectedRefund.paidAmount).toFixed(2) }}</strong></div>
             <div><span>退款金额</span><strong class="money">¥{{ Number(selectedRefund.refundAmount).toFixed(2) }}</strong></div>
             <div><span>退款方式</span><strong>{{ selectedRefund.refundMethod === "ORIGINAL" ? "原路退款" : "退转付" }}</strong></div>
+            <div><span>申请时间</span><strong>{{ formatRefundTime(selectedRefund.appliedAt) }}</strong></div>
+            <div><span>成功时间</span><strong>{{ formatRefundTime(selectedRefund.successAt) }}</strong></div>
+            <div><span>终态时间</span><strong>{{ formatRefundTime(selectedRefund.terminalAt) }}</strong></div>
+            <div><span>失败码</span><strong>{{ selectedRefund.failureCode || "-" }}</strong></div>
             <div class="wide"><span>退款原因</span><strong>{{ selectedRefund.refundReason }}</strong></div>
           </div>
           <div class="actions">
@@ -427,7 +434,7 @@ async function refreshCurrentView() {
             <button class="secondary-button" :disabled="!!activeOperation" @click="showList">返回列表</button>
           </div>
         </section>
-        <section v-if="selectedRefund" class="panel timeline-panel"><span class="section-kicker">AUDIT TRAIL</span><h3>操作日志</h3><div v-if="!selectedRefund.operationLogs.length" class="empty-state">暂无操作日志</div><ol v-else class="timeline"><li v-for="log in selectedRefund.operationLogs" :key="log.logNo"><span class="timeline-dot"></span><div><strong>{{ log.actionName }}</strong><small>{{ log.operatorName }} · {{ log.operatedAt?.replace("T", " ") }}</small><p>{{ log.operationRemark }}</p></div><em>{{ statusLabel[log.toStatus] || log.toStatus }}</em></li></ol></section>
+        <section v-if="selectedRefund" class="panel timeline-panel"><span class="section-kicker">AUDIT TRAIL</span><h3>操作日志</h3><div v-if="!selectedRefund.operationLogs.length" class="empty-state">暂无操作日志</div><ol v-else class="timeline"><li v-for="log in selectedRefund.operationLogs" :key="log.logNo"><span class="timeline-dot"></span><div><strong>{{ log.actionName }}</strong><small>{{ log.operatorName }} · {{ formatRefundTime(log.operatedAt) }}</small><p>{{ log.operationRemark }}</p></div><em>{{ statusLabel[log.toStatus] || log.toStatus }}</em></li></ol></section>
       </section>
     </main>
   </div>

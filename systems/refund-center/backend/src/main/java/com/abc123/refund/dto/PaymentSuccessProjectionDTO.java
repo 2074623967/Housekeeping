@@ -19,5 +19,6 @@ public class PaymentSuccessProjectionDTO {
     private BigDecimal paidAmount;
     /** 支付渠道。 */
     private String channelCode;
+    /** 支付业务场景。 */
+    private String payScene;
 }
-

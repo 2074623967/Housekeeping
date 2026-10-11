@@ -16,13 +16,16 @@ import com.abc123.refund.dto.RefundActionRequestDTO;
 import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOperationLogDTO;
 import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
 import com.abc123.refund.dto.RefundOutboxItemDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +60,7 @@ class RefundServiceImplTest {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-1");
         request.setRefundAmount(new BigDecimal("10.00"));
-        when(refundDao.findPaymentSource("PAY-1")).thenReturn(null);
+        when(refundDao.findPaymentSourceForUpdate("PAY-1")).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> service.apply(request));
     }
@@ -81,9 +84,32 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldKeepRefundSnapshotTextAsCsvData() {
+        RefundListItemDTO item = new RefundListItemDTO();
+        item.setRefundOrderId("REF-CSV");
+        item.setCustomerName("＋1+1");
+        item.setRefundReason("=1+1");
+        RefundOperationLogDTO log = new RefundOperationLogDTO();
+        log.setOperationRemark("note\r=1+1");
+        RefundOutboxItemDTO outbox = new RefundOutboxItemDTO();
+        outbox.setLastErrorMessage("@SUM(1)");
+        when(refundDao.findByRefundOrderId("REF-CSV")).thenReturn(item);
+        when(refundDao.findLogs("REF-CSV")).thenReturn(Collections.singletonList(log));
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(outbox));
+
+        String csv = new String(service.exportDetailSnapshot("REF-CSV"), StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("'＋1+1"));
+        assertTrue(csv.contains("'=1+1"));
+        assertTrue(csv.contains("\"note\r=1+1\""));
+        assertTrue(csv.contains("'@SUM(1)"));
+        assertEquals("=1+1", item.getRefundReason());
+    }
+
+    @Test
     void shouldRejectRefundWhenAmountExceedsPaidAmount() {
         PaymentSuccessProjectionEntity source = source("PAY-1", "100.00");
-        when(refundDao.findPaymentSource("PAY-1")).thenReturn(source);
+        when(refundDao.findPaymentSourceForUpdate("PAY-1")).thenReturn(source);
         when(refundDao.sumActiveRefundAmount("PAY-1")).thenReturn(new BigDecimal("95.00"));
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-1");
@@ -93,9 +119,33 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRefundAmountWithMoreThanTwoDecimalPlacesBeforeReadingSource() {
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId("PAY-1");
+        request.setRefundAmount(new BigDecimal("10.001"));
+
+        assertThrows(BusinessException.class, () -> service.apply(request));
+        verify(refundDao, never()).findByIdempotencyKey(any());
+        verify(refundDao, never()).findPaymentSourceForUpdate(any());
+        verify(refundDao, never()).insertRefund(any());
+    }
+
+    @Test
+    void shouldRejectRefundAmountBeyondDecimalColumnRangeBeforeReadingSource() {
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId("PAY-1");
+        request.setRefundAmount(new BigDecimal("10000000000000000.00"));
+
+        assertThrows(BusinessException.class, () -> service.apply(request));
+        verify(refundDao, never()).findByIdempotencyKey(any());
+        verify(refundDao, never()).findPaymentSourceForUpdate(any());
+        verify(refundDao, never()).insertRefund(any());
+    }
+
+    @Test
     void shouldCreateReviewingRefund() {
         PaymentSuccessProjectionEntity source = source("PAY-1", "100.00");
-        when(refundDao.findPaymentSource("PAY-1")).thenReturn(source);
+        when(refundDao.findPaymentSourceForUpdate("PAY-1")).thenReturn(source);
         when(refundDao.sumActiveRefundAmount("PAY-1")).thenReturn(BigDecimal.ZERO);
         when(refundDao.findByIdempotencyKey(any())).thenReturn(null);
         when(refundDao.insertRefund(any())).thenReturn(1);
@@ -109,6 +159,51 @@ class RefundServiceImplTest {
         assertEquals("REVIEWING", service.apply(request).getStatus());
         verify(refundDao).insertLog(any(), eq("APPLY"), eq("发起退款申请"),
                 eq("INIT"), eq("REVIEWING"), eq("test-operator"), any());
+    }
+
+    @Test
+    void shouldReturnIdenticalRefundIdempotencyReplayAfterLockingPaymentSource() {
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId("PAY-1");
+        request.setRefundAmount(new BigDecimal("10.00"));
+        request.setRefundMethod("ORIGINAL");
+        request.setRefundReason("服务取消");
+        request.setIdempotencyKey("REF-KEY-1");
+        RefundListItemDTO existing = new RefundListItemDTO();
+        existing.setPaymentOrderId("PAY-1");
+        existing.setRefundAmount(new BigDecimal("10.00"));
+        existing.setRefundMethod("ORIGINAL");
+        existing.setRefundReason("服务取消");
+        when(refundDao.findPaymentSourceForUpdate("PAY-1")).thenReturn(source("PAY-1", "100.00"));
+        when(refundDao.findByIdempotencyKey("REF-KEY-1")).thenReturn(existing);
+
+        assertEquals(existing, service.apply(request));
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(refundDao);
+        order.verify(refundDao).findPaymentSourceForUpdate("PAY-1");
+        order.verify(refundDao).findByIdempotencyKey("REF-KEY-1");
+        verify(refundDao, never()).sumActiveRefundAmount(any());
+        verify(refundDao, never()).insertRefund(any());
+    }
+
+    @Test
+    void shouldRejectConflictingRefundIdempotencyReplay() {
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId("PAY-1");
+        request.setRefundAmount(new BigDecimal("11.00"));
+        request.setRefundMethod("ORIGINAL");
+        request.setRefundReason("服务取消");
+        request.setIdempotencyKey("REF-KEY-2");
+        RefundListItemDTO existing = new RefundListItemDTO();
+        existing.setPaymentOrderId("PAY-1");
+        existing.setRefundAmount(new BigDecimal("10.00"));
+        existing.setRefundMethod("ORIGINAL");
+        existing.setRefundReason("服务取消");
+        when(refundDao.findPaymentSourceForUpdate("PAY-1")).thenReturn(source("PAY-1", "100.00"));
+        when(refundDao.findByIdempotencyKey("REF-KEY-2")).thenReturn(existing);
+
+        assertThrows(BusinessException.class, () -> service.apply(request));
+        verify(refundDao).findPaymentSourceForUpdate("PAY-1");
+        verify(refundDao, never()).insertRefund(any());
     }
 
     @Test
@@ -138,6 +233,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = new RefundListItemDTO();
         result.setStatus("SUCCESS");
         result.setPaymentOrderId("PAY-1");
+        result.setPayScene("HOME_CLEAN");
         result.setRefundAmount(new BigDecimal("10.00"));
         when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
@@ -146,7 +242,19 @@ class RefundServiceImplTest {
         request.setChannelRefundId("CH-1");
 
         assertEquals("SUCCESS", service.callback(request).getStatus());
-        verify(refundDao).insertSuccessOutbox("REF-1", "PAY-1", new BigDecimal("10.00"));
+        verify(refundDao).insertSuccessOutbox("REF-1", "PAY-1", "HOME_CLEAN", new BigDecimal("10.00"));
+    }
+
+    @Test
+    void shouldRejectSuccessCallbackWithoutChannelRefundIdWithoutChangingRefund() {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-MISSING-CHANNEL-ID");
+        request.setResult("SUCCESS");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verify(refundDao, never()).updateCallback(any(), any(), any(), any());
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any(), any());
     }
 
     @Test
@@ -155,6 +263,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = new RefundListItemDTO();
         result.setStatus("SUCCESS");
         result.setRefundOrderId("REF-1");
+        result.setChannelRefundId("CH-1");
         when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId("REF-1");
@@ -163,7 +272,25 @@ class RefundServiceImplTest {
 
         assertEquals("SUCCESS", service.callback(request).getStatus());
         verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
-        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectSuccessCallbackWithConflictingChannelRefundId() {
+        when(refundDao.updateCallback("REF-1", "SUCCESS", "CH-2", null)).thenReturn(0);
+        RefundListItemDTO result = new RefundListItemDTO();
+        result.setStatus("SUCCESS");
+        result.setRefundOrderId("REF-1");
+        result.setChannelRefundId("CH-1");
+        when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-1");
+        request.setResult("SUCCESS");
+        request.setChannelRefundId("CH-2");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any(), any());
     }
 
     @Test
@@ -172,6 +299,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = new RefundListItemDTO();
         result.setStatus("FAIL");
         result.setRefundOrderId("REF-2");
+        result.setFailureCode("E001");
         when(refundDao.findByRefundOrderId("REF-2")).thenReturn(result);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId("REF-2");
@@ -184,15 +312,100 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectFailCallbackWithConflictingFailureCode() {
+        when(refundDao.updateCallback("REF-2", "FAIL", "CH-2", "E002")).thenReturn(0);
+        RefundListItemDTO result = new RefundListItemDTO();
+        result.setStatus("FAIL");
+        result.setRefundOrderId("REF-2");
+        result.setFailureCode("E001");
+        when(refundDao.findByRefundOrderId("REF-2")).thenReturn(result);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-2");
+        request.setResult("FAIL");
+        request.setChannelRefundId("CH-2");
+        request.setFailureCode("E002");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectUnknownCallbackResultWithoutChangingRefund() {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-UNKNOWN");
+        request.setResult(" UNKNOWN ");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verify(refundDao, never()).updateCallback(any(), any(), any(), any());
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectMissingCallbackResultWithoutChangingRefund() {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-MISSING-RESULT");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verify(refundDao, never()).updateCallback(any(), any(), any(), any());
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any(), any());
+    }
+
+    @Test
     void shouldProjectPaymentSuccessIdempotently() {
         PaymentSuccessProjectionDTO request = new PaymentSuccessProjectionDTO();
         request.setPaymentOrderId("PAY-2");
         request.setOrderNo("ORDER-2");
         request.setPaidAmount(new BigDecimal("20.00"));
+        when(refundDao.insertPaymentSource(any(PaymentSuccessProjectionEntity.class))).thenReturn(1);
 
         service.projectPaymentSuccess(request);
 
         verify(refundDao).insertPaymentSource(any(PaymentSuccessProjectionEntity.class));
+    }
+
+    @Test
+    void shouldAcceptIdenticalPaymentSuccessReplayWithoutWritingAgain() {
+        PaymentSuccessProjectionDTO request = new PaymentSuccessProjectionDTO();
+        request.setPaymentOrderId("PAY-REPLAY");
+        request.setOrderNo("ORDER-REPLAY");
+        request.setCustomerName("客户");
+        request.setPaidAmount(new BigDecimal("20.00"));
+        request.setChannelCode("WECHAT");
+        when(refundDao.findPaymentSource("PAY-REPLAY"))
+                .thenReturn(source("PAY-REPLAY", "20.00", "ORDER-REPLAY", "客户", "WECHAT"));
+
+        service.projectPaymentSuccess(request);
+
+        verify(refundDao, never()).insertPaymentSource(any(PaymentSuccessProjectionEntity.class));
+    }
+
+    @Test
+    void shouldRejectConflictingPaymentSuccessReplay() {
+        PaymentSuccessProjectionDTO request = new PaymentSuccessProjectionDTO();
+        request.setPaymentOrderId("PAY-CONFLICT");
+        request.setOrderNo("ORDER-CONFLICT");
+        request.setCustomerName("客户");
+        request.setPaidAmount(new BigDecimal("21.00"));
+        request.setChannelCode("WECHAT");
+        when(refundDao.findPaymentSource("PAY-CONFLICT"))
+                .thenReturn(source("PAY-CONFLICT", "20.00", "ORDER-CONFLICT", "客户", "WECHAT"));
+
+        assertThrows(BusinessException.class, () -> service.projectPaymentSuccess(request));
+        verify(refundDao, never()).insertPaymentSource(any(PaymentSuccessProjectionEntity.class));
+    }
+
+    @Test
+    void shouldRejectPaymentSuccessAmountWithMoreThanTwoDecimalPlacesBeforeReadingSource() {
+        PaymentSuccessProjectionDTO request = new PaymentSuccessProjectionDTO();
+        request.setPaymentOrderId("PAY-SCALE");
+        request.setOrderNo("ORDER-SCALE");
+        request.setPaidAmount(new BigDecimal("20.001"));
+
+        assertThrows(BusinessException.class, () -> service.projectPaymentSuccess(request));
+        verify(refundDao, never()).findPaymentSource(any());
+        verify(refundDao, never()).insertPaymentSource(any(PaymentSuccessProjectionEntity.class));
     }
 
     @Test
@@ -243,7 +456,8 @@ class RefundServiceImplTest {
                 "http://accounting/refunds/success", "ACT10003",
                 "http://reconciliation/facts", restTemplate);
         RefundOutboxEventEntity event = outboxEvent("REVT-3", "REF-3");
-        RefundListItemDTO refund = successfulRefund("REF-3", "PAY-3", "10.00");
+        RefundListItemDTO refund = successfulRefund("REF-3", " PAY-3 ", "10.00");
+        refund.setPayScene("HOME_CLEAN");
         when(refundDao.findOutboxByEventId("REVT-3")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-3")).thenReturn(refund);
         when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
@@ -262,6 +476,20 @@ class RefundServiceImplTest {
         assertEquals("SENT", result.getStatus());
         verify(restTemplate).postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class));
         verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+        org.mockito.ArgumentCaptor<Object> accountingPayload = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate).postForEntity(
+                eq("http://accounting/refunds/success"), accountingPayload.capture(), eq(java.util.Map.class));
+        assertEquals("CHAIN-PAY-3",
+                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("businessChainId").asText());
+        assertEquals("HOME_CLEAN",
+                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("payScene").asText());
+        org.mockito.ArgumentCaptor<Object> reconciliationPayload = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate).postForEntity(
+                eq("http://reconciliation/facts"), reconciliationPayload.capture(), eq(java.util.Map.class));
+        assertEquals("CHAIN-PAY-3",
+                new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("businessChainId").asText());
+        assertEquals("退款成功事实，原支付单号=PAY-3，支付场景=HOME_CLEAN",
+                new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("payload").asText());
     }
 
     @Test
@@ -335,11 +563,17 @@ class RefundServiceImplTest {
     }
 
     private PaymentSuccessProjectionEntity source(String paymentOrderId, String amount) {
+        return source(paymentOrderId, amount, "ORDER-1", "客户", null);
+    }
+
+    private PaymentSuccessProjectionEntity source(String paymentOrderId, String amount,
+                                                  String orderNo, String customerName, String channelCode) {
         PaymentSuccessProjectionEntity source = new PaymentSuccessProjectionEntity();
         source.setPaymentOrderId(paymentOrderId);
-        source.setOrderNo("ORDER-1");
-        source.setCustomerName("客户");
+        source.setOrderNo(orderNo);
+        source.setCustomerName(customerName);
         source.setPaidAmount(new BigDecimal(amount));
+        source.setChannelCode(channelCode);
         return source;
     }
 }
