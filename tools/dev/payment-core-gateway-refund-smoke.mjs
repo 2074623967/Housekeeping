@@ -123,14 +123,16 @@ async function main() {
       outgoing.writeHead(200, { "Content-Type": "application/json" });
       outgoing.end(JSON.stringify({
         code: "0",
-        data: { channelRefundNo: "LOCAL-UPSTREAM-REF-001", status: "PROCESSING", statusType: "warn" }
+        data: upstreamCalls.length === 3
+          ? { channelRefundNo: "LOCAL-UPSTREAM-REF-003", status: "SUCCESS", statusType: "success" }
+          : { channelRefundNo: "LOCAL-UPSTREAM-REF-001", status: "PROCESSING", statusType: "warn" }
       }));
     } else {
       upstreamQueries.push(requestBody);
       const submitIndex = upstreamCalls.findIndex((item) => item.refundOrderId === requestBody.refundOrderId);
       const channelRefundNo = submitIndex === 0
         ? upstreamQueries.length === 1 ? "LOCAL-UPSTREAM-WRONG-REF" : "LOCAL-UPSTREAM-REF-001"
-        : "LOCAL-UPSTREAM-REF-002";
+        : submitIndex === 1 ? "LOCAL-UPSTREAM-REF-002" : "LOCAL-UPSTREAM-REF-003";
       outgoing.writeHead(200, { "Content-Type": "application/json" });
       outgoing.end(JSON.stringify({
         code: "0",
@@ -330,7 +332,63 @@ async function main() {
     if (recoveredEvent.bizNo !== unknownAttemptNo) {
       throw new Error("Recovered outbox changed refund attempt identity");
     }
-    console.log("[PASS] payment-core -> gateway-access -> local upstream: reject mismatch, prevent blind retry, recover unknown acceptance");
+
+    const synchronousApplication = assertResponse(await request(`${paymentUrl}/api/refunds/apply`, {
+      paymentOrderId: "PAY202607190001",
+      idempotencyKey: `gateway-synchronous-${randomUUID()}`,
+      refundAmount: 20,
+      refundMethod: "原路退款",
+      refundReason: "isolated synchronous success smoke",
+      operator: "local-smoke"
+    }), (data) => data?.status === "REVIEWING" && data?.refundOrderId,
+    "Synchronous-result refund application failed");
+    assertResponse(await request(`${paymentUrl}/api/refunds/approve`, {
+      refundOrderId: synchronousApplication.refundOrderId, operator: "local-smoke"
+    }), (data) => data?.status === "PROCESSING", "Synchronous success was prematurely finalized");
+    const synchronousDetail = assertResponse(await request(`${paymentUrl}/api/refunds/`
+      + synchronousApplication.refundOrderId),
+    (data) => data?.status === "PROCESSING" && data?.attempts?.length === 1
+      && data.attempts[0].attemptStatus === "UNKNOWN" && !data.channelRefundNo,
+    "Synchronous success did not preserve an unbound unknown attempt");
+    const synchronousAttemptNo = synchronousDetail.attempts[0].refundAttemptNo;
+    const synchronousEvents = assertResponse(await request(`${paymentUrl}/api/payment-events?`
+      + "paymentOrderId=PAY202607190001&eventType=REFUND_SUBMIT"),
+    (data) => data?.total === 3 && data?.items?.length === 3,
+    "Synchronous success refund outbox missing");
+    const synchronousEvent = synchronousEvents.items.find((item) => item.bizNo === synchronousAttemptNo);
+    if (synchronousEvent?.publishStatus !== "UNKNOWN" || upstreamCalls.length !== 3
+        || upstreamCalls[2].refundOrderId !== synchronousApplication.refundOrderId
+        || upstreamCalls[2].refundAttemptNo !== synchronousAttemptNo) {
+      throw new Error("Synchronous success was accepted without querying the original attempt");
+    }
+    const synchronousRepublish = await request(`${paymentUrl}/api/payment-events/republish`, {
+      eventNo: synchronousEvent.eventNo, operator: "local-smoke"
+    });
+    if (synchronousRepublish.code !== "PAYMENT-1050" || upstreamCalls.length !== 3) {
+      throw new Error("Synchronous success was blindly retried");
+    }
+    assertResponse(await request(`${paymentUrl}/api/refunds/query`, {
+      refundOrderId: synchronousApplication.refundOrderId, operator: "local-smoke"
+    }), (data) => data?.status === "SUCCESS", "Synchronous success query did not close the original attempt");
+    assertResponse(await request(`${paymentUrl}/api/refunds/query`, {
+      refundOrderId: synchronousApplication.refundOrderId, operator: "local-smoke"
+    }), (data) => data?.status === "SUCCESS", "Synchronous terminal query was not idempotent");
+    const synchronousSettled = assertResponse(await request(`${paymentUrl}/api/refunds/`
+      + synchronousApplication.refundOrderId),
+    (data) => data?.status === "SUCCESS" && data?.channelRefundNo === "LOCAL-UPSTREAM-REF-003"
+      && data?.attempts?.length === 1 && data.attempts[0].attemptStatus === "SUCCESS",
+    "Synchronous refund query did not bind the original attempt");
+    const synchronousRecoveredEvent = assertResponse(await request(`${paymentUrl}/api/payment-events/`
+      + synchronousEvent.eventNo), (data) => data?.publishStatus === "SUCCESS",
+    "Synchronous refund outbox was not recovered");
+    if (synchronousRecoveredEvent.bizNo !== synchronousAttemptNo
+        || !synchronousSettled.operationLogs?.some((item) => item.actionCode === "CHANNEL_ACCEPTANCE_RECOVERED")
+        || upstreamCalls.length !== 3 || upstreamQueries.length !== 4
+        || upstreamQueries[3].refundAttemptNo !== synchronousAttemptNo
+        || upstreamQueries[3].channelRefundNo) {
+      throw new Error("Synchronous refund recovery lost its attempt identity");
+    }
+    console.log("[PASS] payment-core -> gateway-access -> local upstream: reject mismatch, recover unknown and synchronous success without blind retry");
   } catch (error) {
     for (const { name, logPath } of launched) {
       const log = await readFile(logPath, "utf8").catch(() => "");
