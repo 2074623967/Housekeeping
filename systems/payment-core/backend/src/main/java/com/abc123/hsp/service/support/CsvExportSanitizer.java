@@ -15,7 +15,9 @@ public final class CsvExportSanitizer {
         char firstCharacter = value.charAt(0);
         if (firstCharacter == '=' || firstCharacter == '+' || firstCharacter == '-'
                 || firstCharacter == '@' || firstCharacter == '\t'
-                || firstCharacter == '\r' || firstCharacter == '\n') {
+                || firstCharacter == '\r' || firstCharacter == '\n'
+                || firstCharacter == '\uFF1D' || firstCharacter == '\uFF0B'
+                || firstCharacter == '\uFF0D' || firstCharacter == '\uFF20') {
             return "'" + value;
         }
         return value;

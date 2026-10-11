@@ -15,8 +15,18 @@ public class PaymentRecordRowDTO {
     private Long serialNo;
     /** 支付单号。 */
     private String paymentOrderId;
+    private String successFactIssue;
+    private String prepayBindingIssue;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 业务订单号。 */
     private String businessOrderNo;
+    /** 支付业务场景。 */
+    private String payScene;
     /** 支付请求号。 */
     private String paymentRequestNo;
     /** 应用来源标识。 */
@@ -25,7 +35,7 @@ public class PaymentRecordRowDTO {
     private String businessLineId;
     /** 外部交易流水号。 */
     private String externalTransactionNo;
-    /** 支付网关。 */
+    /** 实际支付网关；无逐单留存来源时为空。 */
     private String paymentGateway;
     /** 支付渠道。 */
     private String paymentChannel;
@@ -39,7 +49,7 @@ public class PaymentRecordRowDTO {
     private String cardNo;
     /** 渠道返回码。 */
     private String channelReturnCode;
-    /** 返回参数类型。 */
+    /** 渠道交易号类型；无渠道交易号时为空。 */
     private String returnParameterType;
     /** 参数值。 */
     private String parameterValue;
@@ -51,6 +61,7 @@ public class PaymentRecordRowDTO {
     private Integer refundCount;
     /** 已退款金额。 */
     private String refundedAmount;
+    private Integer unverifiedRefundCount;
     /** 商品名称。 */
     private String productName;
     /** 用户支付渠道标识。 */
@@ -59,7 +70,7 @@ public class PaymentRecordRowDTO {
     private String receivingAccount;
     /** 通知地址。 */
     private String notifyUrl;
-    /** 回调消息主题。 */
+    /** 最近支付成功事件的实际主题；沿用历史 API 字段名。 */
     private String callbackMqTopic;
     /** 过期时间。 */
     private String expireTime;
@@ -73,4 +84,10 @@ public class PaymentRecordRowDTO {
     private String userId;
     /** 状态样式。 */
     private String statusType;
+    /** 最近一次支付尝试状态。 */
+    private String latestAttemptStatus;
+    /** 最近一次支付尝试状态样式。 */
+    private String latestAttemptStatusType;
+    /** 最近一次支付尝试完成时间。 */
+    private String latestAttemptCompletedAt;
 }

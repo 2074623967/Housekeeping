@@ -12,6 +12,7 @@ import com.abc123.hsp.service.PaymentRequestService;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -70,7 +71,7 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
 
     @Override
     public PageResultDTO<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentRequestListItemDTO> items = paymentRequestMapper.findAll(query);
         return new PageResultDTO<>(
                 maskRequestItems(items),
@@ -82,7 +83,7 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
 
     @Override
     public PaymentRequestOverviewDTO overview(PaymentRequestQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         PaymentRequestOverviewDTO overview = paymentRequestMapper.findOverviewSummary(query);
         if (overview == null) {
             overview = new PaymentRequestOverviewDTO();
@@ -119,15 +120,17 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
 
     @Override
     public String exportCsv(PaymentRequestQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentRequestListItemDTO> items = maskRequestItems(
                 CsvExportRowLimiter.requireWithinLimit(paymentRequestMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("请求编号,支付单号,预付单号,订单号,支付方式,渠道编码,路由结果,终端,客户端IP,幂等键,请求状态,创建时间,请求报文,响应报文\n");
+        builder.append("请求编号,支付单号,业务链路,预付单号,支付场景,订单号,支付方式,渠道编码,路由结果,终端,客户端IP,幂等键,请求状态,状态样式,创建时间,请求报文,响应报文,支付单成功事实异常类型\n");
         for (PaymentRequestListItemDTO item : items) {
             builder.append(csvCell(item.getRequestNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
+                    .append(csvCell(item.getPayScene())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getPaymentMethod())).append(',')
                     .append(csvCell(item.getChannelCode())).append(',')
@@ -136,9 +139,11 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
                     .append(csvCell(item.getClientIp())).append(',')
                     .append(csvCell(item.getIdempotencyKey())).append(',')
                     .append(csvCell(item.getRequestStatus())).append(',')
+                    .append(csvCell(item.getRequestStatusType())).append(',')
                     .append(csvCell(item.getCreatedAt())).append(',')
                     .append(csvCell(item.getRequestPayload())).append(',')
-                    .append(csvCell(item.getResponsePayload())).append('\n');
+                    .append(csvCell(item.getResponsePayload())).append(',')
+                    .append(csvCell(item.getSuccessFactIssue())).append('\n');
         }
         return builder.toString();
     }
@@ -166,7 +171,10 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         return copy;
     }
 
-    private void normalizeQuery(PaymentRequestQueryDTO query) {
+    private PaymentRequestQueryDTO normalizeQuery(PaymentRequestQueryDTO query) {
+        if (query == null) {
+            query = new PaymentRequestQueryDTO();
+        }
         query.setRequestNo(normalizeOptionalQueryField(
                 query.getRequestNo(), REQUEST_NO_MAX_LENGTH, "请求编号", null));
         query.setPaymentOrderId(normalizeOptionalQueryField(
@@ -181,10 +189,11 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
                 query.getClientIp(), CLIENT_IP_MAX_LENGTH, "客户端IP", null));
         query.setRequestStatus(normalizeRequestStatus(normalizeOptionalQueryField(
                 query.getRequestStatus(), REQUEST_STATUS_MAX_LENGTH, "请求状态", "全部")));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentMonitorSummaryDTO;
 import com.abc123.hsp.dto.PaymentTrendPointDTO;
 import com.abc123.hsp.mapper.PaymentMonitorMapper;
 import com.abc123.hsp.service.PaymentMonitorService;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -29,6 +30,10 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
 
     @Override
     public PaymentMonitorOverviewDTO overview() {
+        return loadOverview(false);
+    }
+
+    private PaymentMonitorOverviewDTO loadOverview(boolean forExport) {
         PaymentMonitorOverviewDTO overview = new PaymentMonitorOverviewDTO();
         PaymentMonitorSummaryDTO summary = paymentMonitorMapper.findSummary();
         if (summary == null) {
@@ -38,7 +43,9 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
             summary.setProcessingRefundCount(0);
         }
         overview.setTrends(safeList(paymentMonitorMapper.findRecentTrends()));
-        overview.setChannelMetrics(safeList(paymentMonitorMapper.findChannelMetrics()));
+        overview.setChannelMetrics(safeList(forExport
+                ? paymentMonitorMapper.findChannelMetricsForExport()
+                : paymentMonitorMapper.findChannelMetrics()));
         overview.setAlerts(safeList(paymentMonitorMapper.findAlerts()));
         overview.setMetricDefinitions(metricDefinitions());
         summary.setAlertCount(overview.getAlerts().size());
@@ -48,7 +55,10 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
 
     @Override
     public String exportCsv() {
-        PaymentMonitorOverviewDTO overview = overview();
+        PaymentMonitorOverviewDTO overview = loadOverview(true);
+        CsvExportRowLimiter.requireWithinLimit(10 + overview.getTrends().size()
+                + overview.getChannelMetrics().size() + overview.getAlerts().size()
+                + overview.getMetricDefinitions().size());
         StringBuilder csv = new StringBuilder();
         csv.append("section,metric,value,detail\n");
         PaymentMonitorSummaryDTO summary = overview.getSummary();
@@ -70,11 +80,13 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
             appendRow(csv, "channel", channel.getChannelCode(), channel.getSuccessRate(),
                     "paymentMethod=" + value(channel.getPaymentMethod()) + ";totalCount=" + value(channel.getTotalCount())
                             + ";successCount=" + value(channel.getSuccessCount()) + ";pendingCount=" + value(channel.getPendingCount())
-                            + ";riskLevel=" + value(channel.getRiskLevel()));
+                            + ";riskLevel=" + value(channel.getRiskLevel())
+                            + ";riskLevelType=" + value(channel.getRiskLevelType()));
         }
         for (PaymentAlertItemDTO alert : safeList(overview.getAlerts())) {
             appendRow(csv, "alert", alert.getAlertType(), alert.getAlertLevel(),
                     "title=" + value(alert.getAlertTitle()) + ";affectedCount=" + value(alert.getAffectedCount())
+                            + ";alertLevelType=" + value(alert.getAlertLevelType())
                             + ";suggestedAction=" + value(alert.getSuggestedAction()));
         }
         for (PaymentMonitorMetricDefinitionDTO definition : safeList(overview.getMetricDefinitions())) {

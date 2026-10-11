@@ -4,6 +4,15 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentLogMapper">
 
+    <sql id="paymentLogSuccessFactIssue">
+        (SELECT <include refid="com.abc123.hsp.mapper.PaymentMapper.paymentSuccessFactIssueProjection"/>
+         FROM t_payment_order p
+         WHERE p.payment_order_id = ppl.payment_order_id
+           AND CHAR_LENGTH(p.payment_order_id) = CHAR_LENGTH(ppl.payment_order_id)
+           AND CAST(p.payment_order_id AS BINARY(256)) = CAST(ppl.payment_order_id AS BINARY(256))
+         LIMIT 1) AS successFactIssue
+    </sql>
+
     <sql id="paymentLogWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
@@ -36,7 +45,8 @@
         log_level_type AS logLevelType,
         message,
         source,
-        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+        <include refid="paymentLogSuccessFactIssue"/>
     </sql>
 
     <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentLogDetailDTO">
@@ -52,10 +62,25 @@
                ppl.log_level_type AS logLevelType,
                ppl.message,
                ppl.source,
-               DATE_FORMAT(ppl.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               DATE_FORMAT(ppl.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               <include refid="paymentLogSuccessFactIssue"/>
         FROM t_payment_process_log ppl
                  LEFT JOIN t_order standard_order ON standard_order.order_no = ppl.order_no
+                     AND CHAR_LENGTH(standard_order.order_no) = CHAR_LENGTH(ppl.order_no)
+                     AND CAST(standard_order.order_no AS BINARY(256)) = CAST(ppl.order_no AS BINARY(256))
+                     AND EXISTS (SELECT 1 FROM t_prepay_order owned_pr
+                                 WHERE owned_pr.payment_order_id = ppl.payment_order_id
+                                   AND CHAR_LENGTH(owned_pr.payment_order_id) = CHAR_LENGTH(ppl.payment_order_id)
+                                   AND CAST(owned_pr.payment_order_id AS BINARY(256)) = CAST(ppl.payment_order_id AS BINARY(256))
+                                   AND owned_pr.order_no = ppl.order_no
+                                   AND CHAR_LENGTH(owned_pr.order_no) = CHAR_LENGTH(ppl.order_no)
+                                   AND CAST(owned_pr.order_no AS BINARY(256)) = CAST(ppl.order_no AS BINARY(256))
+                                   AND owned_pr.source_kind = 'STANDARD_ORDER'
+                                   AND CHAR_LENGTH(owned_pr.source_kind) = CHAR_LENGTH('STANDARD_ORDER')
+                                   AND CAST(owned_pr.source_kind AS BINARY(16)) = CAST('STANDARD_ORDER' AS BINARY(16)))
         WHERE ppl.log_no = #{logNo}
+          AND CHAR_LENGTH(ppl.log_no) = CHAR_LENGTH(#{logNo})
+          AND CAST(ppl.log_no AS BINARY(256)) = CAST(#{logNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -83,7 +108,7 @@
 
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentLogListItemDTO">
         SELECT <include refid="paymentLogColumns"/>
-        FROM t_payment_process_log
+        FROM t_payment_process_log ppl
         <include refid="paymentLogWhere"/>
         <include refid="paymentLogOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
@@ -91,7 +116,7 @@
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentLogListItemDTO">
         SELECT <include refid="paymentLogColumns"/>
-        FROM t_payment_process_log
+        FROM t_payment_process_log ppl
         <include refid="paymentLogWhere"/>
         <include refid="paymentLogOrder"/>
         LIMIT 1001

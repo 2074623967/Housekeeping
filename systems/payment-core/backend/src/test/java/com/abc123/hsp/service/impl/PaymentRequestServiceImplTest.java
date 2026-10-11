@@ -172,9 +172,11 @@ class PaymentRequestServiceImplTest {
         PaymentRequestListItemDTO item = new PaymentRequestListItemDTO();
         item.setRequestNo("REQ-001");
         item.setPaymentOrderId("PAY-001");
+        item.setPayScene("HOME_CLEAN");
         item.setClientIp("127.0.0.1");
         item.setIdempotencyKey("IDEMPOTENCY-1234567890");
         item.setRequestStatus("成功");
+        item.setRequestStatusType("success");
         item.setRequestPayload("{\"amount\":\"88\",\"clientIp\":\"127.0.0.1\",\"idempotencyKey\":\"IDEMPOTENCY-1234567890\",\"mobile\":\"13800138000\"}");
         item.setResponsePayload("{\"message\":\"ok\",\"cardNo\":\"6222021234567890123\"}");
         when(paymentRequestMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
@@ -182,6 +184,12 @@ class PaymentRequestServiceImplTest {
         String csv = new PaymentRequestServiceImpl(paymentRequestMapper).exportCsv(query);
 
         assertEquals("成功", query.getRequestStatus());
+        assertTrue(csv.contains("支付单号,业务链路,预付单号"));
+        assertTrue(csv.contains("预付单号,支付场景,订单号"));
+        assertTrue(csv.contains("HOME_CLEAN"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
+        assertTrue(csv.contains("请求状态,状态样式,创建时间"));
+        assertTrue(csv.contains("\"成功\",\"success\""));
         assertTrue(csv.contains("REQ-001"));
         assertTrue(csv.contains("127.0.*.*"));
         assertTrue(csv.contains("IDEMPO****7890"));
@@ -247,6 +255,23 @@ class PaymentRequestServiceImplTest {
         assertEquals(2, result.getRepeatedPaymentOrderCount());
         assertEquals(0, result.getMissingResponseCount());
         verify(paymentRequestMapper).findOverviewSummary(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingPaymentRequestsWithNullQuery() {
+        when(paymentRequestMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentRequestQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentRequestMapper.count(org.mockito.ArgumentMatchers.any(PaymentRequestQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<PaymentRequestListItemDTO> result =
+                new PaymentRequestServiceImpl(paymentRequestMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<PaymentRequestQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentRequestQueryDTO.class);
+        verify(paymentRequestMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int count) {

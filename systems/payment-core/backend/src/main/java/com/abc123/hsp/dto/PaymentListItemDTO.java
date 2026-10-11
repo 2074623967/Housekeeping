@@ -10,8 +10,18 @@ public class PaymentListItemDTO {
 
     /** 支付单号。 */
     private String paymentOrderId;
+
+    /** 统一业务链路标识。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
+
     /** 订单号。 */
     private String orderNo;
+    /** 支付业务场景。 */
+    private String payScene;
+    private String prepayBindingIssue;
     /** 客户名称。 */
     private String customerName;
     /** 支付金额。 */
@@ -26,8 +36,14 @@ public class PaymentListItemDTO {
     private String status;
     /** 支付状态样式。 */
     private String statusType;
+    /** 成功事实异常类型；正常支付单为空。 */
+    private String successFactIssue;
     /** 最近一次支付尝试状态。 */
     private String latestAttemptStatus;
+    /** 最近一次支付尝试状态对应的前端展示样式。 */
+    private String latestAttemptStatusType;
+    /** 最近一次支付尝试的终态完成时间。 */
+    private String latestAttemptCompletedAt;
     /** 创建时间。 */
     private String createdAt;
 }

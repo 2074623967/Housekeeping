@@ -164,6 +164,91 @@ public class PaymentProcessLogMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldNotReadPaymentLogThroughCaseVariantIdentifier() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            assertNull(mapper.findDetail("log-stable-001"));
+            assertEquals("LOG-STABLE-001", mapper.findDetail("LOG-STABLE-001").getLogNo());
+        }
+    }
+
+    @Test
+    void shouldNotBorrowSuccessFactIssueFromCaseVariantPayment() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = NULL "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            statement.executeUpdate("UPDATE t_payment_process_log SET payment_order_id = 'pay-log-stable' "
+                    + "WHERE log_no = 'LOG-STABLE-001'");
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+            query.setPaymentOrderId("pay-log-stable");
+
+            assertNull(mapper.findDetail("LOG-STABLE-001").getSuccessFactIssue());
+            assertNull(mapper.findAll(query).stream()
+                    .filter(item -> "LOG-STABLE-001".equals(item.getLogNo()))
+                    .findFirst().get().getSuccessFactIssue());
+            assertNull(mapper.findAllForExport(query).stream()
+                    .filter(item -> "LOG-STABLE-001".equals(item.getLogNo()))
+                    .findFirst().get().getSuccessFactIssue());
+            assertEquals(3L, mapper.count(query));
+        }
+    }
+
+    @Test
+    void shouldNotLinkVirtualLogToCollidingStandardOrder() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'VIRTUAL' "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            assertEquals("ORD-001", mapper.findDetail("LOG-STABLE-001").getOrderNo());
+            assertNull(mapper.findDetail("LOG-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'standard_order' "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            session.clearCache();
+            assertNull(mapper.findDetail("LOG-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'STANDARD_ORDER', "
+                    + "order_no = 'OTHER-ORDER' WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            session.clearCache();
+            assertNull(mapper.findDetail("LOG-STABLE-001").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-001' "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            session.clearCache();
+            assertEquals("ORD-001", mapper.findDetail("LOG-STABLE-001").getStandardOrderNo());
+        }
+    }
+
+    @Test
+    void shouldProjectPaymentSuccessIssuesAcrossLogListExportAndDetail() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+            query.setPaymentOrderId("PAY-LOG-STABLE");
+
+            assertNull(mapper.findAll(query).get(0).getSuccessFactIssue());
+            assertNull(mapper.findDetail("LOG-STABLE-001").getSuccessFactIssue());
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET completed_at = '2026-09-12 12:00:00.001' "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            session.clearCache();
+            assertEquals("SUCCESS_FACT_MISMATCH", mapper.findAll(query).get(0).getSuccessFactIssue());
+            assertEquals("SUCCESS_FACT_MISMATCH", mapper.findAllForExport(query).get(0).getSuccessFactIssue());
+            assertEquals("SUCCESS_FACT_MISMATCH", mapper.findDetail("LOG-STABLE-001").getSuccessFactIssue());
+
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = NULL "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            session.clearCache();
+            assertEquals("SUCCESS_TIME_MISSING", mapper.findAll(query).get(0).getSuccessFactIssue());
+            assertEquals("SUCCESS_TIME_MISSING", mapper.findDetail("LOG-STABLE-001").getSuccessFactIssue());
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
@@ -181,12 +266,42 @@ public class PaymentProcessLogMapperIntegrationTest {
                     + PaymentProcessLogMapperIntegrationTest.class.getName() + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_process_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
+            statement.execute("DROP TABLE IF EXISTS t_prepay_order");
+            statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE)");
             statement.executeUpdate("INSERT INTO t_order (order_no) VALUES ('ORD-001')");
+            statement.execute("CREATE TABLE t_payment_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
+                    + "order_no VARCHAR(64), "
+                    + "amount DECIMAL(18,2) DEFAULT 1.00, status VARCHAR(32) NOT NULL, "
+                    + "status_type VARCHAR(32), channel_code VARCHAR(64), "
+                    + "payment_method VARCHAR(32) DEFAULT '微信支付', "
+                    + "channel_transaction_no VARCHAR(128), success_at DATETIME, created_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_prepay_order (payment_order_id VARCHAR(64), "
+                    + "order_no VARCHAR(64), amount DECIMAL(18,2), "
+                    + "source_kind VARCHAR(16) DEFAULT 'STANDARD_ORDER')");
+            statement.execute("CREATE TABLE t_payment_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64) NOT NULL, "
+                    + "channel_code VARCHAR(64), payment_method VARCHAR(32) DEFAULT '微信支付', "
+                    + "attempt_status VARCHAR(32), attempt_status_type VARCHAR(32), "
+                    + "completed_at DATETIME, created_at DATETIME NOT NULL)");
+            statement.executeUpdate("INSERT INTO t_payment_order "
+                    + "(payment_order_id, status, status_type, channel_code, channel_transaction_no, "
+                    + "success_at, created_at) VALUES ('PAY-LOG-STABLE', 'SUCCESS', 'success', "
+                    + "'wx_h5', 'WX-STABLE', '2026-09-12 12:00:00', '2026-09-12 11:59:00')");
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(payment_order_id, channel_code, attempt_status, attempt_status_type, completed_at, created_at) "
+                    + "VALUES ('PAY-LOG-STABLE', 'wx_h5', '成功', 'success', "
+                    + "'2026-09-12 12:00:00', '2026-09-12 11:59:30')");
+            statement.executeUpdate("UPDATE t_payment_order SET order_no = 'ORD-001' "
+                    + "WHERE payment_order_id = 'PAY-LOG-STABLE'");
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, order_no, amount) "
+                    + "SELECT payment_order_id, order_no, amount FROM t_payment_order");
             statement.execute("CREATE TABLE t_payment_process_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, log_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "payment_order_id VARCHAR(64) NOT NULL, order_no VARCHAR(64), request_no VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, log_no VARCHAR_IGNORECASE(64) NOT NULL UNIQUE, "
+                    + "payment_order_id VARCHAR_IGNORECASE(64) NOT NULL, order_no VARCHAR(64), request_no VARCHAR(64), "
                     + "source_type VARCHAR(32) NOT NULL, source_no VARCHAR(64) NOT NULL, "
                     + "process_stage VARCHAR(32) NOT NULL, log_level VARCHAR(16) NOT NULL, "
                     + "log_level_type VARCHAR(16) NOT NULL, message TEXT NOT NULL, "

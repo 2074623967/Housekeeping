@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,7 +36,11 @@ class PaymentMonitorServiceImplTest {
         summary.setProcessingRefundCount(4);
         when(paymentMonitorMapper.findSummary()).thenReturn(summary);
         when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
-        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
+        PaymentChannelMetricDTO channel = new PaymentChannelMetricDTO();
+        channel.setChannelCode("WECHAT");
+        channel.setRiskLevel("P1");
+        channel.setRiskLevelType("danger");
+        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.singletonList(channel));
         when(paymentMonitorMapper.findAlerts()).thenReturn(Arrays.asList(
                 new PaymentAlertItemDTO(),
                 new PaymentAlertItemDTO()));
@@ -59,15 +64,43 @@ class PaymentMonitorServiceImplTest {
         summary.setSuccessRate("=1+1");
         when(paymentMonitorMapper.findSummary()).thenReturn(summary);
         when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
-        when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
-        when(paymentMonitorMapper.findAlerts()).thenReturn(Collections.<PaymentAlertItemDTO>emptyList());
+        when(paymentMonitorMapper.findChannelMetricsForExport())
+                .thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
+        PaymentAlertItemDTO alert = new PaymentAlertItemDTO();
+        alert.setAlertType("PAYMENT_FAILURE_RATE");
+        alert.setAlertLevel("P1");
+        alert.setAlertLevelType("danger");
+        when(paymentMonitorMapper.findAlerts()).thenReturn(Collections.singletonList(alert));
 
         String csv = new PaymentMonitorServiceImpl(paymentMonitorMapper).exportCsv();
 
         assertEquals(true, csv.startsWith("section,metric,value,detail\n"));
         assertEquals(true, csv.contains("\"successRate\",\"'=1+1\""));
+        assertTrue(csv.contains("alertLevel=P1"));
+        assertTrue(csv.contains("alertLevelType=danger"));
         assertTrue(csv.contains("\"metric-definition\",\"payment_success_rate\""));
         verify(paymentMonitorMapper).findSummary();
+    }
+
+    @Test
+    void shouldAllowMonitorCsvAtCombinedRowLimit() {
+        when(paymentMonitorMapper.findChannelMetricsForExport()).thenReturn(
+                Collections.nCopies(985, new PaymentChannelMetricDTO()));
+
+        String csv = new PaymentMonitorServiceImpl(paymentMonitorMapper).exportCsv();
+
+        assertEquals(1001, csv.split("\n").length);
+    }
+
+    @Test
+    void shouldRejectMonitorCsvAboveCombinedRowLimit() {
+        when(paymentMonitorMapper.findChannelMetricsForExport()).thenReturn(
+                Collections.nCopies(986, new PaymentChannelMetricDTO()));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentMonitorServiceImpl(paymentMonitorMapper).exportCsv());
+
+        assertEquals("导出数据超过1000条，请缩小筛选范围", exception.getMessage());
     }
 
     @Test

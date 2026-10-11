@@ -11,6 +11,7 @@ import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,7 @@ public class PaymentLogServiceImpl implements PaymentLogService {
 
     @Override
     public PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 safeList(paymentLogMapper.findAll(query)),
                 paymentLogMapper.count(query),
@@ -58,7 +59,7 @@ public class PaymentLogServiceImpl implements PaymentLogService {
 
     @Override
     public PaymentLogOverviewDTO overview(PaymentLogQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         PaymentLogOverviewDTO overview = paymentLogMapper.findOverviewSummary(query);
         if (overview == null) {
             overview = new PaymentLogOverviewDTO();
@@ -95,21 +96,24 @@ public class PaymentLogServiceImpl implements PaymentLogService {
 
     @Override
     public String exportCsv(PaymentLogQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
 
         java.util.List<PaymentLogListItemDTO> items = safeList(
                 CsvExportRowLimiter.requireWithinLimit(paymentLogMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("日志编号,支付单号,订单号,处理阶段,日志级别,来源,日志消息,创建时间\n");
+        builder.append("日志编号,支付单号,业务链路,订单号,处理阶段,日志级别,日志级别样式,来源,日志消息,创建时间,支付单成功事实异常类型\n");
         for (PaymentLogListItemDTO item : items) {
             builder.append(csvCell(item.getLogNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getProcessStage())).append(',')
                     .append(csvCell(item.getLogLevel())).append(',')
+                    .append(csvCell(item.getLogLevelType())).append(',')
                     .append(csvCell(item.getSource())).append(',')
                     .append(csvCell(item.getMessage())).append(',')
-                    .append(csvCell(item.getCreatedAt())).append('\n');
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getSuccessFactIssue())).append('\n');
         }
         return builder.toString();
     }
@@ -132,7 +136,10 @@ public class PaymentLogServiceImpl implements PaymentLogService {
         return result;
     }
 
-    private void normalizeQuery(PaymentLogQueryDTO query) {
+    private PaymentLogQueryDTO normalizeQuery(PaymentLogQueryDTO query) {
+        if (query == null) {
+            query = new PaymentLogQueryDTO();
+        }
         query.setPaymentOrderId(normalizeOptionalQueryField(
                 query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
         query.setOrderNo(normalizeOptionalQueryField(
@@ -145,10 +152,11 @@ public class PaymentLogServiceImpl implements PaymentLogService {
                 query.getSource(), SOURCE_MAX_LENGTH, "来源", null));
         query.setKeyword(normalizeOptionalQueryField(
                 query.getKeyword(), KEYWORD_MAX_LENGTH, "关键字", null));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeRequiredLogNo(String logNo) {

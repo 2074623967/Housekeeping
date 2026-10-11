@@ -41,11 +41,16 @@ class PaymentFlowListMapperIntegrationTest {
         configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentFlowMapper.class);
+        configuration.addMapper(PaymentMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentFlowMapper.xml")) {
             new XMLMapperBuilder(
                     mapperXml,
                     configuration,
                     "mapper/PaymentFlowMapper.xml",
+                    configuration.getSqlFragments()).parse();
+        }
+        try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentMapper.xml")) {
+            new XMLMapperBuilder(mapperXml, configuration, "mapper/PaymentMapper.xml",
                     configuration.getSqlFragments()).parse();
         }
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -102,11 +107,257 @@ class PaymentFlowListMapperIntegrationTest {
             PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
             assertEquals("PRE-DETAIL",
                     mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getPrepayOrderNo());
+            assertEquals("HOME_CLEAN",
+                    mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getPayScene());
+            assertEquals("HOME_CLEAN", mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPayScene());
+            assertEquals("HOME_CLEAN", mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getPayScene());
+            assertEquals("HOME_CLEAN", mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getPayScene());
+            PaymentFlowQueryDTO query = new PaymentFlowQueryDTO();
+            query.setPaymentOrderId("PAY-DETAIL");
+            for (PaymentFlowListItemDTO item : mapper.findAllForExport(query)) {
+                if (!"FLOW-ROUTE-ORPHAN".equals(item.getFlowNo())) {
+                    assertEquals("HOME_CLEAN", item.getPayScene());
+                }
+            }
             assertEquals("FLOW-SAME",
                     mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPaymentRequestNo());
             assertNull(mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getBillNo());
             assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getPrepayOrderNo());
             assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-ROUTE-ORPHAN").getPaymentRequestNo());
+        }
+    }
+
+    @Test
+    void shouldNotTreatRefundOrVirtualEventFlowAsStandardOrder() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertEquals("ORD-DETAIL", mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_payment_event SET event_type = 'REFUND_SUBMIT' "
+                    + "WHERE event_no = 'FLOW-EVENT'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_payment_event SET event_type = 'payment_success' "
+                    + "WHERE event_no = 'FLOW-EVENT'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_payment_event SET event_type = 'PAYMENT_SUCCESS' "
+                    + "WHERE event_no = 'FLOW-EVENT'");
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'VIRTUAL' "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'STANDARD_ORDER', "
+                    + "order_no = 'OTHER-ORDER' WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-DETAIL' "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertEquals("ORD-DETAIL", mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getStandardOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotLinkVirtualPaymentFlowToCollidingStandardOrder() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertEquals("ORD-DETAIL", mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getStandardOrderNo());
+            assertEquals("ORD-DETAIL", mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getStandardOrderNo());
+            assertEquals("ORD-DETAIL", mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'VIRTUAL' "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getStandardOrderNo());
+            assertNull(mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getStandardOrderNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'standard_order' "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getStandardOrderNo());
+            assertNull(mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getStandardOrderNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET source_kind = 'STANDARD_ORDER', "
+                    + "order_no = 'OTHER-ORDER' WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getStandardOrderNo());
+            assertNull(mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getStandardOrderNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getStandardOrderNo());
+
+            statement.executeUpdate("UPDATE t_prepay_order SET order_no = 'ORD-DETAIL' "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.clearCache();
+            assertEquals("ORD-DETAIL", mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getStandardOrderNo());
+            assertEquals("ORD-DETAIL", mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getStandardOrderNo());
+            assertEquals("ORD-DETAIL", mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getStandardOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotReadFlowDetailThroughNumberAlias() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertEquals("FLOW-SAME", mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getFlowNo());
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "flow-same"));
+            assertNull(mapper.findDetail("CHANNEL_NOTIFY", "flow-notify"));
+            assertNull(mapper.findDetail("ROUTE_RECORD", "flow-same"));
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "flow-event"));
+        }
+    }
+
+    @Test
+    void shouldNotJoinRouteToAttemptThroughNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_route_record SET attempt_no = 'flow-same' "
+                    + "WHERE route_no = 'FLOW-SAME'");
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getRouteNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPrepayOrderNo());
+            PaymentFlowListItemDTO route = mapper.findAllForExport(new PaymentFlowQueryDTO()).stream()
+                    .filter(item -> "ROUTE_RECORD".equals(item.getFlowSource())
+                            && "FLOW-SAME".equals(item.getFlowNo()))
+                    .findFirst().orElseThrow(AssertionError::new);
+            assertNull(route.getPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotJoinRouteToAttemptFromAnotherPayment() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_route_record SET payment_order_id = 'PAY-OTHER' "
+                    + "WHERE route_no = 'FLOW-SAME'");
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getRouteNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPrepayOrderNo());
+            PaymentFlowListItemDTO route = mapper.findAllForExport(new PaymentFlowQueryDTO()).stream()
+                    .filter(item -> "ROUTE_RECORD".equals(item.getFlowSource())
+                            && "FLOW-SAME".equals(item.getFlowNo()))
+                    .findFirst().orElseThrow(AssertionError::new);
+            assertNull(route.getPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotJoinRouteToAttemptThroughPaymentNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_route_record SET payment_order_id = 'pay-detail' "
+                    + "WHERE route_no = 'FLOW-SAME'");
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getRouteNo());
+            assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPrepayOrderNo());
+            PaymentFlowListItemDTO route = mapper.findAllForExport(new PaymentFlowQueryDTO()).stream()
+                    .filter(item -> "ROUTE_RECORD".equals(item.getFlowSource())
+                            && "FLOW-SAME".equals(item.getFlowNo()))
+                    .findFirst().orElseThrow(AssertionError::new);
+            assertNull(route.getPrepayOrderNo());
+        }
+    }
+
+    @Test
+    void shouldNotAttributePrepayFromAnotherPayment() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_prepay_order SET payment_order_id = 'PAY-OTHER' "
+                    + "WHERE prepay_order_no = 'PRE-DETAIL'");
+            assertNoForeignPrepayAttribution(session.getMapper(PaymentFlowMapper.class), true);
+        }
+    }
+
+    @Test
+    void shouldNotAttributePrepayThroughNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_attempt SET prepay_order_no = 'pre-detail' "
+                    + "WHERE attempt_no = 'FLOW-SAME'");
+            assertNoForeignPrepayAttribution(session.getMapper(PaymentFlowMapper.class), false);
+        }
+    }
+
+    @Test
+    void shouldNotAttributePrepayThroughPaymentNumberAlias() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_prepay_order SET payment_order_id = 'pay-detail' "
+                    + "WHERE prepay_order_no = 'PRE-DETAIL'");
+            assertNoForeignPrepayAttribution(session.getMapper(PaymentFlowMapper.class), true);
+        }
+    }
+
+    private void assertNoForeignPrepayAttribution(PaymentFlowMapper mapper, boolean ownerMismatch) {
+        PaymentFlowQueryDTO query = new PaymentFlowQueryDTO();
+        for (PaymentFlowListItemDTO item : mapper.findAllForExport(query)) {
+            if ("PAY-DETAIL".equals(item.getPaymentOrderId())
+                    && (ownerMismatch || "PAYMENT_ATTEMPT".equals(item.getFlowSource())
+                            || "ROUTE_RECORD".equals(item.getFlowSource()))) {
+                assertNull(item.getPayScene());
+            }
+        }
+        assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getBillNo());
+        assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getBillNo());
+        assertNull(mapper.findDetail("PAYMENT_ATTEMPT", "FLOW-SAME").getPayScene());
+        assertNull(mapper.findDetail("ROUTE_RECORD", "FLOW-SAME").getPayScene());
+        if (ownerMismatch) {
+            assertNull(mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getPayScene());
+            assertNull(mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getPayScene());
+        } else {
+            assertEquals("HOME_CLEAN", mapper.findDetail("CHANNEL_NOTIFY", "FLOW-NOTIFY").getPayScene());
+            assertEquals("HOME_CLEAN", mapper.findDetail("BUSINESS_EVENT", "FLOW-EVENT").getPayScene());
+        }
+    }
+
+    @Test
+    void shouldProjectOwningPaymentSuccessFactIssueAcrossFlowsAndDetails() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET status = 'SUCCESS', status_type = 'success', "
+                    + "channel_transaction_no = 'CH-DETAIL', created_at = '2026-09-12 11:00:00.000', "
+                    + "success_at = '2026-09-12 11:02:00.123' WHERE payment_order_id = 'PAY-DETAIL'");
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '成功', "
+                    + "attempt_status_type = 'success', completed_at = '2026-09-12 11:02:00.122' "
+                    + "WHERE attempt_no = 'FLOW-SAME'");
+            session.commit();
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            PaymentFlowQueryDTO query = new PaymentFlowQueryDTO();
+            query.setPaymentOrderId("PAY-DETAIL");
+            assertEquals(5L, mapper.count(query));
+            for (PaymentFlowListItemDTO item : mapper.findAllForExport(query)) {
+                assertNull(item.getSuccessFactIssue());
+                assertNull(mapper.findDetail(item.getFlowSource(), item.getFlowNo()).getSuccessFactIssue());
+            }
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET completed_at = '2026-09-12 11:02:00.124' "
+                    + "WHERE attempt_no = 'FLOW-SAME'");
+            session.commit();
+            for (PaymentFlowListItemDTO item : mapper.findAllForExport(query)) {
+                assertEquals("SUCCESS_FACT_MISMATCH", item.getSuccessFactIssue());
+                assertEquals(item.getSuccessFactIssue(),
+                        mapper.findDetail(item.getFlowSource(), item.getFlowNo()).getSuccessFactIssue());
+            }
+            assertEquals("SUCCESS_FACT_MISMATCH", mapper.findAll(query).get(0).getSuccessFactIssue());
+
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = NULL "
+                    + "WHERE payment_order_id = 'PAY-DETAIL'");
+            session.commit();
+            for (PaymentFlowListItemDTO item : mapper.findAllForExport(query)) {
+                assertEquals("SUCCESS_TIME_MISSING", item.getSuccessFactIssue());
+                assertEquals(item.getSuccessFactIssue(),
+                        mapper.findDetail(item.getFlowSource(), item.getFlowNo()).getSuccessFactIssue());
+            }
+            PaymentFlowQueryDTO orphanQuery = new PaymentFlowQueryDTO();
+            orphanQuery.setPaymentOrderId("PAY-CROSS-ATTEMPT");
+            assertNull(mapper.findAll(orphanQuery).get(0).getSuccessFactIssue());
         }
     }
 
@@ -126,7 +377,10 @@ class PaymentFlowListMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "payment_order_id VARCHAR(64) PRIMARY KEY, order_no VARCHAR(64), "
-                    + "channel_code VARCHAR(64), payment_method VARCHAR(32))");
+                    + "amount DECIMAL(18,2) DEFAULT 1.00, "
+                    + "channel_code VARCHAR(64), channel_transaction_no VARCHAR(64), "
+                    + "payment_method VARCHAR(32), status VARCHAR(32), status_type VARCHAR(32), "
+                    + "created_at DATETIME(3), success_at DATETIME(3))");
             statement.execute("CREATE TABLE t_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64), customer_name VARCHAR(64), "
                     + "service_type VARCHAR(32), worker_name VARCHAR(64), order_amount DECIMAL(18,2), "
@@ -137,27 +391,30 @@ class PaymentFlowListMapperIntegrationTest {
                     + "bill_amount DECIMAL(18,2), paid_amount DECIMAL(18,2), bill_status VARCHAR(32), "
                     + "bill_status_type VARCHAR(32), due_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), bill_no VARCHAR(64), order_no VARCHAR(64), created_at DATETIME)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR_IGNORECASE(64), "
+                    + "payment_order_id VARCHAR_IGNORECASE(64), bill_no VARCHAR(64), order_no VARCHAR(64), "
+                    + "amount DECIMAL(18,2), pay_scene VARCHAR(64), created_at DATETIME, "
+                    + "source_kind VARCHAR(16) DEFAULT 'STANDARD_ORDER')");
             statement.execute("CREATE TABLE t_payment_attempt ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, attempt_no VARCHAR(64), payment_order_id VARCHAR(64), "
-                    + "prepay_order_no VARCHAR(64), channel_code VARCHAR(64), terminal VARCHAR(32), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, attempt_no VARCHAR_IGNORECASE(64), "
+                    + "payment_order_id VARCHAR_IGNORECASE(64), "
+                    + "prepay_order_no VARCHAR_IGNORECASE(64), channel_code VARCHAR(64), terminal VARCHAR(32), "
                     + "client_ip VARCHAR(64), idempotency_key VARCHAR(128), attempt_status VARCHAR(32), "
                     + "attempt_status_type VARCHAR(32), request_payload VARCHAR(2048), response_payload VARCHAR(2048), "
                     + "payment_method VARCHAR(32), source_app_id VARCHAR(64), "
-                    + "ops_config_snapshot_version BIGINT, completed_at DATETIME, created_at DATETIME)");
+                    + "ops_config_snapshot_version BIGINT, completed_at DATETIME(3), created_at DATETIME(3))");
             statement.execute("CREATE TABLE t_payment_notify_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, notify_no VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, notify_no VARCHAR_IGNORECASE(64), payment_order_id VARCHAR(64), "
                     + "channel_code VARCHAR(64), notify_status VARCHAR(32), notify_status_type VARCHAR(32), "
                     + "notify_type VARCHAR(32), notify_payload VARCHAR(2048), notify_result VARCHAR(2048), "
                     + "created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_record ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, route_no VARCHAR(64), attempt_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, route_no VARCHAR_IGNORECASE(64), attempt_no VARCHAR(64), "
+                    + "payment_order_id VARCHAR_IGNORECASE(64), "
                     + "channel_code VARCHAR(64), route_result VARCHAR(128), route_rule VARCHAR(128), "
                     + "ops_config_snapshot_version BIGINT, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR_IGNORECASE(64), payment_order_id VARCHAR(64), "
                     + "biz_no VARCHAR(64), event_type VARCHAR(64), downstream_system VARCHAR(256), "
                     + "event_topic VARCHAR(128), publish_status VARCHAR(32), retry_count INT, "
                     + "event_payload VARCHAR(2048), created_at DATETIME)");
@@ -196,8 +453,11 @@ class PaymentFlowListMapperIntegrationTest {
                     + "(payment_order_id, order_no, channel_code, payment_method) "
                     + "VALUES ('PAY-DETAIL', 'ORD-DETAIL', 'wx_h5', '微信')");
             statement.executeUpdate("INSERT INTO t_prepay_order "
-                    + "(prepay_order_no, payment_order_id, bill_no, order_no, created_at) "
-                    + "VALUES ('PRE-DETAIL', 'PAY-DETAIL', 'BILL-DETAIL', 'ORD-DETAIL', '2026-09-12 11:00:00')");
+                    + "(prepay_order_no, payment_order_id, bill_no, order_no, pay_scene, created_at) "
+                    + "VALUES ('PRE-DETAIL', 'PAY-DETAIL', 'BILL-DETAIL', 'ORD-DETAIL', 'HOME_CLEAN', "
+                    + "'2026-09-12 11:00:00')");
+            statement.executeUpdate("UPDATE t_prepay_order SET amount = "
+                    + "(SELECT amount FROM t_payment_order WHERE payment_order_id = t_prepay_order.payment_order_id)");
             statement.executeUpdate("INSERT INTO t_payment_attempt "
                     + "(attempt_no, payment_order_id, prepay_order_no, channel_code, terminal, client_ip, "
                     + "idempotency_key, attempt_status, attempt_status_type, request_payload, response_payload, "

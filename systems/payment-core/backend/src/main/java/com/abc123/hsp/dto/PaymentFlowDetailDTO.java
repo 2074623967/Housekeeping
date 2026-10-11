@@ -14,12 +14,21 @@ public class PaymentFlowDetailDTO {
     private String flowNo;
     /** 关联支付单号。 */
     private String paymentOrderId;
+    private String successFactIssue;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 关联业务订单号。 */
     private String orderNo;
     /** 真实存在于标准订单表中的订单号。 */
     private String standardOrderNo;
     /** 可精确关联的预付单号。 */
     private String prepayOrderNo;
+    /** 支付业务场景。 */
+    private String payScene;
     /** 可精确关联的账单号。 */
     private String billNo;
     /** 可精确关联的支付请求号。 */

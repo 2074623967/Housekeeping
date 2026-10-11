@@ -14,6 +14,13 @@ public class PaymentEventDetailDTO {
     private String eventType;
     /** 关联支付单号。 */
     private String paymentOrderId;
+    private String successFactIssue;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 关联业务单号。 */
     private String bizNo;
     /** 真实存在于标准订单表中的订单号。 */

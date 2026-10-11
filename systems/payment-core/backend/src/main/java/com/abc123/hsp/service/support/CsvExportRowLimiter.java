@@ -16,9 +16,14 @@ public final class CsvExportRowLimiter {
         if (rows == null) {
             return Collections.emptyList();
         }
-        if (rows.size() > MAX_ROWS) {
+        requireWithinLimit(rows.size());
+        return rows;
+    }
+
+    public static int requireWithinLimit(int rowCount) {
+        if (rowCount > MAX_ROWS) {
             throw new IllegalArgumentException("导出数据超过1000条，请缩小筛选范围");
         }
-        return rows;
+        return rowCount;
     }
 }

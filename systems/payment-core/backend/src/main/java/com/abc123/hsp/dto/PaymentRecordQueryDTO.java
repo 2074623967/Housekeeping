@@ -10,7 +10,7 @@ public class PaymentRecordQueryDTO {
 
     /** 记录维度：ALL、WECHAT、BANK_CARD。 */
     private String recordType = "ALL";
-    /** 用户 ID。 */
+    /** 历史查询字段名，实际按客户姓名筛选。 */
     private String userId;
     /** 业务订单号/商户订单号。 */
     private String businessOrderNo;

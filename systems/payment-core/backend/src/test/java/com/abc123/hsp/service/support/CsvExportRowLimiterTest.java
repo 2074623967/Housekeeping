@@ -34,4 +34,12 @@ class CsvExportRowLimiterTest {
 
         assertTrue(exception.getMessage().contains("超过1000条"));
     }
+
+    @Test
+    void shouldCheckCombinedRowCount() {
+        assertEquals(1000, CsvExportRowLimiter.requireWithinLimit(1000));
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class, () -> CsvExportRowLimiter.requireWithinLimit(1001));
+        assertTrue(exception.getMessage().contains("超过1000条"));
+    }
 }

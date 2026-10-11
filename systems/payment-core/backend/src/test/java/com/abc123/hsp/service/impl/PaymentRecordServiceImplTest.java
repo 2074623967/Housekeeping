@@ -167,7 +167,11 @@ class PaymentRecordServiceImplTest {
         row.setSerialNo(1L);
         row.setPaymentOrderId("=PAY-001");
         row.setBusinessOrderNo("ORDER-\"001");
+        row.setPayScene("HOME_CLEAN");
         row.setPaymentAmount("¥100.00");
+        row.setProductName("＝SUM(A1:A2)");
+        row.setPaymentStatus("成功");
+        row.setStatusType("success");
         row.setRefundCount(1);
         row.setUserPaymentChannelId("channel-user-张女士");
         row.setUserId("user-张女士");
@@ -175,8 +179,16 @@ class PaymentRecordServiceImplTest {
 
         String csv = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).exportCsv(query);
 
-        assertTrue(csv.startsWith("\uFEFF序号,支付单号"));
+        assertTrue(csv.startsWith("\uFEFF序号,支付单号,业务链路"));
+        assertTrue(csv.contains("\"CHAIN-=PAY-001\""));
+        assertTrue(csv.contains("业务订单号,支付场景,支付请求号"));
+        assertTrue(csv.contains("支付网关,支付渠道,支付类型"));
+        assertTrue(csv.contains("待核查成功退款笔数,预付归属异常类型"));
+        assertTrue(csv.contains("HOME_CLEAN"));
+        assertTrue(csv.contains("支付状态,支付状态样式,银行名"));
+        assertTrue(csv.contains("\"成功\",\"success\""));
         assertTrue(csv.contains("\"'=PAY-001\""));
+        assertTrue(csv.contains("\"'＝SUM(A1:A2)\""));
         assertTrue(csv.contains("\"ORDER-\"\"001\""));
         assertTrue(csv.contains("\"channel-****\""));
         assertTrue(csv.contains("\"user-****\""));
@@ -187,6 +199,23 @@ class PaymentRecordServiceImplTest {
         assertEquals("=PAY-001", row.getPaymentOrderId());
         assertEquals("user-张女士", row.getUserId());
         verify(paymentRecordMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldExportAmbiguousPrepayBindingWithoutInferredScene() {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        PaymentRecordRowDTO row = new PaymentRecordRowDTO();
+        row.setPaymentOrderId("PAY-AMBIGUOUS");
+        row.setPaymentType("未分类");
+        row.setPrepayBindingIssue("MULTIPLE_PREPAY_BINDINGS");
+        when(paymentRecordMapper.findAllForExport(query)).thenReturn(Collections.singletonList(row));
+
+        String csv = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).exportCsv(query);
+
+        assertTrue(csv.contains("\"PAY-AMBIGUOUS\""));
+        assertTrue(csv.contains("\"未分类\""));
+        assertTrue(csv.contains("\"MULTIPLE_PREPAY_BINDINGS\""));
+        assertTrue(csv.contains("待核查成功退款笔数,预付归属异常类型"));
     }
 
     @Test
@@ -201,5 +230,23 @@ class PaymentRecordServiceImplTest {
                 () -> new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).exportCsv(query));
 
         assertEquals("导出数据超过1000条，请缩小筛选范围", exception.getMessage());
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingPaymentRecordsWithNullQuery() {
+        when(paymentRecordMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentRecordQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentRecordMapper.count(org.mockito.ArgumentMatchers.any(PaymentRecordQueryDTO.class)))
+                .thenReturn(0L);
+
+        PageResultDTO<PaymentRecordRowDTO> result =
+                new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<PaymentRecordQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentRecordQueryDTO.class);
+        verify(paymentRecordMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 }

@@ -36,6 +36,7 @@ public class PaymentRecordController {
     public ApiResponse<PageResultDTO<PaymentRecordRowDTO>> list(
             @RequestParam(defaultValue = "ALL") String recordType,
             @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String customerName,
             @RequestParam(required = false) String businessOrderNo,
             @RequestParam(required = false) String paymentType,
             @RequestParam(defaultValue = "全部") String paymentStatus,
@@ -46,7 +47,7 @@ public class PaymentRecordController {
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
         query.setRecordType(recordType);
-        query.setUserId(userId);
+        query.setUserId(resolveCustomerName(customerName, userId));
         query.setBusinessOrderNo(businessOrderNo);
         query.setPaymentType(paymentType);
         query.setPaymentStatus(paymentStatus);
@@ -65,6 +66,7 @@ public class PaymentRecordController {
     public ResponseEntity<byte[]> export(
             @RequestParam(defaultValue = "ALL") String recordType,
             @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String customerName,
             @RequestParam(required = false) String businessOrderNo,
             @RequestParam(required = false) String paymentType,
             @RequestParam(defaultValue = "全部") String paymentStatus,
@@ -73,7 +75,7 @@ public class PaymentRecordController {
             @RequestParam(defaultValue = "desc") String sortOrder) {
         PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
         query.setRecordType(recordType);
-        query.setUserId(userId);
+        query.setUserId(resolveCustomerName(customerName, userId));
         query.setBusinessOrderNo(businessOrderNo);
         query.setPaymentType(paymentType);
         query.setPaymentStatus(paymentStatus);
@@ -93,5 +95,12 @@ public class PaymentRecordController {
     @GetMapping("/{paymentOrderId}")
     public ApiResponse<PaymentRecordDetailDTO> detail(@PathVariable String paymentOrderId) {
         return ApiResponse.success(paymentRecordService.detail(paymentOrderId));
+    }
+
+    private String resolveCustomerName(String customerName, String legacyUserId) {
+        if (customerName != null && legacyUserId != null) {
+            throw new IllegalArgumentException("客户姓名与历史 userId 筛选参数不能同时提供");
+        }
+        return customerName != null ? customerName : legacyUserId;
     }
 }

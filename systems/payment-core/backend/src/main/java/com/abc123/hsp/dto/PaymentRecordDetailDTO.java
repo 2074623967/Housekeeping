@@ -17,10 +17,6 @@ public class PaymentRecordDetailDTO extends PaymentRecordRowDTO {
     private String latestClientIp;
     /** 最近一次支付尝试的幂等键。 */
     private String latestIdempotencyKey;
-    /** 最近一次支付尝试的状态。 */
-    private String latestAttemptStatus;
-    /** 最近一次支付尝试的状态样式。 */
-    private String latestAttemptStatusType;
     /** 最近一次支付请求报文。 */
     private String latestRequestPayload;
     /** 最近一次支付响应报文。 */

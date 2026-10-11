@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.List;
 import lombok.Data;
 
@@ -23,6 +24,12 @@ public class PaymentDetailDTO {
     private String customerName;
     /** 支付单应收金额。 */
     private String amount;
+    @JsonIgnore
+    private Boolean prepayAmountBindingValid;
+    @JsonIgnore
+    private String sourceKind;
+    /** 支付场景。 */
+    private String payScene;
     /** 用户本次选择的支付方式。 */
     private String paymentMethod;
     /** 实际命中的支付渠道。 */
@@ -73,6 +80,10 @@ public class PaymentDetailDTO {
     private String successAt;
     /** 支付单创建时间。 */
     private String createdAt;
+    @JsonIgnore
+    private Boolean paymentFactTimelineValid;
+    @JsonIgnore
+    private Boolean paymentSubmissionChannelValid;
     /** 支付路由执行轨迹。 */
     private List<String> routeLogs;
     /** 支付回调处理轨迹。 */

@@ -34,6 +34,7 @@ class PaymentLogServiceImplTest {
     void shouldNormalizeAndReturnDetail() {
         PaymentLogDetailDTO detail = new PaymentLogDetailDTO();
         detail.setLogNo("LOG-001");
+        detail.setPaymentOrderId("PAY-001");
         when(paymentLogMapper.findDetail("LOG-001")).thenReturn(detail);
 
         PaymentLogDetailDTO result = new PaymentLogServiceImpl(paymentLogMapper).detail(" LOG-001 ");
@@ -111,6 +112,7 @@ class PaymentLogServiceImplTest {
         PaymentLogQueryDTO query = new PaymentLogQueryDTO();
         PaymentLogListItemDTO item = new PaymentLogListItemDTO();
         item.setLogNo("LOG-001");
+        item.setPaymentOrderId("PAY-001");
         when(paymentLogMapper.findAll(query))
                 .thenReturn(java.util.Arrays.asList((PaymentLogListItemDTO) null, item));
         when(paymentLogMapper.count(query)).thenReturn(1L);
@@ -179,6 +181,9 @@ class PaymentLogServiceImplTest {
         query.setKeyword(" 回调 ");
         PaymentLogListItemDTO item = new PaymentLogListItemDTO();
         item.setLogNo("LOG-001");
+        item.setPaymentOrderId("PAY-001");
+        item.setLogLevel("ERROR");
+        item.setLogLevelType("danger");
         item.setMessage("{\"trace\":\"ok\"}");
         when(paymentLogMapper.findAllForExport(query))
                 .thenReturn(java.util.Arrays.asList((PaymentLogListItemDTO) null, item));
@@ -188,6 +193,11 @@ class PaymentLogServiceImplTest {
         assertEquals("payment-core", query.getSource());
         assertEquals("回调", query.getKeyword());
         assertTrue(csv.contains("LOG-001"));
+        assertTrue(csv.contains("支付单号,业务链路,订单号"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
+        assertTrue(csv.contains("\"ERROR\",\"danger\""));
+        assertTrue(csv.contains("创建时间,支付单成功事实异常类型\n"));
+        assertTrue(csv.endsWith(",\"\"\n"));
         assertTrue(csv.contains("\"{\"\"trace\"\":\"\"ok\"\"}\""));
         verify(paymentLogMapper).findAllForExport(query);
     }
@@ -212,6 +222,23 @@ class PaymentLogServiceImplTest {
         assertEquals(3, result.getCallbackErrorCount());
         assertEquals(0, result.getEventWarnCount());
         verify(paymentLogMapper).findOverviewSummary(query);
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingPaymentLogsWithNullQuery() {
+        when(paymentLogMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentLogQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentLogMapper.count(org.mockito.ArgumentMatchers.any(PaymentLogQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<PaymentLogListItemDTO> result =
+                new PaymentLogServiceImpl(paymentLogMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<PaymentLogQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentLogQueryDTO.class);
+        verify(paymentLogMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     private String repeat(String value, int times) {

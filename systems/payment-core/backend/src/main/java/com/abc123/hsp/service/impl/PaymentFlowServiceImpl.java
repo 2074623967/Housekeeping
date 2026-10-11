@@ -11,6 +11,7 @@ import com.abc123.hsp.service.PaymentFlowService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collections;
@@ -74,7 +75,7 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
 
     @Override
     public PageResultDTO<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskItems(paymentFlowMapper.findAll(query)),
                 paymentFlowMapper.count(query),
@@ -85,17 +86,19 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
 
     @Override
     public String exportCsv(PaymentFlowQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentFlowListItemDTO> items = maskItems(
                 CsvExportRowLimiter.requireWithinLimit(paymentFlowMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("流水来源,流水编号,支付单号,订单号,预付单号,流水类型,类型标签,渠道编码,终端,客户端IP,幂等键,业务状态,状态类型,通知类型,路由规则,下游系统,事件主题,发布状态,重试次数,请求报文,响应报文,摘要,创建时间\n");
+        builder.append("流水来源,流水编号,支付单号,业务链路,订单号,预付单号,支付场景,流水类型,类型标签,渠道编码,终端,客户端IP,幂等键,业务状态,状态类型,通知类型,路由规则,下游系统,事件主题,发布状态,重试次数,请求报文,响应报文,摘要,创建时间,支付单成功事实异常类型\n");
         for (PaymentFlowListItemDTO item : items) {
             builder.append(csvCell(item.getFlowSource())).append(',')
                     .append(csvCell(item.getFlowNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBusinessChainId())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
+                    .append(csvCell(item.getPayScene())).append(',')
                     .append(csvCell(item.getFlowType())).append(',')
                     .append(csvCell(item.getFlowTypeTag())).append(',')
                     .append(csvCell(item.getChannelCode())).append(',')
@@ -113,7 +116,8 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
                     .append(csvCell(item.getRequestPayload())).append(',')
                     .append(csvCell(item.getResponsePayload())).append(',')
                     .append(csvCell(item.getSummary())).append(',')
-                    .append(csvCell(item.getCreatedAt())).append('\n');
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getSuccessFactIssue())).append('\n');
         }
         return builder.toString();
     }
@@ -141,7 +145,10 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
         return copy;
     }
 
-    private void normalizeQuery(PaymentFlowQueryDTO query) {
+    private PaymentFlowQueryDTO normalizeQuery(PaymentFlowQueryDTO query) {
+        if (query == null) {
+            query = new PaymentFlowQueryDTO();
+        }
         query.setPaymentOrderId(normalizeOptionalQueryField(
                 query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
         query.setOrderNo(normalizeOptionalQueryField(
@@ -156,10 +163,11 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
                 query.getBusinessStatus(), BUSINESS_STATUS_MAX_LENGTH, "业务状态", null));
         query.setKeyword(normalizeOptionalQueryField(
                 query.getKeyword(), KEYWORD_MAX_LENGTH, "关键字", null));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     private String normalizeOptionalQueryField(

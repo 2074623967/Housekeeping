@@ -26,6 +26,8 @@ public interface PaymentMonitorMapper {
      */
     List<PaymentChannelMetricDTO> findChannelMetrics();
 
+    List<PaymentChannelMetricDTO> findChannelMetricsForExport();
+
     /**
      * 查询待处理异常告警。
      */

@@ -12,6 +12,7 @@ import com.abc123.hsp.service.PaymentRecordService;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.QuerySortInputNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,7 +57,7 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
 
     @Override
     public PageResultDTO<PaymentRecordRowDTO> list(PaymentRecordQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         return new PageResultDTO<>(
                 maskRows(paymentRecordMapper.findAll(query)),
                 paymentRecordMapper.count(query),
@@ -67,18 +68,20 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
 
     @Override
     public String exportCsv(PaymentRecordQueryDTO query) {
-        normalizeQuery(query);
+        query = normalizeQuery(query);
         List<PaymentRecordRowDTO> rows = maskRows(CsvExportRowLimiter.requireWithinLimit(
                 paymentRecordMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("序号,支付单号,业务订单号,支付请求号,应用来源ID,业务线ID,外部交易流水号,")
-                .append("支付通道,支付渠道,支付类型,支付状态,银行名,卡号,渠道返回码,返参类型,")
+        builder.append("序号,支付单号,业务链路,业务订单号,支付场景,支付请求号,应用来源ID,业务线ID,外部交易流水号,")
+                .append("支付网关,支付渠道,支付类型,支付状态,支付状态样式,银行名,卡号,渠道返回码,返参类型,")
                 .append("参数值,有效期,支付金额,退款次数,已退金额,商品名称,用户支付渠道唯一标识,")
-                .append("收款账号,通知地址,回调MQ主题,失效时间,创建时间,更新时间,支付成功时间,用户ID\n");
+                .append("收款账号,通知地址,支付成功事件主题,失效时间,创建时间,更新时间,支付成功时间,用户ID,支付单成功事实异常类型,待核查成功退款笔数,预付归属异常类型\n");
         for (PaymentRecordRowDTO row : rows) {
             builder.append(csvCell(row.getSerialNo())).append(',')
                     .append(csvCell(row.getPaymentOrderId())).append(',')
+                    .append(csvCell(row.getBusinessChainId())).append(',')
                     .append(csvCell(row.getBusinessOrderNo())).append(',')
+                    .append(csvCell(row.getPayScene())).append(',')
                     .append(csvCell(row.getPaymentRequestNo())).append(',')
                     .append(csvCell(row.getApplicationSourceId())).append(',')
                     .append(csvCell(row.getBusinessLineId())).append(',')
@@ -87,6 +90,7 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                     .append(csvCell(row.getPaymentChannel())).append(',')
                     .append(csvCell(row.getPaymentType())).append(',')
                     .append(csvCell(row.getPaymentStatus())).append(',')
+                    .append(csvCell(row.getStatusType())).append(',')
                     .append(csvCell(row.getBankName())).append(',')
                     .append(csvCell(row.getCardNo())).append(',')
                     .append(csvCell(row.getChannelReturnCode())).append(',')
@@ -105,16 +109,22 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                     .append(csvCell(row.getCreatedAt())).append(',')
                     .append(csvCell(row.getUpdatedAt())).append(',')
                     .append(csvCell(row.getPaidAt())).append(',')
-                    .append(csvCell(row.getUserId())).append('\n');
+                    .append(csvCell(row.getUserId())).append(',')
+                    .append(csvCell(row.getSuccessFactIssue())).append(',')
+                    .append(csvCell(row.getUnverifiedRefundCount())).append(',')
+                    .append(csvCell(row.getPrepayBindingIssue())).append('\n');
         }
         return builder.toString();
     }
 
-    private void normalizeQuery(PaymentRecordQueryDTO query) {
+    private PaymentRecordQueryDTO normalizeQuery(PaymentRecordQueryDTO query) {
+        if (query == null) {
+            query = new PaymentRecordQueryDTO();
+        }
         query.setRecordType(normalizeOptionalQueryField(
                 query.getRecordType(), RECORD_TYPE_MAX_LENGTH, "记录维度", "ALL"));
         query.setUserId(normalizeOptionalQueryField(
-                query.getUserId(), USER_ID_MAX_LENGTH, "用户ID", null));
+                query.getUserId(), USER_ID_MAX_LENGTH, "客户姓名", null));
         query.setBusinessOrderNo(normalizeOptionalQueryField(
                 query.getBusinessOrderNo(), BUSINESS_ORDER_NO_MAX_LENGTH, "业务订单号", null));
         query.setPaymentType(normalizeOptionalQueryField(
@@ -123,10 +133,11 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                 query.getPaymentStatus(), PAYMENT_STATUS_MAX_LENGTH, "支付状态", "全部"));
         query.setPaymentChannel(normalizeOptionalQueryField(
                 query.getPaymentChannel(), PAYMENT_CHANNEL_MAX_LENGTH, "支付渠道", null));
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setSortField(QuerySortInputNormalizer.normalizeSortField(query.getSortField(), "createdAt"));
+        query.setSortOrder(QuerySortInputNormalizer.normalizeSortOrder(query.getSortOrder(), "desc"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
     }
 
     @Override

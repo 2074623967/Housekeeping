@@ -12,8 +12,17 @@ public class PaymentRequestDetailDTO {
     private String requestNo;
     /** 关联支付单号。 */
     private String paymentOrderId;
+    private String successFactIssue;
+
+    /** 跨系统业务链路 ID，按支付单稳定派生为 CHAIN-{paymentOrderId}。 */
+    public String getBusinessChainId() {
+        return paymentOrderId == null || paymentOrderId.trim().isEmpty()
+                ? null : "CHAIN-" + paymentOrderId.trim();
+    }
     /** 本次尝试关联的预付单号。 */
     private String prepayOrderNo;
+    /** 支付业务场景。 */
+    private String payScene;
     /** 支付单记录的业务订单号。 */
     private String orderNo;
     /** 真实存在于标准订单表中的订单号。 */

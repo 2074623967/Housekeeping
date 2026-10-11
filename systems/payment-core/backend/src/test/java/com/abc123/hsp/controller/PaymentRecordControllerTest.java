@@ -1,11 +1,14 @@
 package com.abc123.hsp.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.service.PaymentRecordService;
@@ -30,9 +33,19 @@ class PaymentRecordControllerTest {
     void shouldListPaymentRecords() {
         PaymentRecordController controller = new PaymentRecordController(paymentRecordService);
 
-        controller.list("ALL", "USER-001", "ORD-001", "消费支付", "支付成功", "wx_jsapi", "createdAt", "desc", 1, 20);
+        controller.list("ALL", null, "张女士", "ORD-001", "消费支付", "支付成功", "wx_jsapi", "createdAt", "desc", 1, 20);
 
-        verify(paymentRecordService).list(any(PaymentRecordQueryDTO.class));
+        verify(paymentRecordService).list(argThat(query -> "张女士".equals(query.getUserId())));
+    }
+
+    @Test
+    void shouldKeepLegacyCustomerNameFilterAndRejectAmbiguousParameters() {
+        PaymentRecordController controller = new PaymentRecordController(paymentRecordService);
+
+        controller.list("ALL", "李女士", null, null, null, "全部", null, "createdAt", "desc", 1, 20);
+        verify(paymentRecordService).list(argThat(query -> "李女士".equals(query.getUserId())));
+        assertThrows(IllegalArgumentException.class, () -> controller.list(
+                "ALL", "李女士", "张女士", null, null, "全部", null, "createdAt", "desc", 1, 20));
     }
 
     @Test
@@ -51,13 +64,22 @@ class PaymentRecordControllerTest {
         PaymentRecordController controller = new PaymentRecordController(paymentRecordService);
 
         ResponseEntity<byte[]> response = controller.export(
-                "ALL", "USER-001", "ORD-001", "消费支付", "支付成功",
+                "ALL", null, "张女士", "ORD-001", "消费支付", "支付成功",
                 "wx_jsapi", "createdAt", "desc");
 
         assertEquals("attachment; filename=payment-records.csv",
                 response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
         assertEquals("text/csv;charset=UTF-8", response.getHeaders().getContentType().toString());
         assertArrayEquals("\uFEFF序号,支付单号\n".getBytes(StandardCharsets.UTF_8), response.getBody());
-        verify(paymentRecordService).exportCsv(any(PaymentRecordQueryDTO.class));
+        verify(paymentRecordService).exportCsv(argThat(query -> "张女士".equals(query.getUserId())));
+    }
+
+    @Test
+    void shouldRejectAmbiguousExportFiltersBeforeCallingService() {
+        PaymentRecordController controller = new PaymentRecordController(paymentRecordService);
+
+        assertThrows(IllegalArgumentException.class, () -> controller.export(
+                "ALL", "李女士", "张女士", null, null, "全部", null, "createdAt", "desc"));
+        verifyNoInteractions(paymentRecordService);
     }
 }

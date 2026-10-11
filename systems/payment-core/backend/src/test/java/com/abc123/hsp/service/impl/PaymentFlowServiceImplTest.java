@@ -60,6 +60,23 @@ class PaymentFlowServiceImplTest {
     }
 
     @Test
+    void shouldUseDefaultQueryWhenListingPaymentFlowsWithNullQuery() {
+        when(paymentFlowMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentFlowQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentFlowMapper.count(org.mockito.ArgumentMatchers.any(PaymentFlowQueryDTO.class))).thenReturn(0L);
+
+        com.abc123.hsp.dto.PageResultDTO<PaymentFlowListItemDTO> result =
+                new PaymentFlowServiceImpl(paymentFlowMapper).list(null);
+
+        assertEquals(0, result.getTotal());
+        org.mockito.ArgumentCaptor<PaymentFlowQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentFlowQueryDTO.class);
+        verify(paymentFlowMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
+    }
+
+    @Test
     void shouldRejectOversizedPaymentFlowQueryBeforeMapperAccess() {
         PaymentFlowQueryDTO paymentOrderQuery = new PaymentFlowQueryDTO();
         paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
@@ -147,7 +164,9 @@ class PaymentFlowServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         assertEquals(3, query.getPageNo());
         assertEquals(100, query.getPageSize());
-        assertTrue(csv.startsWith("\uFEFF流水来源,流水编号,支付单号,订单号,预付单号,流水类型,类型标签"));
+        assertTrue(csv.startsWith("\uFEFF流水来源,流水编号,支付单号,业务链路,订单号,预付单号,支付场景,流水类型,类型标签"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
+        assertTrue(csv.contains("\"HOME_CLEAN\""));
         assertTrue(csv.contains("\"FLOW-001\""));
         assertTrue(csv.contains("\"首笔\"\"摘要\""));
         assertTrue(csv.contains("\"info\""));
@@ -223,6 +242,7 @@ class PaymentFlowServiceImplTest {
         item.setPaymentOrderId("PAY-001");
         item.setOrderNo("ORD-001");
         item.setPrepayOrderNo("PRE-001");
+        item.setPayScene("HOME_CLEAN");
         item.setFlowType("支付尝试");
         item.setFlowTypeTag("info");
         item.setChannelCode("wx_h5");

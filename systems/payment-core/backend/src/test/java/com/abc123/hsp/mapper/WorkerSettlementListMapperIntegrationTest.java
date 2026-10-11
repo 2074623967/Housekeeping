@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
+import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import java.io.InputStream;
 import java.sql.Date;
@@ -79,6 +80,27 @@ public class WorkerSettlementListMapperIntegrationTest {
                             "SETTLE-STABLE-002",
                             "SETTLE-STABLE-001"),
                     settlementOrderIds(mapper.findWorkerSettlementsForExport(query)));
+        }
+    }
+
+    @Test
+    void shouldReturnZeroOverviewCountsWhenSettlementTableIsEmpty() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("DELETE FROM t_worker_settlement_order");
+            SettlementMapper mapper = session.getMapper(SettlementMapper.class);
+
+            WorkerSettlementOverviewDTO overview = mapper.findWorkerOverview(new WorkerSettlementQueryDTO());
+
+            assertEquals(0L, overview.getTotalSettlementCount());
+            assertEquals(0L, overview.getPendingAuditCount());
+            assertEquals(0L, overview.getPayoutPendingCount());
+            assertEquals(0L, overview.getPayingCount());
+            assertEquals(0L, overview.getPayoutSuccessCount());
+            assertEquals("¥0.00", overview.getTotalNetSettleAmount());
+            assertEquals("¥0.00", overview.getTotalDeductAmount());
+            assertEquals("¥0.00", overview.getTotalDepositImpactAmount());
+            assertEquals(0, overview.getNegativeNetSettleCount());
         }
     }
 

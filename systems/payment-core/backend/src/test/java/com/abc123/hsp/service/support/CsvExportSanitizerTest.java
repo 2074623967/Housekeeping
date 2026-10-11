@@ -15,6 +15,10 @@ class CsvExportSanitizerTest {
         assertEquals("'\t=cmd", CsvExportSanitizer.preventFormula("\t=cmd"));
         assertEquals("'\r=cmd", CsvExportSanitizer.preventFormula("\r=cmd"));
         assertEquals("'\n=cmd", CsvExportSanitizer.preventFormula("\n=cmd"));
+        assertEquals("'＝SUM(A1:A2)", CsvExportSanitizer.preventFormula("＝SUM(A1:A2)"));
+        assertEquals("'＋cmd", CsvExportSanitizer.preventFormula("＋cmd"));
+        assertEquals("'－1", CsvExportSanitizer.preventFormula("－1"));
+        assertEquals("'＠link", CsvExportSanitizer.preventFormula("＠link"));
     }
 
     @Test

@@ -89,6 +89,7 @@ class PaymentEventServiceImplTest {
         query.setPageSize(20);
         PaymentEventListItemDTO item = new PaymentEventListItemDTO();
         item.setEventNo("EVT-001");
+        item.setPaymentOrderId("PAY-001");
         item.setEventPayload("{\"customerName\":\"张女士\",\"phone\":\"13800138000\"}");
         when(paymentEventMapper.findAll(query)).thenReturn(Collections.singletonList(item));
         when(paymentEventMapper.count(query)).thenReturn(1L);
@@ -120,6 +121,22 @@ class PaymentEventServiceImplTest {
 
         assertEquals(1, page.getItems().size());
         assertEquals("EVT-002", page.getItems().get(0).getEventNo());
+    }
+
+    @Test
+    void shouldUseDefaultQueryWhenListingPaymentEventsWithNullQuery() {
+        when(paymentEventMapper.findAll(org.mockito.ArgumentMatchers.any(PaymentEventQueryDTO.class)))
+                .thenReturn(Collections.emptyList());
+        when(paymentEventMapper.count(org.mockito.ArgumentMatchers.any(PaymentEventQueryDTO.class))).thenReturn(0L);
+
+        PageResultDTO<PaymentEventListItemDTO> page = new PaymentEventServiceImpl(paymentEventMapper).list(null);
+
+        assertEquals(0, page.getTotal());
+        org.mockito.ArgumentCaptor<PaymentEventQueryDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(PaymentEventQueryDTO.class);
+        verify(paymentEventMapper).findAll(captor.capture());
+        assertEquals(1, captor.getValue().getPageNo());
+        assertEquals(20, captor.getValue().getPageSize());
     }
 
     @Test
@@ -155,6 +172,21 @@ class PaymentEventServiceImplTest {
                 () -> new PaymentEventServiceImpl(paymentEventMapper)
                         .republish(new PaymentEventRepublishRequestDTO(), new PaymentEventQueryDTO())
         );
+        verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldValidateRepublishQueryBeforeDispatch() {
+        PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
+        request.setEventNo("EVT-001");
+        request.setOperator("finance-ops");
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPaymentOrderId("PAY-001\n");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new PaymentEventServiceImpl(paymentEventMapper, paymentEventDispatchService)
+                        .republish(request, query));
+
         verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
     }
 
@@ -268,6 +300,25 @@ class PaymentEventServiceImplTest {
     }
 
     @Test
+    void shouldRejectCompatibilityRepublishWhenStatusUpdateAffectsMultipleRows() {
+        PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
+        request.setEventNo("EVT-MULTI");
+        request.setOperator("finance-ops");
+        when(paymentEventMapper.markRepublished("EVT-MULTI")).thenReturn(2);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentEventServiceImpl(paymentEventMapper)
+                        .republish(request, new PaymentEventQueryDTO())
+        );
+
+        verify(paymentEventMapper).markRepublished("EVT-MULTI");
+        org.mockito.Mockito.verify(paymentEventMapper, org.mockito.Mockito.never())
+                .updateLastRepublishAudit(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void shouldRejectRepublishWhenDispatchServiceReturnsFalse() {
         PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
         request.setEventNo(" EVT404 ");
@@ -310,7 +361,9 @@ class PaymentEventServiceImplTest {
         query.setPublishStatus(" FAILED_OR_DEAD_LETTER ");
         PaymentEventListItemDTO item = new PaymentEventListItemDTO();
         item.setEventNo("EVT-001");
+        item.setPaymentOrderId("PAY-001");
         item.setPublishStatus("DEAD_LETTER");
+        item.setPublishStatusType("danger");
         item.setPaymentSuccessHttpStage("CLEARING_ACCEPTED");
         item.setLastRepublishOperator("finance-ops");
         item.setLastRepublishedAt("2026-09-10 21:30:00");
@@ -322,6 +375,10 @@ class PaymentEventServiceImplTest {
         assertEquals("FAILED_OR_DEAD_LETTER", query.getPublishStatus());
         assertTrue(csv.contains("EVT-001"));
         assertTrue(csv.contains("DEAD_LETTER"));
+        assertTrue(csv.contains("支付单号,业务链路,业务单号"));
+        assertTrue(csv.contains("\"CHAIN-PAY-001\""));
+        assertTrue(csv.contains("发布状态,发布状态样式,HTTP投递阶段"));
+        assertTrue(csv.contains("\"DEAD_LETTER\",\"danger\",\"CLEARING_ACCEPTED\""));
         assertTrue(csv.contains("HTTP投递阶段"));
         assertTrue(csv.contains("CLEARING_ACCEPTED"));
         assertTrue(csv.contains("finance-ops"));
