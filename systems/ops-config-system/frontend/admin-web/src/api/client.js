@@ -5,6 +5,8 @@ function createRequestError(code, message, cause) {
   return error;
 }
 
+const CLIENT_TIMEOUT_MS = 10000;
+
 function normalizeListPayload(data) {
   const records = Array.isArray(data)
     ? data
@@ -34,17 +36,22 @@ function normalizeSummaryPayload(data) {
 }
 
 async function request(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(url, {
       headers: { "Content-Type": "application/json" },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
       ? "OPS-CONFIG-CLIENT-TIMEOUT"
       : "OPS-CONFIG-CLIENT-NETWORK";
     throw createRequestError(code, error?.name === "AbortError" ? "运营配置服务请求超时" : "无法连接运营配置服务", error);
+  } finally {
+    clearTimeout(timeoutId);
   }
   let payload;
   try {
@@ -77,11 +84,23 @@ export const opsConfigApi = {
   },
   downloadEffectiveSnapshot: ({ businessCode = "", payType = "", terminalType = "" } = {}) => {
     const params = new URLSearchParams({ businessCode, payType, terminalType });
-    return fetch(`/api/ops-config/effective-snapshot/export?${params.toString()}`).then(async (response) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+    return fetch(`/api/ops-config/effective-snapshot/export?${params.toString()}`, {
+      signal: controller.signal
+    }).then(async (response) => {
       if (!response.ok) {
-        throw new Error("有效配置快照导出失败");
+        throw createRequestError(`OPS-CONFIG-CLIENT-HTTP-${response.status}`, "有效配置快照导出失败");
       }
       return response.blob();
+    }).catch((error) => {
+      if (error?.code) throw error;
+      const code = error?.name === "AbortError"
+        ? "OPS-CONFIG-CLIENT-TIMEOUT"
+        : "OPS-CONFIG-CLIENT-NETWORK";
+      throw createRequestError(code, error?.name === "AbortError" ? "运营配置服务导出请求超时" : "无法连接运营配置服务", error);
+    }).finally(() => {
+      clearTimeout(timeoutId);
     });
   },
   toggleAgreementTemplate: (configCode, enabled) => postJson("/api/ops-config/agreement-templates/toggle", { configCode, enabled }),
