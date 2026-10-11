@@ -9,6 +9,7 @@ import { createServer as createTcpServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertLocalGatewaySmokeEnvironment } from "./local-gateway-smoke-guard.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const maven = process.env.HSP_MAVEN_BIN || "mvn";
@@ -97,6 +98,7 @@ async function stopBackends() {
 }
 
 async function main() {
+  assertLocalGatewaySmokeEnvironment(process.env);
   const directory = await mkdtemp(path.join(os.tmpdir(), "payment-gateway-query-"));
   const upstreamQueries = [];
   const downstreamEvents = [];
