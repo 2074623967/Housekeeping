@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { riskControlApi } from "./client.js";
+import { normalizeReviewActionResult, riskControlApi } from "./client.js";
+
+test("requires the requested review number in risk action responses", () => {
+  assert.equal(
+    normalizeReviewActionResult({ records: [{ reviewNo: "REV-001", status: "APPROVED" }] }, "REV-001").records[0].reviewNo,
+    "REV-001"
+  );
+  assert.throws(
+    () => normalizeReviewActionResult({ records: [{ reviewNo: "REV-002" }] }, "REV-001"),
+    (error) => error.code === "RISK-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+  assert.throws(
+    () => normalizeReviewActionResult({ records: [] }, "REV-001"),
+    (error) => error.code === "RISK-CLIENT-INVALID-BUSINESS-RESULT"
+  );
+});
 
 test("keeps the risk control service envelope on success", async () => {
   const originalFetch = globalThis.fetch;
@@ -128,5 +143,69 @@ test("reports risk control network failures with a stable client error", async (
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("aborts slow risk control requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "risk-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "risk-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      riskControlApi.getSummary(),
+      (error) => error.code === "RISK-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("aborts slow risk control exports and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "risk-export-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "risk-export-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      riskControlApi.downloadReviewOrders(),
+      (error) => error.code === "RISK-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });

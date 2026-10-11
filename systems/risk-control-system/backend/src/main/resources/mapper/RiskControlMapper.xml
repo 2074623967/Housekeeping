@@ -113,6 +113,7 @@
         SELECT id,
                review_no AS reviewNo,
                business_no AS businessNo,
+               request_fingerprint AS requestFingerprint,
                risk_tag AS riskTag,
                review_item AS reviewItem,
                status,
@@ -121,6 +122,8 @@
                FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
         FROM t_risk_review_order
         WHERE review_no = #{reviewNo}
+          AND CHAR_LENGTH(review_no) = CHAR_LENGTH(#{reviewNo})
+          AND CAST(review_no AS BINARY(256)) = CAST(#{reviewNo} AS BINARY(256))
         LIMIT 1
     </select>
 
@@ -128,6 +131,7 @@
         SELECT id,
                review_no AS reviewNo,
                business_no AS businessNo,
+               request_fingerprint AS requestFingerprint,
                risk_tag AS riskTag,
                review_item AS reviewItem,
                status,
@@ -136,8 +140,26 @@
                FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
         FROM t_risk_review_order
         WHERE business_no = #{businessNo}
+          AND CHAR_LENGTH(business_no) = CHAR_LENGTH(#{businessNo})
+          AND CAST(business_no AS BINARY(256)) = CAST(#{businessNo} AS BINARY(256))
         ORDER BY id DESC
         LIMIT 1
+    </select>
+
+    <select id="findReviewOrderByBusinessKeyForUpdate" resultType="com.abc123.riskcontrol.entity.ReviewOrderEntity">
+        SELECT id,
+               review_no AS reviewNo,
+               business_no AS businessNo,
+               request_fingerprint AS requestFingerprint,
+               risk_tag AS riskTag,
+               review_item AS reviewItem,
+               status,
+               status_type AS statusType,
+               reviewer,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_review_order
+        WHERE business_key = #{businessKey,jdbcType=BINARY}
+        FOR UPDATE
     </select>
 
     <select id="findLatestInterceptEvent" resultType="com.abc123.riskcontrol.entity.InterceptEventEntity">
@@ -151,15 +173,39 @@
                FORMATDATETIME(happened_at, 'yyyy-MM-dd HH:mm:ss') AS happenedAt
         FROM t_risk_intercept_event
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND hit_policy = #{hitPolicy}
+          AND CHAR_LENGTH(hit_policy) = CHAR_LENGTH(#{hitPolicy})
+          AND CAST(hit_policy AS BINARY(256)) = CAST(#{hitPolicy} AS BINARY(256))
           AND decision_result = #{decisionResult}
+          AND CHAR_LENGTH(decision_result) = CHAR_LENGTH(#{decisionResult})
+          AND CAST(decision_result AS BINARY(256)) = CAST(#{decisionResult} AS BINARY(256))
+          AND source_system = #{sourceSystem}
+          AND CHAR_LENGTH(source_system) = CHAR_LENGTH(#{sourceSystem})
+          AND CAST(source_system AS BINARY(256)) = CAST(#{sourceSystem} AS BINARY(256))
         ORDER BY id DESC
         LIMIT 1
+    </select>
+
+    <select id="findInterceptEventByKeyForUpdate" resultType="com.abc123.riskcontrol.entity.InterceptEventEntity">
+        SELECT id,
+               event_no AS eventNo,
+               payment_order_id AS paymentOrderId,
+               hit_policy AS hitPolicy,
+               risk_level AS riskLevel,
+               decision_result AS decisionResult,
+               source_system AS sourceSystem,
+               FORMATDATETIME(happened_at, 'yyyy-MM-dd HH:mm:ss') AS happenedAt
+        FROM t_risk_intercept_event
+        WHERE event_key = #{eventKey,jdbcType=BINARY}
+        FOR UPDATE
     </select>
 
     <insert id="insertInterceptEvent" parameterType="com.abc123.riskcontrol.entity.InterceptEventEntity">
         INSERT INTO t_risk_intercept_event (
             event_no,
+            event_key,
             payment_order_id,
             hit_policy,
             risk_level,
@@ -168,6 +214,7 @@
             happened_at
         ) VALUES (
             #{eventNo},
+            #{eventKey,jdbcType=BINARY},
             #{paymentOrderId},
             #{hitPolicy},
             #{riskLevel},
@@ -181,6 +228,8 @@
         INSERT INTO t_risk_review_order (
             review_no,
             business_no,
+            business_key,
+            request_fingerprint,
             risk_tag,
             review_item,
             status,
@@ -190,6 +239,8 @@
         ) VALUES (
             #{reviewNo},
             #{businessNo},
+            #{businessKey,jdbcType=BINARY},
+            #{requestFingerprint},
             #{riskTag},
             #{reviewItem},
             #{status},
@@ -227,6 +278,10 @@
         UPDATE t_risk_review_order
         SET status = #{status}, status_type = #{statusType}, reviewer = #{reviewer}, updated_at = CURRENT_TIMESTAMP
         WHERE review_no = #{reviewNo}
+          AND CHAR_LENGTH(review_no) = CHAR_LENGTH(#{reviewNo})
+          AND CAST(review_no AS BINARY(256)) = CAST(#{reviewNo} AS BINARY(256))
           AND status = 'PENDING'
+          AND CHAR_LENGTH(status) = CHAR_LENGTH('PENDING')
+          AND CAST(status AS BINARY(32)) = CAST('PENDING' AS BINARY(32))
     </update>
 </mapper>

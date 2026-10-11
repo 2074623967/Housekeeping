@@ -106,8 +106,19 @@ public class RiskControlDaoImpl implements RiskControlDao {
     }
 
     @Override
-    public InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy, String decisionResult) {
-        return mapper.findLatestInterceptEvent(paymentOrderId, hitPolicy, decisionResult);
+    public ReviewOrderEntity findReviewOrderByBusinessKeyForUpdate(byte[] businessKey) {
+        return mapper.findReviewOrderByBusinessKeyForUpdate(businessKey);
+    }
+
+    @Override
+    public InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy,
+                                                        String decisionResult, String sourceSystem) {
+        return mapper.findLatestInterceptEvent(paymentOrderId, hitPolicy, decisionResult, sourceSystem);
+    }
+
+    @Override
+    public InterceptEventEntity findInterceptEventByKeyForUpdate(byte[] eventKey) {
+        return mapper.findInterceptEventByKeyForUpdate(eventKey);
     }
 
     @Override

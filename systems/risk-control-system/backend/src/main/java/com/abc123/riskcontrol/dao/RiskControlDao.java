@@ -48,7 +48,12 @@ public interface RiskControlDao {
 
     ReviewOrderEntity findLatestReviewOrderByBusinessNo(String businessNo);
 
-    InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy, String decisionResult);
+    ReviewOrderEntity findReviewOrderByBusinessKeyForUpdate(byte[] businessKey);
+
+    InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy,
+                                                 String decisionResult, String sourceSystem);
+
+    InterceptEventEntity findInterceptEventByKeyForUpdate(byte[] eventKey);
 
     int insertInterceptEvent(InterceptEventEntity entity);
 

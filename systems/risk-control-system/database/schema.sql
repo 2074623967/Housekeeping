@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS t_risk_blocklist (
 CREATE TABLE IF NOT EXISTS t_risk_intercept_event (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
     event_no VARCHAR(64) NOT NULL COMMENT '事件编号',
+    event_key BINARY(32) NULL COMMENT '新事件支付单/策略/处置/来源系统SHA-256精确摘要；历史空值不回填',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
     hit_policy VARCHAR(64) NOT NULL COMMENT '命中策略',
     risk_level VARCHAR(64) NOT NULL COMMENT '风险等级',
@@ -54,13 +55,16 @@ CREATE TABLE IF NOT EXISTS t_risk_intercept_event (
     source_system VARCHAR(64) NOT NULL COMMENT '来源系统',
     happened_at DATETIME NOT NULL COMMENT '发生时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_risk_event_no (event_no)
+    UNIQUE KEY uk_risk_event_no (event_no),
+    UNIQUE KEY uk_risk_event_key (event_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='风险拦截事件表';
 
 CREATE TABLE IF NOT EXISTS t_risk_review_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
     review_no VARCHAR(64) NOT NULL COMMENT '复核单号',
     business_no VARCHAR(64) NOT NULL COMMENT '业务单号',
+    business_key BINARY(32) NULL COMMENT '新复核单原业务单号SHA-256精确摘要；历史空值不回填',
+    request_fingerprint VARCHAR(64) NULL COMMENT 'v2:Base64URL无填充SHA-256；历史空值或旧版本不得批准放行',
     risk_tag VARCHAR(128) NOT NULL COMMENT '风险标签',
     review_item VARCHAR(255) NOT NULL COMMENT '待审事项',
     status VARCHAR(32) NOT NULL COMMENT '状态',
@@ -68,7 +72,8 @@ CREATE TABLE IF NOT EXISTS t_risk_review_order (
     reviewer VARCHAR(64) NULL COMMENT '审核人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_risk_review_no (review_no)
+    UNIQUE KEY uk_risk_review_no (review_no),
+    UNIQUE KEY uk_risk_review_business_key (business_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人工复核单表';
 
 CREATE TABLE IF NOT EXISTS t_risk_monitor_rule (
@@ -84,4 +89,3 @@ CREATE TABLE IF NOT EXISTS t_risk_monitor_rule (
     PRIMARY KEY (id),
     UNIQUE KEY uk_risk_monitor_code (monitor_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='监控规则表';
-

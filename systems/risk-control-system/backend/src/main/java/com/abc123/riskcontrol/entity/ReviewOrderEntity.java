@@ -14,6 +14,8 @@ public class ReviewOrderEntity {
     private String reviewNo;
     /** 业务单号。 */
     private String businessNo;
+    private byte[] businessKey;
+    private String requestFingerprint;
     /** 风险标签。 */
     private String riskTag;
     /** 待审事项。 */
@@ -27,4 +29,3 @@ public class ReviewOrderEntity {
     /** 更新时间。 */
     private String updatedAt;
 }
-

@@ -12,6 +12,7 @@ public class InterceptEventEntity {
     private Long id;
     /** 事件编号。 */
     private String eventNo;
+    private byte[] eventKey;
     /** 支付单号。 */
     private String paymentOrderId;
     /** 命中策略。 */
@@ -25,4 +26,3 @@ public class InterceptEventEntity {
     /** 发生时间。 */
     private String happenedAt;
 }
-

@@ -18,5 +18,5 @@ mybatis:
 risk-control:
   ops-config:
     enabled: ${RISK_CONTROL_OPS_CONFIG_ENABLED:false}
-    snapshot-url: ${RISK_CONTROL_OPS_CONFIG_SNAPSHOT_URL:http://127.0.0.1:18170/api/ops-config/effective-snapshot}
+    snapshot-url: ${RISK_CONTROL_OPS_CONFIG_SNAPSHOT_URL:http://localhost:18170/api/ops-config/effective-snapshot}
     timeout-ms: ${RISK_CONTROL_OPS_CONFIG_TIMEOUT_MS:2000}

@@ -49,9 +49,14 @@ public interface RiskControlMapper {
 
     ReviewOrderEntity findLatestReviewOrderByBusinessNo(@Param("businessNo") String businessNo);
 
+    ReviewOrderEntity findReviewOrderByBusinessKeyForUpdate(@Param("businessKey") byte[] businessKey);
+
     InterceptEventEntity findLatestInterceptEvent(@Param("paymentOrderId") String paymentOrderId,
                                                   @Param("hitPolicy") String hitPolicy,
-                                                  @Param("decisionResult") String decisionResult);
+                                                  @Param("decisionResult") String decisionResult,
+                                                  @Param("sourceSystem") String sourceSystem);
+
+    InterceptEventEntity findInterceptEventByKeyForUpdate(@Param("eventKey") byte[] eventKey);
 
     int insertInterceptEvent(InterceptEventEntity entity);
 
