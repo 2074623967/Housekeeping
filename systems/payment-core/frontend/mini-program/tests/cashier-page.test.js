@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { paymentApi } = require("../utils/request");
+const { normalizePaymentSubmitResult, paymentApi } = require("../utils/request");
 
 test("renders the cashier bill number", () => {
   const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
@@ -77,6 +77,33 @@ function pendingCashier() {
     paymentMethod: "微信支付", channel: "wx_h5", channelTransactionNo: "WX-LOCAL-001",
     latestAttemptStatus: "等待回调", latestAttemptCompletedAt: null
   };
+}
+
+function terminalSubmitResult(paymentStatus) {
+  const cashierStatuses = {
+    SUCCESS: "支付成功", CLOSED: "已关闭", RISK_BLOCKED: "风控拦截",
+    RISK_REJECTED: "风控拒绝", FAIL: "结果待确认"
+  };
+  const result = {
+    ...cashier(), paymentMethod: "微信支付", channel: "WX_H5", paymentStatus,
+    createdAt: "2026-09-27 10:01:00", cashierStatus: cashierStatuses[paymentStatus],
+    cashierStatusType: paymentStatus === "SUCCESS" ? "success" : "danger",
+    latestAttemptCompletedAt: null,
+    nativePaymentParams: {
+      timeStamp: "123", nonceStr: "nonce", package: "prepay_id=local",
+      signType: "RSA", paySign: "signature"
+    }
+  };
+  if (paymentStatus === "SUCCESS") {
+    Object.assign(result, {
+      successAt: "2026-09-27 10:02:00", channelTransactionNo: "WX-001",
+      latestAttemptStatus: "成功", latestAttemptStatusType: "success",
+      latestAttemptCompletedAt: "2026-09-27 10:02:00"
+    });
+  }
+  return normalizePaymentSubmitResult(
+    result, "PRE-001", "微信支付", "WX_H5", "BALANCE_PAY_MINI_PROGRAM"
+  );
 }
 
 test("does not query or submit a cashier for an unsupported external scene", async () => {
@@ -236,6 +263,108 @@ test("does not invoke native payment for an unchanged prepay submit response", a
     assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
     assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
     assert.match(page.data.errorMessage, /状态未推进/);
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("routes completed submit responses without invoking native payment again", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeCalls = 0;
+  let readbacks = 0;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.getCashier = () => { readbacks += 1; return Promise.resolve(cashier()); };
+  try {
+    for (const paymentStatus of ["SUCCESS", "CLOSED"]) {
+      paymentApi.submit = () => Promise.resolve(terminalSubmitResult(paymentStatus));
+      const page = createPage();
+      page.pageActive = true;
+      page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+        loading: false, canSubmit: true });
+      try {
+        await page.submitPayment();
+        assert.equal(page.data.errorMessage, "");
+      } finally {
+        page.onUnload();
+      }
+    }
+    assert.equal(nativeCalls, 0);
+    assert.equal(readbacks, 0);
+    assert.equal(redirects, 2);
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("does not invoke native payment for blocked or failed submit states", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeCalls = 0;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  try {
+    for (const paymentStatus of ["RISK_BLOCKED", "RISK_REJECTED", "FAIL"]) {
+      paymentApi.submit = () => Promise.resolve(terminalSubmitResult(paymentStatus));
+      paymentApi.getCashier = () => Promise.resolve({ ...cashier(), paymentStatus });
+      const page = createPage();
+      page.pageActive = true;
+      page.cashierRequestVersion = 0;
+      page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+        loading: false, canSubmit: true });
+      try {
+        await page.submitPayment();
+        assert.match(page.data.errorMessage, /不允许拉起微信支付/);
+      } finally {
+        page.onUnload();
+      }
+    }
+    assert.equal(nativeCalls, 0);
+    assert.equal(redirects, 0);
+  } finally {
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
+test("still invokes native payment once for an accepted pending submit", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeCalls = 0;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.submit = () => Promise.resolve({
+    ...pendingCashier(),
+    nativePaymentParams: {
+      timeStamp: "123", nonceStr: "nonce", package: "prepay_id=local",
+      signType: "RSA", paySign: "signature"
+    }
+  });
+  const page = createPage();
+  page.pageActive = true;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    loading: false, canSubmit: true });
+  try {
+    await page.submitPayment();
+    assert.equal(nativeCalls, 1);
+    assert.equal(redirects, 1);
+    assert.equal(page.data.errorMessage, "");
   } finally {
     page.onUnload();
     global.getApp = previousGetApp;
