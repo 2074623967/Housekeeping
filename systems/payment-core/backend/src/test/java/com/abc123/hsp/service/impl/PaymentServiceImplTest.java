@@ -5703,7 +5703,6 @@ class PaymentServiceImplTest {
         token.setPaymentOrderId("PAY-330");
         token.setSourceAppId("housekeeping-app-web");
         token.setTokenStatus("ACTIVE");
-        token.setHolderIdempotencyKey("IDEMP-OLD-330");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-330", "housekeeping-app-web")).thenReturn(token);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
@@ -5775,7 +5774,6 @@ class PaymentServiceImplTest {
         token.setPaymentOrderId("PAY-TOKEN-MULTI");
         token.setSourceAppId("default-app");
         token.setTokenStatus("RELEASED");
-        token.setHolderIdempotencyKey("IDEMP-TOKEN-OLD");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-MULTI", "default-app"))
                 .thenReturn(token);
         when(paymentMapper.occupySubmitConcurrencyToken(
@@ -5808,13 +5806,12 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void shouldReoccupyReleasedTokenEvenWithSameIdempotencyKey() throws Exception {
+    void shouldReoccupyReleasedTokenWithRequestedIdempotencyKey() throws Exception {
         PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();
         token.setPrepayOrderNo("PRE-TOKEN-REUSE");
         token.setPaymentOrderId("PAY-TOKEN-REUSE");
         token.setSourceAppId("default-app");
         token.setTokenStatus("RELEASED");
-        token.setHolderIdempotencyKey("IDEMP-TOKEN-REUSE");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-REUSE", "default-app"))
                 .thenReturn(token);
         when(paymentMapper.occupySubmitConcurrencyToken(
@@ -5843,7 +5840,6 @@ class PaymentServiceImplTest {
         token.setPaymentOrderId("PAY-OLD");
         token.setSourceAppId("default-app");
         token.setTokenStatus("ACTIVE");
-        token.setHolderIdempotencyKey("IDEMP-TOKEN-MISMATCH");
         when(paymentMapper.findSubmitConcurrencyToken("PRE-TOKEN-MISMATCH", "default-app"))
                 .thenReturn(token);
 

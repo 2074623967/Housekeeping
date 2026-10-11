@@ -1241,6 +1241,12 @@ class PaymentMapperStateTransitionIntegrationTest {
             assertNull(mapper.findSubmitConcurrencyToken("PRE-TOKEN-001", "APP"));
             assertEquals("PRE-TOKEN-001", mapper.findSubmitConcurrencyToken("PRE-TOKEN-001", "app")
                     .getPrepayOrderNo());
+            String tokenSnapshot = new ObjectMapper().writeValueAsString(
+                    mapper.findSubmitConcurrencyToken("PRE-TOKEN-001", "app"));
+            assertFalse(tokenSnapshot.contains("holderIdempotencyKey"));
+            assertFalse(tokenSnapshot.contains("holderClientIp"));
+            assertFalse(tokenSnapshot.contains("holderTerminal"));
+            assertFalse(tokenSnapshot.contains("expireAt"));
             assertEquals(0, mapper.occupySubmitConcurrencyToken(
                     "pre-token-001", "PAY-TOKEN-001", "app", "alias-key", "APP", "127.0.0.1", 60));
             assertEquals(0, mapper.occupySubmitConcurrencyToken(
@@ -1255,8 +1261,12 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "WHERE prepay_order_no = 'PRE-TOKEN-001'");
             assertEquals(0, mapper.occupySubmitConcurrencyToken(
                     "PRE-TOKEN-001", "PAY-TOKEN-001", "app", "alias-stolen-key", "APP", "127.0.0.1", 60));
-            assertEquals("owner-key", mapper.findSubmitConcurrencyToken("PRE-TOKEN-001", "app")
-                    .getHolderIdempotencyKey());
+            try (java.sql.ResultSet resultSet = statement.executeQuery(
+                    "SELECT holder_idempotency_key FROM t_payment_submit_concurrency_token "
+                            + "WHERE prepay_order_no = 'PRE-TOKEN-001'")) {
+                assertTrue(resultSet.next());
+                assertEquals("owner-key", resultSet.getString(1));
+            }
             statement.executeUpdate("UPDATE t_payment_submit_concurrency_token SET token_status = 'RELEASED' "
                     + "WHERE prepay_order_no = 'PRE-TOKEN-001'");
             assertEquals(0, mapper.occupySubmitConcurrencyToken(

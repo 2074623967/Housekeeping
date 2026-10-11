@@ -16,12 +16,4 @@ public class PaymentSubmitConcurrencyTokenDTO {
     private String sourceAppId;
     /** 令牌状态。 */
     private String tokenStatus;
-    /** 当前占用幂等键。 */
-    private String holderIdempotencyKey;
-    /** 当前占用终端。 */
-    private String holderTerminal;
-    /** 当前占用客户端IP。 */
-    private String holderClientIp;
-    /** 令牌过期时间。 */
-    private String expireAt;
 }

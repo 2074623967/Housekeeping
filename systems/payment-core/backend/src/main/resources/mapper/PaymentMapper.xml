@@ -713,11 +713,7 @@
         SELECT prepay_order_no AS prepayOrderNo,
                payment_order_id AS paymentOrderId,
                source_app_id AS sourceAppId,
-               token_status AS tokenStatus,
-               holder_idempotency_key AS holderIdempotencyKey,
-               holder_terminal AS holderTerminal,
-               holder_client_ip AS holderClientIp,
-               DATE_FORMAT(expire_at, '%Y-%m-%d %H:%i:%s') AS expireAt
+               token_status AS tokenStatus
         FROM t_payment_submit_concurrency_token
         WHERE prepay_order_no = #{prepayOrderNo}
           AND CHAR_LENGTH(prepay_order_no) = CHAR_LENGTH(#{prepayOrderNo})
