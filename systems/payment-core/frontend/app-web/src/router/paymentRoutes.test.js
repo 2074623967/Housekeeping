@@ -6,8 +6,21 @@ import {
   buildCashierRoute,
   buildPaymentResultRoute,
   buildRefundProgressRoute,
+  resolvePaymentBusinessEntryPath,
   refundProgressRoutePath
 } from "./paymentRoutes.js";
+
+test("only links a recorded payment scene to its matching business entry", () => {
+  for (const terminal of ["APP", "H5", "PC"]) {
+    assert.equal(resolvePaymentBusinessEntryPath(`WALLET_RECHARGE_${terminal}`), "/recharge");
+    assert.equal(resolvePaymentBusinessEntryPath(`WITHDRAW_REPAY_${terminal}`), "/withdraw");
+    assert.equal(resolvePaymentBusinessEntryPath(`ACCOUNT_TRANSFER_${terminal}`), "/transfer");
+    assert.equal(resolvePaymentBusinessEntryPath(`BALANCE_PAY_${terminal}`), "/balance-pay");
+  }
+  for (const payScene of ["HOME_CLEAN", "HOME_REPAIR", "WALLET_RECHARGE_OTHER", "constructor_APP", "", null]) {
+    assert.equal(resolvePaymentBusinessEntryPath(payScene), null);
+  }
+});
 
 test("keeps App business entry routes complete", () => {
   assert.deepEqual(businessEntryRoutes.map((route) => route.sceneType), [
@@ -49,4 +62,11 @@ test("resolves refund identifiers as encoded route parameters", () => {
     router.resolve(buildRefundProgressRoute("REF/1?#%", { terminal: "app" })).href,
     "/refund-progress/REF%2F1%3F%23%25?terminal=app"
   );
+});
+
+test("trims route identifiers before building user payment routes", () => {
+  const router = createTestRouter();
+  assert.equal(router.resolve(buildCashierRoute("  PRE-1  ")).href, "/cashier/PRE-1");
+  assert.equal(router.resolve(buildPaymentResultRoute("  PAY-1  ")).href, "/payment-result/PAY-1");
+  assert.equal(router.resolve(buildRefundProgressRoute("  REF-1  ")).href, "/refund-progress/REF-1");
 });

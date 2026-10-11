@@ -4,6 +4,7 @@ import {
   buildPaymentAccessTokenStorageKey,
   persistPaymentAccessToken,
   readPaymentAccessToken,
+  resolveConfiguredPaymentAccessToken,
   withoutAccessToken
 } from "./paymentSession.js";
 
@@ -23,6 +24,24 @@ test("stores access tokens by source application", () => {
   assert.equal(readPaymentAccessToken("housekeeping-h5-web", storage), "");
   assert.equal(buildPaymentAccessTokenStorageKey("housekeeping-app-web"),
     "hsp.accessToken.housekeeping-app-web");
+});
+
+test("uses configured tokens and only permits demo fallback in development", () => {
+  assert.equal(resolveConfiguredPaymentAccessToken(
+    { DEV: false, VITE_PAYMENT_ACCESS_TOKEN_APP: " configured-token " },
+    "VITE_PAYMENT_ACCESS_TOKEN_APP",
+    "demo-token"
+  ), "configured-token");
+  assert.equal(resolveConfiguredPaymentAccessToken(
+    { DEV: true },
+    "VITE_PAYMENT_ACCESS_TOKEN_APP",
+    "demo-token"
+  ), "demo-token");
+  assert.equal(resolveConfiguredPaymentAccessToken(
+    { DEV: false },
+    "VITE_PAYMENT_ACCESS_TOKEN_APP",
+    "demo-token"
+  ), "");
 });
 
 test("fails closed when session storage is unavailable", () => {

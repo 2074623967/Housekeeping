@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canClosePaymentLocally,
+  canRetryReviewedPayment,
   canQueryPaymentChannel,
+  canShowDesktopQrPlaceholder,
+  isCashierExpired,
   isPaymentSubmissionPending,
   PAYMENT_RESULT_STATE_META,
   resolvePaymentMerchantNo,
@@ -16,10 +19,33 @@ test("uses the merchant configured for each payment channel", () => {
   assert.equal(resolvePaymentMerchantNo("银行卡"), "BANK_OFFLINE_30001");
 });
 
-test("only queries the channel for terminal payments or submitted pending payments", () => {
+test("only retries a reviewed cashier with its original method and channel", () => {
+  const cashier = { paymentStatus: "RISK_REVIEW", status: "待风控复核",
+    channels: ["微信支付", "支付宝"], reviewPaymentMethod: "微信支付", reviewChannelCode: "WX_H5" };
+  assert.equal(canRetryReviewedPayment(cashier, "微信支付"), true);
+  assert.equal(canRetryReviewedPayment({ ...cashier, reviewChannelCode: "wx_h5" }, "微信支付"), true);
+  assert.equal(canRetryReviewedPayment(cashier, "支付宝"), false);
+  assert.equal(canRetryReviewedPayment({ ...cashier, reviewChannelCode: "ALIPAY_H5" }, "微信支付"), false);
+  assert.equal(canRetryReviewedPayment({ ...cashier, reviewPaymentMethod: null }, "微信支付"), false);
+  assert.equal(canRetryReviewedPayment({ ...cashier, paymentStatus: "WAIT_CALLBACK" }, "微信支付"), false);
+  assert.equal(canRetryReviewedPayment({ ...cashier, channels: ["支付宝"] }, "微信支付"), false);
+});
+
+test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("SUCCESS", null), true);
   assert.equal(canQueryPaymentChannel("CLOSED", null), true);
-  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中"), true);
+  assert.equal(canQueryPaymentChannel("CLOSED", null, null, "WX-1"), false);
+  assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, null, "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("CLOSED", "失败"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", "wx_h5"), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", null, "WX-1", null), false);
+  assert.equal(canQueryPaymentChannel("CLOSED", "处理中", null, "WX-1", " "), false);
+  assert.equal(canQueryPaymentChannel("PAYING", "处理中"), false);
+  for (const attemptStatus of ["成功", "支付成功", " 支付成功 ", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED", " FAILED "]) {
+    assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", attemptStatus, null, "WX-1", "wx_h5"), false);
+  }
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中", "2026-10-07 09:00:00", "WX-1", "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("PAYING", null), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", null), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "-"), false);
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", " - "), false);
@@ -36,6 +62,30 @@ test("locks submission while cashier status is not final", () => {
 test("locks submission while latest attempt result is unknown", () => {
   assert.equal(isPaymentSubmissionPending("待支付", "渠道提交中"), true);
   assert.equal(isPaymentSubmissionPending("待支付", "结果未知，待查单"), true);
+});
+
+test("treats the server-side expired cashier status as unavailable", () => {
+  assert.equal(isCashierExpired("已失效"), true);
+  assert.equal(isCashierExpired("待支付"), false);
+  assert.equal(canClosePaymentLocally("已失效", "", "-"), true);
+});
+
+test("only shows the desktop QR placeholder for a fresh valid submission", () => {
+  assert.equal(canShowDesktopQrPlaceholder({
+    terminalVariant: "pc",
+    hasValidCashierSnapshot: true,
+    canSubmit: true
+  }), true);
+  assert.equal(canShowDesktopQrPlaceholder({
+    terminalVariant: "pc",
+    hasValidCashierSnapshot: true,
+    canSubmit: false
+  }), false);
+  assert.equal(canShowDesktopQrPlaceholder({
+    terminalVariant: "app",
+    hasValidCashierSnapshot: true,
+    canSubmit: true
+  }), false);
 });
 
 test("allows a fresh unpaid submission", () => {

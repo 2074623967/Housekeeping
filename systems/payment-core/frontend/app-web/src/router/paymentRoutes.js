@@ -5,5 +5,6 @@ export {
   refundProgressRoutePath,
   buildCashierRoute,
   buildPaymentResultRoute,
-  buildRefundProgressRoute
+  buildRefundProgressRoute,
+  resolvePaymentBusinessEntryPath
 } from "../../../shared/src/router/terminalRoutes.js";

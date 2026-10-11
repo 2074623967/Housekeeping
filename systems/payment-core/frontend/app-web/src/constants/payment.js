@@ -56,6 +56,16 @@ export function resolvePaymentMerchantNo(paymentMethod) {
   return PAYMENT_METHOD_MERCHANT_MAP[paymentMethod] || "BANK_OFFLINE_30001";
 }
 
+export function canRetryReviewedPayment(cashier, paymentMethod) {
+  return cashier?.paymentStatus === "RISK_REVIEW"
+    && cashier.status === "待风控复核"
+    && Array.isArray(cashier.channels)
+    && cashier.channels.includes(paymentMethod)
+    && cashier.reviewPaymentMethod === paymentMethod
+    && typeof cashier.reviewChannelCode === "string"
+    && PAYMENT_METHOD_CHANNEL_MAP[paymentMethod]?.toLowerCase() === cashier.reviewChannelCode.toLowerCase();
+}
+
 export function resolvePaymentResultState(paymentStatus) {
   if (paymentStatus === "SUCCESS") {
     return "success";
@@ -103,14 +113,30 @@ export function isPaymentSubmissionPending(cashierStatus, attemptStatus) {
     || ["渠道提交中", "结果未知，待查单"].includes(attemptStatus);
 }
 
-export function canQueryPaymentChannel(status, latestAttemptStatus) {
-  if (["SUCCESS", "CLOSED"].includes(status)) {
+export function isCashierExpired(status) {
+  return status === "已失效";
+}
+
+export function canShowDesktopQrPlaceholder({ terminalVariant, hasValidCashierSnapshot, canSubmit }) {
+  return terminalVariant === "pc" && hasValidCashierSnapshot && canSubmit;
+}
+
+export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
+  if (status === "SUCCESS") {
     return true;
   }
   const normalizedAttemptStatus = typeof latestAttemptStatus === "string"
     ? latestAttemptStatus.trim()
     : "";
-  return status === "WAIT_CALLBACK" && Boolean(normalizedAttemptStatus && normalizedAttemptStatus !== "-");
+  if (status === "CLOSED" && !normalizedAttemptStatus && !channelTransactionNo) {
+    return true;
+  }
+  return ["WAIT_CALLBACK", "CLOSED"].includes(status)
+    && Boolean(normalizedAttemptStatus && normalizedAttemptStatus !== "-")
+    && !["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]
+      .includes(normalizedAttemptStatus.toUpperCase())
+    && typeof channel === "string" && Boolean(channel.trim())
+    && latestAttemptCompletedAt == null;
 }
 
 export function canClosePaymentLocally(status, channelTransactionNo, attemptStatus) {
@@ -120,6 +146,7 @@ export function canClosePaymentLocally(status, channelTransactionNo, attemptStat
     "RISK_BLOCKED",
     "RISK_REJECTED",
     "待支付",
+    "已失效",
     "待风控复核",
     "风控拦截",
     "风控拒绝"

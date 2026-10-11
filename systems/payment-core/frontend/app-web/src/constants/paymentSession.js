@@ -2,6 +2,14 @@ export function buildPaymentAccessTokenStorageKey(sourceAppId) {
   return `hsp.accessToken.${sourceAppId}`;
 }
 
+export function resolveConfiguredPaymentAccessToken(env, envKey, developmentFallback = "") {
+  const configuredToken = typeof env?.[envKey] === "string" ? env[envKey].trim() : "";
+  if (configuredToken) {
+    return configuredToken;
+  }
+  return env?.DEV === true ? developmentFallback : "";
+}
+
 function resolveSessionStorage() {
   try {
     return globalThis.sessionStorage || null;

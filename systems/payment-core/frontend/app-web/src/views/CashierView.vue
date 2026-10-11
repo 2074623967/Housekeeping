@@ -5,6 +5,9 @@ import { paymentApi } from "../api/client";
 import {
   canClosePaymentLocally,
   canQueryPaymentChannel,
+  canRetryReviewedPayment,
+  canShowDesktopQrPlaceholder,
+  isCashierExpired,
   isPaymentSubmissionPending,
   resolvePaymentChannelCode,
   resolvePaymentMerchantNo
@@ -15,10 +18,18 @@ import {
   withoutAccessToken
 } from "../constants/paymentSession";
 import {
+  UnverifiablePaymentSubmitAttemptError,
+  clearPaymentSubmitAttempt,
+  discardPaymentSubmitAttempt,
+  generatePaymentSubmitKey,
+  readPaymentSubmitAttemptForPrepay,
+  resolvePaymentSubmitAttempt
+} from "../constants/paymentSubmitAttempt";
+import {
   matchesPaymentSnapshot,
   matchesPrepayOrder
 } from "../constants/paymentEntity";
-import { buildPaymentResultRoute } from "../router/paymentRoutes";
+import { buildPaymentResultRoute, resolvePaymentBusinessEntryPath } from "../router/paymentRoutes";
 
 const props = defineProps({
   terminalVariant: {
@@ -108,20 +119,43 @@ const BIZ_SCENE_META = {
   }
 };
 
+const GENERIC_SCENE_META = {
+  label: "业务支付",
+  title: "统一支付收银台",
+  description: "请核对当前业务订单与支付金额后再提交。",
+  supportHint: "支付异常时请先查单，并联系原业务服务方核对订单状态。"
+};
+
+const BIZ_PAY_SCENE = {
+  recharge: { app: "WALLET_RECHARGE_APP", h5: "WALLET_RECHARGE_H5", pc: "WALLET_RECHARGE_PC" },
+  withdraw: { app: "WITHDRAW_REPAY_APP", h5: "WITHDRAW_REPAY_H5", pc: "WITHDRAW_REPAY_PC" },
+  transfer: { app: "ACCOUNT_TRANSFER_APP", h5: "ACCOUNT_TRANSFER_H5", pc: "ACCOUNT_TRANSFER_PC" },
+  "balance-pay": { app: "BALANCE_PAY_APP", h5: "BALANCE_PAY_H5", pc: "BALANCE_PAY_PC" }
+};
+
 const route = useRoute();
 const router = useRouter();
+const expectedRoutePayScene = computed(() => {
+  const routePayScene = typeof route.query.payScene === "string"
+    ? route.query.payScene.trim()
+    : "";
+  return routePayScene || BIZ_PAY_SCENE[resolveBizType()]?.[props.terminalVariant] || null;
+});
 const cashier = ref(null);
 const loading = ref(true);
 const message = ref("");
 const selectedPaymentMethod = ref("");
 const submitLoading = ref(false);
+const resetLoading = ref(false);
 const refreshLoading = ref(false);
 const closeLoading = ref(false);
 const queryLoading = ref(false);
 const idempotencyKey = ref("");
+const pendingSubmitAttempt = ref(null);
 const countdownSeconds = ref(0);
 const latestQueriedDetail = ref(null);
 const loadedPrepayOrderNo = ref("");
+const cashierSnapshotStale = ref(false);
 
 let countdownTimer = null;
 let latestLoadRequestId = 0;
@@ -137,14 +171,14 @@ function buildResultRouteQuery(prepayOrderNo, paymentMethod) {
   if (bizType) {
     routeQuery.bizType = bizType;
   }
+  if (expectedRoutePayScene.value) {
+    routeQuery.payScene = expectedRoutePayScene.value;
+  }
   return routeQuery;
 }
 
 function generateIdempotencyKey() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-  return `IDEMP-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return generatePaymentSubmitKey();
 }
 
 function stopCountdown() {
@@ -174,29 +208,72 @@ function startCountdown(expiresAt) {
 
 async function loadCashier(prepayOrderNo = currentPrepayOrderNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = prepayOrderNo === loadedPrepayOrderNo.value && cashier.value
+    ? buildCurrentPaymentSnapshot()
+    : null;
   loading.value = true;
   message.value = "";
   try {
     syncAccessToken();
-    const cashierPage = await paymentApi.getCashier(prepayOrderNo);
+    const cashierPage = await paymentApi.getCashier(
+      prepayOrderNo,
+      terminalMeta.value.terminalCode,
+      expectedRoutePayScene.value
+    );
     if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
       return;
     }
     if (!matchesPrepayOrder(prepayOrderNo, cashierPage)) {
       throw new Error("收银台响应为空或与当前预付单不一致");
     }
+    if (expectedSnapshot && !matchesPaymentSnapshot(expectedSnapshot, cashierPage)) {
+      throw new Error("收银台响应为空或与当前支付单不一致");
+    }
+    let pendingAttempt;
+    try {
+      pendingAttempt = await readPaymentSubmitAttemptForPrepay(prepayOrderNo)
+        || (prepayOrderNo === loadedPrepayOrderNo.value ? pendingSubmitAttempt.value : null);
+    } catch (error) {
+      if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
+        return;
+      }
+      if (error instanceof UnverifiablePaymentSubmitAttemptError
+          && ["SUCCESS", "CLOSED"].includes(cashierPage.paymentStatus)) {
+        router.push(buildPaymentResultRoute(
+          cashierPage.paymentOrderId,
+          buildResultRouteQuery(prepayOrderNo, cashierPage.paymentMethod || "")
+        ));
+        return;
+      }
+      throw error;
+    }
+    if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
+      return;
+    }
     cashier.value = cashierPage;
+    pendingSubmitAttempt.value = pendingAttempt;
+    cashierSnapshotStale.value = false;
+    latestQueriedDetail.value = null;
     loadedPrepayOrderNo.value = prepayOrderNo;
-    if (!idempotencyKey.value) {
+    if (pendingAttempt) {
+      idempotencyKey.value = pendingAttempt.idempotencyKey;
+    } else if (!idempotencyKey.value) {
       idempotencyKey.value = generateIdempotencyKey();
     }
-    selectedPaymentMethod.value = (cashier.value?.channels || [])
+    selectedPaymentMethod.value = (cashierPage.paymentStatus === "RISK_REVIEW"
+      ? cashierPage.reviewPaymentMethod
+      : ["WAIT_CALLBACK", "SUCCESS"].includes(cashierPage.paymentStatus)
+        ? cashierPage.paymentMethod : null) || (cashier.value?.channels || [])
       .find((paymentMethod) => terminalMeta.value.paymentMethods.includes(paymentMethod)) || "";
+    if (pendingAttempt && (cashierPage.channels || []).includes(pendingAttempt.paymentMethod)) {
+      selectedPaymentMethod.value = pendingAttempt.paymentMethod;
+    }
     startCountdown(cashier.value?.expiresAt);
   } catch (error) {
     if (requestId !== latestLoadRequestId || prepayOrderNo !== currentPrepayOrderNo.value) {
       return;
     }
+    cashierSnapshotStale.value = true;
     message.value = error.message;
   } finally {
     if (requestId === latestLoadRequestId) {
@@ -215,7 +292,8 @@ const hasValidCashierSnapshot = computed(() => Boolean(
   loadedPrepayOrderNo.value === currentPrepayOrderNo.value
   && matchesPrepayOrder(currentPrepayOrderNo.value, cashier.value)
 ));
-const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
+const businessEntryPath = computed(() => resolvePaymentBusinessEntryPath(cashier.value?.payScene));
+const bizSceneMeta = computed(() => BIZ_SCENE_META[businessEntryPath.value?.slice(1)] || GENERIC_SCENE_META);
 const sourceAppId = computed(() => {
   if (props.terminalVariant === "pc") {
     return "housekeeping-pc-web";
@@ -230,6 +308,7 @@ const accessTokenAvailable = ref(false);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const actionRunning = computed(() => loading.value
   || submitLoading.value
+  || resetLoading.value
   || refreshLoading.value
   || closeLoading.value
   || queryLoading.value);
@@ -238,34 +317,72 @@ const channels = computed(() => (cashier.value?.channels || [])
 const hasChannels = computed(() => channels.value.length > 0);
 const selectedChannelMeta = computed(() => CHANNEL_META[selectedPaymentMethod.value] || null);
 const selectedChannelCode = computed(() => resolvePaymentChannelCode(selectedPaymentMethod.value));
+const reviewRetryAllowed = computed(() => channels.value.includes(selectedPaymentMethod.value)
+  && canRetryReviewedPayment(cashier.value, selectedPaymentMethod.value));
 const submissionPending = computed(() => {
   return isPaymentSubmissionPending(
     cashier.value?.status,
     latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   );
 });
-const canQueryPayment = computed(() => hasValidCashierSnapshot.value && canQueryPaymentChannel(
-  latestQueriedDetail.value?.status || cashier.value?.paymentStatus,
-  latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
-));
+const canQueryPayment = computed(() => {
+  const paymentSnapshot = latestQueriedDetail.value || cashier.value;
+  const paymentStatus = latestQueriedDetail.value
+    ? paymentSnapshot?.status
+    : paymentSnapshot?.paymentStatus;
+  return hasValidCashierSnapshot.value && !cashierSnapshotStale.value && canQueryPaymentChannel(
+    paymentStatus,
+    paymentSnapshot?.latestAttemptStatus,
+    paymentSnapshot?.latestAttemptCompletedAt,
+    paymentSnapshot?.channelTransactionNo,
+    paymentSnapshot?.channel
+  );
+});
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
 });
 const canSubmit = computed(() => {
   const status = cashier.value?.status;
+  const queriedStatus = latestQueriedDetail.value?.status;
+  const attemptStatus = latestQueriedDetail.value?.latestAttemptStatus
+    || cashier.value?.latestAttemptStatus;
+  const hasAttemptFact = attemptStatus != null
+    && (typeof attemptStatus !== "string" || Boolean(attemptStatus.trim() && attemptStatus.trim() !== "-"));
+  const channelTransactionNo = latestQueriedDetail.value?.channelTransactionNo
+    || cashier.value?.channelTransactionNo;
+  const hasSubmittedChannel = channelTransactionNo != null
+    && (typeof channelTransactionNo !== "string" || Boolean(channelTransactionNo.trim()));
   return hasValidCashierSnapshot.value
+    && !cashierSnapshotStale.value
     && hasChannels.value
+    && accessTokenAvailable.value
     && !submissionPending.value
-    && status !== "待风控复核"
+    && (!pendingSubmitAttempt.value
+      || pendingSubmitAttempt.value.paymentMethod === selectedPaymentMethod.value)
+    && (!queriedStatus || queriedStatus === "PREPAY_CREATED"
+      || (queriedStatus === "RISK_REVIEW" && reviewRetryAllowed.value))
+    && !hasAttemptFact
+    && !hasSubmittedChannel
+    && !isCashierExpired(status)
+    && (status !== "待风控复核" || reviewRetryAllowed.value)
     && status !== "支付成功"
     && status !== "已关闭"
     && countdownSeconds.value > 0;
 });
 const submitBlockedHint = computed(() => {
   const status = cashier.value?.status;
+  if (cashierSnapshotStale.value) {
+    return "收银台状态未能重新核实，请先刷新收银台，避免重复提交。";
+  }
+  if (!accessTokenAvailable.value) {
+    return "当前支付访问令牌未注入，请联系运营完成安全配置后再提交。";
+  }
+  if (isCashierExpired(status)) {
+    return "当前收银台会话已失效，请重新拉起新的预付单。";
+  }
   if (status === "待风控复核") {
-    return "当前支付单正在等待风控复核，请先完成审核后再继续提交。";
+    return "当前支付单等待风控复核；仅支持审核通过后沿原支付方式和渠道重试，请刷新收银台核对。";
   }
   if (status === "支付成功") {
     return "当前支付单已支付成功，无需再次提交。";
@@ -281,23 +398,11 @@ const submitBlockedHint = computed(() => {
   }
   return "";
 });
-const desktopQrCodeValue = computed(() => {
-  if (!isPcVariant.value || !cashier.value) {
-    return "";
-  }
-  return [
-    "HSPAY",
-    cashier.value.paymentOrderId || "UNKNOWN",
-    cashier.value.prepayOrderNo || "UNKNOWN",
-    resolvePaymentChannelCode(selectedPaymentMethod.value),
-    terminalMeta.value.terminalCode
-  ].join("|");
-});
-const desktopQrBlocks = computed(() => {
-  const source = desktopQrCodeValue.value || "HSPAY";
-  return Array.from({ length: 81 }, (_, index) => {
-    const seed = source.charCodeAt(index % source.length) + index * 7;
-    return seed % 3 === 0;
+const desktopQrPlaceholderVisible = computed(() => {
+  return canShowDesktopQrPlaceholder({
+    terminalVariant: props.terminalVariant,
+    hasValidCashierSnapshot: hasValidCashierSnapshot.value,
+    canSubmit: canSubmit.value
   });
 });
 const countdownLabel = computed(() => {
@@ -307,13 +412,13 @@ const countdownLabel = computed(() => {
   return `${hours}:${minutes}:${seconds}`;
 });
 const canClose = computed(() => hasValidCashierSnapshot.value
+  && !cashierSnapshotStale.value
   && Boolean(cashier.value?.paymentOrderId)
   && canClosePaymentLocally(
     cashier.value?.status,
-    latestQueriedDetail.value?.channelTransactionNo,
+    latestQueriedDetail.value?.channelTransactionNo || cashier.value?.channelTransactionNo,
     latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   ));
-const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const countdownRiskLevel = computed(() => {
   if (countdownSeconds.value <= 0) {
     return "danger";
@@ -324,6 +429,11 @@ const countdownRiskLevel = computed(() => {
   return "info";
 });
 const countdownRiskHint = computed(() => {
+  if (isCashierExpired(cashier.value?.status)) {
+    return submissionPending.value
+      ? "当前会话已失效，但渠道结果尚未确认，请继续主动查单。"
+      : "当前会话已失效，可关闭尚未提交渠道的支付单后重新发起。";
+  }
   if (countdownSeconds.value <= 0) {
     return submissionPending.value
       ? "当前会话已过期，但渠道结果尚未确认，请继续主动查单。"
@@ -378,8 +488,56 @@ async function refreshCashier() {
   refreshLoading.value = true;
   try {
     await loadCashier(currentPrepayOrderNo.value);
+    if (hasValidCashierSnapshot.value && !cashierSnapshotStale.value
+        && ["SUCCESS", "CLOSED"].includes(cashier.value?.paymentStatus)) {
+      router.push(buildPaymentResultRoute(
+        cashier.value.paymentOrderId,
+        buildResultRouteQuery(
+          cashier.value.prepayOrderNo,
+          cashier.value.paymentMethod || selectedPaymentMethod.value
+        )
+      ));
+    }
   } finally {
     refreshLoading.value = false;
+  }
+}
+
+async function readBackAfterFailedAction(snapshot, entityVersion, actionError) {
+  if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+    return;
+  }
+  cashierSnapshotStale.value = true;
+  try {
+    const cashierPage = await paymentApi.getCashier(
+      snapshot.prepayOrderNo,
+      terminalMeta.value.terminalCode,
+      expectedRoutePayScene.value
+    );
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    if (!matchesPaymentSnapshot(snapshot, cashierPage)) {
+      throw new Error("动作失败后的收银台与当前支付单不一致");
+    }
+    cashier.value = cashierPage;
+    latestQueriedDetail.value = null;
+    cashierSnapshotStale.value = false;
+    startCountdown(cashierPage.expiresAt);
+    message.value = `${actionError.message}；收银台已重新核实。`;
+    if (cashierPage.paymentStatus === "SUCCESS" || cashierPage.paymentStatus === "CLOSED") {
+      router.push(buildPaymentResultRoute(
+        cashierPage.paymentOrderId,
+        buildResultRouteQuery(
+          cashierPage.prepayOrderNo,
+          cashierPage.paymentMethod || selectedPaymentMethod.value
+        )
+      ));
+    }
+  } catch {
+    if (isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      message.value = `${actionError.message}；支付状态未经确认，请刷新收银台，勿重复付款。`;
+    }
   }
 }
 
@@ -392,7 +550,9 @@ async function queryCurrentPayment() {
     return;
   }
   if (!canQueryPayment.value) {
-    message.value = "当前支付单尚未提交渠道，不能执行主动查单。";
+    message.value = cashierSnapshotStale.value
+      ? "收银台状态未经确认，请先刷新收银台。"
+      : "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
   }
   const snapshot = buildCurrentPaymentSnapshot();
@@ -400,7 +560,11 @@ async function queryCurrentPayment() {
   queryLoading.value = true;
   message.value = "";
   try {
-    const detail = await paymentApi.query({ paymentOrderId: snapshot.paymentOrderId });
+    const detail = await paymentApi.query(
+      { paymentOrderId: snapshot.paymentOrderId },
+      snapshot,
+      expectedRoutePayScene.value
+    );
     if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
       return;
     }
@@ -419,10 +583,7 @@ async function queryCurrentPayment() {
       ));
     }
   } catch (error) {
-    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
-      return;
-    }
-    message.value = error.message;
+    await readBackAfterFailedAction(snapshot, entityVersion, error);
   } finally {
     if (entityVersion === currentEntityVersion) {
       queryLoading.value = false;
@@ -448,22 +609,33 @@ async function pay() {
   submitLoading.value = true;
   message.value = "";
   try {
-    const submitResult = await paymentApi.submit({
+    const submitPayload = {
       prepayOrderNo: snapshot.prepayOrderNo,
       paymentMethod,
       channelCode: resolvePaymentChannelCode(paymentMethod),
       sourceAppId: sourceAppId.value,
       merchantNo: merchantNo.value,
       accessToken: resolveAccessToken(),
-      terminal: terminalMeta.value.terminalCode,
-      idempotencyKey: idempotencyKey.value
-    });
+      terminal: terminalMeta.value.terminalCode
+    };
+    const attempt = await resolvePaymentSubmitAttempt(submitPayload, idempotencyKey.value);
+    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      return;
+    }
+    idempotencyKey.value = attempt.idempotencyKey;
+    pendingSubmitAttempt.value = attempt;
+    const submitResult = await paymentApi.submit({
+      ...submitPayload,
+      idempotencyKey: attempt.idempotencyKey
+    }, expectedRoutePayScene.value);
     if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
       return;
     }
     if (!matchesPaymentSnapshot(snapshot, submitResult)) {
       throw new Error("支付提交响应为空或与当前支付单不一致");
     }
+    clearPaymentSubmitAttempt(attempt);
+    pendingSubmitAttempt.value = null;
     router.push(buildPaymentResultRoute(
       submitResult.paymentOrderId,
       buildResultRouteQuery(submitResult.prepayOrderNo, paymentMethod)
@@ -472,20 +644,36 @@ async function pay() {
     if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
       return;
     }
+    cashierSnapshotStale.value = true;
+    if (error instanceof UnverifiablePaymentSubmitAttemptError) {
+      message.value = error.message;
+      return;
+    }
     try {
-      const cashierPage = await paymentApi.getCashier(snapshot.prepayOrderNo);
+      const cashierPage = await paymentApi.getCashier(
+        snapshot.prepayOrderNo,
+        terminalMeta.value.terminalCode,
+        expectedRoutePayScene.value
+      );
       if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
         return;
       }
-      if (!matchesPrepayOrder(snapshot.prepayOrderNo, cashierPage)
-          || cashierPage.paymentOrderId !== snapshot.paymentOrderId) {
+      if (!matchesPaymentSnapshot(snapshot, cashierPage)) {
         throw new Error("收银台刷新响应为空或与当前支付单不一致");
       }
       cashier.value = cashierPage;
+      cashierSnapshotStale.value = false;
       startCountdown(cashierPage.expiresAt);
+      if (cashierPage.paymentStatus === "SUCCESS" || cashierPage.paymentStatus === "CLOSED") {
+        router.push(buildPaymentResultRoute(
+          cashierPage.paymentOrderId,
+          buildResultRouteQuery(cashierPage.prepayOrderNo, paymentMethod)
+        ));
+        return;
+      }
     } catch (refreshError) {
       if (isCurrentPaymentSnapshot(snapshot, entityVersion)) {
-        message.value = refreshError.message || error.message;
+        message.value = `${error.message}；${refreshError.message}；支付状态未经确认，请刷新收银台，勿重复付款。`;
       }
       return;
     }
@@ -512,7 +700,11 @@ async function closeCurrentPayment() {
   closeLoading.value = true;
   message.value = "";
   try {
-    const detail = await paymentApi.close({ paymentOrderId: snapshot.paymentOrderId });
+    const detail = await paymentApi.close(
+      { paymentOrderId: snapshot.paymentOrderId },
+      snapshot,
+      expectedRoutePayScene.value
+    );
     if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
       return;
     }
@@ -522,10 +714,7 @@ async function closeCurrentPayment() {
     message.value = "当前支付单已关闭，可回到订单中心重新发起支付。";
     await loadCashier(snapshot.prepayOrderNo);
   } catch (error) {
-    if (!isCurrentPaymentSnapshot(snapshot, entityVersion)) {
-      return;
-    }
-    message.value = error.message;
+    await readBackAfterFailedAction(snapshot, entityVersion, error);
   } finally {
     if (entityVersion === currentEntityVersion) {
       closeLoading.value = false;
@@ -536,7 +725,14 @@ async function closeCurrentPayment() {
 function buildCurrentPaymentSnapshot() {
   return {
     prepayOrderNo: loadedPrepayOrderNo.value,
-    paymentOrderId: cashier.value?.paymentOrderId || ""
+    paymentOrderId: cashier.value?.paymentOrderId || "",
+    businessChainId: cashier.value?.businessChainId || "",
+    billNo: cashier.value?.billNo,
+    orderNo: cashier.value?.orderNo || "",
+    customerName: cashier.value?.customerName,
+    payScene: cashier.value?.payScene,
+    paymentMethod: selectedPaymentMethod.value,
+    amount: cashier.value?.amount || ""
   };
 }
 
@@ -546,20 +742,50 @@ function isCurrentPaymentSnapshot(snapshot, entityVersion) {
     && matchesPaymentSnapshot(snapshot, cashier.value);
 }
 
-function regenerateIdempotencyKey() {
+async function regenerateIdempotencyKey() {
   if (actionRunning.value) {
+    return;
+  }
+  if (cashierSnapshotStale.value) {
+    message.value = "收银台状态未经确认，不能重置幂等键。";
     return;
   }
   if (submissionPending.value) {
     message.value = "支付结果尚未确认，不能重置幂等键。";
     return;
   }
-  idempotencyKey.value = generateIdempotencyKey();
-  message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
+  if (pendingSubmitAttempt.value) {
+    message.value = "本次支付提交结果尚未核实，不能重置幂等键；请沿用原方式查单。";
+    return;
+  }
+  const prepayOrderNo = currentPrepayOrderNo.value;
+  const entityVersion = currentEntityVersion;
+  resetLoading.value = true;
+  try {
+    await discardPaymentSubmitAttempt(prepayOrderNo);
+    if (entityVersion !== currentEntityVersion || prepayOrderNo !== currentPrepayOrderNo.value) {
+      return;
+    }
+    idempotencyKey.value = generateIdempotencyKey();
+    message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
+  } catch (error) {
+    if (error instanceof UnverifiablePaymentSubmitAttemptError
+        && entityVersion === currentEntityVersion && prepayOrderNo === currentPrepayOrderNo.value) {
+      message.value = error.message;
+      return;
+    }
+    throw error;
+  } finally {
+    if (entityVersion === currentEntityVersion) {
+      resetLoading.value = false;
+    }
+  }
 }
 
 function backToBusinessEntry() {
-  router.push(businessEntryPath.value);
+  if (businessEntryPath.value) {
+    router.push(businessEntryPath.value);
+  }
 }
 
 function resolveAccessToken() {
@@ -587,24 +813,29 @@ function syncAccessToken() {
   accessTokenAvailable.value = Boolean(resolveAccessToken());
 }
 
+watch(() => route.query.accessToken, syncAccessToken);
+
 watch(selectedPaymentMethod, () => {
-  if (!submissionPending.value) {
+  if (!submissionPending.value && !pendingSubmitAttempt.value) {
     idempotencyKey.value = generateIdempotencyKey();
   }
 });
 
-watch(currentPrepayOrderNo, (prepayOrderNo) => {
+watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
   currentEntityVersion += 1;
   latestLoadRequestId += 1;
   stopCountdown();
   cashier.value = null;
+  cashierSnapshotStale.value = false;
   loadedPrepayOrderNo.value = "";
   latestQueriedDetail.value = null;
   selectedPaymentMethod.value = "";
+  pendingSubmitAttempt.value = null;
   idempotencyKey.value = "";
   countdownSeconds.value = 0;
   message.value = "";
   submitLoading.value = false;
+  resetLoading.value = false;
   refreshLoading.value = false;
   closeLoading.value = false;
   queryLoading.value = false;
@@ -631,7 +862,10 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
     </section>
 
     <div v-if="loading" class="terminal-card terminal-state-card">收银台加载中...</div>
-    <div v-else-if="message && !cashier" class="terminal-card terminal-state-card">{{ message }}</div>
+    <div v-else-if="message && !cashier" class="terminal-card terminal-state-card">
+      <p>{{ message }}</p>
+      <button v-if="currentPrepayOrderNo" class="action-button secondary" @click="loadCashier()">重试加载收银台</button>
+    </div>
 
     <div v-else class="terminal-grid">
       <section class="terminal-card">
@@ -652,7 +886,7 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
             type="button"
             class="channel-card"
             :class="{ active: selectedPaymentMethod === item }"
-            :disabled="actionRunning || submissionPending"
+            :disabled="actionRunning || submissionPending || pendingSubmitAttempt || cashierSnapshotStale || cashier?.paymentStatus === 'RISK_REVIEW'"
             @click="selectedPaymentMethod = item"
           >
             <div class="channel-icon">{{ CHANNEL_META[item]?.icon || "PAY" }}</div>
@@ -685,9 +919,9 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
 
         <div class="terminal-actions">
           <button class="action-button primary" :disabled="actionRunning || !canSubmit" @click="pay">
-            {{ submitLoading ? "支付提交流转中..." : terminalMeta.actionLabel }}
+            {{ submitLoading ? "支付提交流转中..." : reviewRetryAllowed ? "审核通过后继续原支付" : terminalMeta.actionLabel }}
           </button>
-          <button class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
+          <button v-if="businessEntryPath" class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
             返回业务入口
           </button>
           <button class="action-button secondary" :disabled="actionRunning" @click="refreshCashier">
@@ -699,13 +933,15 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
           <button class="action-button ghost" :disabled="actionRunning || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
           </button>
-          <button class="action-button secondary" :disabled="actionRunning || submissionPending" @click="regenerateIdempotencyKey">
+          <button class="action-button secondary" :disabled="actionRunning || submissionPending || pendingSubmitAttempt || cashierSnapshotStale" @click="regenerateIdempotencyKey">
             重置幂等键
           </button>
         </div>
+        <p v-if="!businessEntryPath && hasValidCashierSnapshot" class="feedback-text">当前场景暂无对应的统一支付入口，请从原业务订单页返回。</p>
 
         <p v-if="message" class="feedback-text">{{ message }}</p>
         <p v-else-if="submitBlockedHint" class="feedback-text">{{ submitBlockedHint }}</p>
+        <p v-if="cashierSnapshotStale" class="feedback-text">当前为上次已加载的收银台快照，重新核实成功前不可提交、查单或本地关单。</p>
 
         <div class="terminal-ops-grid">
           <div class="ops-card">
@@ -729,24 +965,22 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
           <div class="desktop-qr-card">
             <div class="desktop-qr-header">
               <div>
-                <strong>桌面端扫码支付区</strong>
-                <p>当前桌面端保留模拟二维码载体，后续可直接替换为真实渠道二维码组件。</p>
+                <strong>桌面端渠道支付区</strong>
+                <p>当前仅展示联调占位，不是支付凭证，不可扫码付款。</p>
               </div>
               <span class="support-tag">PC 扫码模式</span>
             </div>
-            <div class="desktop-qr-frame">
-              <div class="desktop-qr-grid">
-                <span
-                  v-for="(filled, index) in desktopQrBlocks"
-                  :key="index"
-                  :class="['desktop-qr-cell', { filled }]"
-                />
+            <div v-if="desktopQrPlaceholderVisible" class="desktop-qr-frame" aria-label="不可支付的联调占位">
+              <div class="desktop-qr-placeholder">
+                <strong>联调占位</strong>
+                <span>不可扫码支付</span>
               </div>
             </div>
+            <div v-else class="desktop-qr-unavailable">当前状态暂不生成渠道二维码，请以支付状态和主动查单结果为准。</div>
             <div class="desktop-qr-meta">
               <div><span>扫码方式</span><strong>{{ selectedPaymentMethod }}</strong></div>
               <div><span>渠道编码</span><strong>{{ resolvePaymentChannelCode(selectedPaymentMethod) }}</strong></div>
-              <div><span>支付载荷</span><strong class="mono-text">{{ desktopQrCodeValue }}</strong></div>
+              <div><span>支付单号</span><strong class="mono-text">{{ cashier?.paymentOrderId || "-" }}</strong></div>
             </div>
           </div>
 
@@ -832,12 +1066,13 @@ watch(currentPrepayOrderNo, (prepayOrderNo) => {
             </span>
           </div>
           <div class="ops-row"><span>查单来源</span><span>{{ latestQueriedDetail?.querySource || "-" }}</span></div>
-          <div class="ops-row"><span>渠道流水号</span><span class="mono-text">{{ latestQueriedDetail?.channelTransactionNo || "-" }}</span></div>
+          <div class="ops-row"><span>渠道流水号</span><span class="mono-text">{{ latestQueriedDetail?.channelTransactionNo || cashier?.channelTransactionNo || "-" }}</span></div>
           <div class="ops-row"><span>渠道返回码</span><span class="mono-text">{{ latestQueriedDetail?.channelReturnCode || "-" }}</span></div>
           <div class="ops-row"><span>标准错误码</span><span class="mono-text">{{ latestQueriedDetail?.standardizedCode || "-" }}</span></div>
           <div class="ops-row"><span>映射版本</span><span>{{ latestQueriedDetail?.returnCodeMappingVersion || "-" }}</span></div>
           <div class="ops-row"><span>处理建议</span><span>{{ latestQueriedDetail?.handlingSuggestion || "-" }}</span></div>
           <div class="ops-row"><span>最近尝试状态</span><span>{{ latestQueriedDetail?.latestAttemptStatus || "-" }}</span></div>
+          <div class="ops-row"><span>最近尝试完成时间</span><span>{{ latestQueriedDetail?.latestAttemptCompletedAt || cashier?.latestAttemptCompletedAt || "-" }}</span></div>
           <p class="ops-description">
             扫码后若前端仍停留在支付中，可先在当前收银台执行主动查单；若已成功或已关闭，会自动跳转结果页继续收口。
           </p>

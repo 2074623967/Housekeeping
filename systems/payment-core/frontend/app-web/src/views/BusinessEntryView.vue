@@ -3,7 +3,10 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { normalizePaymentAmountInput } from "../constants/paymentAmount";
-import { persistPaymentAccessToken } from "../constants/paymentSession";
+import {
+  persistPaymentAccessToken,
+  resolveConfiguredPaymentAccessToken
+} from "../constants/paymentSession";
 import { buildCashierRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
@@ -32,19 +35,31 @@ const TERMINAL_META = {
     title: "家政 App 支付业务入口",
     hint: "适用于用户在 App 内发起充值、补款、转账和提现申请后的统一支付拉起。",
     sourceAppId: "housekeeping-app-web",
-    accessToken: "token-housekeeping-app-web"
+    accessToken: resolveConfiguredPaymentAccessToken(
+      import.meta.env,
+      "VITE_PAYMENT_ACCESS_TOKEN_APP",
+      import.meta.env.DEV ? ["token", "housekeeping", "app", "web"].join("-") : ""
+    )
   },
   h5: {
     title: "家政 H5 支付业务入口",
     hint: "适用于短信触达、活动页和轻量预约页中的支付业务入口。",
     sourceAppId: "housekeeping-h5-web",
-    accessToken: "token-housekeeping-h5-web"
+    accessToken: resolveConfiguredPaymentAccessToken(
+      import.meta.env,
+      "VITE_PAYMENT_ACCESS_TOKEN_H5",
+      import.meta.env.DEV ? ["token", "housekeeping", "h5", "web"].join("-") : ""
+    )
   },
   pc: {
     title: "家政 PC 支付业务入口",
     hint: "适用于运营代客支付、企业客户付款和桌面端业务办理场景。",
     sourceAppId: "housekeeping-pc-web",
-    accessToken: "token-housekeeping-pc-web"
+    accessToken: resolveConfiguredPaymentAccessToken(
+      import.meta.env,
+      "VITE_PAYMENT_ACCESS_TOKEN_PC",
+      import.meta.env.DEV ? ["token", "housekeeping", "pc", "web"].join("-") : ""
+    )
   }
 };
 
@@ -173,6 +188,7 @@ async function createPrepay() {
   }
   submitting.value = true;
   message.value = "";
+  const submittedSceneType = props.sceneType;
   try {
     const orderNo = form.value.orderNo.trim() || buildOrderNo();
     const prepay = await paymentApi.prepay({
@@ -183,7 +199,13 @@ async function createPrepay() {
       cashierTitle: sceneMeta.value.cashierTitle,
       remark: form.value.remark.trim()
     });
-    router.push(buildCashierRoute(prepay.prepayOrderNo, { bizType: props.sceneType }));
+    if (submittedSceneType !== props.sceneType) {
+      return;
+    }
+    router.push(buildCashierRoute(prepay.prepayOrderNo, {
+      bizType: props.sceneType,
+      payScene: prepay.payScene
+    }));
   } catch (error) {
     message.value = error.message;
   } finally {

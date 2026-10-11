@@ -623,21 +623,36 @@ button {
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
-.desktop-qr-grid {
+.desktop-qr-placeholder {
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 4px;
+  place-items: center;
+  gap: 8px;
   width: 208px;
   height: 208px;
+  border: 2px dashed #94a3b8;
+  background: #f1f5f9;
+  color: #475569;
+  text-align: center;
 }
 
-.desktop-qr-cell {
-  border-radius: 4px;
-  background: #dbeafe;
+.desktop-qr-placeholder strong {
+  color: #0f172a;
+  font-size: 18px;
 }
 
-.desktop-qr-cell.filled {
-  background: #0f172a;
+.desktop-qr-placeholder span {
+  font-size: 12px;
+}
+
+.desktop-qr-unavailable {
+  display: grid;
+  place-items: center;
+  min-height: 208px;
+  padding: 24px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
 }
 
 .desktop-qr-meta {
