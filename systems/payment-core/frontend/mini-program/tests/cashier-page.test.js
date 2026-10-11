@@ -270,6 +270,46 @@ test("does not invoke native payment for an unchanged prepay submit response", a
   }
 });
 
+test("does not invoke native payment while a submit is still processing", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeCalls = 0;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.submit = () => Promise.resolve({
+    ...cashier(), paymentMethod: "微信支付", paymentStatus: "PAYING",
+    nativePaymentParams: {
+      timeStamp: "123", nonceStr: "nonce", package: "prepay_id=local",
+      signType: "RSA", paySign: "signature"
+    }
+  });
+  paymentApi.getCashier = () => Promise.resolve({
+    ...cashier(), status: "支付中", paymentStatus: "PAYING"
+  });
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    idempotencyKey: "MINI-PRE-001", loading: false, canSubmit: true });
+  try {
+    await page.submitPayment();
+    assert.equal(nativeCalls, 0);
+    assert.equal(redirects, 0);
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+    assert.equal(page.data.cashier.paymentStatus, "PAYING");
+    assert.equal(page.data.canSubmit, false);
+    assert.match(page.data.errorMessage, /状态未推进/);
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
 test("routes completed submit responses without invoking native payment again", async () => {
   const previousGetApp = global.getApp;
   const previousWx = global.wx;

@@ -416,6 +416,16 @@ test("rejects mini program payment submit responses without payment and cashier 
     (error) => error.code === "PAYMENT-MINI-INVALID-PAYMENT-SUBMIT"
   );
   assert.throws(
+    () => normalizePaymentSubmitResult({
+      ...validResult,
+      paymentStatus: "PAYING",
+      paymentMethod: "微信支付",
+      channel: "WX_MINI_PROGRAM"
+    }, "PRE-001", "微信支付", "WX_MINI_PROGRAM"),
+    (error) => error.code === "PAYMENT-MINI-INVALID-PAYMENT-SUBMIT"
+      && error.message.includes("状态未推进")
+  );
+  assert.throws(
     () => normalizePaymentSubmitResult(
       { ...validResult, payScene: "WALLET_RECHARGE_MINI_PROGRAM" },
       "PRE-001", null, null, "BALANCE_PAY_MINI_PROGRAM"

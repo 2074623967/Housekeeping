@@ -15,7 +15,8 @@ const chromeBinary = process.env.HSP_CHROME_BIN
 const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
   submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
-  submitStale: "PAY-RESULT-SUBMIT-STALE-001"
+  submitStale: "PAY-RESULT-SUBMIT-STALE-001",
+  submitProcessing: "PAY-RESULT-SUBMIT-PROCESSING-001"
 };
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -35,7 +36,7 @@ function paymentDetail(kind, status) {
     prepayOrderNo: `PRE-${paymentOrderId}`, orderNo: `ORD-${paymentOrderId}`,
     payScene: "HOME_CLEAN", amount: "68.00", paymentMethod: "支付宝",
     customerName: "本机用户", channel: submitted ? "alipay_h5" : null,
-    channelTransactionNo: submitted ? "ALI-LOCAL-001" : null,
+    channelTransactionNo: submitted && status !== "PAYING" ? "ALI-LOCAL-001" : null,
     status, statusType: status === "SUCCESS" ? "success" : status === "CLOSED" ? "danger"
       : status === "WAIT_CALLBACK" ? "warn" : "info",
     successAt: status === "SUCCESS" ? "2026-10-10 10:00:03" : null,
@@ -53,8 +54,9 @@ function cashierPage(kind, status) {
     ...payment,
     paymentStatus: status,
     status: status === "SUCCESS" ? "支付成功" : status === "CLOSED" ? "已关闭"
-      : status === "WAIT_CALLBACK" ? "待回调" : "待支付",
-    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" ? "danger" : "warn",
+      : status === "WAIT_CALLBACK" ? "待回调" : status === "PAYING" ? "支付中" : "待支付",
+    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" ? "danger"
+      : status === "PAYING" ? "info" : "warn",
     paymentMethod: kind !== "close" && status !== "PREPAY_CREATED" ? "支付宝" : null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       .toISOString().slice(0, 19).replace("T", " "),
@@ -92,11 +94,11 @@ async function main() {
           }
           response.end(JSON.stringify({ code: "0", data }));
         }
-      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitStale"].includes(kind) ? "submit" : kind}`) {
+      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
         let input = "";
         for await (const chunk of request) input += chunk;
         const body = JSON.parse(input);
-        if (["submit", "submitOther", "submitStale"].includes(kind)) {
+        if (["submit", "submitOther", "submitStale", "submitProcessing"].includes(kind)) {
           assert.equal(body.prepayOrderNo, `PRE-${paymentIds[kind]}`);
           assert.equal(body.paymentMethod, "支付宝");
           assert.equal(body.accessToken, "local-test-token");
@@ -109,7 +111,13 @@ async function main() {
             attempts.push(body);
             retrySubmitBodies.set(body.prepayOrderNo, attempts);
             assert.ok(attempts.length <= 2);
-            if (kind === "submitStale" && attempts.length === 1) {
+            if (kind === "submitProcessing" && attempts.length === 1) {
+              status = "PAYING";
+              response.end(JSON.stringify({ code: "0", data: {
+                ...cashierPage(kind, status), paymentMethod: body.paymentMethod,
+                channel: body.channelCode, cashierStatus: "支付中", cashierStatusType: "info"
+              } }));
+            } else if (kind === "submitStale" && attempts.length === 1) {
               response.end(JSON.stringify({ code: "0", data: {
                 ...cashierPage(kind, status), paymentMethod: body.paymentMethod, channel: body.channelCode
               } }));
@@ -320,6 +328,21 @@ async function main() {
       "replayed stale submit response");
     assert.equal(retrySubmitBodies.get(`PRE-${paymentIds[kind]}`).length, 2);
     assert.equal(requests.slice(staleStart).filter((item) => item.method === "POST").length, 2);
+    kind = "submitProcessing";
+    status = "PREPAY_CREATED";
+    retrySubmit = true;
+    const processingStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token` });
+    await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
+      "cashier before processing submit response");
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付结果尚未确认，当前请求已锁定')
+      && document.body.innerText.includes('支付中')`), "processing submit remains unresolved");
+    const processingKey = retrySubmitBodies.get(`PRE-${paymentIds[kind]}`)[0].idempotencyKey;
+    assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('${processingKey}'))`), true);
+    assert.equal(await evaluate(`${actionButton('重置幂等键')}.disabled`), true);
+    assert.equal(requests.slice(processingStart).filter((item) => item.method === "POST").length, 1);
+    assert.equal(await evaluate("location.pathname.startsWith('/cashier/')"), true);
     kind = "submit";
     status = "PREPAY_CREATED";
     failReadback = false;
@@ -399,7 +422,8 @@ async function main() {
       "restored cashier after storage recovery");
     assert.equal(await evaluate(`document.body.innerText.includes('${otherSubmitKey}')`), true);
     assert.equal(await evaluate(`(() => {
-      const keys = Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.'));
+      const keys = Object.keys(sessionStorage).filter((key) => key.startsWith('hsp.paymentSubmitAttempt.v1.')
+        && sessionStorage.getItem(key).includes('${otherSubmitKey}'));
       if (keys.length !== 1) return false;
       sessionStorage.setItem(keys[0], '{broken-json');
       return true;

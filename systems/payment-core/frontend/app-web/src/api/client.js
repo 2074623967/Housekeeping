@@ -608,7 +608,7 @@ export function normalizePaymentSubmitResult(
       || typeof data.orderNo !== "string" || !data.orderNo.trim()
       || !isValidAmount(data.amount)
       || !isKnownStatus(data.paymentStatus, PAYMENT_STATUSES)
-      || data.paymentStatus.trim().toUpperCase() === "PREPAY_CREATED"
+      || ["PREPAY_CREATED", "PAYING"].includes(data.paymentStatus.trim().toUpperCase())
       || !isConsistentPaymentSuccessTime(data.paymentStatus, data.successAt)
       || !isConsistentPaymentChannel(data.paymentStatus, data.channel)
       || !isConsistentPaymentChannelTransaction(data.paymentStatus, data.channelTransactionNo)

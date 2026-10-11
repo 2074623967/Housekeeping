@@ -695,6 +695,16 @@ test("rejects a payment submit response without payment and cashier facts", asyn
       && error.message.includes("状态未推进")
   );
   assert.throws(
+    () => normalizePaymentSubmitResult({
+      ...validResult,
+      paymentStatus: "PAYING",
+      paymentMethod: "微信支付",
+      channel: "WX_H5"
+    }, "PRE-001", "微信支付", "WX_H5"),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT"
+      && error.message.includes("状态未推进")
+  );
+  assert.throws(
     () => normalizePaymentSubmitResult(
       { ...validResult, payScene: "WALLET_RECHARGE_APP" },
       "PRE-001", null, null, "BALANCE_PAY_APP"

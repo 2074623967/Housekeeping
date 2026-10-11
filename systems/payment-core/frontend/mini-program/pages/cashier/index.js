@@ -204,14 +204,14 @@ Page({
       const paymentStatus = typeof result.paymentStatus === "string"
         ? result.paymentStatus.trim().toUpperCase()
         : "";
-      if (paymentStatus === "PREPAY_CREATED") {
+      if (["PREPAY_CREATED", "PAYING"].includes(paymentStatus)) {
         throw new Error("支付提交状态未推进，请刷新收银台后使用原请求键重试");
       }
       if (["RISK_REVIEW", "SUCCESS", "CLOSED"].includes(paymentStatus)) {
         this.redirectToPaymentResult(result.paymentOrderId, prepayOrderNo);
         return;
       }
-      if (!["WAIT_CALLBACK", "PAYING"].includes(paymentStatus)) {
+      if (paymentStatus !== "WAIT_CALLBACK") {
         throw new Error("支付提交状态不允许拉起微信支付，请刷新收银台核对结果");
       }
       const nativePaymentResult = await requestNativePayment(result);
