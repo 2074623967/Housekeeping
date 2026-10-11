@@ -11,7 +11,6 @@ import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
-import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
@@ -20,8 +19,14 @@ import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.Arrays;
 import java.util.List;
@@ -37,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.FileSystemResource;
@@ -298,24 +304,26 @@ class PaymentSubmitReplayIntegrationTest {
     }
 
     @Test
-    void shouldNotReplayUnacceptedChannelSubmitAsSuccess() throws Exception {
+    void shouldNotReplayUnacceptedChannelSubmitOverHttp() throws Exception {
         String channelCode = "blocking_wx_h5";
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger calls = new AtomicInteger();
         PaymentChannelSubmitAdapter adapter = new BlockingChannelSubmitAdapter(channelCode, entered, release, calls);
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
-        application.setWebApplicationType(WebApplicationType.NONE);
         application.addInitializers(context -> context.getBeanFactory().registerSingleton("blockingAdapter", adapter));
         String databaseUrl = "jdbc:h2:mem:payment_pending_replay_" + System.nanoTime()
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE;LOCK_TIMEOUT=10000";
         try (ConfigurableApplicationContext context = application.run(
                 "--spring.profiles.active=demo", "--spring.datasource.url=" + databaseUrl,
+                "--server.address=127.0.0.1", "--server.port=0",
                 "--payment.ops-config.enabled=false", "--payment.scheduling.enabled=false",
                 "--spring.rabbitmq.listener.simple.auto-startup=false",
                 "--spring.rabbitmq.listener.direct.auto-startup=false")) {
             PaymentService paymentService = context.getBean(PaymentService.class);
             JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
             assertEquals(1, jdbcTemplate.update(
                     "UPDATE t_payment_channel_config SET channel_code = ? WHERE channel_code = 'wx_h5'",
                     channelCode));
@@ -338,9 +346,10 @@ class PaymentSubmitReplayIntegrationTest {
             request.setTerminal("H5");
             request.setClientIp("127.0.0.1");
             request.setIdempotencyKey("DEMO-PENDING-REPLAY-001");
+            String requestBody = objectMapper.writeValueAsString(request);
             ExecutorService executor = Executors.newSingleThreadExecutor();
             try {
-                Future<PrepayOrderDTO> first = executor.submit(() -> paymentService.submit(request));
+                Future<JsonNode> first = executor.submit(() -> post(objectMapper, port, requestBody));
                 if (!entered.await(10, TimeUnit.SECONDS)) {
                     first.get(1, TimeUnit.SECONDS);
                     throw new AssertionError("channel submit was not entered");
@@ -354,12 +363,16 @@ class PaymentSubmitReplayIntegrationTest {
                 assertEquals("支付中", jdbcTemplate.queryForObject(
                         "SELECT cashier_status FROM t_prepay_order WHERE prepay_order_no = ?",
                         String.class, prepay.getPrepayOrderNo()));
-                CashierPageDTO cashier = paymentService.cashier(prepay.getPrepayOrderNo());
-                assertEquals("PAYING", cashier.getPaymentStatus());
-                assertEquals("支付中", cashier.getStatus());
-                assertNull(cashier.getChannelTransactionNo());
-                BusinessException pending = assertThrows(BusinessException.class, () -> paymentService.submit(request));
-                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, pending.getCode());
+                JsonNode cashier = get(objectMapper, port, prepay.getPrepayOrderNo()).path("data");
+                assertEquals("PAYING", cashier.path("paymentStatus").asText());
+                assertEquals("支付中", cashier.path("status").asText());
+                assertTrue(cashier.path("channelTransactionNo").isNull()
+                        || cashier.path("channelTransactionNo").isMissingNode());
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS,
+                        post(objectMapper, port, requestBody).path("code").asText());
+                request.setPayerPhone("13800000001");
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_CONFLICT,
+                        post(objectMapper, port, objectMapper.writeValueAsString(request)).path("code").asText());
                 assertEquals(1, calls.get());
                 assertEquals(1, jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
@@ -368,9 +381,12 @@ class PaymentSubmitReplayIntegrationTest {
                         "SELECT token_status FROM t_payment_submit_concurrency_token WHERE prepay_order_no = ?",
                         String.class, prepay.getPrepayOrderNo()));
                 release.countDown();
-                assertEquals("WAIT_CALLBACK", first.get(15, TimeUnit.SECONDS).getPaymentStatus());
-                assertEquals("WAIT_CALLBACK", paymentService.cashier(prepay.getPrepayOrderNo()).getPaymentStatus());
-                assertEquals("WAIT_CALLBACK", paymentService.submit(request).getPaymentStatus());
+                assertEquals("WAIT_CALLBACK", first.get(15, TimeUnit.SECONDS)
+                        .path("data").path("paymentStatus").asText());
+                assertEquals("WAIT_CALLBACK", get(objectMapper, port, prepay.getPrepayOrderNo())
+                        .path("data").path("paymentStatus").asText());
+                assertEquals("WAIT_CALLBACK", post(objectMapper, port, requestBody)
+                        .path("data").path("paymentStatus").asText());
                 assertEquals(1, calls.get());
             } finally {
                 release.countDown();
@@ -782,6 +798,42 @@ class PaymentSubmitReplayIntegrationTest {
             assertEquals(routeCount, jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM t_payment_route_record WHERE payment_order_id = ?",
                     Integer.class, paymentOrderId));
+        }
+    }
+
+    private JsonNode post(ObjectMapper objectMapper, int port, String body) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://127.0.0.1:" + port + "/api/payments/submit").openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(3000);
+        connection.setReadTimeout(20000);
+        connection.setRequestProperty("Content-Type", "application/json");
+        connection.setDoOutput(true);
+        try {
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(body.getBytes(StandardCharsets.UTF_8));
+            }
+            assertEquals(200, connection.getResponseCode());
+            try (InputStream input = connection.getInputStream()) {
+                return objectMapper.readTree(input);
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private JsonNode get(ObjectMapper objectMapper, int port, String prepayOrderNo) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://127.0.0.1:" + port + "/api/payments/cashier/" + prepayOrderNo).openConnection();
+        connection.setConnectTimeout(3000);
+        connection.setReadTimeout(5000);
+        try {
+            assertEquals(200, connection.getResponseCode());
+            try (InputStream input = connection.getInputStream()) {
+                return objectMapper.readTree(input);
+            }
+        } finally {
+            connection.disconnect();
         }
     }
 }
