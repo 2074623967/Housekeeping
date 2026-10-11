@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentRouteApi } from "../api/client";
+import { matchesPaymentRouteDetailSnapshot, paymentRouteApi } from "../api/client";
 import {
   paymentDetailRoute,
   paymentFlowDetailRoute,
@@ -28,7 +28,8 @@ const canUseSnapshot = computed(() => Boolean(
   && !isSnapshotStale.value
 ));
 const relatedRoutes = computed(() => ({
-  payment: detail.value?.paymentOrderId ? paymentDetailRoute(detail.value.paymentOrderId) : null,
+  payment: detail.value?.paymentOrderId && !detail.value.successFactIssue
+    ? paymentDetailRoute(detail.value.paymentOrderId) : null,
   request: detail.value?.requestNo ? paymentRequestDetailRoute(detail.value.requestNo) : null,
   routeFlow: detail.value?.routeNo ? paymentFlowDetailRoute("ROUTE_RECORD", detail.value.routeNo) : null,
   flows: detail.value?.paymentOrderId ? paymentFlowsRoute({ paymentOrderId: detail.value.paymentOrderId }) : null,
@@ -43,6 +44,19 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(routeNo = currentRouteNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = routeNo === currentRouteNo.value && detail.value
+    ? {
+      routeNo: detail.value.routeNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      requestNo: detail.value.requestNo,
+      orderNo: detail.value.orderNo,
+      paymentMethod: detail.value.paymentMethod,
+      customerName: detail.value.customerName,
+      amount: detail.value.amount,
+      channelCode: detail.value.channelCode
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -52,6 +66,9 @@ async function loadDetail(routeNo = currentRouteNo.value) {
     }
     if (!result || result.routeNo !== routeNo) {
       throw new Error("支付路由详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentRouteDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("支付路由详情响应为空或与当前支付关联/订单/金额快照不一致");
     }
     detail.value = result;
     hasLoadedData.value = true;
@@ -113,6 +130,9 @@ watch(currentRouteNo, (routeNo) => {
       <div v-if="loadErrorMessage" class="error-banner">
         {{ hasLoadedData ? "支付路由详情刷新失败，当前展示上次成功快照：" : "支付路由详情加载失败：" }}{{ loadErrorMessage }}
       </div>
+      <div v-if="canUseSnapshot && detail?.successFactIssue" class="error-banner">
+        所属支付单成功事实异常（{{ detail.successFactIssue }}）；保留路由详情，支付单详情不可用。
+      </div>
       <div v-if="isLoading" class="state-box">支付路由详情加载中...</div>
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付路由详情快照</div>
       <template v-else-if="detail">
@@ -150,6 +170,7 @@ watch(currentRouteNo, (routeNo) => {
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div><strong>业务链路：</strong><span class="mono-text">{{ formatValue(detail.businessChainId) }}</span></div>
               <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
               <div><strong>预付单号：</strong>{{ formatValue(detail.prepayOrderNo) }}</div>
               <div><strong>客户名称：</strong>{{ formatValue(detail.customerName) }}</div>

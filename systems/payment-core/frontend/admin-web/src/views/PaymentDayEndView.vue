@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentDayEndApi } from "../api/client";
 import { isClosedShanghaiBusinessDate, previousShanghaiBusinessDate } from "../utils/businessDate";
+import { resolvePaymentDayEndRunMessage } from "../utils/paymentDayEnd";
 
 const router = useRouter();
 const overview = ref({
@@ -100,7 +101,7 @@ async function runBatch() {
       recentBatches: Array.isArray(result.recentBatches) ? result.recentBatches : []
     };
     hasLoadedData.value = true;
-    actionResultMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
+    actionResultMessage.value = resolvePaymentDayEndRunMessage(result, runForm.value.bizDate);
   } catch (error) {
     actionErrorMessage.value = `支付日终处理触发失败：${error.message}`;
   } finally {
@@ -113,7 +114,7 @@ function exportBatches() {
     return;
   }
   const exportUrl = paymentDayEndApi.buildExportUrl();
-  window.open(exportUrl, "_blank", "noopener");
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function openDrillDown(route) {

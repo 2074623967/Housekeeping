@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentRequestApi } from "../api/client";
+import { matchesPaymentRequestDetailSnapshot, paymentRequestApi } from "../api/client";
 import {
   billDetailRoute,
   cashierSessionDetailRoute,
@@ -38,7 +38,8 @@ const canUseSnapshot = computed(() => Boolean(
 const relatedRoutes = computed(() => ({
   order: detail.value?.standardOrderNo ? orderDetailRoute(detail.value.standardOrderNo) : null,
   bill: detail.value?.billNo ? billDetailRoute(detail.value.billNo) : null,
-  payment: detail.value?.paymentOrderId ? paymentDetailRoute(detail.value.paymentOrderId) : null,
+  payment: detail.value?.paymentOrderId && !detail.value.successFactIssue
+    ? paymentDetailRoute(detail.value.paymentOrderId) : null,
   paymentRecord: detail.value?.paymentOrderId
     ? paymentRecordDetailRoute(detail.value.paymentOrderId)
     : null,
@@ -56,7 +57,7 @@ const relatedRoutes = computed(() => ({
     : null
 }));
 const cashierUrl = computed(() => detail.value?.prepayOrderNo
-  ? buildAppWebCashierUrl(detail.value.prepayOrderNo)
+  ? buildAppWebCashierUrl(detail.value.prepayOrderNo, undefined, detail.value.payScene)
   : "");
 const metricCards = computed(() => detail.value ? [
   { title: "请求状态", value: detail.value.requestStatus || "-", hint: detail.value.requestNo },
@@ -67,6 +68,20 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(requestNo = currentRequestNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = requestNo === currentRequestNo.value && detail.value
+    ? {
+      requestNo: detail.value.requestNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      prepayOrderNo: detail.value.prepayOrderNo,
+      payScene: detail.value.payScene,
+      orderNo: detail.value.orderNo,
+      standardOrderNo: detail.value.standardOrderNo,
+      billNo: detail.value.billNo,
+      paymentMethod: detail.value.paymentMethod,
+      routeNo: detail.value.routeNo
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -76,6 +91,9 @@ async function loadDetail(requestNo = currentRequestNo.value) {
     }
     if (!requestDetail || requestDetail.requestNo !== requestNo) {
       throw new Error("支付请求详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentRequestDetailSnapshot(expectedSnapshot, requestDetail)) {
+      throw new Error("支付请求详情响应为空或与当前支付关联快照不一致");
     }
     detail.value = requestDetail;
     hasLoadedData.value = true;
@@ -148,6 +166,9 @@ watch(currentRequestNo, (requestNo) => {
       <div v-if="loadErrorMessage" class="error-banner">
         {{ hasLoadedData ? "支付请求详情刷新失败，当前展示上次成功快照：" : "支付请求详情加载失败：" }}{{ loadErrorMessage }}
       </div>
+      <div v-if="canUseSnapshot && detail?.successFactIssue" class="error-banner">
+        所属支付单成功事实异常（{{ detail.successFactIssue }}）；保留请求详情，支付单详情不可用。
+      </div>
       <div v-if="isLoading" class="state-box">支付请求详情加载中...</div>
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付请求详情快照</div>
       <template v-else-if="detail">
@@ -168,6 +189,7 @@ watch(currentRequestNo, (requestNo) => {
             <div class="detail-grid detail-grid-wide">
               <div><strong>请求编号：</strong>{{ formatValue(detail.requestNo) }}</div>
               <div><strong>预付单号：</strong>{{ formatValue(detail.prepayOrderNo) }}</div>
+              <div><strong>支付场景：</strong>{{ formatValue(detail.payScene) }}</div>
               <div><strong>支付方式：</strong>{{ formatValue(detail.paymentMethod) }}</div>
               <div><strong>来源应用：</strong>{{ formatValue(detail.sourceAppId) }}</div>
               <div><strong>渠道编码：</strong>{{ formatValue(detail.channelCode) }}</div>
@@ -191,13 +213,14 @@ watch(currentRequestNo, (requestNo) => {
               <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
               <div><strong>账单号：</strong>{{ formatValue(detail.billNo) }}</div>
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div><strong>业务链路：</strong>{{ formatValue(detail.businessChainId) }}</div>
               <div><strong>路由编号：</strong>{{ formatValue(detail.routeNo) }}</div>
               <div><strong>路由规则：</strong>{{ formatValue(detail.routeRule) }}</div>
               <div><strong>路由结果：</strong>{{ formatValue(detail.routeResult) }}</div>
               <div><strong>路由配置快照：</strong>{{ formatValue(detail.routeOpsConfigSnapshotVersion) }}</div>
             </div>
             <div class="ops-card detail-panel">
-              <div class="ops-row"><span>标准订单</span><span>{{ detail.standardOrderNo ? "可联查" : "当前业务号不是标准订单" }}</span></div>
+              <div class="ops-row"><span>标准订单</span><span>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</span></div>
               <div class="ops-row"><span>请求路由</span><span>{{ detail.routeNo ? "已精确关联" : "本次请求无路由事实" }}</span></div>
               <div class="ops-row"><span>导航状态</span><span>{{ canUseSnapshot ? "当前快照有效" : "当前快照不可用于联查" }}</span></div>
             </div>

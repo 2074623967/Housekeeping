@@ -44,6 +44,7 @@ const metrics = computed(() => ({
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 
 function buildQuery() {
   return {
@@ -83,6 +84,9 @@ function refreshWorkerSettlements() {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
@@ -285,7 +289,7 @@ onMounted(loadWorkerSettlements);
                 <td><span :class="['badge', item.payoutStatusType]">{{ item.payoutStatus }}</span></td>
                 <td>
                   <div class="list-actions">
-                    <button class="link-button" @click="pickItem(item)">查看快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
                   </div>
                 </td>
               </tr>

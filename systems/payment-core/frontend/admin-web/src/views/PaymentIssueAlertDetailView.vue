@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentIssueApi } from "../api/client";
+import { matchesPaymentIssueAlertDetailSnapshot, paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentIssuesRoute, paymentLogsRoute } from "../router/listRoutes";
 
@@ -14,6 +14,13 @@ const loadErrorMessage = ref("");
 let latestLoadRequestId = 0;
 
 const currentAlertNo = computed(() => typeof route.params.alertNo === "string" ? route.params.alertNo : "");
+const isSnapshotStale = computed(() => Boolean(hasLoadedData.value && loadErrorMessage.value));
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value
+  && detail.value?.alertNo === currentAlertNo.value
+  && !isLoading.value
+  && !isSnapshotStale.value
+));
 const statusLabel = (state) => ({
   INITIAL_WAIT: "首次等待",
   DUE: "当前可执行",
@@ -34,16 +41,29 @@ const metricCards = computed(() => detail.value ? [
 ] : []);
 
 function formatValue(value) { return value == null || value === "" ? "-" : value; }
-function openRoute(target) { if (target && !isLoading.value && hasLoadedData.value) router.push(target); }
+function openRoute(target) { if (target && canUseSnapshot.value) router.push(target); }
 
 async function loadDetail(alertNo = currentAlertNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = alertNo === currentAlertNo.value && detail.value
+    ? {
+      alertNo: detail.value.alertNo,
+      sourceAlertNo: detail.value.sourceAlertNo,
+      issueNo: detail.value.issueNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      issueType: detail.value.issueType,
+      severity: detail.value.severity
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
     const result = await paymentIssueApi.getAlertDetail(alertNo);
     if (requestId !== latestLoadRequestId || alertNo !== currentAlertNo.value) return;
     if (!result || result.alertNo !== alertNo) throw new Error("告警详情响应为空或与当前路由不一致");
+    if (expectedSnapshot && !matchesPaymentIssueAlertDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("告警详情响应为空或与当前支付归属快照不一致");
+    }
     detail.value = result;
     hasLoadedData.value = true;
   } catch (error) {
@@ -69,9 +89,9 @@ watch(currentAlertNo, (alertNo) => {
       <div><h2>支付异常告警详情</h2><p>按告警号精确核对异常触达、供应商投递、回执回查与人工确认事实</p></div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="router.push('/payment-issue-alerts')">返回告警明细</button>
-        <button class="button secondary" :disabled="!hasLoadedData || !relatedRoutes.payment" @click="openRoute(relatedRoutes.payment)">支付单</button>
-        <button class="button secondary" :disabled="!hasLoadedData || !relatedRoutes.issue" @click="openRoute(relatedRoutes.issue)">异常中心</button>
-        <button class="button secondary" :disabled="!hasLoadedData || !relatedRoutes.logs" @click="openRoute(relatedRoutes.logs)">处理日志</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !relatedRoutes.payment" @click="openRoute(relatedRoutes.payment)">支付单</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !relatedRoutes.issue" @click="openRoute(relatedRoutes.issue)">异常中心</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !relatedRoutes.logs" @click="openRoute(relatedRoutes.logs)">处理日志</button>
         <button class="button primary" :disabled="isLoading" @click="loadDetail()">{{ isLoading ? "刷新中..." : "刷新" }}</button>
       </div>
     </div>
@@ -85,6 +105,7 @@ watch(currentAlertNo, (alertNo) => {
           <section class="panel mini"><div class="section-title"><h3>告警事实</h3><span class="meta">告警号唯一定位</span></div><div class="detail-grid detail-grid-wide">
             <div><strong>告警号：</strong><span class="mono-text">{{ formatValue(detail.alertNo) }}</span></div><div><strong>来源告警号：</strong>{{ formatValue(detail.sourceAlertNo) }}</div>
             <div><strong>异常编号：</strong>{{ formatValue(detail.issueNo) }}</div><div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+            <div><strong>业务链路：</strong><span class="mono-text">{{ formatValue(detail.businessChainId) }}</span></div>
             <div><strong>告警类型：</strong>{{ formatValue(detail.issueType) }}</div><div><strong>严重等级：</strong>{{ formatValue(detail.severity) }}</div>
             <div><strong>责任组：</strong>{{ formatValue(detail.responsibilityGroup) }}</div><div><strong>告警通道：</strong>{{ formatValue(detail.alertChannel) }}</div>
             <div><strong>接收人：</strong>{{ formatValue(detail.receiver) }}</div><div><strong>触发来源：</strong>{{ formatValue(detail.triggeredBy) }}</div>

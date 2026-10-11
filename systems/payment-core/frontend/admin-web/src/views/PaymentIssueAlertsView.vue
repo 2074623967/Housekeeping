@@ -216,6 +216,13 @@ async function acknowledgeAlert(alertNo) {
   try {
     await paymentIssueApi.acknowledgeAlert(alertNo, {
       operator: ackOperator.value.trim()
+    }, {
+      alertNo: currentItem.alertNo,
+      sourceAlertNo: currentItem.sourceAlertNo,
+      issueNo: currentItem.issueNo,
+      paymentOrderId: currentItem.paymentOrderId,
+      issueType: currentItem.issueType,
+      severity: currentItem.severity
     });
     successMessage.value = `告警 ${alertNo} 已确认回执`;
     if (snapshotRequestId === latestLoadRequestId) {
@@ -451,6 +458,7 @@ watch(
                 <th>告警编号</th>
                 <th>异常编号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>异常类型</th>
                 <th>严重等级</th>
                 <th>责任组</th>
@@ -475,6 +483,7 @@ watch(
                     {{ item.paymentOrderId }}
                   </button>
                 </td>
+                <td class="mono-text">{{ item.businessChainId }}</td>
                 <td>{{ item.issueType }}</td>
                 <td>{{ item.severity }}</td>
                 <td>{{ item.responsibilityGroup }}</td>
@@ -533,6 +542,7 @@ watch(
             </div>
             <div class="detail-grid">
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
               <div class="detail-card"><span>异常编号</span><strong>{{ selectedItem.issueNo }}</strong></div>
               <div class="detail-card"><span>触发来源</span><strong>{{ selectedItem.triggeredBy || "-" }}</strong></div>
               <div class="detail-card"><span>接收人</span><strong>{{ selectedItem.receiver || "-" }}</strong></div>

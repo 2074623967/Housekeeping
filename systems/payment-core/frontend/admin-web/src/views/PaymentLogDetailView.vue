@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentLogApi } from "../api/client";
+import { matchesPaymentLogDetailSnapshot, paymentLogApi } from "../api/client";
 import {
   orderDetailRoute,
   paymentDetailRoute,
@@ -44,7 +44,8 @@ const canLinkFlow = computed(() => Boolean(
 ));
 const relatedRoutes = computed(() => ({
   order: detail.value?.standardOrderNo ? orderDetailRoute(detail.value.standardOrderNo) : null,
-  payment: detail.value?.paymentOrderId ? paymentDetailRoute(detail.value.paymentOrderId) : null,
+  payment: detail.value?.paymentOrderId && !detail.value.successFactIssue
+    ? paymentDetailRoute(detail.value.paymentOrderId) : null,
   request: detail.value?.requestNo ? paymentRequestDetailRoute(detail.value.requestNo) : null,
   flow: canLinkFlow.value ? paymentFlowDetailRoute(linkedFlowSource.value, detail.value.sourceNo) : null,
   flows: detail.value?.paymentOrderId ? paymentFlowsRoute({ paymentOrderId: detail.value.paymentOrderId }) : null,
@@ -59,6 +60,19 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(logNo = currentLogNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = logNo === currentLogNo.value && detail.value
+    ? {
+      logNo: detail.value.logNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      orderNo: detail.value.orderNo,
+      standardOrderNo: detail.value.standardOrderNo,
+      requestNo: detail.value.requestNo,
+      sourceType: detail.value.sourceType,
+      sourceNo: detail.value.sourceNo,
+      processStage: detail.value.processStage
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -68,6 +82,9 @@ async function loadDetail(logNo = currentLogNo.value) {
     }
     if (!result || result.logNo !== logNo) {
       throw new Error("支付处理日志详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentLogDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("支付处理日志详情响应为空或与当前支付归属快照不一致");
     }
     detail.value = result;
     hasLoadedData.value = true;
@@ -149,6 +166,7 @@ watch(currentLogNo, (logNo) => {
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>日志编号：</strong><span class="mono-text">{{ formatValue(detail.logNo) }}</span></div>
+              <div><strong>业务链路：</strong><span class="mono-text">{{ formatValue(detail.businessChainId) }}</span></div>
               <div><strong>处理阶段：</strong>{{ formatValue(detail.processStage) }}</div>
               <div><strong>日志级别：</strong><span :class="['badge', detail.logLevelType || 'info']">{{ formatValue(detail.logLevel) }}</span></div>
               <div><strong>级别样式：</strong>{{ formatValue(detail.logLevelType) }}</div>
@@ -164,6 +182,7 @@ watch(currentLogNo, (logNo) => {
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div v-if="detail.successFactIssue"><strong>成功事实异常：</strong>{{ detail.successFactIssue === "SUCCESS_TIME_MISSING" ? "成功时间缺失" : "成功事实不一致" }}；支付详情暂不可用</div>
               <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
               <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
               <div><strong>支付请求号：</strong>{{ formatValue(detail.requestNo) }}</div>
@@ -172,7 +191,7 @@ watch(currentLogNo, (logNo) => {
             </div>
             <div class="ops-card detail-panel">
               <div class="ops-row"><span>支付流水联查</span><span>{{ canLinkFlow ? `可按 ${linkedFlowSource} + 来源编号精确联查` : "当前来源不可安全映射为流水详情" }}</span></div>
-              <div class="ops-row"><span>标准订单联查</span><span>{{ detail.standardOrderNo ? "可联查" : "当前业务订单号未命中标准订单" }}</span></div>
+              <div class="ops-row"><span>标准订单联查</span><span>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</span></div>
               <div class="ops-row"><span>导航状态</span><span>{{ canUseSnapshot ? "当前快照有效" : "当前快照不可用于联查" }}</span></div>
             </div>
           </section>

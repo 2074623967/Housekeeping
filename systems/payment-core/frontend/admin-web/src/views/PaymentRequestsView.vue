@@ -329,6 +329,9 @@ watch(
           <label>请求状态</label>
           <select v-model="filters.requestStatus" :disabled="isLoading">
             <option>全部</option>
+            <option>处理中</option>
+            <option>待人工确认</option>
+            <option>等待回调</option>
             <option>请求已发起</option>
             <option>请求成功</option>
             <option>请求失败</option>
@@ -375,7 +378,9 @@ watch(
               <tr>
                 <th>请求编号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>预付单号</th>
+                <th>支付场景</th>
                 <th>订单号</th>
                 <th>支付方式</th>
                 <th>渠道编码</th>
@@ -393,11 +398,14 @@ watch(
                 <tr>
                   <td>{{ item.requestNo }}</td>
                   <td>
-                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentDetailRoute(item.paymentOrderId))">
+                    <button v-if="!item.successFactIssue" class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentDetailRoute(item.paymentOrderId))">
                       {{ item.paymentOrderId }}
                     </button>
+                    <span v-else>{{ item.paymentOrderId }} · {{ item.successFactIssue }}</span>
                   </td>
+                  <td>{{ item.businessChainId }}</td>
                   <td>{{ item.prepayOrderNo }}</td>
+                  <td>{{ item.payScene }}</td>
                   <td>{{ item.orderNo }}</td>
                   <td>{{ item.paymentMethod }}</td>
                   <td>{{ item.channelCode }}</td>
@@ -416,7 +424,7 @@ watch(
                   </td>
                 </tr>
                 <tr v-if="expandedRequestNo === item.requestNo">
-                  <td colspan="13">
+                  <td colspan="14">
                     <div class="payload-grid">
                       <div>
                         <strong>请求报文</strong>
@@ -442,7 +450,9 @@ watch(
             </div>
             <div class="detail-grid">
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
               <div class="detail-card"><span>预付单号</span><strong>{{ selectedItem.prepayOrderNo }}</strong></div>
+              <div class="detail-card"><span>支付场景</span><strong>{{ selectedItem.payScene }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>支付方式</span><strong>{{ selectedItem.paymentMethod }}</strong></div>
               <div class="detail-card"><span>渠道编码</span><strong>{{ selectedItem.channelCode }}</strong></div>
@@ -454,13 +464,13 @@ watch(
             </div>
             <div class="ops-card">
             <div class="ops-title">联查建议</div>
-              <div class="ops-row"><span>排查入口</span><span>支付单详情 / 路由结果 / 处理日志</span></div>
+              <div class="ops-row"><span>排查入口</span><span>{{ selectedItem.successFactIssue ? "保留请求快照，联查路由结果与处理日志；成功支付详情不可用" : "支付单详情 / 路由结果 / 处理日志" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>幂等键、终端、渠道编码、请求状态</span></div>
               <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRequestDetailRoute(selectedItem.requestNo))">查看唯一详情</button>
-              <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !!selectedItem.successFactIssue" @click="openRoute(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(cashierSessionsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看会话</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRoute(paymentRoutesRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看路由结果</button>

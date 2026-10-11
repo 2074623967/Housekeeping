@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { billsRoute, cashierSessionsRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
+import { billsRoute, cashierSessionsRoute, paymentIssuesRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute, refundsRoute } from "./listRoutes.js";
+
+test("registers the refund list name used by real payment operations drill-downs", () => {
+  const source = readFileSync(new URL("./index.js", import.meta.url), "utf8");
+  assert.match(source, /path: "refunds", name: "refunds", component: RefundsView/);
+});
 
 function createTestRouter() {
   return createRouter({
@@ -12,7 +18,8 @@ function createTestRouter() {
       { path: "/payment-requests", name: "payment-requests", component: {} },
       { path: "/cashier-sessions", name: "cashier-sessions", component: {} },
       { path: "/payments", name: "payments", component: {} },
-      { path: "/refunds", name: "refunds", component: {} }
+      { path: "/refunds", name: "refunds", component: {} },
+      { path: "/payment-issues", name: "payment-issues", component: {} }
     ]
   });
 }
@@ -46,6 +53,22 @@ test("keeps the processing refund status group in the refund list route", () => 
 
   assert.deepEqual(resolved.query, { refundStatus: "PROCESSING" });
   assert.equal(resolved.href, "/refunds?refundStatus=PROCESSING");
+});
+
+test("keeps the blocked failed refund status group in the refund list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(refundsRoute({ refundStatus: "TERMINAL_FACT_MISMATCH" }));
+
+  assert.deepEqual(resolved.query, { refundStatus: "TERMINAL_FACT_MISMATCH" });
+  assert.equal(resolved.href, "/refunds?refundStatus=TERMINAL_FACT_MISMATCH");
+});
+
+test("keeps unverified successful refunds scoped to the original payment", () => {
+  const router = createTestRouter();
+  const unverified = router.resolve(refundsRoute({ paymentOrderId: "PAY-001", refundStatus: "UNVERIFIED_SUCCESS" }));
+  assert.deepEqual(unverified.query, { paymentOrderId: "PAY-001", refundStatus: "UNVERIFIED_SUCCESS" });
+  assert.equal(unverified.href, "/refunds?paymentOrderId=PAY-001&refundStatus=UNVERIFIED_SUCCESS");
 });
 
 test("keeps structured payment log risk filters in the log list route", () => {
@@ -100,4 +123,13 @@ test("keeps the payment success-fact mismatch group in the payment list route", 
 
   assert.deepEqual(resolved.query, { status: "SUCCESS_FACT_MISMATCH" });
   assert.equal(resolved.href, "/payments?status=SUCCESS_FACT_MISMATCH");
+});
+
+test("keeps the unknown refund submit issue drilldown in the issue list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(paymentIssuesRoute({ issueType: "退款提交结果待核查" }));
+
+  assert.deepEqual(resolved.query, { issueType: "退款提交结果待核查" });
+  assert.equal(resolved.href, "/payment-issues?issueType=%E9%80%80%E6%AC%BE%E6%8F%90%E4%BA%A4%E7%BB%93%E6%9E%9C%E5%BE%85%E6%A0%B8%E6%9F%A5");
 });

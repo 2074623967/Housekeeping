@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentIssueApi } from "../api/client";
+import { matchesPaymentIssueDetailSnapshot, paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import {
   paymentEventsRoute,
@@ -45,6 +45,18 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(issueNo = currentIssueNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = issueNo === currentIssueNo.value && detail.value
+    ? {
+      issueNo: detail.value.issueNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      orderNo: detail.value.orderNo,
+      customerName: detail.value.customerName,
+      paymentMethod: detail.value.paymentMethod,
+      channelCode: detail.value.channelCode,
+      issueType: detail.value.issueType
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -54,6 +66,9 @@ async function loadDetail(issueNo = currentIssueNo.value) {
     }
     if (!result || result.issueNo !== issueNo) {
       throw new Error("支付交易异常详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentIssueDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("支付交易异常详情响应为空或与当前支付归属快照不一致");
     }
     detail.value = result;
     hasLoadedData.value = true;
@@ -142,7 +157,8 @@ watch(currentIssueNo, (issueNo) => {
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>异常编号：</strong><span class="mono-text">{{ formatValue(detail.issueNo) }}</span></div>
-              <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+        <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+        <div><strong>业务链路：</strong><span class="mono-text">{{ formatValue(detail.businessChainId) }}</span></div>
               <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
               <div><strong>客户：</strong>{{ formatValue(detail.customerName) }}</div>
               <div><strong>支付方式：</strong>{{ formatValue(detail.paymentMethod) }}</div>

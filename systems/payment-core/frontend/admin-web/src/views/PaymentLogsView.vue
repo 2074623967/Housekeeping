@@ -115,7 +115,8 @@ function pickItem(item) {
 }
 
 function openPaymentDetail(paymentOrderId) {
-  if (!canUseSnapshot.value || !paymentOrderId) return;
+  const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
+  if (!canUseSnapshot.value || !paymentItem || paymentItem.successFactIssue) return;
   router.push(paymentDetailRoute(paymentOrderId));
 }
 
@@ -390,6 +391,7 @@ watch(
               <tr>
                 <th>日志编号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>订单号</th>
                 <th>处理阶段</th>
                 <th>级别</th>
@@ -403,10 +405,13 @@ watch(
               <tr v-for="item in items" :key="item.logNo">
                 <td>{{ item.logNo }}</td>
                 <td>
-                  <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
+                  <span v-if="item.successFactIssue" class="mono-text" title="成功事实异常，请保留当前日志快照">{{ item.paymentOrderId }}</span>
+                  <span v-if="item.successFactIssue" class="badge danger">{{ item.successFactIssue }}</span>
+                  <button v-else class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
                     {{ item.paymentOrderId }}
                   </button>
                 </td>
+                <td class="mono-text">{{ item.businessChainId }}</td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.processStage }}</td>
                 <td><span :class="['badge', item.logLevelType]">{{ item.logLevel }}</span></td>
@@ -429,7 +434,7 @@ watch(
               <span class="meta">{{ selectedItem.logNo }}</span>
             </div>
             <div class="detail-grid">
-              <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}{{ selectedItem.successFactIssue ? ` · ${selectedItem.successFactIssue}` : "" }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>处理阶段</span><strong>{{ selectedItem.processStage }}</strong></div>
               <div class="detail-card"><span>日志级别</span><strong>{{ selectedItem.logLevel }}</strong></div>
@@ -439,14 +444,14 @@ watch(
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先联查</span><span>支付单详情 / 支付请求 / 支付事件</span></div>
+              <div class="ops-row"><span>优先联查</span><span>{{ selectedItem.successFactIssue ? "保留日志快照，联查支付请求与支付事件；成功支付详情不可用" : "支付单详情 / 支付请求 / 支付事件" }}</span></div>
               <div class="ops-row"><span>适用角色</span><span>运营 / 研发 / 测试共用同一入口</span></div>
               <div class="ops-row"><span>重点核对</span><span>处理阶段、来源系统、级别和关键字</span></div>
               <div class="ops-row"><span>当前过滤命中</span><span>{{ metrics.callbackKeywordCount }} 条回调相关日志</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" :disabled="!canUseSnapshot" @click="openLogDetail(selectedItem.logNo)">查看日志详情</button>
-              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !!selectedItem.successFactIssue" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看支付流水</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentEvents(selectedItem.paymentOrderId)">查看支付事件</button>

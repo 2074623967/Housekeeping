@@ -5,6 +5,11 @@ import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute, paymentIssueDetailRoute } from "../router/detailRoutes";
 import { paymentIssueAlertsRoute } from "../router/listRoutes";
 import { paymentIssueListFiltersFromQuery } from "../utils/paymentIssueListFilters";
+import {
+  UnverifiablePaymentIssueActionAttemptError,
+  clearPaymentIssueActionAttempt,
+  resolvePaymentIssueActionAttempt
+} from "../utils/paymentIssueActionAttempt";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,6 +38,7 @@ const actionForm = ref({
 });
 const filters = ref(paymentIssueListFiltersFromQuery(route.query));
 let latestLoadRequestId = 0;
+let pendingActionAttempt = null;
 
 const issueOverview = computed(() => ({
   groupCount: responsibilitySummaries.value.length,
@@ -43,7 +49,7 @@ const issueOverview = computed(() => ({
 }));
 
 const isSnapshotStale = computed(() => Boolean(
-  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value || summaryErrorMessage.value)
 ));
 const isWriteDisabled = computed(() => (
   !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunning.value
@@ -221,23 +227,33 @@ async function submitBatchAction() {
   }
   const issueNos = [...selectedIssueNos.value];
   const query = { ...loadedQuery.value };
+  const actionPayload = {
+    issueNos,
+    actionType: actionForm.value.actionType,
+    assignee: actionForm.value.assignee,
+    operator,
+    remark: actionForm.value.remark
+  };
   isActionRunning.value = true;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    await paymentIssueApi.batchAction({
-      issueNos,
-      actionType: actionForm.value.actionType,
-      assignee: actionForm.value.assignee,
-      operator,
-      remark: actionForm.value.remark
-    });
+    pendingActionAttempt = await resolvePaymentIssueActionAttempt(actionPayload, pendingActionAttempt);
+    await paymentIssueApi.batchAction({ ...actionPayload, idempotencyKey: pendingActionAttempt.idempotencyKey });
+    clearPaymentIssueActionAttempt(pendingActionAttempt);
+    pendingActionAttempt = null;
     selectedIssueNos.value = [];
     actionResultMessage.value = `已记录 ${issueNos.length} 条异常的批量处理动作。`;
     actionRefreshErrorMessage.value = "";
     await loadIssues(true, query);
   } catch (error) {
-    actionErrorMessage.value = `批量处理失败：${error.message}`;
+    selectedIssueNos.value = [];
+    const refreshed = await loadIssues(true, query);
+    const failureLabel = error instanceof UnverifiablePaymentIssueActionAttemptError
+      ? "批量处理未发送：" : "批量处理请求失败：";
+    actionErrorMessage.value = refreshed
+      ? `${failureLabel}${error.message}；已重新读取异常与责任组，请核对处理记录后重新选择。`
+      : `${failureLabel}${error.message}；状态未经确认，旧快照不可操作，请刷新成功后核对处理记录。`;
   } finally {
     isActionRunning.value = false;
   }
@@ -278,7 +294,7 @@ watch(
         {{ hasLoadedData ? "支付交易异常刷新失败，当前展示上次成功快照：" : "支付交易异常加载失败：" }}{{ loadErrorMessage }}
       </div>
       <div v-if="actionRefreshErrorMessage" class="error-banner">
-        批量处理结果已确认，但异常列表刷新失败，当前展示上次成功列表快照：{{ actionRefreshErrorMessage }}
+        批量处理后的异常列表刷新失败，当前状态未经确认，展示上次成功列表快照：{{ actionRefreshErrorMessage }}
       </div>
       <div v-if="summaryErrorMessage" class="error-banner">
         责任组统计刷新失败，当前展示上次成功统计快照：{{ summaryErrorMessage }}
@@ -429,6 +445,7 @@ watch(
               <th>选择</th>
               <th>异常编号</th>
               <th>支付单号</th>
+              <th>业务链路</th>
               <th>订单号</th>
               <th>客户</th>
               <th>支付方式</th>
@@ -467,6 +484,7 @@ watch(
                   {{ item.paymentOrderId }}
                 </button>
               </td>
+              <td class="mono-text">{{ item.businessChainId }}</td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>
               <td>{{ item.paymentMethod }}</td>

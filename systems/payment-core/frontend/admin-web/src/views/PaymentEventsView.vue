@@ -219,7 +219,12 @@ async function republish(item) {
       overviewRefreshErrorMessage.value = error.message;
     }
   } catch (error) {
-    actionErrorMessage.value = `事件 ${item.eventNo} 重发失败：${error.message}`;
+    const failureMessage = `事件 ${item.eventNo} 重发失败：${error.message}`;
+    activeEventNo.value = "";
+    const refreshed = await loadEvents({ ...loadedQuery.value });
+    actionErrorMessage.value = refreshed
+      ? `${failureMessage}；事件状态已刷新，请核对待核查、失败或死信事实。`
+      : `${failureMessage}；状态刷新失败，请勿按旧快照重发。`;
   } finally {
     activeEventNo.value = "";
   }
@@ -427,7 +432,8 @@ onMounted(loadEvents);
               <tr v-for="item in items" :key="item.eventNo">
                 <td>{{ item.eventNo }}</td>
                 <td>{{ item.eventType }}</td>
-                <td>{{ item.paymentOrderId }}</td>
+                <td>{{ item.paymentOrderId }}<span v-if="item.successFactIssue"> · {{ item.successFactIssue }}</span></td>
+                <td>{{ item.businessChainId }}</td>
                 <td>{{ item.bizNo }}</td>
                 <td>{{ item.eventTopic }}</td>
                 <td>{{ item.downstreamSystem }}</td>
@@ -469,6 +475,8 @@ onMounted(loadEvents);
             <div class="detail-grid">
               <div class="detail-card"><span>事件类型</span><strong>{{ selectedItem.eventType }}</strong></div>
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div v-if="selectedItem.successFactIssue" class="detail-card"><span>支付成功事实</span><strong>{{ selectedItem.successFactIssue }}</strong></div>
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
               <div class="detail-card"><span>业务单号</span><strong>{{ selectedItem.bizNo }}</strong></div>
               <div class="detail-card"><span>事件主题</span><strong>{{ selectedItem.eventTopic }}</strong></div>
               <div class="detail-card"><span>下游系统</span><strong>{{ selectedItem.downstreamSystem }}</strong></div>
@@ -492,7 +500,7 @@ onMounted(loadEvents);
             </div>
             <div class="table-inline-actions">
               <button class="link-button" :disabled="!canUseSnapshot" @click="openEventDetail(selectedItem.eventNo)">查看事件详情</button>
-              <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !!selectedItem.successFactIssue" @click="openDrillDown(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付日志</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown('/payment-dead-letter-tasks')">查看死信补偿任务</button>

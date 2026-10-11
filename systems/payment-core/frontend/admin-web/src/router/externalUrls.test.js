@@ -15,11 +15,20 @@ test("builds configured cashier URLs with encoded identifiers", () => {
     buildAppWebCashierUrl("PRE-1", "  https://pay.example.com/app///  "),
     "https://pay.example.com/app/cashier/PRE-1"
   );
-  assert.equal(buildAppWebCashierUrl("PRE-1"), "http://127.0.0.1:5175/cashier/PRE-1");
+  assert.equal(
+    buildAppWebCashierUrl("  PRE-1  "),
+    "http://localhost:5175/cashier/PRE-1"
+  );
+  assert.equal(buildAppWebCashierUrl("PRE-1"), "http://localhost:5175/cashier/PRE-1");
+  assert.equal(
+    buildAppWebCashierUrl("PRE-1", "https://pay.example.com/app", " HOME_CLEAN "),
+    "https://pay.example.com/app/cashier/PRE-1?payScene=HOME_CLEAN"
+  );
 });
 
 test("rejects unsafe cashier URL inputs", () => {
   assert.throws(() => buildAppWebCashierUrl(" "), /required/);
+  assert.throws(() => buildAppWebCashierUrl("PRE-1", undefined, 42), /string/);
   assert.throws(() => buildAppWebCashierUrl("PRE-1", "javascript:alert(1)"), /HTTP or HTTPS/);
 });
 
@@ -28,11 +37,20 @@ test("builds configured refund progress URLs with encoded identifiers", () => {
     buildAppWebRefundProgressUrl("REF/1?#%", "https://pay.example.com/app/?stale=1#old"),
     "https://pay.example.com/app/refund-progress/REF%2F1%3F%23%25"
   );
-  assert.equal(buildAppWebRefundProgressUrl("REF-1"), "http://127.0.0.1:5175/refund-progress/REF-1");
+  assert.equal(buildAppWebRefundProgressUrl("REF-1"), "http://localhost:5175/refund-progress/REF-1");
+  assert.equal(
+    buildAppWebRefundProgressUrl(
+      "REF-1",
+      "https://pay.example.com/app/?stale=1#old",
+      " HOME_CLEAN "
+    ),
+    "https://pay.example.com/app/refund-progress/REF-1?payScene=HOME_CLEAN"
+  );
 });
 
 test("rejects empty refund progress URL inputs", () => {
   assert.throws(() => buildAppWebRefundProgressUrl(" "), /required/);
+  assert.throws(() => buildAppWebRefundProgressUrl("REF-1", undefined, 42), /string/);
 });
 
 test("builds a reconciliation chain diagnostic url", () => {
@@ -42,7 +60,7 @@ test("builds a reconciliation chain diagnostic url", () => {
   );
   assert.equal(
     buildReconciliationChainUrl("CHAIN-001"),
-    "http://127.0.0.1:5180/?businessChainId=CHAIN-001"
+    "http://localhost:5180/?businessChainId=CHAIN-001"
   );
 });
 

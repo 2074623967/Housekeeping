@@ -137,7 +137,8 @@ function goToPage(nextPage) {
 }
 
 function openPaymentDetail(paymentOrderId) {
-  if (!canUseSnapshot.value || !paymentOrderId) return;
+  if (!canUseSnapshot.value || !paymentOrderId
+      || !items.value.some((item) => item.paymentOrderId === paymentOrderId && !item.successFactIssue)) return;
   router.push(paymentDetailRoute(paymentOrderId));
 }
 
@@ -326,8 +327,10 @@ watch(
               <tr>
                 <th>流水编号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>订单号</th>
                 <th>预付单号</th>
+                <th>支付场景</th>
                 <th>流水类型</th>
                 <th>渠道编码</th>
                 <th>业务状态</th>
@@ -341,21 +344,24 @@ watch(
                 <tr>
                   <td>{{ item.flowNo }}</td>
                   <td>
-                    <button class="link-button" @click="openPaymentDetail(item.paymentOrderId)">
+                    <button v-if="!item.successFactIssue" class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
                       {{ item.paymentOrderId }}
                     </button>
+                    <span v-else>{{ item.paymentOrderId }} · {{ item.successFactIssue }}</span>
                   </td>
+                  <td>{{ item.businessChainId }}</td>
                   <td>{{ item.orderNo }}</td>
                   <td>{{ item.prepayOrderNo || "-" }}</td>
+                  <td>{{ item.payScene || "-" }}</td>
                   <td><span :class="['badge', item.flowTypeTag]">{{ item.flowType }}</span></td>
                   <td>{{ item.channelCode || "-" }}</td>
                   <td><span :class="['badge', item.businessStatusType]">{{ item.businessStatus }}</span></td>
                   <td class="flow-summary-cell">{{ item.summary }}</td>
                   <td>{{ item.createdAt }}</td>
                   <td>
-                    <button class="link-button" :disabled="isSnapshotStale" @click="openFlowDetail(item)">查看详情</button>
-                    <button class="link-button" :disabled="isSnapshotStale" @click="pickItem(item)">查看快照</button>
-                    <button class="link-button" :disabled="isSnapshotStale" @click="toggleExpanded(item.flowNo)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openFlowDetail(item)">查看详情</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="toggleExpanded(item.flowNo)">
                       {{ expandedFlowNo === item.flowNo ? "收起报文" : "查看报文" }}
                     </button>
                   </td>
@@ -386,6 +392,8 @@ watch(
               <span class="meta">{{ selectedItem.flowNo }}</span>
             </div>
             <div class="detail-grid">
+              <div class="detail-card"><span>业务链路</span><strong>{{ formatValue(selectedItem.businessChainId) }}</strong></div>
+              <div class="detail-card"><span>支付场景</span><strong>{{ formatValue(selectedItem.payScene) }}</strong></div>
               <div class="detail-card"><span>流水类型</span><strong>{{ formatValue(selectedItem.flowType) }}</strong></div>
               <div class="detail-card"><span>渠道编码</span><strong>{{ formatValue(selectedItem.channelCode) }}</strong></div>
               <div class="detail-card"><span>终端</span><strong>{{ formatValue(selectedItem.terminal) }}</strong></div>
@@ -402,14 +410,14 @@ watch(
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先联查</span><span>支付单详情 / 支付请求 / 处理日志</span></div>
+              <div class="ops-row"><span>优先联查</span><span>{{ selectedItem.successFactIssue ? "保留流水快照，联查支付请求与处理日志；成功支付详情不可用" : "支付单详情 / 支付请求 / 处理日志" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>终端、幂等键、回调类型、事件发布状态</span></div>
               <div class="ops-row"><span>典型场景</span><span>回调未收口、事件未发布、重试次数异常</span></div>
             </div>
             <div class="table-inline-actions">
-              <button class="link-button" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
-              <button class="link-button" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
-              <button class="link-button" @click="openPaymentLogs(selectedItem.paymentOrderId)">查看处理日志</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !!selectedItem.successFactIssue" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentLogs(selectedItem.paymentOrderId)">查看处理日志</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付流水后，可在这里查看链路快照与排障建议。</div>

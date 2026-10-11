@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentDayEndApi } from "../api/client";
+import { matchesPaymentDayEndDetailSnapshot, paymentDayEndApi } from "../api/client";
 
 const route = useRoute();
 const router = useRouter();
@@ -23,12 +23,21 @@ function formatValue(value) { return value == null || value === "" ? "-" : value
 
 async function loadDetail(batchNo = currentBatchNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = batchNo === currentBatchNo.value && detail.value
+    ? {
+      batchNo: detail.value.batchNo,
+      bizDate: detail.value.bizDate
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
     const result = await paymentDayEndApi.getDetail(batchNo);
     if (requestId !== latestLoadRequestId || batchNo !== currentBatchNo.value) return;
     if (!result || result.batchNo !== batchNo) throw new Error("日终批次详情响应为空或与当前路由不一致");
+    if (expectedSnapshot && !matchesPaymentDayEndDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("日终批次详情响应为空或与当前业务日期快照不一致");
+    }
     detail.value = result;
     hasLoadedData.value = true;
   } catch (error) {

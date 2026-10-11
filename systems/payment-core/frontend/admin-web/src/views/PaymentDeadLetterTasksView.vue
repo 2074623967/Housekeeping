@@ -29,6 +29,7 @@ let latestLoadRequestId = 0;
 
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(loadErrorMessage.value));
 const isInteractionLocked = computed(() => isLoading.value || Boolean(activeAction.value));
+const canUseSnapshot = computed(() => hasLoadedData.value && !isInteractionLocked.value && !isSnapshotStale.value);
 
 const metricCards = computed(() => [
   { title: "任务总数", value: total.value, hint: "当前筛选条件下的死信补偿任务" },
@@ -87,10 +88,16 @@ function applyFilters() {
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
 function openDetail(item) {
+  if (!canUseSnapshot.value || !item?.taskNo) {
+    return;
+  }
   router.push(`/payment-dead-letter-tasks/${encodeURIComponent(item.taskNo)}`);
 }
 
@@ -168,11 +175,11 @@ async function runAction(item, action) {
     let actionResult;
     let replayMessage;
     if (action === "ready") {
-      actionResult = await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload, currentItem);
     } else if (action === "resolve") {
-      actionResult = await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload, currentItem);
     } else {
-      actionResult = await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
+      actionResult = await paymentDeadLetterTaskApi.replay(item.taskNo, payload, currentItem);
       replayMessage = replayActionMessage(actionResult);
     }
     if (action === "ready") {
@@ -191,7 +198,10 @@ async function runAction(item, action) {
       }
     }
   } catch (error) {
-    actionErrorMessage.value = `死信任务操作失败：${error.message}`;
+    const refreshed = await loadTasks(item.taskNo, { ...loadedQuery.value });
+    actionErrorMessage.value = refreshed
+      ? `死信任务操作请求失败：${error.message}；已重新读取任务列表，请以最新状态核对后再操作`
+      : `死信任务操作请求失败：${error.message}；列表复核失败，旧快照不可操作，请刷新成功后核对任务状态`;
   } finally {
     activeAction.value = "";
   }
@@ -316,7 +326,7 @@ onMounted(loadTasks);
             </thead>
             <tbody>
               <tr v-for="item in items" :key="item.taskNo">
-                <td><button class="table-link" @click="pickItem(item)">{{ item.taskNo }}</button></td>
+                <td><button class="table-link" :disabled="!canUseSnapshot" @click="pickItem(item)">{{ item.taskNo }}</button></td>
                 <td>{{ item.messageId }}</td>
                 <td>{{ item.targetSystem }}</td>
                 <td><span :class="['badge', item.taskStatusType]">{{ statusLabel(item.taskStatus) }}</span></td>
@@ -328,6 +338,7 @@ onMounted(loadTasks);
                   <div class="list-actions">
                     <button
                       class="link-button"
+                      :disabled="!canUseSnapshot"
                       @click="openDetail(item)"
                     >详情</button>
                     <button

@@ -1,7 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { paymentTaskCenterApi } from "../api/client";
+import {
+  mergePaymentTaskCenterActionOverview,
+  paymentTaskCenterApi
+} from "../api/client";
+import { paymentIssuesRoute, refundsRoute } from "../router/listRoutes";
 
 const router = useRouter();
 const overview = ref({
@@ -105,14 +109,19 @@ async function loadOverview() {
   if (activeTaskCode.value) {
     return false;
   }
+  return refreshSnapshots(buildTaskRunsQuery());
+}
+
+async function refreshSnapshots(query, afterAction = false) {
   const overviewRequestId = ++latestOverviewRequestId;
   const taskRunsRequestId = ++latestTaskRunsRequestId;
-  const query = buildTaskRunsQuery();
   isLoading.value = true;
   errorMessage.value = "";
   taskRunsErrorMessage.value = "";
-  actionErrorMessage.value = "";
-  actionResultMessage.value = "";
+  if (!afterAction) {
+    actionErrorMessage.value = "";
+    actionResultMessage.value = "";
+  }
   const [overviewResult, taskRunResult] = await Promise.allSettled([
     paymentTaskCenterApi.getOverview(),
     fetchTaskRuns(query)
@@ -236,7 +245,7 @@ function exportTaskRuns() {
     taskStatus: loadedTaskRunsQuery.value.taskStatus,
     severityLevel: loadedTaskRunsQuery.value.severityLevel
   });
-  window.open(exportUrl, "_blank", "noopener");
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function openTaskRunDetail(taskLogNo) {
@@ -245,7 +254,7 @@ function openTaskRunDetail(taskLogNo) {
 }
 
 async function runTask(taskCode, taskName, candidateCount, actionRunner) {
-  if (!canUseOverview.value || !loadedTaskRunsQuery.value || candidateCount <= 0) {
+  if (!canUseTaskRuns.value || candidateCount <= 0) {
     actionErrorMessage.value = `${taskName}执行失败：当前任务快照不可操作，请刷新成功后重试。`;
     actionResultMessage.value = "";
     return;
@@ -260,24 +269,15 @@ async function runTask(taskCode, taskName, candidateCount, actionRunner) {
   actionResultMessage.value = "";
   const query = { ...loadedTaskRunsQuery.value };
   try {
-    const result = (await actionRunner({ operator: taskOperator.value.trim() })) || {};
-    overview.value = {
-      ...overview.value,
-      ...(result.overview || {}),
-      queryTrends: Array.isArray(result.overview?.queryTrends)
-        ? result.overview.queryTrends
-        : [],
-      focusAlerts: Array.isArray(result.overview?.focusAlerts)
-        ? result.overview.focusAlerts
-        : [],
-      recentTaskRuns: Array.isArray(result.overview?.recentTaskRuns)
-        ? result.overview.recentTaskRuns
-        : []
-    };
+    const result = (await actionRunner({ operator: taskOperator.value.trim() }, taskCode)) || {};
+    overview.value = mergePaymentTaskCenterActionOverview(overview.value, result);
     actionResultMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
     await loadTaskRuns(query, true);
   } catch (error) {
-    actionErrorMessage.value = `${taskName}执行失败：${error.message}`;
+    const refreshed = await refreshSnapshots(query, true);
+    actionErrorMessage.value = refreshed
+      ? `${taskName}执行请求失败：${error.message}；总览与执行日志已重新读取，请核对最新候选后再操作。`
+      : `${taskName}执行请求失败：${error.message}；复核总览或执行日志失败，旧快照不可操作，请刷新成功后再核对。`;
   } finally {
     activeTaskCode.value = "";
   }
@@ -288,6 +288,20 @@ function openOverviewRoute(target) {
     return;
   }
   router.push(target);
+}
+
+function openUnknownRefundSubmitIssues() {
+  if (!canUseOverview.value || !(overview.value.unknownRefundSubmitEventCount > 0)) {
+    return;
+  }
+  router.push(paymentIssuesRoute({ issueType: "退款提交结果待核查" }));
+}
+
+function openBlockedFailedRefunds() {
+  if (!canUseOverview.value || !(overview.value.blockedFailedRefundCount > 0)) {
+    return;
+  }
+  router.push(refundsRoute({ refundStatus: "TERMINAL_FACT_MISMATCH" }));
 }
 
 function openTaskRunRoute(target) {
@@ -384,11 +398,17 @@ onMounted(loadOverview);
             <div class="detail-label">退款提交待核查</div>
             <div class="detail-value">{{ overview.unknownRefundSubmitEventCount }}</div>
             <div class="meta">结果未知，禁止直接重发</div>
+            <button class="link-button" :disabled="!canUseOverview || !(overview.unknownRefundSubmitEventCount > 0)" @click="openUnknownRefundSubmitIssues">
+              查看待核查异常
+            </button>
           </div>
           <div class="detail-card">
             <div class="detail-label">失败退款</div>
             <div class="detail-value">{{ overview.failedRefundCount }}</div>
             <div class="meta">可批量重试 {{ overview.retryableFailedRefundCount }} · 事实异常 {{ overview.blockedFailedRefundCount }}</div>
+            <button class="link-button" :disabled="!canUseOverview || !(overview.blockedFailedRefundCount > 0)" @click="openBlockedFailedRefunds">
+              查看事实异常退款
+            </button>
           </div>
           <div class="detail-card">
             <div class="detail-label">控制策略告警</div>
@@ -562,7 +582,7 @@ onMounted(loadOverview);
               <p>只关闭超过收银台失效时间、从未提交渠道且当前已到重试时间的待支付单；失败退避中的记录到期后再执行，已提交支付继续通过主动查单收口。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.dueExpiredPaymentCount === 0"
+                :disabled="!canUseTaskRuns || overview.dueExpiredPaymentCount === 0"
                 @click="runTask('PAYMENT_EXPIRE_CLOSE', '支付超时关单', overview.dueExpiredPaymentCount, paymentTaskCenterApi.runCloseExpiredPayments)"
               >
                 {{ activeTaskCode === "PAYMENT_EXPIRE_CLOSE" ? "执行中..." : overview.dueExpiredPaymentCount === 0 ? "暂无可关闭支付" : `执行超时关单（${overview.dueExpiredPaymentCount}）` }}
@@ -574,7 +594,7 @@ onMounted(loadOverview);
               <p>立即批量补查达到等待阈值的待回调支付单，收银台已过期但渠道已提交的交易仍可查；人工执行不受自动退避窗口限制。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.pendingQueryBacklogCount === 0"
+                :disabled="!canUseTaskRuns || overview.pendingQueryBacklogCount === 0"
                 @click="runTask('PAYMENT_PENDING_QUERY', '待回调主动查单', overview.pendingQueryBacklogCount, paymentTaskCenterApi.runPendingPaymentQueries)"
               >
                 {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : overview.pendingQueryBacklogCount === 0 ? "暂无待查支付" : `执行主动查单（${overview.pendingQueryBacklogCount}）` }}
@@ -586,7 +606,7 @@ onMounted(loadOverview);
               <p>评估当前监控窗口内的查单失败笔数、失败率和限流拒绝次数，命中阈值时生成可由现有 IM、短信和邮件链路派发的 outbox 告警。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.actionableQueryMonitorAlertCount === 0"
+                :disabled="!canUseTaskRuns || overview.actionableQueryMonitorAlertCount === 0"
                 @click="runTask('PAYMENT_QUERY_MONITOR_ALERT', '主动查单监控告警', overview.actionableQueryMonitorAlertCount, paymentTaskCenterApi.runGenerateQueryMonitorAlerts)"
               >
                 {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : overview.actionableQueryMonitorAlertCount === 0 ? "暂无可生成监控告警" : `生成查单监控告警（${overview.actionableQueryMonitorAlertCount}）` }}
@@ -598,7 +618,7 @@ onMounted(loadOverview);
               <p>立即补查达到等待阈值且已有渠道退款号，或提交结果未知但具备渠道定位事实的处理中退款；明确终态由服务端收口。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.pendingRefundQueryBacklogCount === 0"
+                :disabled="!canUseTaskRuns || overview.pendingRefundQueryBacklogCount === 0"
                 @click="runTask('REFUND_PENDING_QUERY', '处理中退款主动查单', overview.pendingRefundQueryBacklogCount, paymentTaskCenterApi.runPendingRefundQueries)"
               >
                 {{ activeTaskCode === "REFUND_PENDING_QUERY" ? "执行中..." : overview.pendingRefundQueryBacklogCount === 0 ? "暂无待查退款" : `执行退款查单（${overview.pendingRefundQueryBacklogCount}）` }}
@@ -610,7 +630,7 @@ onMounted(loadOverview);
               <p>仅批量重发仍为 FAILED 的下游投递事件；DEAD_LETTER 已停止批量重试，须进入事件页或死信补偿任务受控处置。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.retryableFailedEventCount === 0"
+                :disabled="!canUseTaskRuns || overview.retryableFailedEventCount === 0"
                 @click="runTask('PAYMENT_EVENT_RETRY', '失败事件重发', overview.retryableFailedEventCount, paymentTaskCenterApi.runRepublishFailedEvents)"
               >
                 {{ activeTaskCode === "PAYMENT_EVENT_RETRY" ? "执行中..." : overview.retryableFailedEventCount === 0 ? "暂无可重发事件" : `执行事件重发（${overview.retryableFailedEventCount}）` }}
@@ -622,7 +642,7 @@ onMounted(loadOverview);
               <p>仅将终态事实完整的失败退款重新推进到处理中；事实异常记录须先核查退款单与最新尝试。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.retryableFailedRefundCount === 0"
+                :disabled="!canUseTaskRuns || overview.retryableFailedRefundCount === 0"
                 @click="runTask('REFUND_FAIL_RETRY', '失败退款重试', overview.retryableFailedRefundCount, paymentTaskCenterApi.runRetryFailedRefunds)"
               >
                 {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : overview.retryableFailedRefundCount === 0 ? "暂无可重试退款" : `执行退款重试（${overview.retryableFailedRefundCount}）` }}
@@ -634,7 +654,7 @@ onMounted(loadOverview);
               <p>批量扫描启用中的来源应用支付控制策略，回写渠道、网关、商户号和令牌配置是否满足当前准入要求。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.enabledControlPolicyCount === 0"
+                :disabled="!canUseTaskRuns || overview.enabledControlPolicyCount === 0"
                 @click="runTask('PAYMENT_CONTROL_SELF_CHECK', '支付控制策略自动巡检', overview.enabledControlPolicyCount, paymentTaskCenterApi.runControlPolicySelfChecks)"
               >
                 {{ activeTaskCode === "PAYMENT_CONTROL_SELF_CHECK" ? "执行中..." : overview.enabledControlPolicyCount === 0 ? "暂无启用控制策略" : `执行控制策略巡检（${overview.enabledControlPolicyCount}）` }}
@@ -646,7 +666,7 @@ onMounted(loadOverview);
               <p>巡检超过 SLA 的支付交易异常，将结果写入任务日志，推动运营和值班负责人跟进。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.actionableIssueSlaCount === 0"
+                :disabled="!canUseTaskRuns || overview.actionableIssueSlaCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ESCALATE', '异常 SLA 升级巡检', overview.actionableIssueSlaCount, paymentTaskCenterApi.runEscalateOverdueIssues)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : overview.actionableIssueSlaCount === 0 ? "暂无可升级异常" : `执行 SLA 升级巡检（${overview.actionableIssueSlaCount}）` }}
@@ -658,7 +678,7 @@ onMounted(loadOverview);
               <p>将已生成的异常告警 outbox 派发到本地 IM、短信、邮件骨架通道，并回写派发状态，作为后续接入真实通知网关的统一入口。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.pendingIssueAlertDispatchCount === 0"
+                :disabled="!canUseTaskRuns || overview.pendingIssueAlertDispatchCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ALERT_DISPATCH', '异常告警派发', overview.pendingIssueAlertDispatchCount, paymentTaskCenterApi.runDispatchIssueAlerts)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : overview.pendingIssueAlertDispatchCount === 0 ? "暂无待派发告警" : `执行异常告警派发（${overview.pendingIssueAlertDispatchCount}）` }}
@@ -670,7 +690,7 @@ onMounted(loadOverview);
               <p>对已派发且仍停留在供应商受理中的异常告警执行回执回查，统一回写送达结果，减少人工逐条核对。</p>
               <button
                 class="button primary"
-                :disabled="!canUseOverview || overview.manualIssueAlertReceiptCount === 0"
+                :disabled="!canUseTaskRuns || overview.manualIssueAlertReceiptCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE', '异常告警回执回查', overview.manualIssueAlertReceiptCount, paymentTaskCenterApi.runReconcileIssueAlertReceipts)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE" ? "执行中..." : overview.manualIssueAlertReceiptCount === 0 ? "暂无可回查告警" : `执行回执回查（${overview.manualIssueAlertReceiptCount}）` }}

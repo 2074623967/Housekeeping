@@ -24,6 +24,9 @@ const metrics = ref({
 const overviewCards = computed(() => summary.value);
 
 const focusQueue = computed(() => buildDashboardFocusQueue(metrics.value, taskOverview.value || {}));
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value && !isLoading.value && !errorMessage.value
+));
 
 const healthRows = computed(() => [
   {
@@ -111,6 +114,9 @@ async function loadDashboard() {
 }
 
 function openRoute(route) {
+  if (!canUseSnapshot.value || !route) {
+    return;
+  }
   router.push(route);
 }
 
@@ -175,7 +181,7 @@ onMounted(loadDashboard);
               <tbody>
                 <tr v-for="item in focusQueue" :key="item.title">
                   <td>
-                    <button class="table-link" @click="openRoute(item.route)">{{ item.title }}</button>
+                    <button class="table-link" :disabled="!canUseSnapshot" @click="openRoute(item.route)">{{ item.title }}</button>
                   </td>
                   <td>{{ item.owner }}</td>
                   <td>{{ item.impact }}</td>
@@ -211,6 +217,7 @@ onMounted(loadDashboard);
             v-for="item in quickActions"
             :key="item.title"
             class="quick-card"
+            :disabled="!canUseSnapshot"
             @click="openRoute(item.route)"
           >
             <strong>{{ item.title }}</strong>

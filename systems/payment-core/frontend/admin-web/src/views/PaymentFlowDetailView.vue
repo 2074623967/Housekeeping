@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentFlowApi } from "../api/client";
+import { matchesPaymentFlowDetailSnapshot, paymentFlowApi } from "../api/client";
 import {
   billDetailRoute,
   orderDetailRoute,
@@ -36,7 +36,8 @@ const canUseSnapshot = computed(() => Boolean(
 const relatedRoutes = computed(() => ({
   order: detail.value?.standardOrderNo ? orderDetailRoute(detail.value.standardOrderNo) : null,
   bill: detail.value?.billNo ? billDetailRoute(detail.value.billNo) : null,
-  payment: detail.value?.paymentOrderId ? paymentDetailRoute(detail.value.paymentOrderId) : null,
+  payment: detail.value?.paymentOrderId && !detail.value.successFactIssue
+    ? paymentDetailRoute(detail.value.paymentOrderId) : null,
   request: detail.value?.paymentRequestNo
     ? paymentRequestDetailRoute(detail.value.paymentRequestNo)
     : null,
@@ -57,6 +58,24 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(flowSource = currentFlowSource.value, flowNo = currentFlowNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = flowSource === currentFlowSource.value
+    && flowNo === currentFlowNo.value
+    && detail.value
+    ? {
+      flowSource: detail.value.flowSource,
+      flowNo: detail.value.flowNo,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      orderNo: detail.value.orderNo,
+      standardOrderNo: detail.value.standardOrderNo,
+      prepayOrderNo: detail.value.prepayOrderNo,
+      payScene: detail.value.payScene,
+      billNo: detail.value.billNo,
+      paymentMethod: detail.value.paymentMethod,
+      paymentRequestNo: detail.value.paymentRequestNo,
+      routeNo: detail.value.routeNo
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -68,6 +87,9 @@ async function loadDetail(flowSource = currentFlowSource.value, flowNo = current
     }
     if (!result || result.flowSource !== flowSource || result.flowNo !== flowNo) {
       throw new Error("支付流水详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentFlowDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("支付流水详情响应为空或与当前支付关联快照不一致");
     }
     detail.value = result;
     hasLoadedData.value = true;
@@ -127,6 +149,9 @@ watch(
       <div v-if="loadErrorMessage" class="error-banner">
         {{ hasLoadedData ? "支付流水详情刷新失败，当前展示上次成功快照：" : "支付流水详情加载失败：" }}{{ loadErrorMessage }}
       </div>
+      <div v-if="canUseSnapshot && detail?.successFactIssue" class="error-banner">
+        所属支付单成功事实异常（{{ detail.successFactIssue }}）；保留流水详情，支付单详情不可用。
+      </div>
       <div v-if="isLoading" class="state-box">支付流水详情加载中...</div>
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付流水详情快照</div>
       <template v-else-if="detail">
@@ -160,8 +185,11 @@ watch(
             <div class="section-title"><h3>关联事实</h3><span class="meta">仅展示确定存在的归属</span></div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div><strong>支付场景：</strong>{{ formatValue(detail.payScene) }}</div>
+              <div><strong>业务链路：</strong>{{ formatValue(detail.businessChainId) }}</div>
               <div><strong>业务订单号：</strong>{{ formatValue(detail.orderNo) }}</div>
               <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
+              <div><strong>标准订单联查：</strong>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</div>
               <div><strong>账单号：</strong>{{ formatValue(detail.billNo) }}</div>
               <div><strong>支付请求号：</strong>{{ formatValue(detail.paymentRequestNo) }}</div>
               <div><strong>路由编号：</strong>{{ formatValue(detail.routeNo) }}</div>

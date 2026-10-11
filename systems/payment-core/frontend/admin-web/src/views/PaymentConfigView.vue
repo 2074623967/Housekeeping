@@ -8,6 +8,10 @@ import {
   paymentConfigChannelStatusFromQuery
 } from "../utils/paymentConfigChannelFilter";
 import {
+  routeFallbackChannelIssue,
+  routeFallbackChannelOptions
+} from "../utils/paymentRouteFallbackChannels";
+import {
   buildRouteRuleCollisionAcknowledgement,
   buildRouteRuleReviewActionPayload,
   canApproveRouteRuleReview,
@@ -161,6 +165,11 @@ const returnCodeReviewer = ref("");
 const returnCodeReviewComment = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
+const routeFallbackOptions = computed(() => routeFallbackChannelOptions(
+  channels.value, routeRuleForm.value.targetChannelCode, routeRuleForm.value.fallbackChannelCode
+));
+const routeFallbackIssueCount = computed(() => routeRules.value.filter((rule) =>
+  routeFallbackChannelIssue(channels.value, rule)).length);
 const rosterForm = ref(createRosterForm());
 const alertProviderForm = ref(createAlertProviderForm());
 
@@ -2110,7 +2119,7 @@ function exportGovernanceSnapshot(section = "ALL") {
     return;
   }
   const exportUrl = paymentConfigApi.buildExportUrl(section);
-  window.open(exportUrl, "_blank", "noopener");
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 </script>
 
@@ -2239,7 +2248,8 @@ function exportGovernanceSnapshot(section = "ALL") {
             </label>
             <label>
               支付方式
-              <input v-model.trim="channelForm.paymentMethod" maxlength="64" />
+              <input v-model.trim="channelForm.paymentMethod" :disabled="Boolean(editingChannelCode)" maxlength="64" />
+              <span v-if="editingChannelCode" class="muted-text">现有渠道支付方式不可变；需变更时请新建渠道并迁移规则。</span>
             </label>
             <label>
               商户号
@@ -2578,6 +2588,9 @@ function exportGovernanceSnapshot(section = "ALL") {
               <button class="button secondary" @click="startCreateRouteRule">新建规则</button>
             </div>
           </div>
+          <div v-if="hasLoadedOverview && !isLoading && !overviewErrorMessage && routeFallbackIssueCount" class="notice-banner" role="status">
+            当前快照有 {{ routeFallbackIssueCount }} 条路由规则的目标或兜底渠道需人工核对；下方逐条标注。不会自动改写历史规则，启用前请重新确认渠道支付方式。
+          </div>
 
           <div class="panel" style="margin-bottom: 16px;">
             <div class="section-title">
@@ -2612,8 +2625,8 @@ function exportGovernanceSnapshot(section = "ALL") {
                 兜底渠道
                 <select v-model="routeRuleForm.fallbackChannelCode">
                   <option value="">无兜底渠道</option>
-                  <option v-for="channel in channels" :key="channel.channelCode" :value="channel.channelCode">
-                    {{ channel.channelCode }} / {{ channel.channelName }}
+                  <option v-for="channel in routeFallbackOptions" :key="channel.channelCode" :value="channel.channelCode" :disabled="channel.incompatible">
+                    {{ channel.channelCode }} / {{ channel.channelName }}{{ channel.incompatible ? "（历史值不匹配，需调整）" : "" }}
                   </option>
                 </select>
               </label>
@@ -2815,7 +2828,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <td>{{ rule.matchScene }}</td>
                   <td class="flow-summary-cell">{{ rule.matchExpression }}</td>
                   <td>{{ rule.targetChannelCode }}</td>
-                  <td>{{ rule.fallbackChannelCode }}</td>
+                  <td>
+                    {{ rule.fallbackChannelCode || "-" }}
+                    <div v-if="hasLoadedOverview && !isLoading && !overviewErrorMessage && routeFallbackChannelIssue(channels, rule)" class="muted-text">
+                      需核对：{{ routeFallbackChannelIssue(channels, rule) }}
+                    </div>
+                  </td>
                   <td>{{ rule.rolloutPercentage ?? 100 }}% / {{ rule.rolloutSalt }}</td>
                   <td>{{ rule.priority }}</td>
                   <td><span :class="['badge', rule.statusType]">{{ rule.status }}</span></td>
@@ -2960,6 +2978,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                       {{ review.matchExpression }}
                       <div class="muted-text">
                         {{ review.targetChannelCode }} / 兜底 {{ review.fallbackChannelCode || "无" }} / 灰度 {{ review.rolloutPercentage ?? 100 }}% / 盐 {{ review.rolloutSalt }} / 优先级 {{ review.priority }} / {{ review.status }}
+                      </div>
+                      <div v-if="review.reviewStatus === 'PENDING_REVIEW' && review.status !== 'DISABLED' && hasLoadedOverview && !isLoading && !overviewErrorMessage && routeFallbackChannelIssue(channels, review)" class="muted-text">
+                        渠道需核对：{{ routeFallbackChannelIssue(channels, review) }}
                       </div>
                     </td>
                     <td>

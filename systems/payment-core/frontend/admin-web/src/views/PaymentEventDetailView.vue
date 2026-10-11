@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentEventApi } from "../api/client";
+import { matchesPaymentEventDetailSnapshot, paymentEventApi } from "../api/client";
 import {
   orderDetailRoute,
   paymentDetailRoute,
@@ -34,7 +34,8 @@ const canUseSnapshot = computed(() => Boolean(
 const httpStageMeta = computed(() => paymentSuccessHttpStageMeta(detail.value || {}));
 const relatedRoutes = computed(() => ({
   order: detail.value?.standardOrderNo ? orderDetailRoute(detail.value.standardOrderNo) : null,
-  payment: detail.value?.paymentOrderId ? paymentDetailRoute(detail.value.paymentOrderId) : null,
+  payment: detail.value?.paymentOrderId && !detail.value.successFactIssue
+    ? paymentDetailRoute(detail.value.paymentOrderId) : null,
   eventFlow: detail.value?.eventNo ? paymentFlowDetailRoute("BUSINESS_EVENT", detail.value.eventNo) : null,
   flows: detail.value?.paymentOrderId ? paymentFlowsRoute({ paymentOrderId: detail.value.paymentOrderId }) : null,
   logs: detail.value?.paymentOrderId ? paymentLogsRoute({ paymentOrderId: detail.value.paymentOrderId }) : null
@@ -48,6 +49,18 @@ const metricCards = computed(() => detail.value ? [
 
 async function loadDetail(eventNo = currentEventNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = eventNo === currentEventNo.value && detail.value
+    ? {
+      eventNo: detail.value.eventNo,
+      eventType: detail.value.eventType,
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      bizNo: detail.value.bizNo,
+      standardOrderNo: detail.value.standardOrderNo,
+      eventTopic: detail.value.eventTopic,
+      downstreamSystem: detail.value.downstreamSystem
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
@@ -57,6 +70,9 @@ async function loadDetail(eventNo = currentEventNo.value) {
     }
     if (!result || result.eventNo !== eventNo) {
       throw new Error("支付事件详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentEventDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("支付事件详情响应为空或与当前支付归属快照不一致");
     }
     detail.value = result;
     hasLoadedData.value = true;
@@ -122,6 +138,9 @@ watch(currentEventNo, (eventNo) => {
       <div v-if="isLoading" class="state-box">支付事件详情加载中...</div>
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付事件详情快照</div>
       <template v-else-if="detail">
+        <div v-if="detail.successFactIssue" class="error-banner">
+          所属支付单成功事实异常（{{ detail.successFactIssue }}）；保留事件详情，支付单详情不可用。
+        </div>
         <div class="detail-card-grid">
           <div v-for="card in metricCards" :key="card.title" class="detail-card">
             <div class="detail-label">{{ card.title }}</div>
@@ -159,11 +178,13 @@ watch(currentEventNo, (eventNo) => {
             </div>
             <div class="detail-grid detail-grid-wide">
               <div><strong>支付单号：</strong>{{ formatValue(detail.paymentOrderId) }}</div>
+              <div><strong>业务链路：</strong>{{ formatValue(detail.businessChainId) }}</div>
               <div><strong>业务单号：</strong>{{ formatValue(detail.bizNo) }}</div>
               <div><strong>标准订单号：</strong>{{ formatValue(detail.standardOrderNo) }}</div>
               <div><strong>事件流水来源：</strong>BUSINESS_EVENT</div>
             </div>
             <div class="ops-card detail-panel">
+              <div class="ops-row"><span>标准订单联查</span><span>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</span></div>
               <div class="ops-row"><span>建议动作</span><span>{{ paymentEventRecommendedAction(detail) }}</span></div>
               <div class="ops-row"><span>事件流水</span><span>按 BUSINESS_EVENT + 事件号精确联查</span></div>
               <div class="ops-row"><span>导航状态</span><span>{{ canUseSnapshot ? "当前快照有效" : "当前快照不可用于联查" }}</span></div>

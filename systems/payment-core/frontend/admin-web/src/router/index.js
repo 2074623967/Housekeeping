@@ -110,7 +110,7 @@ const routes = [
       { path: "payment-records/:paymentOrderId", name: "payment-record-detail", component: PaymentRecordDetailView },
       { path: "payments", name: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", name: "payment-detail", component: PaymentDetailView },
-      { path: "refunds", component: RefundsView },
+      { path: "refunds", name: "refunds", component: RefundsView },
       { path: "refunds/:refundOrderId", name: "refund-detail", component: RefundDetailView },
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },

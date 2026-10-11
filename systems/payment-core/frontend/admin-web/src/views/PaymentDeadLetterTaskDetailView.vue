@@ -1,7 +1,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentDeadLetterTaskApi } from "../api/client";
+import {
+  matchesPaymentDeadLetterTaskDetailSnapshot,
+  paymentDeadLetterTaskApi
+} from "../api/client";
 
 const route = useRoute();
 const router = useRouter();
@@ -11,7 +14,7 @@ const hasLoadedData = ref(false);
 const loadErrorMessage = ref("");
 let latestLoadRequestId = 0;
 
-const currentTaskNo = computed(() => typeof route.params.taskNo === "string" ? route.params.taskNo : "");
+const currentTaskNo = computed(() => typeof route.params.taskNo === "string" ? route.params.taskNo.trim() : "");
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(loadErrorMessage.value));
 const statusLabel = (status) => ({
   PENDING_REVIEW: "待复核",
@@ -34,12 +37,26 @@ function formatValue(value) {
 
 async function loadDetail(taskNo = currentTaskNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = taskNo === currentTaskNo.value && detail.value
+    ? {
+      taskNo: detail.value.taskNo,
+      messageId: detail.value.messageId,
+      correlationId: detail.value.correlationId,
+      targetSystem: detail.value.targetSystem,
+      deadLetterRoutingKey: detail.value.deadLetterRoutingKey,
+      replayExchange: detail.value.replayExchange,
+      replayRoutingKey: detail.value.replayRoutingKey
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
     const result = await paymentDeadLetterTaskApi.getDetail(taskNo);
     if (requestId !== latestLoadRequestId || taskNo !== currentTaskNo.value) return;
     if (!result || result.taskNo !== taskNo) throw new Error("死信任务详情响应为空或与当前路由不一致");
+    if (expectedSnapshot && !matchesPaymentDeadLetterTaskDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("死信任务详情响应为空或与当前消息路由快照不一致");
+    }
     detail.value = result;
     hasLoadedData.value = true;
   } catch (error) {

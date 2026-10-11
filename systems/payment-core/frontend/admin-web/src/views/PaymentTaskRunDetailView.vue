@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentTaskCenterApi } from "../api/client";
+import { matchesPaymentTaskRunDetailSnapshot, paymentTaskCenterApi } from "../api/client";
 
 const route = useRoute();
 const router = useRouter();
@@ -20,12 +20,23 @@ const metricCards = computed(() => detail.value ? [
 function formatValue(value) { return value == null || value === "" ? "-" : value; }
 async function loadDetail(taskLogNo = currentTaskLogNo.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = taskLogNo === currentTaskLogNo.value && detail.value
+    ? {
+      taskLogNo: detail.value.taskLogNo,
+      taskCode: detail.value.taskCode,
+      bizDate: detail.value.bizDate,
+      businessRefNo: detail.value.businessRefNo
+    }
+    : null;
   isLoading.value = true;
   loadErrorMessage.value = "";
   try {
     const result = await paymentTaskCenterApi.getTaskRunDetail(taskLogNo);
     if (requestId !== latestLoadRequestId || taskLogNo !== currentTaskLogNo.value) return;
     if (!result || result.taskLogNo !== taskLogNo) throw new Error("任务详情响应为空或与当前路由不一致");
+    if (expectedSnapshot && !matchesPaymentTaskRunDetailSnapshot(expectedSnapshot, result)) {
+      throw new Error("任务详情响应为空或与当前执行上下文快照不一致");
+    }
     detail.value = result;
     hasLoadedData.value = true;
   } catch (error) {

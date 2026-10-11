@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRecordApi } from "../api/client";
 import { paymentRecordDetailRoute } from "../router/detailRoutes";
+import { refundsRoute } from "../router/listRoutes";
 import { sumPaymentAmounts } from "../utils/paymentAmount";
 
 const route = useRoute();
@@ -19,7 +20,7 @@ const hasLoadedData = ref(false);
 const errorMessage = ref("");
 let latestLoadRequestId = 0;
 const filters = ref({
-  userId: "",
+  customerName: "",
   businessOrderNo: "",
   paymentType: "",
   paymentStatus: "全部",
@@ -35,22 +36,24 @@ const pageConfig = computed(() => ({
 
 const metrics = computed(() => ({
   total: total.value,
-  successTotal: rows.value.filter((item) => item.paymentStatus === "支付成功").length,
+  successTotal: rows.value.filter((item) => item.paymentStatus === "支付成功" && !item.successFactIssue).length,
   closedTotal: rows.value.filter((item) => item.paymentStatus === "已关闭").length,
   refundAmountTotal: `¥${sumPaymentAmounts(rows.value.map((item) => item.refundedAmount))}`
 }));
 const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
 const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 
 const columns = [
   { key: "serialNo", label: "序号", className: "col-serial" },
   { key: "paymentOrderId", label: "支付单号", hint: "支付系统唯一ID", className: "col-payment-id" },
+  { key: "businessChainId", label: "业务链路", hint: "跨系统排障链路ID", className: "col-payment-id" },
   { key: "businessOrderNo", label: "业务订单号", hint: "业务方唯一ID", className: "col-business-order" },
   { key: "paymentRequestNo", label: "支付请求号", hint: "商户订单号", className: "col-payment-request" },
   { key: "applicationSourceId", label: "应用来源ID", className: "col-source" },
   { key: "businessLineId", label: "业务线ID", className: "col-line" },
   { key: "externalTransactionNo", label: "外部交易流水号", className: "col-external" },
-  { key: "paymentGateway", label: "支付通道", className: "col-gateway" },
+  { key: "paymentGateway", label: "支付网关", className: "col-gateway" },
   { key: "paymentChannel", label: "支付渠道", className: "col-channel" },
   { key: "paymentType", label: "支付类型", className: "col-type" },
   { key: "paymentStatus", label: "支付状态", className: "col-status" },
@@ -67,7 +70,7 @@ const columns = [
   { key: "userPaymentChannelId", label: "用户支付渠道唯一标识", className: "col-user-channel" },
   { key: "receivingAccount", label: "收款账号", className: "col-account" },
   { key: "notifyUrl", label: "通知地址", className: "col-notify" },
-  { key: "callbackMqTopic", label: "回调MQ主题", className: "col-mq" },
+  { key: "callbackMqTopic", label: "支付成功事件主题", className: "col-mq" },
   { key: "expireTime", label: "失效时间", className: "col-time" },
   { key: "createdAt", label: "创建时间", className: "col-time" },
   { key: "updatedAt", label: "更新时间", className: "col-time" },
@@ -119,7 +122,7 @@ function resetFilters() {
     return;
   }
   filters.value = {
-    userId: "",
+    customerName: "",
     businessOrderNo: "",
     paymentType: "",
     paymentStatus: "全部",
@@ -163,10 +166,26 @@ function exportRows() {
 }
 
 function openPayment(row) {
+  if (!canUseSnapshot.value || !row?.paymentOrderId) {
+    return;
+  }
   router.push(paymentRecordDetailRoute(row.paymentOrderId, pageConfig.value.recordType));
 }
 
+function openUnverifiedRefunds(row) {
+  if (!canUseSnapshot.value || !row?.paymentOrderId || !(row.unverifiedRefundCount > 0)) {
+    return;
+  }
+  router.push(refundsRoute({
+    paymentOrderId: row.paymentOrderId,
+    refundStatus: "UNVERIFIED_SUCCESS"
+  }));
+}
+
 function pickRow(row) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedRow.value = row;
 }
 
@@ -221,8 +240,8 @@ onMounted(loadRows);
     <section class="panel">
       <div class="toolbar">
         <div class="field">
-          <label for="record-user-id">用户ID</label>
-          <input id="record-user-id" v-model="filters.userId" placeholder="请输入用户ID" :disabled="isLoading" />
+          <label for="record-customer-name">客户姓名</label>
+          <input id="record-customer-name" v-model="filters.customerName" placeholder="请输入客户姓名" :disabled="isLoading" />
         </div>
         <div class="field">
           <label for="record-order-no">商户订单号</label>
@@ -233,6 +252,11 @@ onMounted(loadRows);
           <select id="record-payment-type" v-model="filters.paymentType" :disabled="isLoading">
             <option value="">全部</option>
             <option value="消费支付">消费支付</option>
+            <option value="充值支付">充值支付</option>
+            <option value="提现补款">提现补款</option>
+            <option value="转账补款">转账补款</option>
+            <option value="余额补款">余额补款</option>
+            <option value="未分类">未分类</option>
           </select>
         </div>
         <div class="field">
@@ -296,10 +320,15 @@ onMounted(loadRows);
                   <span :class="{ 'prototype-status': column.key === 'paymentStatus' }">
                     {{ formatCell(row, column) }}
                   </span>
+                  <span v-if="column.key === 'paymentStatus' && row.successFactIssue"> · {{ row.successFactIssue }}</span>
+                  <span v-if="column.key === 'paymentType' && row.prepayBindingIssue" class="badge warn">{{ row.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付缺失待核查" : "多预付待核查" }}</span>
+                  <span v-if="column.key === 'refundedAmount' && row.unverifiedRefundCount > 0" class="badge warn">
+                    {{ row.unverifiedRefundCount }} 笔待核查
+                  </span>
                 </td>
                 <td class="col-operation">
-                  <button class="link-button" type="button" @click="pickRow(row)">查看快照</button>
-                  <button class="link-button" type="button" @click="openPayment(row)">详情</button>
+                  <button class="link-button" type="button" :disabled="!canUseSnapshot" @click="pickRow(row)">查看快照</button>
+                  <button class="link-button" type="button" :disabled="!canUseSnapshot" @click="openPayment(row)">详情</button>
                 </td>
               </tr>
             </tbody>
@@ -313,20 +342,28 @@ onMounted(loadRows);
               <span class="meta">{{ selectedRow.paymentOrderId }}</span>
             </div>
             <div class="detail-grid">
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedRow.businessChainId || "—" }}</strong></div>
+              <div class="detail-card"><span>支付场景</span><strong>{{ selectedRow.payScene || "—" }}</strong></div>
+              <div v-if="selectedRow.prepayBindingIssue" class="detail-card"><span>预付归属</span><strong>{{ selectedRow.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付归属缺失，待人工核查" : "多预付冲突，待人工核查" }}</strong></div>
               <div class="detail-card"><span>业务订单号</span><strong>{{ selectedRow.businessOrderNo || "—" }}</strong></div>
               <div class="detail-card"><span>支付状态</span><strong>{{ selectedRow.paymentStatus || "—" }}</strong></div>
+              <div v-if="selectedRow.successFactIssue" class="detail-card"><span>支付成功事实</span><strong>{{ selectedRow.successFactIssue }}</strong></div>
               <div class="detail-card"><span>支付类型</span><strong>{{ selectedRow.paymentType || "—" }}</strong></div>
               <div class="detail-card"><span>支付渠道</span><strong>{{ selectedRow.paymentChannel || "—" }}</strong></div>
               <div class="detail-card"><span>支付金额</span><strong>{{ selectedRow.paymentAmount || "—" }}</strong></div>
               <div class="detail-card"><span>已退金额</span><strong>{{ selectedRow.refundedAmount || "—" }}</strong></div>
+              <div v-if="selectedRow.unverifiedRefundCount > 0" class="detail-card detail-card-wide">
+                <span>成功退款待核查</span><strong>{{ selectedRow.unverifiedRefundCount }} 笔未计入已退</strong>
+                <button class="link-button" type="button" :disabled="!canUseSnapshot" @click="openUnverifiedRefunds(selectedRow)">查看待核查退款</button>
+              </div>
               <div class="detail-card"><span>外部流水号</span><strong>{{ selectedRow.externalTransactionNo || "—" }}</strong></div>
               <div class="detail-card"><span>支付成功时间</span><strong>{{ selectedRow.paidAt || "—" }}</strong></div>
               <div class="detail-card detail-card-wide"><span>通知地址</span><strong>{{ selectedRow.notifyUrl || "—" }}</strong></div>
-              <div class="detail-card detail-card-wide"><span>回调 MQ 主题</span><strong>{{ selectedRow.callbackMqTopic || "—" }}</strong></div>
+              <div class="detail-card detail-card-wide"><span>支付成功事件主题</span><strong>{{ selectedRow.callbackMqTopic || "—" }}</strong></div>
             </div>
             <div class="ops-card">
               <div class="ops-title">运营建议</div>
-              <div class="ops-row"><span>优先联查</span><span>支付记录详情 / 支付单详情 / 支付请求</span></div>
+              <div class="ops-row"><span>优先联查</span><span>{{ selectedRow.successFactIssue ? "支付记录详情 / 支付请求 / 处理日志；成功支付详情不可用" : "支付记录详情 / 支付单详情 / 支付请求" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>状态、已退金额、外部流水号、通知地址</span></div>
               <div class="ops-row"><span>典型场景</span><span>收款已成功但业务未收口、部分退款后复核</span></div>
             </div>

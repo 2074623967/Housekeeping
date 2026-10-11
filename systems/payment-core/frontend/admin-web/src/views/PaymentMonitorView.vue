@@ -111,7 +111,7 @@ const alertSuggestions = computed(() => {
   } else if (alert.alertTitle?.includes("退款终态事实不一致")) {
     suggestions.push("优先核对退款单终态、最新退款尝试状态、完成时间和操作日志，确认结构化事实一致后再推进对账。");
   } else if (alert.alertTitle?.includes("支付成功事实不一致")) {
-    suggestions.push("优先核对支付单成功终态、最新支付尝试状态、完成时间和操作日志，确认结构化事实一致后再推进对账。");
+    suggestions.push("优先核对预付单绑定、订单来源、支付尝试与渠道流水，结合操作日志查明异常；不得按当前订单行自动补标来源或重发付款。");
   } else if (alert.alertTitle?.includes("成功时间缺失") || alert.alertMessage?.includes("成功时间")) {
     suggestions.push("优先核对支付成功通知与内部事件，确认可信成功时间后再归属账期。");
   }
@@ -217,6 +217,13 @@ function openProcessingRefunds() {
   router.push(refundsRoute({ refundStatus: "PROCESSING" }));
 }
 
+function openClosedPayments() {
+  if (!canDrillDown.value || !(overview.value.summary?.closedPaymentCount > 0)) {
+    return;
+  }
+  router.push(paymentsRoute({ status: "CLOSED" }));
+}
+
 function openFailedRefunds() {
   if (!canDrillDown.value || !(overview.value.summary?.failedRefundCount > 0)) {
     return;
@@ -232,10 +239,16 @@ function openDisabledChannels() {
 }
 
 function pickAlert(alert) {
+  if (!canDrillDown.value) {
+    return;
+  }
   selectedAlert.value = alert;
 }
 
 function pickChannel(item) {
+  if (!canDrillDown.value) {
+    return;
+  }
   selectedChannel.value = item;
 }
 
@@ -338,6 +351,14 @@ onMounted(loadOverview);
                 查看处理中退款
               </button>
             </article>
+            <article class="overview-card info">
+              <p class="overview-title">已关闭支付</p>
+              <strong>{{ overview.summary.closedPaymentCount ?? 0 }}</strong>
+              <span>用于复核超时关闭和人工关闭的支付单。</span>
+              <button class="link-button" :disabled="!canDrillDown || !(overview.summary.closedPaymentCount > 0)" @click="openClosedPayments">
+                查看已关闭支付
+              </button>
+            </article>
             <article class="overview-card danger">
               <p class="overview-title">失败退款</p>
               <strong>{{ overview.summary.failedRefundCount ?? 0 }}</strong>
@@ -410,7 +431,7 @@ onMounted(loadOverview);
                   <tr v-for="alert in overview.alerts" :key="alert.alertType">
                     <td><span :class="['badge', alert.alertLevelType]">{{ alert.alertLevel }}</span></td>
                     <td>
-                      <button class="table-link" @click="pickAlert(alert)">{{ alert.alertTitle }}</button>
+                      <button class="table-link" :disabled="!canDrillDown" @click="pickAlert(alert)">{{ alert.alertTitle }}</button>
                       <div class="meta">{{ alert.alertMessage }}</div>
                       <div class="meta">{{ alert.suggestedAction }}</div>
                     </td>
@@ -494,7 +515,7 @@ onMounted(loadOverview);
                 </tr>
                 <tr v-for="item in overview.channelMetrics" :key="item.channelCode + item.paymentMethod">
                   <td>
-                    <button class="table-link" @click="pickChannel(item)">{{ item.channelCode }}</button>
+                    <button class="table-link" :disabled="!canDrillDown" @click="pickChannel(item)">{{ item.channelCode }}</button>
                   </td>
                   <td>{{ item.paymentMethod }}</td>
                   <td>{{ item.totalCount }}</td>

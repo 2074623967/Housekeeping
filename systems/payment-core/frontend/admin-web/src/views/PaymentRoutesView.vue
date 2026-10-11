@@ -185,7 +185,8 @@ function goToPage(nextPage) {
 }
 
 function openPaymentDetail(paymentOrderId) {
-  if (!canUseSnapshot.value) {
+  if (!canUseSnapshot.value || !paymentOrderId
+      || !items.value.some((item) => item.paymentOrderId === paymentOrderId && !item.successFactIssue)) {
     return;
   }
   router.push(paymentDetailRoute(paymentOrderId));
@@ -403,6 +404,7 @@ watch(
               <tr>
                 <th>路由记录号</th>
                 <th>支付单号</th>
+                <th>业务链路</th>
                 <th>订单号</th>
                 <th>预付单号</th>
                 <th>支付方式</th>
@@ -419,10 +421,12 @@ watch(
                 <tr>
                   <td>{{ item.routeNo }}</td>
                   <td>
-                    <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
+                    <button v-if="!item.successFactIssue" class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
                       {{ item.paymentOrderId }}
                     </button>
+                    <span v-else>{{ item.paymentOrderId }} · {{ item.successFactIssue }}</span>
                   </td>
+                  <td class="mono-text">{{ item.businessChainId }}</td>
                   <td>{{ item.orderNo }}</td>
                   <td>{{ item.prepayOrderNo || "-" }}</td>
                   <td>{{ item.paymentMethod || "-" }}</td>
@@ -440,7 +444,7 @@ watch(
                   </td>
                 </tr>
                 <tr v-if="expandedRouteNo === item.routeNo">
-                  <td colspan="11">
+                  <td colspan="12">
                     <div class="payload-grid">
                       <div>
                         <strong>最近支付请求报文</strong>
@@ -466,6 +470,7 @@ watch(
             </div>
             <div class="detail-grid">
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>业务链路</span><strong>{{ selectedItem.businessChainId }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>预付单号</span><strong>{{ selectedItem.prepayOrderNo || "—" }}</strong></div>
               <div class="detail-card"><span>支付方式</span><strong>{{ selectedItem.paymentMethod || "—" }}</strong></div>
@@ -479,14 +484,14 @@ watch(
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先联查</span><span>支付单详情 / 路由流水 / 支付请求 / 路由配置</span></div>
+              <div class="ops-row"><span>优先联查</span><span>{{ selectedItem.successFactIssue ? "保留路由快照，联查流水与请求；成功支付详情不可用" : "支付单详情 / 路由流水 / 支付请求 / 路由配置" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>规则命中、渠道落点、配置快照版本、终端与幂等键</span></div>
               <div class="ops-row"><span>典型场景</span><span>误命中兜底渠道、渠道落错、桌面/H5 终端规则偏差</span></div>
               <div class="ops-row"><span>当前总览</span><span>最近路由 {{ metrics.latestRouteAt }} / 线下 {{ metrics.offlineRouteCount }} / 微信 {{ metrics.wechatRouteCount }} / 支付宝 {{ metrics.alipayRouteCount }}</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" :disabled="!canUseSnapshot" @click="openRouteDetail(selectedItem.routeNo)">查看唯一详情</button>
-              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !!selectedItem.successFactIssue" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看路由流水</button>
               <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
               <button class="link-button" @click="openPaymentConfig">查看路由配置</button>

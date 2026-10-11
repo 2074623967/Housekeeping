@@ -1,19 +1,19 @@
 const DEFAULT_SYSTEM_BASE_URLS = {
-  paymentCore: "http://127.0.0.1:5174",
-  paymentApp: "http://127.0.0.1:5175",
-  paymentH5: "http://127.0.0.1:5176",
-  paymentPc: "http://127.0.0.1:5177",
-  walletAccount: "http://127.0.0.1:5178",
-  refundCenter: "http://127.0.0.1:5179",
-  reconciliation: "http://127.0.0.1:5180",
-  deposit: "http://127.0.0.1:5181",
-  opsConfig: "http://127.0.0.1:5182",
-  riskControl: "http://127.0.0.1:5183",
-  gatewayAccess: "http://127.0.0.1:5184",
-  wallet: "http://127.0.0.1:5185",
-  clearing: "http://127.0.0.1:5273",
-  settlement: "http://127.0.0.1:5274",
-  accounting: "http://127.0.0.1:5275"
+  paymentCore: "http://localhost:5174",
+  paymentApp: "http://localhost:5175",
+  paymentH5: "http://localhost:5176",
+  paymentPc: "http://localhost:5177",
+  walletAccount: "http://localhost:5178",
+  refundCenter: "http://localhost:5179",
+  reconciliation: "http://localhost:5180",
+  deposit: "http://localhost:5181",
+  opsConfig: "http://localhost:5182",
+  riskControl: "http://localhost:5183",
+  gatewayAccess: "http://localhost:5184",
+  wallet: "http://localhost:5185",
+  clearing: "http://localhost:5273",
+  settlement: "http://localhost:5274",
+  accounting: "http://localhost:5275"
 };
 
 const envBaseUrls = import.meta.env || {};

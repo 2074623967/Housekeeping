@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { paymentApi, paymentRecordApi } from "../api/client";
+import { matchesPaymentRecordDetailSnapshot, paymentApi, paymentRecordApi } from "../api/client";
 import { normalizePaymentRecordType, paymentDetailRoute } from "../router/detailRoutes";
-import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { paymentLogsRoute, paymentRequestsRoute, refundsRoute } from "../router/listRoutes";
 import { canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
@@ -46,11 +46,24 @@ const recordTypeLabel = computed(() => {
 
 const canRunQuery = computed(() => canQueryPaymentChannel(
   detail.value?.paymentStatus,
-  detail.value?.latestAttemptStatus
-));
+  detail.value?.latestAttemptStatus,
+  detail.value?.latestAttemptCompletedAt,
+  detail.value?.externalTransactionNo,
+  detail.value?.paymentChannel
+) && !detail.value?.successFactIssue && !detail.value?.prepayBindingIssue);
 
 async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOrderId.value) {
   const requestId = ++latestLoadRequestId;
+  const expectedSnapshot = paymentOrderId === currentPaymentOrderId.value && detail.value
+    ? {
+      paymentOrderId: detail.value.paymentOrderId,
+      businessChainId: detail.value.businessChainId,
+      businessOrderNo: detail.value.businessOrderNo,
+      payScene: detail.value.payScene,
+      paymentMethod: detail.value.paymentMethod,
+      paymentAmount: detail.value.paymentAmount
+    }
+    : null;
   isLoading.value = true;
   if (afterAction) {
     actionRefreshErrorMessage.value = "";
@@ -64,6 +77,9 @@ async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOr
     }
     if (!paymentRecordDetail || paymentRecordDetail.paymentOrderId !== paymentOrderId) {
       throw new Error("支付记录详情响应为空或与当前路由不一致");
+    }
+    if (expectedSnapshot && !matchesPaymentRecordDetailSnapshot(expectedSnapshot, paymentRecordDetail)) {
+      throw new Error("支付记录详情响应为空或与当前订单/金额快照不一致");
     }
     detail.value = paymentRecordDetail;
     hasLoadedData.value = true;
@@ -100,7 +116,7 @@ function goBackToList() {
 }
 
 function openPaymentDetail() {
-  if (!canUseSnapshot.value) {
+  if (!canUseSnapshot.value || detail.value?.successFactIssue || detail.value?.prepayBindingIssue) {
     return;
   }
   router.push(paymentDetailRoute(detail.value.paymentOrderId));
@@ -118,6 +134,16 @@ function openPaymentLogs() {
     return;
   }
   router.push(paymentLogsRoute({ paymentOrderId: detail.value.paymentOrderId }));
+}
+
+function openUnverifiedRefunds() {
+  if (!canUseSnapshot.value || !(detail.value?.unverifiedRefundCount > 0)) {
+    return;
+  }
+  router.push(refundsRoute({
+    paymentOrderId: detail.value.paymentOrderId,
+    refundStatus: "UNVERIFIED_SUCCESS"
+  }));
 }
 
 function formatValue(value) {
@@ -161,13 +187,24 @@ const operationSuggestions = computed(() => {
     return [];
   }
   const suggestions = [];
+  if (detail.value.successFactIssue) {
+    suggestions.push(`成功事实异常（${detail.value.successFactIssue}），保留支付记录快照并联查请求和日志；勿将当前状态视为可信成功。`);
+  }
+  if (detail.value.prepayBindingIssue) {
+    suggestions.push(detail.value.prepayBindingIssue === "PREPAY_BINDING_MISSING"
+      ? "当前支付单缺少精确预付归属，来源场景和失效时间不可判定；先人工审计，勿据此查单或重新提交。"
+      : "同一支付单关联多张预付单，来源场景和失效时间不可判定；先人工审计，勿据此查单或重新提交。");
+  }
+  if (detail.value.unverifiedRefundCount > 0) {
+    suggestions.push(`${detail.value.unverifiedRefundCount} 笔成功退款事实待核查，尚未计入已退金额；请下钻退款异常记录。`);
+  }
   if ((detail.value.notifyLogs || []).length === 0) {
     suggestions.push("当前无回调轨迹，优先核对渠道回调是否到达与通知地址是否配置正确。");
   }
   if ((detail.value.eventLogs || []).length === 0) {
     suggestions.push("当前无事件轨迹，建议联查支付处理日志和事件出站记录。");
   }
-  if (detail.value.latestAttemptStatus && detail.value.latestAttemptStatus !== "SUCCESS") {
+  if (canRunQuery.value && detail.value.latestAttemptStatus && detail.value.latestAttemptStatus !== "成功") {
     suggestions.push(`最近一次支付尝试状态为 ${detail.value.latestAttemptStatus}，建议先主动查单再决定是否人工干预。`);
   }
   if (!suggestions.length) {
@@ -193,7 +230,11 @@ async function handleQueryPayment() {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator, {
+      orderNo: detail.value?.businessOrderNo,
+      amount: detail.value?.paymentAmount,
+      payScene: detail.value?.payScene
+    });
     if (paymentOrderId !== currentPaymentOrderId.value) {
       return;
     }
@@ -233,9 +274,10 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="goBackToList">返回{{ recordTypeLabel }}</button>
-        <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentDetail">查看支付单详情</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !!detail?.successFactIssue || !!detail?.prepayBindingIssue" @click="openPaymentDetail">查看支付单详情</button>
         <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentRequests">查看支付请求</button>
         <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentLogs">查看处理日志</button>
+        <button v-if="detail?.unverifiedRefundCount > 0" class="button secondary" :disabled="!canUseSnapshot" @click="openUnverifiedRefunds">查看待核查退款</button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
         <button class="button primary" :disabled="!canUseSnapshot || !canRunQuery" @click="handleQueryPayment">
           {{ activeAction === "query" ? "查单中..." : "主动查单" }}
@@ -261,10 +303,20 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
       <div v-if="isLoading" class="state-box">支付记录详情加载中...</div>
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付记录详情快照</div>
       <template v-else-if="detail">
+        <div v-if="detail.successFactIssue" class="error-banner">
+          所属支付单成功事实异常（{{ detail.successFactIssue }}）；保留支付记录详情，支付单详情不可用。
+        </div>
+        <div v-if="detail.unverifiedRefundCount > 0" class="risk-banner">
+          {{ detail.unverifiedRefundCount }} 笔成功退款事实待核查，当前已退金额仅包含可信成功退款。
+        </div>
         <div class="detail-card-grid">
           <div class="detail-card">
             <div class="detail-label">支付单号</div>
             <div class="detail-value">{{ formatValue(detail.paymentOrderId) }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">业务链路</div>
+            <div class="detail-value">{{ formatValue(detail.businessChainId) }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">支付状态</div>
@@ -312,7 +364,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
               <div><strong>商品名称：</strong>{{ formatValue(detail.productName) }}</div>
               <div><strong>渠道返回码：</strong>{{ formatValue(detail.channelReturnCode) }}</div>
               <div><strong>回调地址：</strong>{{ formatValue(detail.notifyUrl) }}</div>
-              <div><strong>回调 MQ 主题：</strong>{{ formatValue(detail.callbackMqTopic) }}</div>
+              <div><strong>支付成功事件主题：</strong>{{ formatValue(detail.callbackMqTopic) }}</div>
             </div>
           </section>
 
@@ -334,6 +386,8 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
 
         <div class="detail-grid detail-grid-wide">
           <div><strong>支付金额：</strong>{{ formatValue(detail.paymentAmount) }}</div>
+          <div><strong>支付场景：</strong>{{ formatValue(detail.payScene) }}</div>
+          <div v-if="detail.prepayBindingIssue"><strong>预付归属：</strong>{{ detail.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付归属缺失，待人工核查" : "多预付冲突，待人工核查" }}</div>
           <div><strong>已退金额：</strong>{{ formatValue(detail.refundedAmount) }}</div>
           <div><strong>退款次数：</strong>{{ formatValue(detail.refundCount) }}</div>
           <div><strong>银行名：</strong>{{ formatValue(detail.bankName) }}</div>
@@ -346,6 +400,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           <div><strong>创建时间：</strong>{{ formatValue(detail.createdAt) }}</div>
           <div><strong>更新时间：</strong>{{ formatValue(detail.updatedAt) }}</div>
           <div><strong>支付成功时间：</strong>{{ formatValue(detail.paidAt) }}</div>
+          <div><strong>最近尝试完成时间：</strong>{{ formatValue(detail.latestAttemptCompletedAt) }}</div>
           <div><strong>最近终端：</strong>{{ formatValue(detail.latestTerminal) }}</div>
           <div><strong>最近客户端 IP：</strong>{{ formatValue(detail.latestClientIp) }}</div>
           <div><strong>最近幂等键：</strong>{{ formatValue(detail.latestIdempotencyKey) }}</div>
