@@ -206,6 +206,43 @@ test("reuses the same mini-program payment key after page recreation and an unce
   }
 });
 
+test("does not invoke native payment for an unchanged prepay submit response", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let nativeCalls = 0;
+  let redirects = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = {
+    requestPayment: ({ success }) => { nativeCalls += 1; success(); },
+    redirectTo: () => { redirects += 1; }
+  };
+  paymentApi.submit = () => Promise.resolve({
+    ...cashier(), paymentMethod: "微信支付", channel: "WX_MINI_PROGRAM",
+    nativePaymentParams: {
+      timeStamp: "123", nonceStr: "nonce", package: "prepay_id=local",
+      signType: "RSA", paySign: "signature"
+    }
+  });
+  paymentApi.getCashier = () => Promise.resolve(cashier());
+  const page = createPage();
+  page.pageActive = true;
+  page.cashierRequestVersion = 0;
+  page.setData({ prepayOrderNo: "PRE-001", cashier: cashier(),
+    idempotencyKey: "MINI-PRE-001", loading: false, canSubmit: true });
+  try {
+    await page.submitPayment();
+    assert.equal(nativeCalls, 0);
+    assert.equal(redirects, 0);
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+    assert.equal(page.data.cashier.paymentStatus, "PREPAY_CREATED");
+    assert.match(page.data.errorMessage, /状态未推进/);
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
 test("does not write submit state after page unload", async () => {
   const submitRequest = deferred();
   const previousGetApp = global.getApp;

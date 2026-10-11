@@ -201,6 +201,9 @@ Page({
       )) {
         throw new Error("支付提交响应为空或与当前预付单不一致");
       }
+      if (result.paymentStatus.trim().toUpperCase() === "PREPAY_CREATED") {
+        throw new Error("支付提交状态未推进，请刷新收银台后使用原请求键重试");
+      }
       if (result.paymentStatus === "RISK_REVIEW") {
         this.redirectToPaymentResult(result.paymentOrderId, prepayOrderNo);
         return;

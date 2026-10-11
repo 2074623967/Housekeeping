@@ -405,6 +405,17 @@ test("rejects mini program payment submit responses without payment and cashier 
   const validResult = { prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001", orderNo: "ORDER-001", amount: "68.00", paymentStatus: "WAIT_CALLBACK", createdAt: "2026-09-27 11:59:00", expiresAt: "2026-09-27 12:00:00", cashierStatus: "支付中", cashierStatusType: "info", status: "SUCCESS" };
   assert.deepEqual(normalizePaymentSubmitResult(validResult), validResult);
   assert.throws(
+    () => normalizePaymentSubmitResult({
+      ...validResult,
+      paymentStatus: "PREPAY_CREATED",
+      cashierStatus: "待支付",
+      cashierStatusType: "warn",
+      paymentMethod: "微信支付",
+      channel: "WX_MINI_PROGRAM"
+    }, "PRE-001", "微信支付", "WX_MINI_PROGRAM"),
+    (error) => error.code === "PAYMENT-MINI-INVALID-PAYMENT-SUBMIT"
+  );
+  assert.throws(
     () => normalizePaymentSubmitResult(
       { ...validResult, payScene: "WALLET_RECHARGE_MINI_PROGRAM" },
       "PRE-001", null, null, "BALANCE_PAY_MINI_PROGRAM"

@@ -636,6 +636,12 @@ function normalizePaymentSubmitResult(
       "支付提交响应为空或缺少订单金额事实"
     );
   }
+  if (data.paymentStatus.trim().toUpperCase() === "PREPAY_CREATED") {
+    throw createBusinessError(
+      { code: "PAYMENT-MINI-INVALID-PAYMENT-SUBMIT" },
+      "支付提交状态未推进，请刷新收银台后使用原请求键重试"
+    );
+  }
   return data;
 }
 

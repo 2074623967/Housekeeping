@@ -5600,6 +5600,10 @@ payment-core 的正式 gateway-access 支付提交/查单、退款提交/查单�
 
 用户端 POST 支付提交即使收到业务成功包装，也不能仅凭预付号、支付单号和金额匹配就清除未决幂等键：若响应仍为 `PREPAY_CREATED`，说明提交结果尚未得到可信的状态推进确认。App/H5/PC 共用 API 客户端现将此响应判为 `PAYMENT-CLIENT-INVALID-PAYMENT-SUBMIT`，收银台沿用既有失败后 GET 复核流程，不清除当前分区记录或开放换渠道、重置键；GET 仍为待支付时只允许相同完整请求与原键重试。此门禁不替代后端按键核对渠道受理事实，也不证明跨标签页/会话、正式渠道资金、目标 MySQL 8 或可信身份。
 
+### 14.510 小程序提交响应未推进时禁止原生拉起
+
+小程序提交接口即使返回字段完整的业务成功响应，`paymentStatus=PREPAY_CREATED` 也不代表微信支付已受理。API 将该状态判为 `PAYMENT-MINI-INVALID-PAYMENT-SUBMIT`，收银台在调用 `wx.requestPayment` 前再次拦截；沿用现有失败后 GET 收银台复核流程，未推进时保留确定性幂等键 `MINI-${prepayOrderNo}`，不跳转结果页、不依据可能携带的 `nativePaymentParams` 发起支付。预付单创建响应仍允许 `PREPAY_CREATED`。此处只验证本地 JS 路径，不代表微信真机、正式渠道资金或服务端受理事实。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
