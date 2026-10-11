@@ -3,8 +3,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/;
 
 export class UnverifiablePaymentSubmitAttemptError extends Error {
-  constructor() {
-    super("本次预付单的未决支付记录无法核实，请勿重复付款，联系运营核对原支付结果。");
+  constructor(message = "本次预付单的未决支付记录无法核实，请勿重复付款，联系运营核对原支付结果。") {
+    super(message);
   }
 }
 
@@ -112,13 +112,22 @@ export async function resolvePaymentSubmitAttempt(
 }
 
 export function clearPaymentSubmitAttempt(attempt, storage = availableStorage()) {
-  if (!attempt?.scopeHash || !storage) return;
   try {
+    if (!attempt?.scopeHash || !storage) throw new Error("pending payment submit unavailable");
     const saved = readSavedAttempt(storage, attempt.scopeHash);
-    if (saved?.idempotencyKey === attempt.idempotencyKey) {
-      storage.removeItem(storageKey(attempt.scopeHash));
+    if (!saved) return;
+    if (saved.idempotencyKey !== attempt.idempotencyKey || saved.digest !== attempt.digest) {
+      throw new Error("pending payment submit changed");
     }
-  } catch {}
+    storage.removeItem(storageKey(attempt.scopeHash));
+    if (storage.getItem(storageKey(attempt.scopeHash)) !== null) {
+      throw new Error("pending payment submit was not removed");
+    }
+  } catch {
+    throw new UnverifiablePaymentSubmitAttemptError(
+      "支付响应已返回，但本机未决记录未能清理；请刷新核对支付结果，勿重复付款。"
+    );
+  }
 }
 
 export async function discardPaymentSubmitAttempt(

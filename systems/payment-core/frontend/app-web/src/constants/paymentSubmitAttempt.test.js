@@ -156,6 +156,39 @@ test("does not report a reset when storage silently retains a pending key", asyn
   assert.equal(storage.values.size, 1);
 });
 
+test("does not report a confirmed submit key as cleared when storage retains it", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage);
+  storage.removeItem = () => {};
+  assert.throws(() => clearPaymentSubmitAttempt(attempt, storage),
+    (error) => error instanceof UnverifiablePaymentSubmitAttemptError
+      && error.message.includes("支付响应已返回"));
+  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).idempotencyKey,
+    attempt.idempotencyKey);
+});
+
+test("does not clear a different pending key after a confirmed submit", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage);
+  const storageKey = [...storage.values.keys()][0];
+  const differentAttempt = { ...attempt, idempotencyKey: generatePaymentSubmitKey() };
+  storage.setItem(storageKey, JSON.stringify(differentAttempt));
+  assert.throws(() => clearPaymentSubmitAttempt(attempt, storage),
+    UnverifiablePaymentSubmitAttemptError);
+  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).idempotencyKey,
+    differentAttempt.idempotencyKey);
+});
+
+test("fails closed when confirmed submit cleanup storage throws", async () => {
+  const storage = memoryStorage();
+  const attempt = await resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage);
+  storage.removeItem = () => { throw new Error("blocked"); };
+  assert.throws(() => clearPaymentSubmitAttempt(attempt, storage),
+    UnverifiablePaymentSubmitAttemptError);
+  assert.equal((await readPaymentSubmitAttemptForPrepay("PRE-001", storage)).idempotencyKey,
+    attempt.idempotencyKey);
+});
+
 test("rejects a saved UUID with a non-string representation", async () => {
   const storage = memoryStorage();
   const attempt = await resolvePaymentSubmitAttempt(payload, generatePaymentSubmitKey(), storage);
