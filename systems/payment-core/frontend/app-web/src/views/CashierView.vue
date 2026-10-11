@@ -38,6 +38,8 @@ const props = defineProps({
   }
 });
 
+const PAYING_SUBMIT_HINT = "支付提交仍在处理中，请刷新收银台等待状态推进，暂勿重复付款。";
+
 const TERMINAL_META = {
   app: {
     heroLabel: "家政服务 App 收银台",
@@ -387,6 +389,9 @@ const submitBlockedHint = computed(() => {
   if (status === "支付成功") {
     return "当前支付单已支付成功，无需再次提交。";
   }
+  if (cashier.value?.paymentStatus === "PAYING") {
+    return PAYING_SUBMIT_HINT;
+  }
   if (submissionPending.value) {
     return "当前支付结果尚未确认，请先主动查单。";
   }
@@ -677,9 +682,13 @@ async function pay() {
       }
       return;
     }
-    message.value = submissionPending.value
-      ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
-      : error.message;
+    if (cashier.value?.paymentStatus === "PAYING") {
+      message.value = PAYING_SUBMIT_HINT;
+    } else {
+      message.value = submissionPending.value
+        ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
+        : error.message;
+    }
   } finally {
     if (entityVersion === currentEntityVersion) {
       submitLoading.value = false;

@@ -336,13 +336,18 @@ async function main() {
     await waitFor(() => evaluate(`Boolean(${actionButton('确认支付')}) && !${actionButton('确认支付')}.disabled`),
       "cashier before processing submit response");
     await evaluate(`${actionButton('确认支付')}.click()`);
-    await waitFor(() => evaluate(`document.body.innerText.includes('支付结果尚未确认，当前请求已锁定')
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付提交仍在处理中，请刷新收银台等待状态推进')
       && document.body.innerText.includes('支付中')`), "processing submit remains unresolved");
     const processingKey = retrySubmitBodies.get(`PRE-${paymentIds[kind]}`)[0].idempotencyKey;
     assert.equal(await evaluate(`Object.values(sessionStorage).some((value) => value.includes('${processingKey}'))`), true);
     assert.equal(await evaluate(`${actionButton('重置幂等键')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('主动查单')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('刷新收银台')}.disabled`), false);
     assert.equal(requests.slice(processingStart).filter((item) => item.method === "POST").length, 1);
     assert.equal(await evaluate("location.pathname.startsWith('/cashier/')"), true);
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token` });
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付提交仍在处理中，请刷新收银台等待状态推进')
+      && document.body.innerText.includes('${processingKey}')`), "reloaded processing submit hint");
     kind = "submit";
     status = "PREPAY_CREATED";
     failReadback = false;
