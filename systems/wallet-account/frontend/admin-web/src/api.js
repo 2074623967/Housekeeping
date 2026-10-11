@@ -1,6 +1,9 @@
 const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "";
+const CLIENT_TIMEOUT_MS = 10000;
 
 async function request(path, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -8,7 +11,8 @@ async function request(path, options = {}) {
         "Content-Type": "application/json",
         ...(options.headers || {})
       },
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     const code = error?.name === "AbortError"
@@ -19,6 +23,8 @@ async function request(path, options = {}) {
     transportError.code = code;
     transportError.cause = error;
     throw transportError;
+  } finally {
+    clearTimeout(timeoutId);
   }
   let payload;
   try {
@@ -62,6 +68,49 @@ async function post(path, body) {
   });
 }
 
+function invalidBusinessResult(message) {
+  const error = new Error(`${message} [WALLET-ACCOUNT-CLIENT-INVALID-BUSINESS-RESULT]`);
+  error.code = "WALLET-ACCOUNT-CLIENT-INVALID-BUSINESS-RESULT";
+  return error;
+}
+
+export function normalizeWalletAccountResult(data, expectedWalletAccountNo = "") {
+  if (!data || typeof data !== "object" || typeof data.walletAccountNo !== "string"
+      || !data.walletAccountNo.trim()
+      || (expectedWalletAccountNo && data.walletAccountNo !== expectedWalletAccountNo)) {
+    throw invalidBusinessResult("钱包账户响应未确认当前账户");
+  }
+  return data;
+}
+
+export function normalizeWalletAccountDetailResult(data, expectedWalletAccountNo) {
+  if (!data || typeof data !== "object" || !data.account || typeof data.account !== "object") {
+    throw invalidBusinessResult("钱包账户详情响应未确认当前账户");
+  }
+  normalizeWalletAccountResult(data.account, expectedWalletAccountNo);
+  return data;
+}
+
+export function normalizeWalletBalancesResult(data, expectedWalletAccountNos = []) {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  const expected = new Set(expectedWalletAccountNos);
+  if (data.some((item) => !item || typeof item.walletAccountNo !== "string"
+      || !item.walletAccountNo.trim() || (expected.size > 0 && !expected.has(item.walletAccountNo)))) {
+    throw invalidBusinessResult("钱包余额响应包含未请求的账户");
+  }
+  return data;
+}
+
+export function normalizeWalletExportTaskResult(data) {
+  if (!data || typeof data !== "object" || typeof data.exportTaskNo !== "string"
+      || !data.exportTaskNo.trim()) {
+    throw invalidBusinessResult("钱包流水导出响应未确认导出任务");
+  }
+  return data;
+}
+
 export async function fetchWalletAccounts(params) {
   const query = new URLSearchParams();
   if (params.keyword) {
@@ -98,6 +147,10 @@ export async function fetchWalletAccounts(params) {
 
 export async function fetchWalletAccountDetail(walletAccountNo) {
   const detail = await request(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}`);
+  if (detail == null) {
+    return detail;
+  }
+  normalizeWalletAccountDetailResult(detail, walletAccountNo);
   if (!detail || typeof detail !== "object") {
     return detail;
   }
@@ -110,7 +163,7 @@ export async function fetchWalletAccountDetail(walletAccountNo) {
 
 export async function fetchWalletBalances(walletAccountNos) {
   const balances = await post("/api/wallet/accounts/balances/query", walletAccountNos);
-  return Array.isArray(balances) ? balances : [];
+  return normalizeWalletBalancesResult(balances, walletAccountNos);
 }
 
 export async function fetchWalletFlows(params) {
@@ -130,15 +183,18 @@ export async function fetchWalletFlows(params) {
 }
 
 export async function openWalletAccount(payload) {
-  return post("/api/wallet/accounts", payload);
+  return normalizeWalletAccountResult(await post("/api/wallet/accounts", payload));
 }
 
 export async function changeWalletAccountStatus(walletAccountNo, payload) {
-  return post(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}/status-change`, payload);
+  return normalizeWalletAccountResult(
+    await post(`/api/wallet/accounts/${encodeURIComponent(walletAccountNo)}/status-change`, payload),
+    walletAccountNo
+  );
 }
 
 export async function exportWalletFlows(payload) {
-  return post("/api/wallet/flows/export", payload);
+  return normalizeWalletExportTaskResult(await post("/api/wallet/flows/export", payload));
 }
 
 export async function fetchWalletFlowExportTasks(params) {

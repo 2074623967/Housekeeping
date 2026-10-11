@@ -79,7 +79,11 @@ async function exportFlows() {
 }
 
 function downloadTask(task) {
-  window.open(buildWalletFlowExportDownloadUrl(task.exportTaskNo, exportTaskQuery.operatorRole), "_blank");
+  window.open(
+    buildWalletFlowExportDownloadUrl(task.exportTaskNo, exportTaskQuery.operatorRole),
+    "_blank",
+    "noopener,noreferrer"
+  );
   window.setTimeout(() => {
     loadExportTasks();
   }, 300);

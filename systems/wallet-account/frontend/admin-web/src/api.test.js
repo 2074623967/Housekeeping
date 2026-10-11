@@ -1,12 +1,43 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import {
+  normalizeWalletAccountDetailResult,
+  normalizeWalletAccountResult,
+  normalizeWalletBalancesResult,
+  normalizeWalletExportTaskResult
+} from "./api.js";
+
+test("requires wallet account and export business keys on mutation responses", () => {
+  assert.equal(normalizeWalletAccountResult({ walletAccountNo: "WAL-001" }, "WAL-001").walletAccountNo, "WAL-001");
+  assert.equal(normalizeWalletAccountDetailResult({ account: { walletAccountNo: "WAL-001" } }, "WAL-001").account.walletAccountNo, "WAL-001");
+  assert.equal(normalizeWalletBalancesResult([{ walletAccountNo: "WAL-001" }], ["WAL-001"])[0].walletAccountNo, "WAL-001");
+  assert.equal(normalizeWalletExportTaskResult({ exportTaskNo: "EXP-001" }).exportTaskNo, "EXP-001");
+  for (const invalidResult of [
+    () => normalizeWalletAccountResult({ walletAccountNo: "WAL-002" }, "WAL-001"),
+    () => normalizeWalletAccountDetailResult({ account: { walletAccountNo: "WAL-002" } }, "WAL-001"),
+    () => normalizeWalletBalancesResult([{ walletAccountNo: "WAL-002" }], ["WAL-001"]),
+    () => normalizeWalletExportTaskResult({ exportTaskNo: "" })
+  ]) {
+    assert.throws(invalidResult, (error) => error.code === "WALLET-ACCOUNT-CLIENT-INVALID-BUSINESS-RESULT");
+  }
+});
+
+const viewsDirectory = join(dirname(fileURLToPath(import.meta.url)), "views");
+
+test("wallet flow export downloads isolate the opener and referrer", () => {
+  const source = readFileSync(join(viewsDirectory, "WalletFlowsView.vue"), "utf8");
+  assert.match(source, /window\.open\([\s\S]*"noopener,noreferrer"[\s\S]*\)/);
+});
 
 test("encodes wallet account detail identifiers as one path segment", async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
-  globalThis.fetch = async (url) => {
+    globalThis.fetch = async (url) => {
     urls.push(url);
-    return new Response(JSON.stringify({ code: "0", data: { walletAccountNo: "WAL/001?#" } }), {
+    return new Response(JSON.stringify({ code: "0", data: { account: { walletAccountNo: "WAL/001?#" } } }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
@@ -171,6 +202,25 @@ test("reports wallet account network failures with a stable client error", async
     await assert.rejects(
       fetchWalletAccounts({}),
       (error) => error.code === "WALLET-ACCOUNT-CLIENT-NETWORK"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("maps aborted wallet account requests to a stable timeout error", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    const { fetchWalletAccounts } = await import(`./api.js?timeout=${Date.now()}`);
+    await assert.rejects(
+      fetchWalletAccounts({}),
+      (error) => error.code === "WALLET-ACCOUNT-CLIENT-TIMEOUT"
     );
   } finally {
     globalThis.fetch = originalFetch;
