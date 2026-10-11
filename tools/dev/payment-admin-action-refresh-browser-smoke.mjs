@@ -17,6 +17,7 @@ const refundOrderId = "REF-LOCAL-001";
 const appliedRefundOrderId = "REF-APPLY-LOCAL-001";
 const paymentOrderId = "PAY-CLOSE-LOCAL-001";
 const queryPaymentOrderId = "PAY-QUERY-LOCAL-001";
+const recordPaymentOrderId = "PAY-RECORD-LOCAL-001";
 const initialEvent = {
   eventNo, eventType: "PAYMENT_SUCCESS", paymentOrderId: "PAY-LOCAL-001",
   businessChainId: "CHAIN-PAY-LOCAL-001", successFactIssue: null,
@@ -56,6 +57,25 @@ const initialQueryPayment = {
   prepayOrderNo: "PREPAY-QUERY-LOCAL-001", orderNo: "ORDER-QUERY-LOCAL-001",
   channelTransactionNo: "LOCAL-TXN-001", status: "WAIT_CALLBACK", statusType: "warn",
   latestAttemptStatus: "处理中", latestAttemptStatusType: "info"
+};
+const initialPaymentRecord = {
+  serialNo: 1, paymentOrderId: recordPaymentOrderId,
+  businessChainId: `CHAIN-${recordPaymentOrderId}`,
+  businessOrderNo: "ORDER-RECORD-LOCAL-001", payScene: "HOME_CLEAN",
+  prepayBindingIssue: null, successFactIssue: null,
+  paymentRequestNo: "REQ-RECORD-LOCAL-001", applicationSourceId: "housekeeping-admin",
+  businessLineId: null, externalTransactionNo: null,
+  paymentGateway: null, paymentChannel: "wx_h5", paymentMethod: "微信",
+  paymentType: "消费支付", paymentStatus: "支付中", statusType: "warn",
+  bankName: null, cardNo: null, receivingAccount: null, channelReturnCode: null,
+  returnParameterType: null, parameterValue: null, validityPeriod: "1小时",
+  paymentAmount: "¥68.00", refundCount: 0, refundedAmount: "¥0.00",
+  unverifiedRefundCount: 0, productName: null, userPaymentChannelId: null,
+  notifyUrl: null, callbackMqTopic: null, userId: null,
+  expireTime: "2026-10-09 11:00:00", createdAt: "2026-10-09 10:00:00",
+  updatedAt: "2026-10-09 10:01:00", paidAt: null,
+  latestAttemptStatus: "渠道提交中", latestAttemptStatusType: "info",
+  latestAttemptCompletedAt: null, routeLogs: [], notifyLogs: [], eventLogs: []
 };
 const taskOverview = {
   expiredPaymentCount: 1, dueExpiredPaymentCount: 1, backingOffExpiredPaymentCount: 0,
@@ -144,6 +164,7 @@ async function main() {
   let paymentStatus = "PREPAY_CREATED";
   let paymentScenario = "close";
   let querySubmissionUnaccepted = false;
+  let recordSubmissionUnaccepted = true;
   let failPaymentReadbackOnce = false;
   let taskExecuted = false;
   let failTaskRunReadbackOnce = false;
@@ -286,6 +307,14 @@ async function main() {
           response.end(JSON.stringify({ code: "0", data: pathname === "/api/payments"
             ? { items: [item], total: 1 } : item }));
         }
+      } else if (request.method === "GET" && (pathname === "/api/payment-records"
+        || pathname === `/api/payment-records/${recordPaymentOrderId}`)) {
+        const item = {
+          ...initialPaymentRecord,
+          externalTransactionNo: recordSubmissionUnaccepted ? null : "WX-RECORD-ACCEPTED"
+        };
+        response.end(JSON.stringify({ code: "0", data: pathname === "/api/payment-records"
+          ? { items: [item], total: 1 } : item }));
       } else if (request.method === "POST" && pathname === "/api/payment-task-center/close-expired-payments") {
         assert.equal(taskExecuted, false, "不得按旧候选重复执行任务");
         taskExecuted = true;
@@ -711,6 +740,37 @@ async function main() {
       && await evaluate("document.body.innerText.includes('可主动查单')"), "渠道受理后详情");
     assert.equal(await evaluate("document.body.innerText.includes('渠道受理未确认')"), false);
     assert.equal(requests.slice(unacceptedStart).filter((item) => item.method === "POST").length, 0);
+    const recordQueryButton = `Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '主动查单')`;
+    recordSubmissionUnaccepted = true;
+    const recordStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/payment-records` });
+    await waitFor(() => evaluate(`location.pathname === '/payment-records'
+      && document.body.innerText.includes('记录快照')
+      && document.body.innerText.includes('渠道受理未确认')`), "支付记录列表待受理标记");
+    assert.equal(await evaluate("document.body.innerText.includes('勿主动查单或重复提交')"), true);
+    assert.equal(await evaluate("document.body.innerText.includes('最近尝试')"), true);
+    await send("Page.navigate", { url: `${baseUrl}/payment-records/${recordPaymentOrderId}` });
+    await waitFor(() => evaluate(`location.pathname === '/payment-records/${recordPaymentOrderId}'
+      && document.querySelector('h2')?.textContent.trim() === '支付记录详情'
+      && document.body.innerText.includes('渠道受理未确认')
+      && document.body.innerText.includes('勿主动查单或重复提交')`), "支付记录详情待受理建议");
+    assert.equal(await evaluate(`${recordQueryButton}?.disabled`), true);
+    assert.equal(await evaluate("document.body.innerText.includes('建议先主动查单')"), false);
+    await evaluate(`${recordQueryButton}.click()`);
+    assert.equal(requests.slice(recordStart).filter((item) => item.method === "POST").length, 0);
+    recordSubmissionUnaccepted = false;
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '刷新').click()`);
+    await waitFor(async () => await evaluate(`${recordQueryButton}?.disabled`) === false
+      && await evaluate("document.body.innerText.includes('建议先主动查单')"), "支付记录详情受理后建议");
+    assert.equal(await evaluate("document.body.innerText.includes('渠道受理未确认')"), false);
+    assert.equal(requests.slice(recordStart).filter((item) => item.method === "POST").length, 0);
+    assert.ok(requests.slice(recordStart).some((item) => item.method === "GET"
+      && item.pathname === "/api/payment-records"));
+    assert.ok(requests.slice(recordStart).filter((item) => item.method === "GET"
+      && item.pathname === `/api/payment-records/${recordPaymentOrderId}`).length >= 2);
+    console.log("[PASS] 管理端浏览器：支付记录列表/详情待受理与受理后刷新，零查单 POST");
     for (const detail of [false, true]) {
       for (const failReadback of [false, true]) {
         paymentScenario = "query";
