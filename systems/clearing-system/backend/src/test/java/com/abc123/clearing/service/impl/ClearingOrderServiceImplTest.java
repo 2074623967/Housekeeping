@@ -29,10 +29,15 @@ class ClearingOrderServiceImplTest {
         String detailCsv = new String(clearingOrderService.exportDetail(clearingNo), StandardCharsets.UTF_8);
 
         assertTrue(listCsv.contains("清分单号,清分批次号,支付单号"));
+        assertTrue(listCsv.contains("清分状态,状态样式,规则版本"));
         assertTrue(listCsv.contains(clearingNo));
+        assertTrue(listCsv.contains("清分成功,success"));
         assertTrue(detailCsv.contains("清分结果详情快照"));
+        assertTrue(detailCsv.contains("清分状态,状态样式,规则版本"));
         assertTrue(detailCsv.contains("费用规则快照"));
+        assertTrue(detailCsv.contains("状态,状态样式,创建时间"));
         assertTrue(detailCsv.contains("分账明细"));
+        assertTrue(detailCsv.contains("状态,状态样式,创建时间"));
         assertTrue(detailCsv.contains(clearingNo));
     }
 }

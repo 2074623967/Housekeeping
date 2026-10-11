@@ -50,6 +50,7 @@ public class ClearingMapper {
         dto.setClearingNo(entity.getClearingNo());
         dto.setBatchNo(entity.getBatchNo());
         dto.setPaymentOrderId(entity.getPaymentOrderId());
+        dto.setPayScene(entity.getPayScene());
         dto.setOrderNo(entity.getOrderNo());
         dto.setOrderAmount(formatAmount(entity.getOrderAmount()));
         dto.setMerchantAmount(formatAmount(entity.getMerchantAmount()));

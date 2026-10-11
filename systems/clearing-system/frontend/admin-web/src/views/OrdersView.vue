@@ -116,6 +116,7 @@ onMounted(loadRows);
             <tr>
               <th>清分单号</th>
               <th>支付单号</th>
+              <th>支付场景</th>
               <th>订单号</th>
               <th>订单金额</th>
               <th>商家</th>
@@ -131,6 +132,7 @@ onMounted(loadRows);
             <tr v-for="row in rows" :key="row.clearingNo">
               <td>{{ row.clearingNo }}</td>
               <td>{{ row.paymentOrderId }}</td>
+              <td>{{ row.payScene || "-" }}</td>
               <td>{{ row.orderNo }}</td>
               <td class="amount">{{ row.orderAmount }}</td>
               <td class="amount">{{ row.merchantAmount }}</td>
@@ -142,7 +144,7 @@ onMounted(loadRows);
               <td><button class="button secondary button-inline" :disabled="detailLoading" @click="loadDetail(row)">查看详情</button></td>
             </tr>
             <tr v-if="rows.length === 0">
-              <td colspan="11" class="empty-cell">当前筛选条件下暂无清分结果。</td>
+              <td colspan="12" class="empty-cell">当前筛选条件下暂无清分结果。</td>
             </tr>
           </tbody>
         </table>
@@ -166,7 +168,7 @@ onMounted(loadRows);
       <div v-if="selectedOrder" class="detail-summary-grid">
         <div class="summary-card">
           <strong>支付与订单</strong>
-          <span>{{ selectedOrder.paymentOrderId }} / {{ selectedOrder.orderNo }}</span>
+          <span>{{ selectedOrder.paymentOrderId }} / {{ selectedOrder.orderNo }} / {{ selectedOrder.payScene || "-" }}</span>
         </div>
         <div class="summary-card">
           <strong>清分状态</strong>

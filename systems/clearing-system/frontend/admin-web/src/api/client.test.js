@@ -1,6 +1,98 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { batchApi, feeApi, normalizePagePayload, orderApi, ruleApi, shareApi } from "./client.js";
+import {
+  batchApi,
+  feeApi,
+  normalizeClearingBatchResult,
+  normalizeClearingEventResult,
+  normalizeClearingEventListPage,
+  normalizeClearingOrderDetailResult,
+  normalizeClearingReplayResult,
+  normalizeClearingRuleResult,
+  normalizeFeeRuleResult,
+  normalizePagePayload,
+  orderApi,
+  ruleApi,
+  shareApi
+} from "./client.js";
+
+test("requires clearing business keys on detail and mutation responses", () => {
+  assert.equal(normalizeClearingBatchResult({ batchNo: "CLB-001" }, "CLB-001").batchNo, "CLB-001");
+  assert.equal(normalizeClearingRuleResult({ ruleNo: "RULE-001" }, "RULE-001").ruleNo, "RULE-001");
+  assert.equal(normalizeFeeRuleResult({ feeRuleNo: "FEE-001" }, "FEE-001").feeRuleNo, "FEE-001");
+  const validOrder = {
+    clearingNo: "CLO-001", businessChainId: "CHAIN-PAY-001", paymentOrderId: "PAY-001", payScene: "HOME_CLEAN",
+    orderNo: "ORD-001", batchNo: "CLB-001", ruleNo: "RULE-001",
+    orderAmount: "88.00", merchantAmount: "8.80", workerAmount: "71.16",
+    platformAmount: "7.04", channelFeeAmount: "1.00", subsidyAmount: "0.00",
+    clearingStatus: "清分成功", clearingStatusType: "success", createdAt: "2026-09-30 10:00:00"
+  };
+  assert.equal(normalizeClearingOrderDetailResult({ order: validOrder }, "CLO-001").order.clearingNo, "CLO-001");
+  assert.equal(normalizeClearingEventResult({ eventNo: "EVT-001", bizNo: "PAY-001" }, "PAY-001").eventNo, "EVT-001");
+  for (const invalidResult of [
+    () => normalizeClearingBatchResult({ batchNo: "CLB-002" }, "CLB-001"),
+    () => normalizeClearingRuleResult({ ruleNo: "RULE-002" }, "RULE-001"),
+    () => normalizeFeeRuleResult({ feeRuleNo: "FEE-002" }, "FEE-001"),
+    () => normalizeClearingOrderDetailResult({ order: { ...validOrder, clearingNo: "CLO-002" } }, "CLO-001"),
+    () => normalizeClearingEventResult({ eventNo: "EVT-001", bizNo: "PAY-002" }, "PAY-001")
+  ]) {
+    assert.throws(invalidResult, (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT");
+  }
+  for (const invalidOrder of [
+    { ...validOrder, businessChainId: "CHAIN-OTHER" },
+    { ...validOrder, payScene: 123 },
+    { ...validOrder, workerAmount: "71.15" },
+    { ...validOrder, clearingStatusType: "warn" }
+  ]) {
+    assert.throws(
+      () => normalizeClearingOrderDetailResult({ order: invalidOrder }, "CLO-001"),
+      (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+});
+
+test("rejects clearing event rows without lifecycle and retry facts", () => {
+  const validEvent = {
+    businessChainId: "CHAIN-PAY-001",
+    eventNo: "EVT-001",
+    eventType: "PAYMENT_SUCCESS",
+    bizNo: "PAY-001",
+    eventStatus: "已消费",
+    statusType: "success",
+    publishStatus: "NOT_APPLICABLE",
+    retryCount: 0,
+    createdAt: "2026-09-30 10:00:00"
+  };
+  assert.equal(normalizeClearingEventListPage({ items: [validEvent], total: 1 }).items[0].eventNo, "EVT-001");
+  for (const invalidEvent of [
+    { ...validEvent, businessChainId: "" },
+    { ...validEvent, eventStatus: "" },
+    { ...validEvent, retryCount: -1 },
+    { ...validEvent, createdAt: undefined }
+  ]) {
+    assert.throws(
+      () => normalizeClearingEventListPage({ items: [invalidEvent], total: 1 }),
+      (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+});
+
+test("requires a bounded clearing replay action result", () => {
+  assert.equal(
+    normalizeClearingReplayResult({ attemptedCount: 2, message: "已重放" }).attemptedCount,
+    2
+  );
+  for (const invalidResult of [
+    { attemptedCount: -1, message: "已重放" },
+    { attemptedCount: 1.5, message: "已重放" },
+    { attemptedCount: 1, message: "" }
+  ]) {
+    assert.throws(
+      () => normalizeClearingReplayResult(invalidResult),
+      (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
+    );
+  }
+});
 
 test("normalizes null clearing page items without changing non-page payloads", () => {
   const page = normalizePagePayload({ items: null, total: 0, pageNo: 1, pageSize: 20 });
@@ -35,13 +127,48 @@ test("normalizes malformed clearing pagination metadata", async () => {
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { code: "0", data: { items: [{ batchNo: "CLB-002" }], total: "invalid", pageNo: 0, pageSize: -1 } };
+      return { code: "0", data: { items: [{
+        batchNo: "CLB-002", batchDate: "2026-09-30", sourceType: "PAYMENT_SUCCESS",
+        batchStatus: "已完成", batchStatusType: "success", totalOrderCount: 1,
+        successOrderCount: 1, failedOrderCount: 0, totalAmount: "88.00",
+        versionNo: "V1", createdBy: "system", createdAt: "2026-09-30 10:00:00",
+        finishedAt: "2026-09-30 10:01:00"
+      }], total: "invalid", pageNo: 0, pageSize: -1 } };
     }
   });
   try {
     assert.deepEqual(await batchApi.getList(), {
-      items: [{ batchNo: "CLB-002" }], total: 1, pageNo: 1, pageSize: 20
+      items: [{
+        batchNo: "CLB-002", batchDate: "2026-09-30", sourceType: "PAYMENT_SUCCESS",
+        batchStatus: "已完成", batchStatusType: "success", totalOrderCount: 1,
+        successOrderCount: 1, failedOrderCount: 0, totalAmount: "88.00",
+        versionNo: "V1", createdBy: "system", createdAt: "2026-09-30 10:00:00",
+        finishedAt: "2026-09-30 10:01:00"
+      }], total: 1, pageNo: 1, pageSize: 20
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects clearing batch pages with inconsistent counts", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { code: "0", data: { items: [{
+        batchNo: "CLB-003", batchDate: "2026-09-30", sourceType: "PAYMENT_SUCCESS",
+        batchStatus: "处理中", batchStatusType: "warn", totalOrderCount: 1,
+        successOrderCount: 1, failedOrderCount: 1, totalAmount: "88.00",
+        versionNo: "V1", createdBy: "system", createdAt: "2026-09-30 10:00:00"
+      }], total: 1, pageNo: 1, pageSize: 20 } };
+    }
+  });
+  try {
+    await assert.rejects(
+      batchApi.getList(),
+      (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -68,13 +195,25 @@ test("normalizes null clearing order detail collections", async () => {
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { code: "0", data: { order: { clearingNo: "CLO-001" }, shareItems: null, feeRules: null } };
+      return { code: "0", data: { order: {
+        clearingNo: "CLO-001", businessChainId: "CHAIN-PAY-001", paymentOrderId: "PAY-001",
+        orderNo: "ORD-001", batchNo: "CLB-001", ruleNo: "RULE-001",
+        orderAmount: "88.00", merchantAmount: "8.80", workerAmount: "71.16",
+        platformAmount: "7.04", channelFeeAmount: "1.00", subsidyAmount: "0.00",
+        clearingStatus: "清分成功", clearingStatusType: "success", createdAt: "2026-09-30 10:00:00"
+      }, shareItems: null, feeRules: null } };
     }
   });
 
   try {
     assert.deepEqual(await orderApi.getDetail("CLO-001"), {
-      order: { clearingNo: "CLO-001" },
+      order: {
+        clearingNo: "CLO-001", businessChainId: "CHAIN-PAY-001", paymentOrderId: "PAY-001",
+        orderNo: "ORD-001", batchNo: "CLB-001", ruleNo: "RULE-001",
+        orderAmount: "88.00", merchantAmount: "8.80", workerAmount: "71.16",
+        platformAmount: "7.04", channelFeeAmount: "1.00", subsidyAmount: "0.00",
+        clearingStatus: "清分成功", clearingStatusType: "success", createdAt: "2026-09-30 10:00:00"
+      },
       shareItems: [],
       feeRules: []
     });
@@ -179,5 +318,37 @@ test("passes pagination to clearing batch, rule, fee, and share lists", async ()
     }
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("aborts slow clearing requests and clears the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let clearCount = 0;
+  globalThis.setTimeout = (callback) => {
+    callback();
+    return "clearing-timeout";
+  };
+  globalThis.clearTimeout = (timeoutId) => {
+    assert.equal(timeoutId, "clearing-timeout");
+    clearCount += 1;
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    const error = new Error("request aborted");
+    error.name = "AbortError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      batchApi.getDetail("CLR-TIMEOUT"),
+      (error) => error.code === "CLEARING-CLIENT-TIMEOUT"
+    );
+    assert.equal(clearCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });

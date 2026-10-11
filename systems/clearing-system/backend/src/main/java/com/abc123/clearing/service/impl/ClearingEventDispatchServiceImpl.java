@@ -8,12 +8,15 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -25,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClearingEventDispatchServiceImpl.class);
     private final ClearingMemoryStore clearingMemoryStore;
     private final String settlementUrl;
     private final String accountingUrl;
@@ -137,12 +141,14 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
                 clearingMemoryStore.markOutboxPublishSuccess(outboxEvent.getEventNo());
                 return true;
             }
-            postForSuccess(settlementUrl, buildSettlementPayload(clearingOrder, workerShare, workerAmount));
-            postForSuccess(accountingUrl, buildAccountingPayload(clearingOrder, workerAmount));
+            postClearingEvent(settlementUrl, buildSettlementPayload(clearingOrder, workerShare, workerAmount), clearingOrder);
+            postClearingEvent(accountingUrl, buildAccountingPayload(clearingOrder, workerAmount), clearingOrder);
             postReconciliationFact(clearingOrder);
             clearingMemoryStore.markOutboxPublishSuccess(outboxEvent.getEventNo());
             return true;
         } catch (RuntimeException exception) {
+            LOGGER.warn("清分出站派发失败 eventNo={}, exceptionType={}",
+                    outboxEvent.getEventNo(), exception.getClass().getSimpleName());
             clearingMemoryStore.markOutboxPublishFailed(outboxEvent.getEventNo());
             return false;
         }
@@ -189,13 +195,33 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
                 .findFirst();
     }
 
-    private void postForSuccess(String url, Object payload) {
+    private Map<?, ?> postForSuccess(String url, Object payload) {
         if (!StringUtils.hasText(url)) {
-            return;
+            throw new IllegalStateException("清分下游地址未配置");
         }
-        ResponseEntity<String> response = restTemplate.postForEntity(url.trim(), payload, String.class);
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new IllegalStateException("下游系统响应非 2xx");
+        ResponseEntity<Map> response = restTemplate.postForEntity(url.trim(), payload, Map.class);
+        Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
+        if (response == null || !response.getStatusCode().is2xxSuccessful()
+                || !"0".equals(String.valueOf(code))
+                || !(response.getBody().get("data") instanceof Map)) {
+            LOGGER.warn("清分下游响应拒绝 target={}, reason=HTTP_CODE_OR_STRUCTURE",
+                    url.equals(settlementUrl) ? "SETTLEMENT" : url.equals(accountingUrl) ? "ACCOUNTING" : "RECONCILIATION");
+            throw new IllegalStateException("清分下游业务响应失败");
+        }
+        return (Map<?, ?>) response.getBody().get("data");
+    }
+
+    private void postClearingEvent(String url, Object payload, ClearingOrderEntity clearingOrder) {
+        Map<?, ?> event = postForSuccess(url, payload);
+        if (!"CLEARING_GENERATED".equals(event.get("eventType"))
+                || !Objects.equals(clearingOrder.getClearingNo(), event.get("bizNo"))
+                || !Objects.equals(clearingOrder.getBusinessChainId(), event.get("businessChainId"))
+                || !(event.get("eventNo") instanceof String)
+                || !StringUtils.hasText((String) event.get("eventNo"))
+                || !"已消费".equals(event.get("eventStatus"))) {
+            LOGGER.warn("清分下游事件回执拒绝 clearingNo={}, target={}, reason=IDENTITY",
+                    clearingOrder.getClearingNo(), url.equals(settlementUrl) ? "SETTLEMENT" : "ACCOUNTING");
+            throw new IllegalStateException("清分下游事件回执归属不匹配");
         }
     }
 
@@ -204,15 +230,42 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             return;
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("businessChainId", "CHAIN-" + clearingOrder.getPaymentOrderId());
+        payload.put("businessChainId", clearingOrder.getBusinessChainId());
         payload.put("systemCode", "clearing-system");
         payload.put("factType", "CLEARING_GENERATED");
         payload.put("factNo", clearingOrder.getClearingNo());
         payload.put("businessNo", clearingOrder.getPaymentOrderId());
+        payload.put("payScene", clearingOrder.getPayScene());
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", clearingOrder.getOrderAmount());
-        payload.put("payload", "{\"clearingNo\":\"" + clearingOrder.getClearingNo() + "\"}");
-        postForSuccess(reconciliationFactUrl, payload);
+        payload.put("payload", "{\"clearingNo\":\"" + clearingOrder.getClearingNo()
+                + "\",\"payScene\":\"" + (clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene()) + "\"}");
+        Map<?, ?> snapshot = postForSuccess(reconciliationFactUrl, payload);
+        if (!Objects.equals(payload.get("businessChainId"), snapshot.get("businessChainId"))
+                || !(snapshot.get("facts") instanceof List)) {
+            LOGGER.warn("清分对账事实回执拒绝 clearingNo={}, reason=CHAIN_OR_FACTS", clearingOrder.getClearingNo());
+            throw new IllegalStateException("清分对账回执业务链不匹配");
+        }
+        for (Object item : (List<?>) snapshot.get("facts")) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> fact = (Map<?, ?>) item;
+            if (Objects.equals(payload.get("businessChainId"), fact.get("businessChainId"))
+                    && Objects.equals(payload.get("systemCode"), fact.get("systemCode"))
+                    && Objects.equals(payload.get("factType"), fact.get("factType"))
+                    && Objects.equals(payload.get("factNo"), fact.get("factNo"))
+                    && Objects.equals(payload.get("businessNo"), fact.get("businessNo"))
+                    && Objects.equals(payload.get("payScene"), fact.get("payScene"))
+                    && Objects.equals(payload.get("factStatus"), fact.get("factStatus"))
+                    && fact.get("amount") instanceof Number
+                    && new BigDecimal(fact.get("amount").toString())
+                            .compareTo((BigDecimal) payload.get("amount")) == 0) {
+                return;
+            }
+        }
+        LOGGER.warn("清分对账事实回执拒绝 clearingNo={}, reason=FACT_MISSING", clearingOrder.getClearingNo());
+        throw new IllegalStateException("清分对账回执缺少本次清分事实");
     }
 
     private SettlementClearingGeneratedPayload buildSettlementPayload(
@@ -225,6 +278,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
                 clearingOrder.getBusinessChainId(),
                 clearingOrder.getClearingNo(),
                 clearingOrder.getPaymentOrderId(),
+                clearingOrder.getPayScene(),
                 "WORKER",
                 targetNo,
                 targetName,
@@ -240,6 +294,8 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
                 accountingAccountNo,
                 clearingOrder.getClearingNo(),
                 clearingOrder.getPaymentOrderId(),
+                clearingOrder.getBusinessChainId(),
+                clearingOrder.getPayScene(),
                 workerAmount,
                 "清分结果入账至服务者应收");
     }
@@ -252,6 +308,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         private final String businessChainId;
         private final String clearingNo;
         private final String paymentOrderId;
+        private final String payScene;
         private final String targetType;
         private final String targetNo;
         private final String targetName;
@@ -262,6 +319,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         SettlementClearingGeneratedPayload(String businessChainId,
                                            String clearingNo,
                                            String paymentOrderId,
+                                           String payScene,
                                            String targetType,
                                            String targetNo,
                                            String targetName,
@@ -271,6 +329,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             this.businessChainId = businessChainId;
             this.clearingNo = clearingNo;
             this.paymentOrderId = paymentOrderId;
+            this.payScene = payScene;
             this.targetType = targetType;
             this.targetNo = targetNo;
             this.targetName = targetName;
@@ -289,6 +348,10 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
 
         public String getPaymentOrderId() {
             return paymentOrderId;
+        }
+
+        public String getPayScene() {
+            return payScene;
         }
 
         public String getTargetType() {
@@ -324,17 +387,23 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         private final String accountNo;
         private final String clearingOrderNo;
         private final String bizNo;
+        private final String businessChainId;
+        private final String payScene;
         private final BigDecimal amount;
         private final String summary;
 
         AccountingClearingGeneratedPayload(String accountNo,
                                            String clearingOrderNo,
                                            String bizNo,
+                                           String businessChainId,
+                                           String payScene,
                                            BigDecimal amount,
                                            String summary) {
             this.accountNo = accountNo;
             this.clearingOrderNo = clearingOrderNo;
             this.bizNo = bizNo;
+            this.businessChainId = businessChainId;
+            this.payScene = payScene;
             this.amount = amount;
             this.summary = summary;
         }
@@ -349,6 +418,14 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
 
         public String getBizNo() {
             return bizNo;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
+        }
+
+        public String getPayScene() {
+            return payScene;
         }
 
         public BigDecimal getAmount() {

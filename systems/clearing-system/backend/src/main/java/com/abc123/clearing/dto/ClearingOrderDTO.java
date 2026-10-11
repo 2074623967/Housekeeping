@@ -13,6 +13,8 @@ public class ClearingOrderDTO {
     private String clearingNo;
     private String batchNo;
     private String paymentOrderId;
+    /** 支付业务场景。 */
+    private String payScene;
     private String orderNo;
     private String orderAmount;
     private String merchantAmount;

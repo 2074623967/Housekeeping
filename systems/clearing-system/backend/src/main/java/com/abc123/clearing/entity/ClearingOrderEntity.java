@@ -14,6 +14,8 @@ public class ClearingOrderEntity {
     private String clearingNo;
     private String batchNo;
     private String paymentOrderId;
+    /** 支付业务场景。 */
+    private String payScene;
     private String orderNo;
     private BigDecimal orderAmount;
     private BigDecimal merchantAmount;

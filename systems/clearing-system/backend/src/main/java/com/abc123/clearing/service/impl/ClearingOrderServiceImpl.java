@@ -43,7 +43,7 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
         List<ClearingOrderDTO> items = list(batchNo, orderNo, paymentOrderId, clearingStatus, 1, Integer.MAX_VALUE).getItems();
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("清分单号,清分批次号,支付单号,订单号,订单金额,商家分账,服务者分账,平台分账,渠道费用,补贴金额,清分状态,规则版本,创建时间\n");
+        builder.append("清分单号,清分批次号,支付单号,订单号,订单金额,商家分账,服务者分账,平台分账,渠道费用,补贴金额,清分状态,状态样式,规则版本,创建时间\n");
         for (ClearingOrderDTO item : items) {
             builder.append(csv(item.getClearingNo())).append(',')
                     .append(csv(item.getBatchNo())).append(',')
@@ -56,6 +56,7 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
                     .append(csv(item.getChannelFeeAmount())).append(',')
                     .append(csv(item.getSubsidyAmount())).append(',')
                     .append(csv(item.getClearingStatus())).append(',')
+                    .append(csv(item.getClearingStatusType())).append(',')
                     .append(csv(item.getRuleNo())).append(',')
                     .append(csv(item.getCreatedAt())).append('\n');
         }
@@ -80,7 +81,7 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("清分结果详情快照\n");
-        builder.append("清分单号,清分批次号,支付单号,订单号,订单金额,商家分账,服务者分账,平台分账,渠道费用,补贴金额,清分状态,规则版本,创建时间\n");
+        builder.append("清分单号,清分批次号,支付单号,订单号,订单金额,商家分账,服务者分账,平台分账,渠道费用,补贴金额,清分状态,状态样式,规则版本,创建时间\n");
         ClearingOrderDTO order = detail.getOrder();
         builder.append(csv(order.getClearingNo())).append(',')
                 .append(csv(order.getBatchNo())).append(',')
@@ -93,11 +94,12 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
                 .append(csv(order.getChannelFeeAmount())).append(',')
                 .append(csv(order.getSubsidyAmount())).append(',')
                 .append(csv(order.getClearingStatus())).append(',')
+                .append(csv(order.getClearingStatusType())).append(',')
                 .append(csv(order.getRuleNo())).append(',')
                 .append(csv(order.getCreatedAt())).append('\n');
         builder.append('\n');
         builder.append("费用规则快照\n");
-        builder.append("费用规则号,费用名称,费用类型,费用模式,费率,固定金额,承担方,状态,创建时间\n");
+        builder.append("费用规则号,费用名称,费用类型,费用模式,费率,固定金额,承担方,状态,状态样式,创建时间\n");
         for (FeeRuleDTO feeRule : detail.getFeeRules()) {
             builder.append(csv(feeRule.getFeeRuleNo())).append(',')
                     .append(csv(feeRule.getFeeName())).append(',')
@@ -107,11 +109,12 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
                     .append(csv(feeRule.getFixedAmount())).append(',')
                     .append(csv(feeRule.getFeeBearer())).append(',')
                     .append(csv(feeRule.getStatus())).append(',')
+                    .append(csv(feeRule.getStatusType())).append(',')
                     .append(csv(feeRule.getCreatedAt())).append('\n');
         }
         builder.append('\n');
         builder.append("分账明细\n");
-        builder.append("分账明细号,清分单号,分账类型,对象编号,对象名称,分账金额,状态,创建时间\n");
+        builder.append("分账明细号,清分单号,分账类型,对象编号,对象名称,分账金额,状态,状态样式,创建时间\n");
         for (ShareItemDTO shareItem : detail.getShareItems()) {
             builder.append(csv(shareItem.getShareItemNo())).append(',')
                     .append(csv(shareItem.getClearingNo())).append(',')
@@ -120,6 +123,7 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
                     .append(csv(shareItem.getShareTargetName())).append(',')
                     .append(csv(shareItem.getShareAmount())).append(',')
                     .append(csv(shareItem.getShareStatus())).append(',')
+                    .append(csv(shareItem.getStatusType())).append(',')
                     .append(csv(shareItem.getCreatedAt())).append('\n');
         }
         return builder.toString().getBytes(StandardCharsets.UTF_8);

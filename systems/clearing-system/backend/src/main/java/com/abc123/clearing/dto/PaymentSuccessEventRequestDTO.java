@@ -18,6 +18,8 @@ public class PaymentSuccessEventRequestDTO {
     /** 跨系统业务链路 ID；历史调用未传时由清分系统按支付单号兼容生成。 */
     private String businessChainId;
     private String paymentOrderId;
+    /** 支付业务场景。 */
+    private String payScene;
     private String orderNo;
     private String batchDate;
     private String customerName;

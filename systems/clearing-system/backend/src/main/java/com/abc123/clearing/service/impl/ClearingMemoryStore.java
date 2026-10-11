@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
@@ -30,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClearingMemoryStore {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
+    private static final int PAYMENT_IDENTIFIER_MAX_LENGTH = 64;
 
     private final AtomicLong batchSeq = new AtomicLong(10000L);
     private final AtomicLong orderSeq = new AtomicLong(20000L);
@@ -115,7 +118,8 @@ public class ClearingMemoryStore {
                     order.getOrderAmount(),
                     order.getRuleNo(),
                     "重跑成功",
-                    order.getBusinessChainId());
+                    order.getBusinessChainId(),
+                    order.getPayScene());
         }
         rerun.setBatchStatus("已完成");
         rerun.setFinishedAt(now());
@@ -254,9 +258,14 @@ public class ClearingMemoryStore {
 
     @Transactional
     public ClearingEventEntity consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
-        request.setBusinessChainId(resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId()));
+        validatePaymentSuccessAmount(request);
+        validatePaymentSuccessIdentifier(request.getPaymentOrderId(), "支付单号");
+        validatePaymentSuccessIdentifier(request.getOrderNo(), "业务订单号");
+        request.setBusinessChainId(normalizePaymentSuccessBusinessChainId(
+                request.getBusinessChainId(), request.getPaymentOrderId()));
         ClearingOrderEntity existingOrder = clearingDataMapper.findOrderByPaymentOrderId(request.getPaymentOrderId());
         if (existingOrder != null) {
+            validateExistingPaymentFacts(existingOrder, request);
             ClearingEventEntity existingEvent = clearingDataMapper.findEventByTypeAndBizNo("PAYMENT_SUCCESS", request.getPaymentOrderId());
             if (existingEvent != null) {
                 ensureClearingGeneratedOutboxEvent(existingOrder);
@@ -280,7 +289,8 @@ public class ClearingMemoryStore {
                 request.getAmount(),
                 activeRule.getRuleNo(),
                 "清分成功",
-                request.getBusinessChainId());
+                request.getBusinessChainId(),
+                request.getPayScene());
         ClearingBatchEntity refreshedBatch = findBatch(batch.getBatchNo());
         refreshedBatch.setBatchStatus("已完成");
         refreshedBatch.setFinishedAt(now());
@@ -298,9 +308,24 @@ public class ClearingMemoryStore {
         return paymentSuccessEvent;
     }
 
+    private void validateExistingPaymentFacts(ClearingOrderEntity existingOrder,
+                                              PaymentSuccessEventRequestDTO request) {
+        if (!Objects.equals(existingOrder.getOrderNo(), request.getOrderNo())
+                || existingOrder.getOrderAmount() == null
+                || existingOrder.getOrderAmount().compareTo(request.getAmount()) != 0
+                || !Objects.equals(existingOrder.getBusinessChainId(), request.getBusinessChainId())) {
+            throw new IllegalArgumentException("支付成功事件订单事实与已有清分订单不一致");
+        }
+        String storedPayScene = existingOrder.getPayScene() == null ? "" : existingOrder.getPayScene().trim();
+        String requestedPayScene = request.getPayScene() == null ? "" : request.getPayScene().trim();
+        if (!storedPayScene.isEmpty() && !storedPayScene.equals(requestedPayScene)) {
+            throw new IllegalArgumentException("支付成功事件支付场景与已有清分订单不一致");
+        }
+    }
+
     @Transactional
     protected ClearingOrderEntity createOrder(String batchNo, String paymentOrderId, String orderNo, BigDecimal orderAmount,
-            String ruleNo, String successStatus, String businessChainId) {
+            String ruleNo, String successStatus, String businessChainId, String payScene) {
         BigDecimal platformAmount = orderAmount.multiply(new BigDecimal("0.08")).setScale(2, RoundingMode.HALF_UP);
         BigDecimal channelFeeAmount = new BigDecimal("1.00");
         BigDecimal merchantAmount = orderAmount.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
@@ -311,6 +336,7 @@ public class ClearingMemoryStore {
         entity.setClearingNo(nextNo("CLO", orderSeq));
         entity.setBatchNo(batchNo);
         entity.setPaymentOrderId(paymentOrderId);
+        entity.setPayScene(payScene);
         entity.setOrderNo(orderNo);
         entity.setOrderAmount(orderAmount);
         entity.setMerchantAmount(merchantAmount);
@@ -378,7 +404,11 @@ public class ClearingMemoryStore {
         event.setEventType("PAYMENT_SUCCESS");
         event.setBizNo(request.getPaymentOrderId());
         event.setSummary(request.getCustomerName() + " 支付成功后触发清分");
-        event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId() + "\",\"orderNo\":\"" + request.getOrderNo() + "\"}");
+        event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId()
+                + "\",\"orderNo\":\"" + request.getOrderNo()
+                + "\",\"businessChainId\":\"" + request.getBusinessChainId()
+                + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene())
+                + "\"}");
         event.setEventStatus("已消费");
         event.setPublishStatus("NOT_APPLICABLE");
         event.setRetryCount(0);
@@ -414,6 +444,7 @@ public class ClearingMemoryStore {
                 + "\",\"businessChainId\":\"" + clearingOrder.getBusinessChainId()
                 + "\",\"clearingOrderNo\":\"" + clearingOrder.getClearingNo()
                 + "\",\"paymentOrderId\":\"" + clearingOrder.getPaymentOrderId()
+                + "\",\"payScene\":\"" + (clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene())
                 + "\",\"bizNo\":\"" + clearingOrder.getPaymentOrderId()
                 + "\",\"targetType\":\"WORKER\",\"targetNo\":\"" + targetNo
                 + "\",\"targetName\":\"" + targetName
@@ -433,6 +464,35 @@ public class ClearingMemoryStore {
         return businessChainId == null || businessChainId.trim().isEmpty()
                 ? "CHAIN-" + businessNo
                 : businessChainId.trim();
+    }
+
+    private String normalizePaymentSuccessBusinessChainId(String businessChainId, String paymentOrderId) {
+        String normalizedPaymentOrderId = paymentOrderId == null ? null : paymentOrderId.trim();
+        String normalizedChainId = businessChainId == null ? null : businessChainId.trim();
+        if (normalizedChainId == null || normalizedChainId.isEmpty()) {
+            return "CHAIN-" + normalizedPaymentOrderId;
+        }
+        if (normalizedPaymentOrderId == null || normalizedPaymentOrderId.isEmpty()
+                || !normalizedChainId.equals("CHAIN-" + normalizedPaymentOrderId)) {
+            throw new IllegalArgumentException("业务链路与支付单号不匹配");
+        }
+        return normalizedChainId;
+    }
+
+    private void validatePaymentSuccessAmount(PaymentSuccessEventRequestDTO request) {
+        if (request == null || request.getAmount() == null
+                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0
+                || request.getAmount().scale() > 2
+                || request.getAmount().compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException("支付成功金额必须大于0且最多保留2位小数");
+        }
+    }
+
+    private void validatePaymentSuccessIdentifier(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()
+                || value.length() > PAYMENT_IDENTIFIER_MAX_LENGTH || !value.equals(value.trim())) {
+            throw new IllegalArgumentException("支付成功事件" + fieldName + "非法");
+        }
     }
 
     private void syncSequencesFromDatabase() {
