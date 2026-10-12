@@ -307,6 +307,36 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedCallbackFactsBeforeChangingRefund() {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-1");
+        request.setResult("SUCCESS");
+        request.setChannelRefundId(String.join("", Collections.nCopies(129, "C")));
+        assertThrows(BusinessException.class, () -> service.callback(request));
+
+        request.setChannelRefundId("CH-1");
+        request.setResult("FAIL");
+        request.setFailureCode(String.join("", Collections.nCopies(65, "E")));
+        assertThrows(BusinessException.class, () -> service.callback(request));
+
+        request.setFailureCode("E001");
+        request.setRawMessage(String.join("", Collections.nCopies(501, "R")));
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verifyNoInteractions(refundDao);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInChannelRefundIdentity() {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-1");
+        request.setResult("SUCCESS");
+        request.setChannelRefundId("CH-1\nCH-2");
+
+        assertThrows(BusinessException.class, () -> service.callback(request));
+        verifyNoInteractions(refundDao);
+    }
+
+    @Test
     void shouldReturnExistingRefundWhenSuccessCallbackRepeated() {
         when(refundDao.updateCallback("REF-1", "SUCCESS", "CH-1", null)).thenReturn(0);
         RefundListItemDTO result = new RefundListItemDTO();

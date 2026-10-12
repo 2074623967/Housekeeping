@@ -322,29 +322,34 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("退款回调结果必须为 SUCCESS 或 FAIL");
         }
         String target = SUCCESS.equalsIgnoreCase(result) ? SUCCESS : FAIL;
-        if (SUCCESS.equals(target) && !StringUtils.hasText(request.getChannelRefundId())) {
+        String channelRefundId = normalizeCallbackIdentifier(request.getChannelRefundId(), "渠道退款流水号", 128);
+        String failureCode = normalizeCallbackIdentifier(request.getFailureCode(), "渠道失败码", 64);
+        String rawMessage = request.getRawMessage();
+        if (rawMessage != null && rawMessage.length() > 500) {
+            throw new BusinessException("渠道回执摘要不能超过500字符");
+        }
+        if (SUCCESS.equals(target) && !StringUtils.hasText(channelRefundId)) {
             throw new BusinessException("退款成功回调缺少渠道退款流水号");
         }
-        int affected = refundDao.updateCallback(id, target, trim(request.getChannelRefundId()),
-                trim(request.getFailureCode()));
+        int affected = refundDao.updateCallback(id, target, channelRefundId, failureCode);
         if (affected == 0) {
             RefundListItemDTO existing = refundDao.findByRefundOrderId(id);
             if (existing == null) {
                 throw new BusinessException("退款单不存在");
             }
             if (SUCCESS.equals(target) && SUCCESS.equals(existing.getStatus())) {
-                assertSameSuccessfulCallback(existing, trim(request.getChannelRefundId()));
+                assertSameSuccessfulCallback(existing, channelRefundId);
                 return existing;
             }
             if (FAIL.equals(target) && FAIL.equals(existing.getStatus())) {
-                assertSameFailedCallback(existing, trim(request.getFailureCode()));
+                assertSameFailedCallback(existing, failureCode);
                 return existing;
             }
             throw new BusinessException("退款单不在可回调状态，或回调已处理");
         }
         refundDao.insertLog(id, "CALLBACK_" + target, "渠道退款回调",
                 PROCESSING, target, "channel-callback",
-                StringUtils.hasText(request.getRawMessage()) ? request.getRawMessage().trim() : target);
+                StringUtils.hasText(rawMessage) ? rawMessage.trim() : target);
         if (SUCCESS.equals(target)) {
             RefundListItemDTO refund = refundDao.findByRefundOrderId(id);
             if (refundDao.insertSuccessOutbox(id, refund.getPaymentOrderId(), refund.getPayScene(),
@@ -568,6 +573,21 @@ public class RefundServiceImpl implements RefundService {
 
     private String trim(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String normalizeCallbackIdentifier(String value, String fieldName, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new BusinessException(fieldName + "包含控制字符");
+            }
+        }
+        if (value.length() > maxLength) {
+            throw new BusinessException(fieldName + "不能超过" + maxLength + "字符");
+        }
+        return trim(value);
     }
 
     private String csv(String value) {

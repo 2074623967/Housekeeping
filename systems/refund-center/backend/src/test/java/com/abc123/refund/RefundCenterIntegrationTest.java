@@ -182,6 +182,45 @@ class RefundCenterIntegrationTest {
     }
 
     @Test
+    void shouldRejectOversizedCallbackBeforeWritingAndAcceptColumnBoundaries() {
+        String paymentOrderId = "PAY-IT-BOUNDARY-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-BOUNDARY");
+        source.setPaidAmount(new BigDecimal("100.00"));
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("10.00"));
+        RefundListItemDTO created = refundService.apply(apply);
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(created.getRefundOrderId());
+        refundService.approve(action);
+        refundService.submit(action);
+
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setRefundOrderId(created.getRefundOrderId());
+        callback.setResult("SUCCESS");
+        callback.setChannelRefundId(String.join("", java.util.Collections.nCopies(129, "C")));
+        assertThrows(BusinessException.class, () -> refundService.callback(callback));
+        assertEquals("PROCESSING", refundService.detail(created.getRefundOrderId()).getStatus());
+        assertEquals(3, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+
+        String channelRefundId = callback.getChannelRefundId().substring(0, 128);
+        String rawMessage = String.join("", java.util.Collections.nCopies(500, "R"));
+        callback.setChannelRefundId(channelRefundId);
+        callback.setRawMessage(rawMessage);
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        RefundDetailDTO completed = refundService.detail(created.getRefundOrderId());
+        assertEquals(channelRefundId, completed.getChannelRefundId());
+        assertEquals(rawMessage, completed.getOperationLogs().get(3).getOperationRemark());
+        RefundOutboxQueryDTO outboxQuery = new RefundOutboxQueryDTO();
+        outboxQuery.setAggregateId(created.getRefundOrderId());
+        assertEquals(1L, refundService.listOutbox(outboxQuery).getTotal());
+    }
+
+    @Test
     void shouldStoreValidSuccessOutboxJsonForEscapedPaymentScene() throws Exception {
         String paymentOrderId = "PAY-IT-JSON-\"" + UUID.randomUUID();
         String payScene = "HOME_\"CLEAN\\WEEK\nLY";
