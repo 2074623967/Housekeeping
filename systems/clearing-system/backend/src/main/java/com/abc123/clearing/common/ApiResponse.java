@@ -23,4 +23,12 @@ public class ApiResponse<T> {
         response.setRequestId(RequestIdHolder.nextRequestId());
         return response;
     }
+
+    public static <T> ApiResponse<T> failure(String code, String message) {
+        ApiResponse<T> response = new ApiResponse<>();
+        response.setCode(code);
+        response.setMessage(message);
+        response.setRequestId(RequestIdHolder.nextRequestId());
+        return response;
+    }
 }

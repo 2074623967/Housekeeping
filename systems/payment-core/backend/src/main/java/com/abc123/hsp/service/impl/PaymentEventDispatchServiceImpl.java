@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.common.PaymentEventHttpSignature;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
@@ -33,6 +34,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,6 +99,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     @Value("${payment.downstream.reconciliation.fact-url:}")
     private String reconciliationFactUrl;
+
+    @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}")
+    private String paymentSuccessHttpSecret;
 
     @Autowired
     public PaymentEventDispatchServiceImpl(
@@ -946,7 +953,20 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private void postPaymentEventForSuccess(String url, Object payload, String paymentOrderId) {
-        Object data = postForSuccess(url, payload).getData();
+        Object request = payload;
+        if (StringUtils.hasText(paymentSuccessHttpSecret)) {
+            try {
+                String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.set(PaymentEventHttpSignature.HEADER_NAME,
+                        PaymentEventHttpSignature.sign(body, paymentSuccessHttpSecret));
+                request = new HttpEntity<>(body, headers);
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException("支付成功事件签名序列化失败", exception);
+            }
+        }
+        Object data = postForSuccess(url, request).getData();
         if (!(data instanceof Map)) {
             LOGGER.warn("支付成功事件回执拒绝 paymentOrderId={}, target={}, reason=STRUCTURE",
                     paymentOrderId, url.equals(clearingUrl) ? "CLEARING" : "ACCOUNTING");

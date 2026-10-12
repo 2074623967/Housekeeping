@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.common.PaymentEventHttpSignature;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
@@ -39,6 +40,7 @@ import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -1917,6 +1919,37 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("ORD-001", detail.getOrderNo());
         Assertions.assertEquals(" 张女士 ", detail.getCustomerName());
         verify(paymentEventMapper).markPublishSuccess("EVT-PARTY-NORMALIZED");
+    }
+
+    @Test
+    void shouldSignExactPaymentSuccessBodyForBothHttpDownstreams() {
+        String secret = "local-payment-event-test-secret";
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentEventMapper.markPublishSuccess("EVT-SIGNED-HTTP")).thenReturn(1);
+        when(restTemplate.postForEntity(any(String.class), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate);
+        setField(service, "paymentSuccessHttpSecret", secret);
+
+        service.publishPaymentSuccess("EVT-SIGNED-HTTP", "PAY-001");
+
+        ArgumentCaptor<Object> requests = ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(any(String.class), requests.capture(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        for (Object request : requests.getAllValues()) {
+            Assertions.assertTrue(request instanceof HttpEntity);
+            HttpEntity<?> signed = (HttpEntity<?>) request;
+            String body = (String) signed.getBody();
+            Assertions.assertEquals(PaymentEventHttpSignature.sign(body, secret),
+                    signed.getHeaders().getFirst(PaymentEventHttpSignature.HEADER_NAME));
+            Assertions.assertTrue(body.contains("\"paymentOrderId\":\"PAY-001\""));
+        }
+        verify(paymentEventMapper).markPublishSuccess("EVT-SIGNED-HTTP");
     }
 
     @Test
