@@ -22,11 +22,42 @@ test("guides PAYING results to refresh rather than channel query", () => {
 
 test("separates collided channel transactions from ordinary in-flight payments", () => {
   const source = readFileSync(viewPath, "utf8");
-  const conflictChecklist = source.split('if (resultState.value === "conflict") {')[1]?.split('\n  }')[0];
+  const conflictChecklist = source.split('if (resultState.value === "paying") {')[1]
+    ?.split('if (resultState.value === "conflict") {')[1]?.split('\n  }')[0];
   assert.ok(conflictChecklist);
   assert.match(conflictChecklist, /人工核查[\s\S]*勿重复付款、主动查单或关闭支付单/);
   assert.match(source, /resolvePaymentResultState\(\s*paymentDetail\.value\.status, paymentDetail\.value\.latestAttemptStatus/);
   assert.match(source, /resolvePaymentDetailRefreshDelay\([\s\S]*paymentDetail\.value\?\.latestAttemptStatus/);
+});
+
+test("keeps conflicted results manual-only across delayed polling and desktop guidance", () => {
+  const source = readFileSync(viewPath, "utf8");
+  const backgroundRefresh = source.split("async function refreshDetailInBackground() {")[1]
+    ?.split("\nasync function loadDetail(")[0];
+  assert.ok(backgroundRefresh);
+  assert.match(backgroundRefresh, /resolvePaymentDetailRefreshDelay\(\s*paymentDetail\.value\?\.status,\s*autoRefreshAttempts\.value,\s*paymentDetail\.value\?\.latestAttemptStatus\s*\)/);
+  assert.match(source, /resultState\.value === "conflict"\s*\? "渠道流水归属冲突，需人工核查，不能主动查单。"/);
+  assert.match(source, /resultState === "conflict" \? "人工核查中" : terminalCopy\.queryLabel/);
+  assert.match(source, /v-if="resultState === 'conflict'"[^>]*>争议流水需人工核账；勿主动查单或关闭支付单。/);
+});
+
+test("does not promise automatic retry after a disputed result becomes stale", () => {
+  const source = readFileSync(viewPath, "utf8");
+  const checklist = source.split("const nextStepChecklist = computed(() => {")[1]
+    ?.split("\n  if (resultState.value === \"success\")")[0];
+  const recovery = source.split("const recoveryActions = computed(() => {")[1]
+    ?.split("\n  if (resultState.value === \"success\")")[0];
+  assert.match(checklist, /resultState\.value === "conflict"[\s\S]*手动刷新支付详情/);
+  assert.match(recovery, /resultState\.value === "conflict"[\s\S]*人工核对渠道原始事实/);
+  assert.match(source, /v-if="hasStaleResult"[^>]*>自动刷新未能确认最新支付状态，\{\{ resultState === "conflict"/);
+});
+
+test("preserves manual review guidance when a disputed detail refresh fails", () => {
+  const source = readFileSync(viewPath, "utf8");
+  const refresh = source.split("async function refreshPaymentDetail() {")[1]
+    ?.split("\nasync function readBackAfterFailedAction(")[0];
+  assert.ok(refresh);
+  assert.match(refresh, /const wasChannelConflict = resultState\.value === "conflict";[\s\S]*paymentDetail\.value = null;[\s\S]*feedbackMessage\.value = wasChannelConflict[\s\S]*勿重复付款、主动查单或关闭支付单/);
 });
 
 test("guides FAIL results to verify payment facts without unavailable actions", () => {
@@ -54,7 +85,7 @@ test("does not present an unverified payment detail as a processing payment", ()
 
 test("invalidates the previously trusted result when a manual detail refresh fails", () => {
   const source = readFileSync(viewPath, "utf8");
-  assert.match(source, /async function refreshPaymentDetail\(\)[\s\S]*?catch \(error\) \{[\s\S]*?isCurrentPaymentSnapshot\(snapshot, entityVersion\)[\s\S]*?paymentDetail\.value = null;[\s\S]*?loadedPaymentOrderId\.value = "";[\s\S]*?feedbackMessage\.value = error\.message;/);
+  assert.match(source, /async function refreshPaymentDetail\(\)[\s\S]*?catch \(error\) \{[\s\S]*?isCurrentPaymentSnapshot\(snapshot, entityVersion\)[\s\S]*?paymentDetail\.value = null;[\s\S]*?loadedPaymentOrderId\.value = "";[\s\S]*?feedbackMessage\.value = wasChannelConflict[\s\S]*?: error\.message;/);
   assert.match(source, /v-else-if="feedbackMessage && !paymentDetail"/);
 });
 

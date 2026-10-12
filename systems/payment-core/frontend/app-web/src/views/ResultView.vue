@@ -163,6 +163,13 @@ const sourceAppId = computed(() => {
 });
 const nextStepChecklist = computed(() => {
   if (hasStaleResult.value) {
+    if (resultState.value === "conflict") {
+      return [
+        "当前只保留上次读取的争议详情，支付状态尚未重新确认。",
+        "渠道流水归属冲突，请手动刷新支付详情并联系运营人工核对渠道原始事实。",
+        "勿重复付款、主动查单或关闭支付单；不可凭旧快照认定资金归属。"
+      ];
+    }
     return [
       "当前只保留上次读取的详情，支付状态尚未重新确认。",
       "请勿重复付款或根据旧状态关单，等待自动重试或手动刷新支付详情。",
@@ -250,6 +257,12 @@ const nextStepChecklist = computed(() => {
 });
 const recoveryActions = computed(() => {
   if (hasStaleResult.value) {
+    if (resultState.value === "conflict") {
+      return [
+        "请手动刷新支付详情，并联系运营人工核对渠道原始事实与流水归属。",
+        "勿重复付款、主动查单或关闭支付单。"
+      ];
+    }
     return [
       "优先刷新支付详情，不要依赖上次读取的状态发起新的支付。",
       "若网络持续异常，请联系服务方核查真实支付和业务订单状态。"
@@ -289,6 +302,12 @@ const recoveryActions = computed(() => {
     return [
       "等待页面自动刷新或手动刷新支付详情，不要重复付款。",
       "不可主动查单或关单，请在状态推进后按页面可用操作继续。"
+    ];
+  }
+  if (resultState.value === "conflict") {
+    return [
+      "保留支付单号，联系运营人工核对渠道原始事实与流水归属。",
+      "勿重复付款、主动查单或关闭支付单，不将争议流水认作支付成功。"
     ];
   }
   if (resultState.value === "fail") {
@@ -345,7 +364,8 @@ async function refreshDetailInBackground() {
   if (!hasValidPaymentSnapshot.value
       || resolvePaymentDetailRefreshDelay(
         paymentDetail.value?.status,
-        autoRefreshAttempts.value
+        autoRefreshAttempts.value,
+        paymentDetail.value?.latestAttemptStatus
       ) == null) {
     return;
   }
@@ -459,11 +479,14 @@ async function refreshPaymentDetail() {
     feedbackMessage.value = "支付详情已刷新。";
   } catch (error) {
     if (requestId === latestLoadRequestId && isCurrentPaymentSnapshot(snapshot, entityVersion)) {
+      const wasChannelConflict = resultState.value === "conflict";
       paymentDetail.value = null;
       loadedPaymentOrderId.value = "";
       autoRefreshStale.value = false;
       syncStatusByDetail();
-      feedbackMessage.value = error.message;
+      feedbackMessage.value = wasChannelConflict
+        ? `上次读取为渠道流水归属冲突，最新结果未能确认；勿重复付款、主动查单或关闭支付单，请联系运营人工核查。${error.message}`
+        : error.message;
     }
   } finally {
     if (requestId === latestLoadRequestId && entityVersion === currentEntityVersion) {
@@ -511,7 +534,9 @@ async function queryResult() {
   if (!canQueryPayment.value) {
     feedbackMessage.value = hasStaleResult.value
       ? "当前支付详情未能重新确认，请先刷新支付详情。"
-      : "当前支付单尚未提交渠道，不能执行主动查单。";
+      : resultState.value === "conflict"
+        ? "渠道流水归属冲突，需人工核查，不能主动查单。"
+        : "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
   }
   const snapshot = buildCurrentPaymentSnapshot();
@@ -835,7 +860,7 @@ watch([currentPaymentOrderId, expectedPrepayOrderNo, expectedPaymentMethod, expe
             {{ detailRefreshLoading ? "刷新中..." : "刷新支付详情" }}
           </button>
           <button class="action-button primary" :disabled="actionRunning || !canQueryPayment" @click="queryResult">
-            {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
+            {{ queryLoading ? "查询中..." : resultState === "conflict" ? "人工核查中" : terminalCopy.queryLabel }}
           </button>
           <button v-if="businessEntryPath" class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
             返回业务入口
@@ -851,17 +876,19 @@ watch([currentPaymentOrderId, expectedPrepayOrderNo, expectedPaymentMethod, expe
         <p v-if="!businessEntryPath && hasValidPaymentSnapshot" class="feedback-text">当前场景暂无对应的统一支付入口，请从原业务订单页返回。</p>
 
         <p v-if="feedbackMessage" class="feedback-text">{{ feedbackMessage }}</p>
-        <p v-if="hasStaleResult" class="feedback-text">自动刷新未能确认最新支付状态，详情仅供核对上次读取的事实；请勿重复付款，等待自动重试或手动刷新支付详情。</p>
+        <p v-if="hasStaleResult" class="feedback-text">自动刷新未能确认最新支付状态，{{ resultState === "conflict" ? "上次读取为渠道流水归属冲突；勿重复付款、主动查单或关闭支付单，请手动刷新并联系运营人工核查。" : "详情仅供核对上次读取的事实；请勿重复付款，等待自动重试或手动刷新支付详情。" }}</p>
         <p v-if="autoRefreshPaused" class="feedback-text">自动刷新已暂停，当前展示上次成功查询的状态；请刷新支付详情或联系服务方。</p>
 
         <div v-if="isPcVariant" class="desktop-hint-grid">
           <div class="desktop-hint-card">
             <strong>桌面端结果处理</strong>
-            <p>PC 端适合由客服、运营或用户本人停留在结果页核对轨迹；已提交渠道的支付只能继续查单。</p>
+            <p v-if="resultState === 'conflict'">争议流水需人工核账；勿主动查单或关闭支付单。</p>
+            <p v-else>PC 端适合由客服、运营或用户本人停留在结果页核对轨迹；已提交渠道的支付只能继续查单。</p>
           </div>
           <div class="desktop-hint-card">
             <strong>联调建议</strong>
-            <p>若渠道回调延迟，可先查看路由轨迹，再执行主动查单，确保桌面端结果页与后台详情页状态一致。</p>
+            <p v-if="resultState === 'conflict'">保留支付单号和渠道原始事实，联系运营核查流水归属，不自动认定争议资金。</p>
+            <p v-else>若渠道回调延迟，可先查看路由轨迹，再执行主动查单，确保桌面端结果页与后台详情页状态一致。</p>
           </div>
         </div>
       </section>
