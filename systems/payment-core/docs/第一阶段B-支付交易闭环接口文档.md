@@ -5897,6 +5897,10 @@ App/H5/PC 在首次支付提交收到 `PAYMENT-1016` 且回读到有精确冲突
 
 已验签、已复核的支付成功或清分生成死信定向重放使用关联 `CorrelationData`，等待 broker 肯定确认且无 mandatory return 后才标为 `REPLAYED`。发送抛错、NACK、超时、不可路由退回均以原有脱敏失败状态收口，不能把只被 exchange 接受的消息展示为已重放。沿用 `payment.amqp.publisher-confirm-timeout-ms` 的默认 5000ms、上限 60000ms，以及 correlated confirms、returns、mandatory 三项 Rabbit 配置。失败状态只表达本次未能确认路由，不排除 broker 已收到消息；下一次重放必须依赖下游业务幂等，不能凭失败标记断言未发生资金处理。该路径没有真实 RabbitMQ 正常、退回、断线或重投测试，也不能证明队列持久化和消费入账。
 
+### 14.582 支付与退款回调签名字段分隔符
+
+支付和退款回调的 HMAC-SHA256 / RSA2 待签名正文按既有协议以 `|` 连接字段。为避免同一签名字节被解析为不同的渠道流水号、时间戳或 nonce，启用验签时渠道编码、业务单号、状态、渠道流水号、退款尝试号及 nonce 均不得包含 `|`；缺失的业务签名字段也不再以字符串 `null` 拼入正文。违规回调按 `PAYMENT_CALLBACK_SIGNATURE_INVALID` 拒绝，不写入 nonce 或业务状态。该限制需要正式渠道在联调时核对原始回调字段约定；未改变既有签名串的字段顺序或正常字节格式。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

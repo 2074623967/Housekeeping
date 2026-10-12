@@ -94,6 +94,58 @@ class PaymentCallbackSignatureServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentCallbackWithAmbiguousSignedFields() throws Exception {
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        PaymentCallbackRequestDTO request = buildRequest(
+                "wx_h5", "test-secret", "nonce-ambiguous", timestamp);
+        request.setChannelTransactionNo("CHANNEL-TEST-001|" + timestamp);
+        request.setSignature(sign(String.join("|",
+                "wx_h5", request.getPaymentOrderId(), request.getTradeStatus(),
+                request.getChannelTransactionNo(), timestamp, request.getNonce()), "test-secret"));
+        PaymentCallbackRequestDTO alternate = buildRequest(
+                "wx_h5", "test-secret", timestamp + "|nonce-ambiguous", timestamp);
+        assertEquals(request.getSignature(), alternate.getSignature());
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper, true, 601);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.verify("wx_h5", request));
+
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).insertCallbackNonce(
+                anyString(), anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void shouldRejectRefundCallbackWithAmbiguousSignedFields() throws Exception {
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-TEST-001");
+        request.setRefundAttemptNo("RFA-TEST-001");
+        request.setRefundStatus("SUCCESS");
+        request.setChannelRefundNo("CHANNEL-REFUND-001");
+        request.setTimestamp(timestamp);
+        request.setNonce(timestamp + "|nonce-ambiguous");
+        request.setSignature(sign(String.join("|",
+                "wx_h5", request.getRefundOrderId(), request.getRefundAttemptNo(),
+                request.getRefundStatus(), request.getChannelRefundNo(), timestamp,
+                request.getNonce()), "test-secret"));
+        assertEquals(request.getSignature(), sign(String.join("|",
+                "wx_h5", request.getRefundOrderId(), request.getRefundAttemptNo(),
+                request.getRefundStatus(), request.getChannelRefundNo() + "|" + timestamp,
+                timestamp, "nonce-ambiguous"), "test-secret"));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper, true, 601);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.verifyRefund("wx_h5", request));
+
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).insertCallbackNonce(
+                anyString(), anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void shouldRejectReplayNonce() throws Exception {
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
         PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-002", timestamp);

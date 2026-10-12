@@ -72,6 +72,9 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
                 || !StringUtils.hasText(request.getNonce())) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
         }
+        validateSignedComponent(request.getPaymentOrderId());
+        validateSignedComponent(request.getTradeStatus());
+        validateSignedComponent(request.getChannelTransactionNo());
         String payload = String.join("|",
                 normalizeChannel(channel),
                 request.getPaymentOrderId(),
@@ -94,6 +97,10 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
                 || !StringUtils.hasText(request.getNonce())) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
         }
+        validateSignedComponent(request.getRefundOrderId());
+        validateSignedComponent(request.getRefundAttemptNo());
+        validateSignedComponent(request.getRefundStatus());
+        validateSignedComponent(request.getChannelRefundNo());
         String payload = String.join("|",
                 normalizeChannel(channel),
                 request.getRefundOrderId(),
@@ -209,7 +216,15 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISSING,
                     "callback channel is invalid");
         }
+        validateSignedComponent(normalizedChannel);
         return normalizedChannel;
+    }
+
+    private void validateSignedComponent(String value) {
+        if (!StringUtils.hasText(value) || value.indexOf('|') >= 0) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
+                    "callback signed fields are invalid");
+        }
     }
 
     private void validateSecurityFields(String timestamp, String nonce, String signature) {
@@ -220,6 +235,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         }
         if (nonce.length() > CALLBACK_NONCE_MAX_LENGTH
                 || signature.length() > CALLBACK_SIGNATURE_MAX_LENGTH
+                || nonce.indexOf('|') >= 0
                 || containsIsoControl(nonce)
                 || containsIsoControl(signature)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
