@@ -1227,6 +1227,7 @@
               AND CHAR_LENGTH(current_attempt.payment_method) = CHAR_LENGTH(t_payment_order.payment_method)
               AND CAST(current_attempt.payment_method AS BINARY(256)) = CAST(t_payment_order.payment_method AS BINARY(256))
               AND current_attempt.completed_at IS NULL
+              AND current_attempt.attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
               AND UPPER(TRIM(current_attempt.attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
               AND current_attempt.id = (
                   SELECT latest_attempt.id
@@ -1551,6 +1552,7 @@
         WHERE attempt_no = #{attemptNo}
           AND CHAR_LENGTH(attempt_no) = CHAR_LENGTH(#{attemptNo})
           AND CAST(attempt_no AS BINARY(256)) = CAST(#{attemptNo} AS BINARY(256))
+          AND attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
           AND (completed_at IS NOT NULL
                OR (NULLIF(TRIM(attempt_status), '') IS NOT NULL
                    AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')))

@@ -28553,3 +28553,7 @@ H2 MySQL 模式红测复现：最新尝试已变成“渠道流水归属冲突�
 ### 10.1053 2026-10-12 九服务支付与退款对账双路径本地复核
 
 当前 `test` HEAD `7658fd51` 下，先后在受控本机回环环境执行 `HSP_MAVEN_BIN=/Users/abc123/apache-maven-3.9.16/bin/mvn HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home bash tools/dev/local-stack.sh verify payment-query-chain` 与 `verify payment-chain`。两次均完成九后端 HTTP 冒烟及本地 happy-path：支付分别由 `GATEWAY_QUERY`、`CALLBACK` 收口，支付成功、清分、结算、账务、退款成功事实读回后，对账链均为 `COMPLETED`、`4/4`、本地 `financialCloseable=true`；退出码均为 `0`，服务和查单 mock 均停服，所用端口无残留监听。测试只操作本机隔离 H2/demo 数据，不代表真实渠道资金、生产 MySQL/MQ、财务审批或历史争议流水验收；人工核查状态不得因正常主路径通过而自动收口。
+
+### 10.1054 2026-10-12 争议流水的迟到提交结果写保护
+
+H2 MySQL 模式红测复现：将最新尝试标记为“渠道流水归属冲突，待人工核查”后，直接调用 `bindPaymentChannelSubmitResult` 仍影响一行并给本单绑定另一流水。绿测通过共享开放尝试谓词排除冲突，`markPaymentSubmitResultUnknown` 同样影响零行；单独的 `updatePaymentAttemptSubmitResult` 不再覆盖冲突状态和原响应快照。真实 H2/demo Spring 冲突恢复夹具也验证三处 Mapper 均拒绝迟到提交结果，本单保持未绑定流水、人工核查尝试与原响应不变。定向两项及获准本机回环的后端全量 H2/demo `2038/2038` 通过，零失败、错误、跳过；`git diff --check` 通过。未接目标 MySQL 8、正式渠道及真实资金；本地回归不替代多实例竞争与历史争议处置。

@@ -1858,6 +1858,39 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldRejectLateSubmitResultForDisputedChannelTransaction() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道流水归属冲突，待人工核查', "
+                    + "attempt_status_type = 'danger' WHERE attempt_no = 'ATT-SUBMITTED-LATEST'");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(0, mapper.bindPaymentChannelSubmitResult(
+                    "PAY-SUBMITTED", "ATT-SUBMITTED-LATEST", "微信支付", "wx_h5", "WX-LATE"));
+            assertEquals(0, mapper.markPaymentSubmitResultUnknown(
+                    "PAY-SUBMITTED", "ATT-SUBMITTED-LATEST", "微信支付", "WX-LATE"));
+            assertEquals(0, mapper.updatePaymentAttemptSubmitResult(
+                    "ATT-SUBMITTED-LATEST", "late-result", "待回调", "warn"));
+            try (java.sql.ResultSet payment = statement.executeQuery(
+                    "SELECT status, status_type, channel_transaction_no FROM t_payment_order "
+                            + "WHERE payment_order_id = 'PAY-SUBMITTED'")) {
+                assertTrue(payment.next());
+                assertEquals("WAIT_CALLBACK", payment.getString("status"));
+                assertEquals("warn", payment.getString("status_type"));
+                assertNull(payment.getString("channel_transaction_no"));
+            }
+            try (java.sql.ResultSet attempt = statement.executeQuery(
+                    "SELECT attempt_status, attempt_status_type, response_payload FROM t_payment_attempt "
+                            + "WHERE attempt_no = 'ATT-SUBMITTED-LATEST'")) {
+                assertTrue(attempt.next());
+                assertEquals("渠道流水归属冲突，待人工核查", attempt.getString("attempt_status"));
+                assertEquals("danger", attempt.getString("attempt_status_type"));
+                assertNull(attempt.getString("response_payload"));
+            }
+        }
+    }
+
+    @Test
     void shouldOnlyUpdateLatestPaymentAttemptStatus() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);

@@ -183,10 +183,22 @@ class PaymentSubmitReplayIntegrationTest {
                     () -> paymentService.callback("wx_h5", disputedCallback));
             assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, disputedBlocked.getCode());
             PaymentMapper mapper = context.getBean(PaymentMapper.class);
+            String attemptNo = jdbcTemplate.queryForObject(
+                    "SELECT attempt_no FROM t_payment_attempt WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId());
+            String responsePayload = jdbcTemplate.queryForObject(
+                    "SELECT response_payload FROM t_payment_attempt WHERE attempt_no = ?",
+                    String.class, attemptNo);
             assertEquals(0, mapper.markPaymentPendingFromCallback(
                     prepay.getPaymentOrderId(), "WX-COLLISION-OTHER"));
             assertEquals(0, mapper.markPaymentSuccessFromChannelResult(
                     prepay.getPaymentOrderId(), "WX-COLLISION-OTHER"));
+            assertEquals(0, mapper.bindPaymentChannelSubmitResult(
+                    prepay.getPaymentOrderId(), attemptNo, "微信支付", "wx_h5", "WX-COLLISION-OTHER"));
+            assertEquals(0, mapper.markPaymentSubmitResultUnknown(
+                    prepay.getPaymentOrderId(), attemptNo, "微信支付", "WX-COLLISION-OTHER"));
+            assertEquals(0, mapper.updatePaymentAttemptSubmitResult(
+                    attemptNo, "late-result", "待回调", "warn"));
             assertEquals("WAIT_CALLBACK", jdbcTemplate.queryForObject(
                     "SELECT status FROM t_payment_order WHERE payment_order_id = ?",
                     String.class, prepay.getPaymentOrderId()));
@@ -196,6 +208,9 @@ class PaymentSubmitReplayIntegrationTest {
             assertEquals("渠道流水归属冲突，待人工核查", jdbcTemplate.queryForObject(
                     "SELECT attempt_status FROM t_payment_attempt WHERE payment_order_id = ?",
                     String.class, prepay.getPaymentOrderId()));
+            assertEquals(responsePayload, jdbcTemplate.queryForObject(
+                    "SELECT response_payload FROM t_payment_attempt WHERE attempt_no = ?",
+                    String.class, attemptNo));
             assertEquals(0, jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM t_payment_notify_log WHERE payment_order_id = ?",
                     Integer.class, prepay.getPaymentOrderId()).intValue());
