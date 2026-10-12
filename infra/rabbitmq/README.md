@@ -33,6 +33,7 @@ The script creates a suffix-scoped queue / retry queue / DLQ set for:
 
 It also prints the environment variables that the four local services should use for the isolated drill.
 `RETRY_TTL_MS` defaults to `300000` and can be lowered for rapid replay / retry verification.
+The suffix must start with a letter or digit and contain only letters, digits or hyphens (at most 41 characters). The script rejects invalid suffixes and retry TTL values before issuing any Management API writes. Its printed payment-core routing variable and payment/clearing AMQP dispatch switches match the current application configuration; apply those settings to the isolated services before a drill.
 
 ## Queue snapshot
 

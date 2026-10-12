@@ -28653,3 +28653,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1078 2026-10-13 DLQ 演练脚本来源验签回归
 
 加强本地 mock：无签名来源任务的 `ready-to-replay` 与 `replay` 被拒，原脚本三个正向场景红测返回 `SOURCE_UNVERIFIED`。修正后对实际 Management API 载荷字节以对应 AMQP 环境密钥 HMAC-SHA256/Base64 签名，先核对任务 `sourceSignatureVerified=true`，无密钥时发布前退出；非法报文保持未签名并仅人工结案。获准回环环境 Node `9/9`，零失败/跳过；沙箱端口绑定为 `EPERM`，未连接 RabbitMQ（本机 Docker API socket 不存在）。该模拟不证明经主队列、retry TTL、死信转发和真实资金的端到端行为。
+
+### 10.1079 2026-10-13 隔离 RabbitMQ 拓扑推荐配置回归
+
+本机回环 Management API mock 红测复现原脚本输出的 `HSP_PAYMENT_EVENT_ROUTING_KEY` 不被 payment-core 识别，且缺支付、清分 AMQP 派发开关。修正后输出 `HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY`、两端派发模式及死信 intake 开关；suffix 与 TTL 非法时不发管理写入。Node `2/2`、`bash -n` 与 `git diff --check` 通过。mock 收到 12 次持久队列声明、20 次绑定请求，但 Docker daemon 未运行，未连接真实 RabbitMQ，也未验证生产 ACL/TLS、队列实际声明、重试和资金结果。

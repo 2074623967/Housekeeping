@@ -9457,3 +9457,7 @@ App 的浏览器证据不能代替 H5 与 PC 各自的打包入口、终端文�
 ### 10.982 2026-10-13 隔离 DLQ 演练脚本适配来源验签
 
 原有当前批次 `dlq-compensation-smoke.mjs` 直接注入无签名报文，来源验签门禁上线后仍试图复核和重放，演练必然失败。现在按事件模式用与 payment-core 一致的 AMQP 密钥签署即将发布的 UTF-8 JSON 字节，密钥缺失或入站 `sourceSignatureVerified` 不为 `true` 时停止重放；可选非法报文保持未签名且仅人工结案。Node 模拟测试通过。脚本仍直接注入隔离 DLQ，不验证真实主队列、重试、死信转发或 RabbitMQ/资金闭环；本机 Docker daemon 未运行，无法据此关闭真实 MQ 门禁。
+
+### 10.983 2026-10-13 隔离 RabbitMQ 拓扑推荐变量复核
+
+隔离拓扑脚本原输出不存在于 payment-core 配置中的 `HSP_PAYMENT_EVENT_ROUTING_KEY`，且未提示将支付与清分事件派发切到 AMQP；即使创建隔离队列，消息仍可能发往默认共享路由或继续走 HTTP。现输出实际可用的支付成功 routing key、两端 AMQP 派发模式和死信 intake 开关，并在 Management API 写入前拒绝非法 suffix/TTL。模拟 HTTP broker 管理接口测试通过，仍未连真实 RabbitMQ、未验证资金事件或队列持久性。

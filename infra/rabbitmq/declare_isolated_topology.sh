@@ -9,12 +9,20 @@ if [ "${1:-}" = "" ]; then
 fi
 
 SUFFIX="$1"
+if [[ ! "${SUFFIX}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,40}$ ]]; then
+  echo "suffix must be 1-41 letters, digits or hyphens, starting with a letter or digit" >&2
+  exit 1
+fi
 RABBIT_HOST="${RABBIT_HOST:-127.0.0.1}"
 RABBIT_PORT="${RABBIT_PORT:-15672}"
 RABBIT_USER="${RABBIT_USER:-hsp}"
 RABBIT_PASSWORD="${RABBIT_PASSWORD:-hsp-local-drill-20260801}"
 RABBIT_VHOST="${RABBIT_VHOST:-/}"
 RETRY_TTL_MS="${RETRY_TTL_MS:-300000}"
+if [[ ! "${RETRY_TTL_MS}" =~ ^[1-9][0-9]*$ ]] || [ "${#RETRY_TTL_MS}" -gt 9 ]; then
+  echo "RETRY_TTL_MS must be a positive integer of at most 9 digits" >&2
+  exit 1
+fi
 
 urlencode() {
   python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
@@ -108,10 +116,13 @@ Retry TTL (ms): ${RETRY_TTL_MS}
 Recommended environment variables:
 
 payment-core:
-  HSP_PAYMENT_EVENT_ROUTING_KEY=payment.success.${SUFFIX}.v1
+  HSP_PAYMENT_EVENT_DISPATCH_MODE=amqp
+  HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY=payment.success.${SUFFIX}.v1
+  HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_ENABLED=true
 
 clearing-system:
   HSP_CLEARING_AMQP_ENABLED=true
+  HSP_CLEARING_AMQP_DISPATCH_MODE=amqp
   HSP_CLEARING_AMQP_PAYMENT_SUCCESS_QUEUE=clearing.payment-success.${SUFFIX}
   HSP_CLEARING_AMQP_RETRY_ROUTING_KEY=payment.success.clearing.retry.${SUFFIX}.v1
   HSP_CLEARING_AMQP_DEAD_LETTER_ROUTING_KEY=payment.success.clearing.dlq.${SUFFIX}.v1
