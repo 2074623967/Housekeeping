@@ -58,6 +58,8 @@
             AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
             AND CAST(ps.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
         WHERE t_refund_order.refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(t_refund_order.refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(t_refund_order.refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
     </select>
 
     <select id="findByIdempotencyKey" resultType="com.abc123.refund.dto.RefundListItemDTO">
@@ -78,6 +80,8 @@
                operator_name, operation_remark, operated_at
         FROM t_refund_operation_log
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
         ORDER BY operated_at ASC, id ASC
     </select>
 
@@ -134,6 +138,8 @@
             version = version + 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = #{expectedStatus}
     </update>
 
@@ -147,6 +153,8 @@
             version = version + 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE refund_order_id = #{refundOrderId}
+          AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
+          AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'PROCESSING'
     </update>
 
@@ -217,12 +225,16 @@
                last_error_message, last_relay_at, created_at, updated_at
         FROM t_refund_outbox_event
         WHERE event_id = #{eventId}
+          AND CHAR_LENGTH(event_id) = CHAR_LENGTH(#{eventId})
+          AND CAST(event_id AS BINARY(256)) = CAST(#{eventId} AS BINARY(256))
     </select>
 
     <update id="markOutboxDispatching">
         UPDATE t_refund_outbox_event
         SET status = 'DISPATCHING'
         WHERE event_id = #{eventId}
+          AND CHAR_LENGTH(event_id) = CHAR_LENGTH(#{eventId})
+          AND CAST(event_id AS BINARY(256)) = CAST(#{eventId} AS BINARY(256))
           AND status IN ('PENDING', 'FAIL')
     </update>
 
@@ -233,6 +245,8 @@
             last_relay_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE event_id = #{eventId}
+          AND CHAR_LENGTH(event_id) = CHAR_LENGTH(#{eventId})
+          AND CAST(event_id AS BINARY(256)) = CAST(#{eventId} AS BINARY(256))
           AND status = 'DISPATCHING'
     </update>
 
@@ -244,6 +258,8 @@
             last_relay_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE event_id = #{eventId}
+          AND CHAR_LENGTH(event_id) = CHAR_LENGTH(#{eventId})
+          AND CAST(event_id AS BINARY(256)) = CAST(#{eventId} AS BINARY(256))
           AND status = 'DISPATCHING'
     </update>
 </mapper>

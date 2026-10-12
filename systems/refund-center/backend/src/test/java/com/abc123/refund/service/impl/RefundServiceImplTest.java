@@ -465,10 +465,9 @@ class RefundServiceImplTest {
         when(refundDao.findOutboxByEventId("REVT-1")).thenReturn(event);
         when(refundDao.markOutboxSent("REVT-1")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-1")).thenReturn(1);
-        RefundOutboxItemDTO item = new RefundOutboxItemDTO();
-        item.setEventId("REVT-1");
-        item.setStatus("SENT");
-        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(item));
+        RefundOutboxEventEntity sent = outboxEvent("REVT-1", "REF-1");
+        sent.setStatus("SENT");
+        when(refundDao.findOutboxByEventId("REVT-1")).thenReturn(event, sent);
 
         RefundOutboxDispatchRequestDTO request = new RefundOutboxDispatchRequestDTO();
         request.setSimulateResult("SUCCESS");
@@ -485,11 +484,10 @@ class RefundServiceImplTest {
         when(refundDao.findOutboxByEventId("REVT-2")).thenReturn(event);
         when(refundDao.markOutboxFailed("REVT-2", "账务系统暂不可用")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-2")).thenReturn(1);
-        RefundOutboxItemDTO item = new RefundOutboxItemDTO();
-        item.setEventId("REVT-2");
-        item.setStatus("FAIL");
-        item.setRetryCount(1);
-        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(item));
+        RefundOutboxEventEntity failed = outboxEvent("REVT-2", "REF-2");
+        failed.setStatus("FAIL");
+        failed.setRetryCount(1);
+        when(refundDao.findOutboxByEventId("REVT-2")).thenReturn(event, failed);
 
         RefundOutboxDispatchRequestDTO request = new RefundOutboxDispatchRequestDTO();
         request.setSimulateResult("FAIL");
@@ -515,10 +513,9 @@ class RefundServiceImplTest {
                 .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
         when(refundDao.markOutboxSent("REVT-3")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-3")).thenReturn(1);
-        RefundOutboxItemDTO sent = new RefundOutboxItemDTO();
-        sent.setEventId("REVT-3");
+        RefundOutboxEventEntity sent = outboxEvent("REVT-3", "REF-3");
         sent.setStatus("SENT");
-        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(sent));
+        when(refundDao.findOutboxByEventId("REVT-3")).thenReturn(event, sent);
 
         RefundOutboxItemDTO result = service.dispatchOutbox("REVT-3", new RefundOutboxDispatchRequestDTO());
 
@@ -556,10 +553,9 @@ class RefundServiceImplTest {
                 .thenThrow(new IllegalStateException("downstream unavailable"));
         when(refundDao.markOutboxFailed("REVT-4", "下游派发失败:IllegalStateException")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-4")).thenReturn(1);
-        RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
-        failed.setEventId("REVT-4");
+        RefundOutboxEventEntity failed = outboxEvent("REVT-4", "REF-4");
         failed.setStatus("FAIL");
-        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(failed));
+        when(refundDao.findOutboxByEventId("REVT-4")).thenReturn(event, failed);
 
         RefundOutboxItemDTO result = service.dispatchOutbox("REVT-4", new RefundOutboxDispatchRequestDTO());
 
@@ -581,10 +577,9 @@ class RefundServiceImplTest {
                 .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "ACCOUNTING_ERROR")));
         when(refundDao.markOutboxFailed("REVT-5", "下游派发失败:IllegalStateException")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-5")).thenReturn(1);
-        RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
-        failed.setEventId("REVT-5");
+        RefundOutboxEventEntity failed = outboxEvent("REVT-5", "REF-5");
         failed.setStatus("FAIL");
-        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(failed));
+        when(refundDao.findOutboxByEventId("REVT-5")).thenReturn(event, failed);
 
         RefundOutboxItemDTO result = service.dispatchOutbox("REVT-5", new RefundOutboxDispatchRequestDTO());
 

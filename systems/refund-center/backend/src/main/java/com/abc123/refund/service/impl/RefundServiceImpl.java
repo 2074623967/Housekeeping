@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -542,13 +543,13 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private RefundOutboxItemDTO loadSingleOutbox(String eventId) {
-        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
-        query.setEventId(eventId);
-        query.setPageNo(1);
-        query.setPageSize(1);
-        return safeList(refundDao.findOutboxList(query)).stream()
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("退款成功事件不存在"));
+        RefundOutboxEventEntity event = refundDao.findOutboxByEventId(eventId);
+        if (event == null) {
+            throw new BusinessException("退款成功事件不存在");
+        }
+        RefundOutboxItemDTO item = new RefundOutboxItemDTO();
+        BeanUtils.copyProperties(event, item);
+        return item;
     }
 
     private <T> List<T> safeList(List<T> values) {
