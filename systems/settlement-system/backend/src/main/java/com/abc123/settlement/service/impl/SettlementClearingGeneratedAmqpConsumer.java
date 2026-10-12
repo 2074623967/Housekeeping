@@ -37,6 +37,9 @@ public class SettlementClearingGeneratedAmqpConsumer {
     private final int maxRetryCount;
     private final String clearingGeneratedAmqpSecret;
 
+    @Value("${settlement.amqp.forward-confirm-timeout-ms:5000}")
+    private long forwardConfirmTimeoutMs = 5000L;
+
     public SettlementClearingGeneratedAmqpConsumer(SettlementEventService settlementEventService, RabbitTemplate rabbitTemplate,
                                                     ObjectMapper objectMapper,
                                                     @Value("${settlement.amqp.retry-exchange:clearing.trade.retry}") String retryExchange,
@@ -78,7 +81,8 @@ public class SettlementClearingGeneratedAmqpConsumer {
 
     private void routeUntrusted(Message message, Channel channel, long deliveryTag) throws IOException {
         try {
-            rabbitTemplate.send(deadLetterExchange, deadLetterRoutingKey, message);
+            AmqpConfirmedForwarder.send(rabbitTemplate, deadLetterExchange, deadLetterRoutingKey,
+                    message, forwardConfirmTimeoutMs);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException exception) {
             channel.basicNack(deliveryTag, false, true);
@@ -120,9 +124,11 @@ public class SettlementClearingGeneratedAmqpConsumer {
         int retryCount = retryCount(message.getMessageProperties().getHeaders());
         try {
             if (retryCount >= maxRetryCount) {
-                rabbitTemplate.send(deadLetterExchange, deadLetterRoutingKey, copy(message, retryCount));
+                AmqpConfirmedForwarder.send(rabbitTemplate, deadLetterExchange, deadLetterRoutingKey,
+                        copy(message, retryCount), forwardConfirmTimeoutMs);
             } else {
-                rabbitTemplate.send(retryExchange, retryRoutingKey, copy(message, retryCount + 1));
+                AmqpConfirmedForwarder.send(rabbitTemplate, retryExchange, retryRoutingKey,
+                        copy(message, retryCount + 1), forwardConfirmTimeoutMs);
             }
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException exception) {

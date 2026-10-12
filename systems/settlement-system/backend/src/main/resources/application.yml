@@ -15,6 +15,10 @@ spring:
     username: ${HSP_RABBITMQ_USERNAME:hsp}
     password: ${HSP_RABBITMQ_PASSWORD:}
     virtual-host: ${HSP_RABBITMQ_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   sql:
     init:
       mode: always
@@ -39,3 +43,4 @@ settlement:
     dead-letter-exchange: ${HSP_SETTLEMENT_AMQP_DEAD_LETTER_EXCHANGE:clearing.trade.dlq}
     dead-letter-routing-key: ${HSP_SETTLEMENT_AMQP_DEAD_LETTER_ROUTING_KEY:clearing.generated.settlement.dlq.v1}
     max-retry-count: ${HSP_SETTLEMENT_AMQP_MAX_RETRY_COUNT:3}
+    forward-confirm-timeout-ms: ${HSP_SETTLEMENT_AMQP_FORWARD_CONFIRM_TIMEOUT_MS:5000}

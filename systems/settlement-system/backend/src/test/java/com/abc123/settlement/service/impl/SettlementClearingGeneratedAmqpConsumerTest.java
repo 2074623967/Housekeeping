@@ -10,8 +10,10 @@ import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.service.SettlementEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +21,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /** 清分结果结算 AMQP 消费适配测试。 */
@@ -34,6 +38,15 @@ class SettlementClearingGeneratedAmqpConsumerTest {
     @Mock
     private Channel channel;
 
+    @BeforeEach
+    void confirmForwardedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+    }
+
     @Test
     void shouldDeadLetterUnsignedClearingEventBeforeSettlement() throws Exception {
         Message unsigned = message(0);
@@ -41,7 +54,7 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(unsigned, channel, 36L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
+                eq("clearing.generated.settlement.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(settlementEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
         verify(channel).basicAck(36L, false);
     }
@@ -55,8 +68,9 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(tampered, channel, 37L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
-        verify(rabbitTemplate, never()).send(eq("clearing.trade.retry"), any(), any(Message.class));
+                eq("clearing.generated.settlement.dlq.v1"), any(Message.class), any(CorrelationData.class));
+        verify(rabbitTemplate, never()).send(eq("clearing.trade.retry"), any(),
+                any(Message.class), any(CorrelationData.class));
         verify(settlementEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
     }
 
@@ -65,7 +79,7 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3, " ").consume(message(0), channel, 38L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
+                eq("clearing.generated.settlement.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(settlementEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
     }
 
@@ -75,7 +89,7 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                        eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
+                        eq("clearing.generated.settlement.dlq.v1"), any(Message.class), any(CorrelationData.class));
 
         consumer(3).consume(unsigned, channel, 39L);
 
@@ -84,12 +98,64 @@ class SettlementClearingGeneratedAmqpConsumerTest {
     }
 
     @Test
+    void shouldNackUntrustedMessageWhenDeadLetterConfirmTimesOut() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doAnswer(invocation -> null).when(rabbitTemplate)
+                .send(eq("clearing.trade.dlq"), eq("clearing.generated.settlement.dlq.v1"),
+                        any(Message.class), any(CorrelationData.class));
+        SettlementClearingGeneratedAmqpConsumer consumer = consumer(3);
+        setConfirmTimeout(consumer, 1L);
+
+        consumer.consume(unsigned, channel, 40L);
+
+        verify(channel).basicNack(40L, false, true);
+        verify(channel, never()).basicAck(40L, false);
+    }
+
+    @Test
+    void shouldNackWhenDeadLetterIsReturnedDespitePositiveConfirm() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.setReturned(new ReturnedMessage(unsigned, 312, "NO_ROUTE",
+                    "clearing.trade.dlq", "clearing.generated.settlement.dlq.v1"));
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(eq("clearing.trade.dlq"),
+                eq("clearing.generated.settlement.dlq.v1"), any(Message.class), any(CorrelationData.class));
+
+        consumer(3).consume(unsigned, channel, 41L);
+
+        verify(channel).basicNack(41L, false, true);
+        verify(channel, never()).basicAck(41L, false);
+    }
+
+    @Test
+    void shouldNackWhenRetryIsNegativelyConfirmed() throws Exception {
+        org.mockito.Mockito.doThrow(new IllegalStateException("business failure"))
+                .when(settlementEventService).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(false, "broker nack"));
+            return null;
+        }).when(rabbitTemplate).send(eq("clearing.trade.retry"),
+                eq("clearing.generated.settlement.retry.v1"), any(Message.class), any(CorrelationData.class));
+
+        consumer(3).consume(message(0), channel, 42L);
+
+        verify(channel).basicNack(42L, false, true);
+        verify(channel, never()).basicAck(42L, false);
+    }
+
+    @Test
     void shouldConsumeAndAckWhenSettlementCreationSucceeds() throws Exception {
         consumer(3).consume(message(0), channel, 31L);
 
         verify(settlementEventService).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
         verify(channel).basicAck(31L, false);
-        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class));
+        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class), any(CorrelationData.class));
     }
 
     @Test
@@ -100,7 +166,8 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0), channel, 32L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"),
+                retryMessage.capture(), any(CorrelationData.class));
         verify(channel).basicAck(32L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1,
                 retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
@@ -113,7 +180,8 @@ class SettlementClearingGeneratedAmqpConsumerTest {
 
         consumer(3).consume(message(3), channel, 33L);
 
-        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.settlement.dlq.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(33L, false);
     }
 
@@ -122,7 +190,8 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0, "OTHER_EVENT", null, null), channel, 34L);
 
         verify(settlementEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(34L, false);
     }
 
@@ -131,7 +200,8 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0, null, null, "2"), channel, 35L);
 
         verify(settlementEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(35L, false);
     }
 
@@ -150,6 +220,16 @@ class SettlementClearingGeneratedAmqpConsumerTest {
                 "clearing.generated.settlement.dlq.v1",
                 maxRetryCount,
                 secret);
+    }
+
+    private void setConfirmTimeout(SettlementClearingGeneratedAmqpConsumer consumer, long timeoutMs) {
+        try {
+            Field field = SettlementClearingGeneratedAmqpConsumer.class.getDeclaredField("forwardConfirmTimeoutMs");
+            field.setAccessible(true);
+            field.setLong(consumer, timeoutMs);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private Message message(int retryCount) throws Exception {
