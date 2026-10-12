@@ -16,6 +16,7 @@ const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
   conflict: "PAY-RESULT-CONFLICT-001",
   submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
+  submitConflict: "PAY-RESULT-SUBMIT-CONFLICT-001",
   submitCleanup: "PAY-RESULT-SUBMIT-CLEANUP-001",
   submitCleanupWrite: "PAY-RESULT-SUBMIT-CLEANUP-WRITE-001",
   submitStale: "PAY-RESULT-SUBMIT-STALE-001",
@@ -34,19 +35,20 @@ async function waitFor(condition, label) {
 function paymentDetail(kind, status) {
   const paymentOrderId = paymentIds[kind];
   const submitted = kind !== "close" && status !== "PREPAY_CREATED";
+  const disputed = ["conflict", "submitConflict"].includes(kind) && status === "PAYING";
   return {
     paymentOrderId, businessChainId: `CHAIN-${paymentOrderId}`,
     prepayOrderNo: `PRE-${paymentOrderId}`, orderNo: `ORD-${paymentOrderId}`,
     payScene: "HOME_CLEAN", amount: "68.00", paymentMethod: "支付宝",
     customerName: "本机用户", channel: submitted ? "alipay_h5" : null,
     channelTransactionNo: submitted && status !== "PAYING" ? "ALI-LOCAL-001" : null,
-    status, statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || kind === "conflict" ? "danger"
+    status, statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || disputed ? "danger"
       : status === "WAIT_CALLBACK" ? "warn" : "info",
     successAt: status === "SUCCESS" ? "2026-10-10 10:00:03" : null,
     createdAt: "2026-10-10 10:00:00",
-    latestAttemptStatus: submitted ? kind === "conflict" ? "渠道流水归属冲突，待人工核查"
+    latestAttemptStatus: submitted ? disputed ? "渠道流水归属冲突，待人工核查"
       : status === "SUCCESS" ? "成功" : "处理中" : null,
-    latestAttemptStatusType: submitted ? kind === "conflict" ? "danger"
+    latestAttemptStatusType: submitted ? disputed ? "danger"
       : status === "SUCCESS" ? "success" : "info" : null,
     latestAttemptCompletedAt: status === "SUCCESS" ? "2026-10-10 10:00:02" : null,
     routeLogs: [], notifyLogs: [], eventLogs: []
@@ -55,13 +57,14 @@ function paymentDetail(kind, status) {
 
 function cashierPage(kind, status) {
   const payment = paymentDetail(kind, status);
+  const disputed = ["conflict", "submitConflict"].includes(kind) && status === "PAYING";
   return {
     ...payment,
     paymentStatus: status,
     status: status === "SUCCESS" ? "支付成功" : status === "CLOSED" ? "已关闭"
-      : kind === "conflict" && status === "PAYING" ? "结果待确认"
+      : disputed ? "结果待确认"
       : status === "WAIT_CALLBACK" ? "待回调" : status === "PAYING" ? "支付中" : "待支付",
-    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || kind === "conflict" ? "danger"
+    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || disputed ? "danger"
       : status === "PAYING" ? "info" : "warn",
     paymentMethod: kind !== "close" && status !== "PREPAY_CREATED" ? "支付宝" : null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -100,15 +103,21 @@ async function main() {
           }
           response.end(JSON.stringify({ code: "0", data }));
         }
-      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing"].includes(kind) ? "submit" : kind}`) {
+      } else if (request.method === "POST" && pathname === `/api/payments/${["submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing", "submitConflict"].includes(kind) ? "submit" : kind}`) {
         let input = "";
         for await (const chunk of request) input += chunk;
         const body = JSON.parse(input);
-        if (["submit", "submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing"].includes(kind)) {
+        if (["submit", "submitOther", "submitCleanup", "submitCleanupWrite", "submitStale", "submitProcessing", "submitConflict"].includes(kind)) {
           assert.equal(body.prepayOrderNo, `PRE-${paymentIds[kind]}`);
           assert.equal(body.paymentMethod, "支付宝");
           assert.equal(body.accessToken, "local-test-token");
           assert.ok(typeof body.idempotencyKey === "string" && body.idempotencyKey.length > 0);
+          if (kind === "submitConflict") {
+            status = "PAYING";
+            response.end(JSON.stringify({ code: "PAYMENT-1016", message: "渠道流水归属冲突，待人工核查",
+              requestId: "REQ-COLLISION-BROWSER" }));
+            return;
+          }
           if (kind === "submitCleanup" || kind === "submitCleanupWrite") {
             status = "WAIT_CALLBACK";
             response.end(JSON.stringify({ code: "0", data: {
@@ -288,6 +297,26 @@ async function main() {
     assert.equal(await evaluate(`${actionButton('关闭本次支付')}.disabled`), true);
     assert.equal(await evaluate("document.body.innerText.includes('勿主动查单、重复付款或关闭支付单')"), true);
     assert.equal(requests.slice(conflictStart).filter((item) => item.method === "POST").length, 0);
+    kind = "submitConflict";
+    status = "PREPAY_CREATED";
+    failReadback = false;
+    const submitConflictStart = requests.length;
+    const submitConflictCashierPath = `/api/payments/cashier/PRE-${paymentIds[kind]}`;
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token` });
+    await waitFor(() => evaluate(`${actionButton('确认支付')}?.disabled === false`), "cashier before conflicting submit");
+    await evaluate(`${actionButton('确认支付')}.click()`);
+    await waitFor(() => evaluate(`document.body.innerText.includes('REQ-COLLISION-BROWSER')
+      && Array.from(document.querySelectorAll('.terminal-actions button'))
+        .filter((button) => button.textContent.trim() === '人工核查中').length === 2`),
+    "first conflicting submit readback");
+    assert.equal(await evaluate("document.body.innerText.includes('PAYMENT-1016')"), true);
+    assert.equal(await evaluate("document.body.innerText.includes('勿主动查单、重复付款或关闭支付单')"), true);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.terminal-actions button'))
+      .filter((button) => button.textContent.trim() === '人工核查中').every((button) => button.disabled)`), true);
+    assert.equal(await evaluate(`${actionButton('关闭本次支付')}.disabled`), true);
+    assert.ok(requests.slice(submitConflictStart)
+      .filter((item) => item.method === "GET" && item.pathname === submitConflictCashierPath).length >= 2);
+    assert.equal(requests.slice(submitConflictStart).filter((item) => item.method === "POST").length, 1);
     for (const scenario of ["query", "close"]) {
       for (const readbackFails of [false, true]) {
         kind = scenario;
@@ -604,7 +633,7 @@ async function main() {
     assert.equal(requests.slice(retryStart).filter((item) => item.method === "POST").length, 3);
     assert.equal(await evaluate(`Object.entries(sessionStorage).some(([key, value]) =>
       key.startsWith('hsp.paymentSubmitAttempt.v1.') && value === '{broken-json')`), true);
-    console.log("[PASS] User result and cashier actions, including disputed channel facts and corrupt attempt");
+    console.log("[PASS] User result and cashier actions, including first disputed submit and corrupt attempt");
   } finally {
     socket?.close();
     chrome.kill("SIGTERM");
