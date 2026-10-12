@@ -49,13 +49,14 @@ class AccountingEventControllerTest {
     }
 
     @Test
-    void shouldConsumeClearingGeneratedEvent() {
+    void shouldConsumeClearingGeneratedEvent() throws Exception {
         AccountingEventController controller = controller();
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeClearingGenerated(request);
+        controller.consumeClearingGenerated(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
 
-        verify(accountingEventService).consumeClearingGenerated(request);
+        verify(accountingEventService).consumeClearingGenerated(argThat(received -> received != null));
     }
 
     @Test
@@ -80,6 +81,7 @@ class AccountingEventControllerTest {
     }
 
     private AccountingEventController controller() {
-        return new AccountingEventController(accountingEventService, new ObjectMapper(), TEST_SECRET, TEST_SECRET);
+        return new AccountingEventController(accountingEventService, new ObjectMapper(),
+                TEST_SECRET, TEST_SECRET, TEST_SECRET);
     }
 }

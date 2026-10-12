@@ -1,9 +1,11 @@
 package com.abc123.clearing.service.impl;
 
+import com.abc123.clearing.common.ClearingEventHttpSignature;
 import com.abc123.clearing.entity.ClearingOrderEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
 import com.abc123.clearing.service.ClearingEventDispatchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +20,9 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -43,6 +48,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
 
     @Value("${clearing.downstream.reconciliation.fact-url:}")
     private String reconciliationFactUrl;
+
+    @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}")
+    private String clearingGeneratedHttpSecret;
 
     @Autowired
     public ClearingEventDispatchServiceImpl(
@@ -212,7 +220,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
     }
 
     private void postClearingEvent(String url, Object payload, ClearingOrderEntity clearingOrder) {
-        Map<?, ?> event = postForSuccess(url, payload);
+        Map<?, ?> event = postForSuccess(url, signedClearingPayload(payload));
         if (!"CLEARING_GENERATED".equals(event.get("eventType"))
                 || !Objects.equals(clearingOrder.getClearingNo(), event.get("bizNo"))
                 || !Objects.equals(clearingOrder.getBusinessChainId(), event.get("businessChainId"))
@@ -222,6 +230,22 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             LOGGER.warn("清分下游事件回执拒绝 clearingNo={}, target={}, reason=IDENTITY",
                     clearingOrder.getClearingNo(), url.equals(settlementUrl) ? "SETTLEMENT" : "ACCOUNTING");
             throw new IllegalStateException("清分下游事件回执归属不匹配");
+        }
+    }
+
+    private Object signedClearingPayload(Object payload) {
+        if (!StringUtils.hasText(clearingGeneratedHttpSecret)) {
+            return payload;
+        }
+        try {
+            String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set(ClearingEventHttpSignature.HEADER_NAME,
+                    ClearingEventHttpSignature.sign(body, clearingGeneratedHttpSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("清分结果签名序列化失败", exception);
         }
     }
 

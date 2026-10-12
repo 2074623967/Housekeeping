@@ -4,6 +4,8 @@ import static org.mockito.Mockito.verify;
 
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.service.SettlementEventService;
+import com.abc123.settlement.common.ClearingEventHttpSignature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -20,7 +22,8 @@ class SettlementEventControllerTest {
 
     @Test
     void shouldListSettlementEvents() {
-        SettlementEventController controller = new SettlementEventController(settlementEventService);
+        SettlementEventController controller = new SettlementEventController(
+                settlementEventService, new ObjectMapper(), "local-test-secret");
 
         controller.list("CLEARING_GENERATED", "CLO20001", 1, 20);
 
@@ -28,12 +31,15 @@ class SettlementEventControllerTest {
     }
 
     @Test
-    void shouldConsumeClearingGeneratedEvent() {
-        SettlementEventController controller = new SettlementEventController(settlementEventService);
+    void shouldConsumeClearingGeneratedEvent() throws Exception {
+        SettlementEventController controller = new SettlementEventController(
+                settlementEventService, new ObjectMapper(), "local-test-secret");
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeClearingGenerated(request);
+        controller.consumeClearingGenerated(body, ClearingEventHttpSignature.sign(body, "local-test-secret"));
 
-        verify(settlementEventService).consumeClearingGenerated(request);
+        verify(settlementEventService).consumeClearingGenerated(
+                org.mockito.ArgumentMatchers.argThat(received -> received != null));
     }
 }

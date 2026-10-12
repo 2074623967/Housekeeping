@@ -30,19 +30,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountingEventController {
 
     private static final String REFUND_EVENT_SIGNATURE_HEADER = "X-HSP-Refund-Event-Signature";
+    private static final String CLEARING_EVENT_SIGNATURE_HEADER = "X-HSP-Clearing-Event-Signature";
 
     private final AccountingEventService accountingEventService;
     private final ObjectMapper objectMapper;
     private final String paymentEventSecret;
     private final String refundEventSecret;
+    private final String clearingEventSecret;
 
     public AccountingEventController(AccountingEventService accountingEventService, ObjectMapper objectMapper,
             @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret,
-            @Value("${HSP_REFUND_SUCCESS_HTTP_SECRET:}") String refundEventSecret) {
+            @Value("${HSP_REFUND_SUCCESS_HTTP_SECRET:}") String refundEventSecret,
+            @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}") String clearingEventSecret) {
         this.accountingEventService = accountingEventService;
         this.objectMapper = objectMapper;
         this.paymentEventSecret = paymentEventSecret;
         this.refundEventSecret = refundEventSecret;
+        this.clearingEventSecret = clearingEventSecret;
     }
 
     @GetMapping
@@ -71,8 +75,19 @@ public class AccountingEventController {
     }
 
     @PostMapping("/clearing/generated")
-    public ApiResponse<AccountEventDTO> consumeClearingGenerated(@RequestBody ClearingGeneratedEventRequestDTO request) {
-        return ApiResponse.success(accountingEventService.consumeClearingGenerated(request));
+    public ResponseEntity<ApiResponse<AccountEventDTO>> consumeClearingGenerated(@RequestBody String body,
+            @RequestHeader(value = CLEARING_EVENT_SIGNATURE_HEADER, required = false) String signature) {
+        if (!PaymentEventHttpSignature.matches(body, signature, clearingEventSecret)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure("CLEARING_EVENT_UNAUTHORIZED", "清分事件签名校验失败"));
+        }
+        try {
+            ClearingGeneratedEventRequestDTO request = objectMapper.readValue(body, ClearingGeneratedEventRequestDTO.class);
+            return ResponseEntity.ok(ApiResponse.success(accountingEventService.consumeClearingGenerated(request)));
+        } catch (JsonProcessingException exception) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.failure("CLEARING_EVENT_INVALID", "清分事件载荷无效"));
+        }
     }
 
     @PostMapping("/refunds/success")

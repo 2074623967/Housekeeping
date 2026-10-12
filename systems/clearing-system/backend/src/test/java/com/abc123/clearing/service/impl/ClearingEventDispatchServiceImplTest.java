@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.clearing.entity.ClearingOrderEntity;
+import com.abc123.clearing.common.ClearingEventHttpSignature;
 import com.abc123.clearing.entity.ClearingEventEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
@@ -44,6 +46,29 @@ class ClearingEventDispatchServiceImplTest {
     private RestTemplate restTemplate;
     @Mock
     private RabbitTemplate rabbitTemplate;
+
+    @Test
+    void shouldSignExactClearingBodyForSettlementAndAccounting() throws Exception {
+        String secret = "local-clearing-http-test-secret";
+        stubClearingOutbox();
+        stubSuccessfulEvents();
+        ClearingEventDispatchServiceImpl dispatchService = dispatchService();
+        setField(dispatchService, "clearingGeneratedHttpSecret", secret);
+
+        assertTrue(dispatchService.publishClearingGenerated("PAY-001"));
+
+        for (String url : new String[] {"http://settlement", "http://accounting"}) {
+            ArgumentCaptor<Object> request = ArgumentCaptor.forClass(Object.class);
+            verify(restTemplate).postForEntity(eq(url), request.capture(), eq(Map.class));
+            assertTrue(request.getValue() instanceof HttpEntity);
+            HttpEntity<?> signed = (HttpEntity<?>) request.getValue();
+            String body = (String) signed.getBody();
+            assertEquals(ClearingEventHttpSignature.sign(body, secret),
+                    signed.getHeaders().getFirst(ClearingEventHttpSignature.HEADER_NAME));
+            assertEquals("CHAIN-PAY-001", new ObjectMapper().readTree(body).get("businessChainId").asText());
+        }
+        verify(clearingMemoryStore).markOutboxPublishSuccess("EVT-001");
+    }
 
     @Test
     void shouldPublishClearingGeneratedToSettlementAndAccounting() {

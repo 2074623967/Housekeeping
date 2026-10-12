@@ -1,13 +1,20 @@
 package com.abc123.settlement.controller;
 
 import com.abc123.settlement.common.ApiResponse;
+import com.abc123.settlement.common.ClearingEventHttpSignature;
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.SettlementEventDTO;
 import com.abc123.settlement.service.SettlementEventService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,9 +27,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettlementEventController {
 
     private final SettlementEventService settlementEventService;
+    private final ObjectMapper objectMapper;
+    private final String clearingEventSecret;
 
-    public SettlementEventController(SettlementEventService settlementEventService) {
+    public SettlementEventController(SettlementEventService settlementEventService, ObjectMapper objectMapper,
+            @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}") String clearingEventSecret) {
         this.settlementEventService = settlementEventService;
+        this.objectMapper = objectMapper;
+        this.clearingEventSecret = clearingEventSecret;
     }
 
     @GetMapping
@@ -35,7 +47,18 @@ public class SettlementEventController {
     }
 
     @PostMapping("/clearing/generated")
-    public ApiResponse<SettlementEventDTO> consumeClearingGenerated(@RequestBody ClearingGeneratedEventRequestDTO request) {
-        return ApiResponse.success(settlementEventService.consumeClearingGenerated(request));
+    public ResponseEntity<ApiResponse<SettlementEventDTO>> consumeClearingGenerated(@RequestBody String body,
+            @RequestHeader(value = ClearingEventHttpSignature.HEADER_NAME, required = false) String signature) {
+        if (!ClearingEventHttpSignature.matches(body, signature, clearingEventSecret)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure("CLEARING_EVENT_UNAUTHORIZED", "清分事件签名校验失败"));
+        }
+        try {
+            ClearingGeneratedEventRequestDTO request = objectMapper.readValue(body, ClearingGeneratedEventRequestDTO.class);
+            return ResponseEntity.ok(ApiResponse.success(settlementEventService.consumeClearingGenerated(request)));
+        } catch (JsonProcessingException exception) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.failure("CLEARING_EVENT_INVALID", "清分事件载荷无效"));
+        }
     }
 }
