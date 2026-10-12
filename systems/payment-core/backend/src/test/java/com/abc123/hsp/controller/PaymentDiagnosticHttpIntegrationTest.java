@@ -94,7 +94,24 @@ class PaymentDiagnosticHttpIntegrationTest {
             assertTrue(getCsv(port, "/api/payment-requests/export?" + processingQuery).contains("\"渠道提交中\""));
             assertEquals(0, get(objectMapper, port, "/api/payment-requests?" + query)
                     .path("data").path("total").asInt());
-            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET attempt_status = '待回调' "
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET "
+                    + "attempt_status = '渠道流水归属冲突，待人工核查', attempt_status_type = 'danger' "
+                    + "WHERE attempt_no = 'ATT202607190002'"));
+            JsonNode conflictOverview = get(objectMapper, port,
+                    "/api/payment-requests/overview?" + processingQuery).path("data");
+            assertEquals(1, conflictOverview.path("processingRequestCount").asInt());
+            assertEquals(0, conflictOverview.path("waitingCallbackRequestCount").asInt());
+            JsonNode conflictPage = get(objectMapper, port, "/api/payment-requests?" + processingQuery)
+                    .path("data");
+            assertEquals("渠道流水归属冲突，待人工核查", conflictPage.path("items").get(0)
+                    .path("requestStatus").asText());
+            assertEquals("danger", conflictPage.path("items").get(0).path("requestStatusType").asText());
+            assertEquals("渠道流水归属冲突，待人工核查", get(objectMapper, port,
+                    "/api/payment-requests/ATT202607190002").path("data").path("requestStatus").asText());
+            assertTrue(getCsv(port, "/api/payment-requests/export?" + processingQuery)
+                    .contains("\"渠道流水归属冲突，待人工核查\""));
+            assertEquals(1, jdbcTemplate.update("UPDATE t_payment_attempt SET attempt_status = '待回调', "
+                    + "attempt_status_type = 'warn' "
                     + "WHERE attempt_no = 'ATT202607190002'"));
 
             JsonNode overview = get(objectMapper, port, "/api/payment-requests/overview?" + query)

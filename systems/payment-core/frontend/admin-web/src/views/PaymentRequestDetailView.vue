@@ -196,7 +196,7 @@ watch(currentRequestNo, (requestNo) => {
               <div><strong>来源终端：</strong>{{ formatValue(detail.terminal) }}</div>
               <div><strong>客户端 IP：</strong>{{ formatValue(detail.clientIp) }}</div>
               <div><strong>幂等键：</strong><span class="mono-text">{{ formatValue(detail.idempotencyKey) }}</span></div>
-              <div><strong>请求状态：</strong><span :class="['badge', detail.requestStatusType || 'info']">{{ formatValue(detail.requestStatus) }}</span> <span v-if="detail.requestStatus === '渠道提交中'" class="badge warn">渠道受理未确认</span></div>
+              <div><strong>请求状态：</strong><span :class="['badge', detail.requestStatusType || 'info']">{{ formatValue(detail.requestStatus) }}</span> <span v-if="detail.requestStatus === '渠道提交中'" class="badge warn">渠道受理未确认</span> <span v-if="detail.requestStatus === '渠道流水归属冲突，待人工核查'" class="badge danger">渠道流水归属冲突</span></div>
               <div><strong>运营配置快照：</strong>{{ formatValue(detail.opsConfigSnapshotVersion) }}</div>
               <div><strong>创建时间：</strong>{{ formatValue(detail.createdAt) }}</div>
               <div><strong>完成时间：</strong>{{ formatValue(detail.completedAt) }}</div>
@@ -221,6 +221,7 @@ watch(currentRequestNo, (requestNo) => {
             </div>
             <div class="ops-card detail-panel">
               <div v-if="detail.requestStatus === '渠道提交中'" class="ops-row"><span>受理核查</span><span>先核对提交日志，等待状态推进；勿主动查单或重复提交。</span></div>
+              <div v-else-if="detail.requestStatus === '渠道流水归属冲突，待人工核查'" class="ops-row"><span>人工核查</span><span>核对渠道原始事实与流水归属；勿主动查单、重复提交或绑定争议流水。</span></div>
               <div class="ops-row"><span>标准订单</span><span>{{ detail.standardOrderNo ? "归属已确认" : "归属未确认，暂不可联查" }}</span></div>
               <div class="ops-row"><span>请求路由</span><span>{{ detail.routeNo ? "已精确关联" : "本次请求无路由事实" }}</span></div>
               <div class="ops-row"><span>导航状态</span><span>{{ canUseSnapshot ? "当前快照有效" : "当前快照不可用于联查" }}</span></div>

@@ -27,7 +27,7 @@
             <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
                 <choose>
                     <when test="query.requestStatus == '处理中'">
-                        AND pa.attempt_status IN ('处理中', '待人工确认', '渠道提交中')
+                        AND pa.attempt_status IN ('处理中', '待人工确认', '渠道提交中', '渠道流水归属冲突，待人工核查')
                     </when>
                     <when test="query.requestStatus == '等待回调'">
                         AND pa.attempt_status IN ('等待回调', '待回调')
@@ -211,7 +211,7 @@
         SELECT COUNT(1) AS totalRequestCount,
                COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '成功' THEN 1 ELSE 0 END), 0) AS successRequestCount,
                COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '失败' THEN 1 ELSE 0 END), 0) AS failedRequestCount,
-               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status IN ('处理中', '待人工确认', '渠道提交中') THEN 1 ELSE 0 END), 0) AS processingRequestCount,
+               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status IN ('处理中', '待人工确认', '渠道提交中', '渠道流水归属冲突，待人工核查') THEN 1 ELSE 0 END), 0) AS processingRequestCount,
                COALESCE(SUM(CASE WHEN filtered_requests.attempt_status IN ('等待回调', '待回调') THEN 1 ELSE 0 END), 0) AS waitingCallbackRequestCount,
                COUNT(DISTINCT NULLIF(filtered_requests.terminal, '')) AS distinctTerminalCount,
                COUNT(DISTINCT NULLIF(filtered_requests.channel_code, '')) AS distinctChannelCount,

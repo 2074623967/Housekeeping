@@ -11,6 +11,12 @@ test("shows unaccepted channel submissions within processing requests without re
   assert.match(source, /处理中请求[\s\S]*渠道提交中/);
 });
 
+test("keeps channel transaction conflicts in processing requests with manual-review guidance", () => {
+  assert.match(source, /<option>渠道流水归属冲突，待人工核查<\/option>/);
+  assert.match(source, /item\.requestStatus === '渠道流水归属冲突，待人工核查'[^>]*>渠道流水归属冲突/);
+  assert.match(source, /selectedItem\.requestStatus === '渠道流水归属冲突，待人工核查'[\s\S]*勿主动查单、重复提交或绑定争议流水/);
+});
+
 test("shows payment scene in payment request list snapshots", () => {
   assert.match(source, /<th>支付场景<\/th>/);
   assert.match(source, /<td>\{\{ item\.payScene \}\}<\/td>/);

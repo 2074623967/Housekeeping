@@ -2523,8 +2523,8 @@ test("rejects empty or mismatched payment request detail responses", async (cont
     requestPayload: "{}", responsePayload: null, completedAt: "2026-09-27 10:01:00",
     createdAt: "2026-09-27 10:00:00"
   };
-  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭"]) {
-    const statusType = requestStatus === "已关闭" ? "danger" : "warn";
+  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭", "渠道流水归属冲突，待人工核查"]) {
+    const statusType = ["已关闭", "渠道流水归属冲突，待人工核查"].includes(requestStatus) ? "danger" : "warn";
     assert.equal(normalizePaymentRequestDetailResult({
       ...validDetail, successFactIssue: null, requestStatus,
       requestStatusType: statusType, completedAt: null
@@ -2533,6 +2533,10 @@ test("rejects empty or mismatched payment request detail responses", async (cont
   assert.throws(() => normalizePaymentRequestDetailResult({
     ...validDetail, successFactIssue: null, requestStatus: "渠道提交中",
     requestStatusType: "success", completedAt: null
+  }, "REQ-001"), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-REQUEST-DETAIL");
+  assert.throws(() => normalizePaymentRequestDetailResult({
+    ...validDetail, successFactIssue: null, requestStatus: "渠道流水归属冲突，待人工核查",
+    requestStatusType: "warn", completedAt: null
   }, "REQ-001"), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-REQUEST-DETAIL");
   for (const successFactIssue of ["SUCCESS_FACT_MISMATCH", "SUCCESS_TIME_MISSING"]) {
     assert.equal(normalizePaymentRequestDetailResult({ ...validDetail, successFactIssue }, "REQ-001")
@@ -2630,8 +2634,8 @@ test("rejects payment request pages with inconsistent status and associations", 
     normalizePaymentRequestListPage({ items: [validRow], total: 1 }).items,
     [validRow]
   );
-  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭"]) {
-    const statusType = requestStatus === "已关闭" ? "danger" : "warn";
+  for (const requestStatus of ["渠道提交中", "待人工确认", "待回调", "已关闭", "渠道流水归属冲突，待人工核查"]) {
+    const statusType = ["已关闭", "渠道流水归属冲突，待人工核查"].includes(requestStatus) ? "danger" : "warn";
     assert.equal(normalizePaymentRequestListPage({ items: [{
       ...validRow, requestStatus, requestStatusType: statusType
     }], total: 1 }).items[0].requestStatus, requestStatus);

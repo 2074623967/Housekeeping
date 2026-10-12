@@ -276,7 +276,21 @@ class PaymentRequestListMapperIntegrationTest {
             assertEquals(1L, mapper.count(submittingQuery));
             assertEquals("ATTEMPT-VIRTUAL-001", mapper.findAll(submittingQuery).get(0).getRequestNo());
 
-            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '待回调' "
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道流水归属冲突，待人工核查', "
+                    + "attempt_status_type = 'danger' WHERE attempt_no = 'ATTEMPT-VIRTUAL-001'");
+            session.clearCache();
+            assertEquals(5L, mapper.findOverviewSummary(overviewQuery).getProcessingRequestCount());
+            assertEquals(0L, mapper.findOverviewSummary(overviewQuery).getWaitingCallbackRequestCount());
+            assertEquals(5L, mapper.count(processingQuery));
+            assertEquals(0L, mapper.count(submittingQuery));
+            PaymentRequestQueryDTO conflictQuery = new PaymentRequestQueryDTO();
+            conflictQuery.setRequestStatus("渠道流水归属冲突，待人工核查");
+            assertEquals(1L, mapper.count(conflictQuery));
+            assertEquals("danger", mapper.findAllForExport(conflictQuery).get(0).getRequestStatusType());
+            assertEquals("ATTEMPT-VIRTUAL-001", mapper.findDetail("ATTEMPT-VIRTUAL-001").getRequestNo());
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '待回调', "
+                    + "attempt_status_type = 'warn' "
                     + "WHERE attempt_no = 'ATTEMPT-VIRTUAL-001'");
             session.clearCache();
             assertEquals(7L, mapper.findOverviewSummary(overviewQuery).getTotalRequestCount());

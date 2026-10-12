@@ -1559,6 +1559,7 @@ function isConsistentPaymentRequestStatus(status, statusType) {
     "等待回调": "warn",
     "待回调": "warn",
     "渠道提交中": "warn",
+    "渠道流水归属冲突，待人工核查": "danger",
     "待人工确认": "warn",
     "已关闭": "danger"
   }[status.trim()];

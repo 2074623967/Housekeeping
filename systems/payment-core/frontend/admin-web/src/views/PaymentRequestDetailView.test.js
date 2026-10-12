@@ -9,6 +9,11 @@ test("identifies unaccepted request submissions before operators query the payme
   assert.match(source, /detail\.requestStatus === '渠道提交中'[\s\S]*勿主动查单或重复提交/);
 });
 
+test("flags collided channel transactions for manual review", () => {
+  assert.match(source, /detail\.requestStatus === '渠道流水归属冲突，待人工核查'[^>]*>渠道流水归属冲突/);
+  assert.match(source, /detail\.requestStatus === '渠道流水归属冲突，待人工核查'[\s\S]*勿主动查单、重复提交或绑定争议流水/);
+});
+
 test("preserves payment scene in payment request details and cashier entry", () => {
   assert.match(source, /prepayOrderNo: detail\.value\.prepayOrderNo,[\s\S]*payScene: detail\.value\.payScene/);
   assert.match(source, /buildAppWebCashierUrl\(detail\.value\.prepayOrderNo, undefined, detail\.value\.payScene\)/);
