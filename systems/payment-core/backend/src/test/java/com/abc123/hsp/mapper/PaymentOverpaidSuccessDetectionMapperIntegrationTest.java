@@ -115,6 +115,31 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
     }
 
     @Test
+    void shouldGuideChannelTransactionConflictToManualReview() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, order_no, customer_name, "
+                    + "amount, payment_method, channel_code, status, status_type, created_at) VALUES "
+                    + "('PAY-CHANNEL-CONFLICT', 'ORD-CONFLICT', '客户', 10.00, "
+                    + "'微信', 'wx_h5', 'WAIT_CALLBACK', 'danger', NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                    + "VALUES ('PAY-CHANNEL-CONFLICT', '渠道流水归属冲突，待人工核查', NOW())");
+            PaymentIssueMapper mapper = session.getMapper(PaymentIssueMapper.class);
+
+            PaymentIssueRowDTO issue = mapper.findByIssueNo("ISSUE-WAIT-PAY-CHANNEL-CONFLICT");
+            assertNotNull(issue);
+            assertTrue(issue.getIssueSummary().contains("流水归属冲突"));
+            assertTrue(issue.getRootCauseHint().contains("勿主动查单"));
+            assertTrue(issue.getRecommendedAction().contains("人工核查"));
+            assertTrue(issue.getResponsibilityHint().contains("流水归属"));
+            PaymentIssueQueryDTO query = new PaymentIssueQueryDTO();
+            query.setPaymentOrderId("PAY-CHANNEL-CONFLICT");
+            assertTrue(mapper.responsibilitySummary(query).stream().anyMatch(summary ->
+                    summary.getSuggestedAction().contains("流水归属")));
+        }
+    }
+
+    @Test
     void shouldRouteOverpaidSuccessToClearingAndBlockDayEndReadiness() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);

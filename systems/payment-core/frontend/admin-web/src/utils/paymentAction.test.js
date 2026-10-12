@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentDetailOperationSuggestions, paymentRecordQuerySuggestion } from "./paymentAction.js";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, isChannelTransactionConflict, paymentDetailOperationSuggestions, paymentRecordQuerySuggestion } from "./paymentAction.js";
 
 test("distinguishes persisted callback waiting from unaccepted channel submission", () => {
   assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", "渠道提交中", null), true);
@@ -36,6 +36,17 @@ test("only queries readable payments or open submitted attempts", () => {
   assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", " - "), false);
   assert.equal(canQueryPaymentChannel("PREPAY_CREATED", "处理中"), false);
   assert.equal(canQueryPaymentChannel("RISK_REJECTED", null), false);
+});
+
+test("channel transaction collisions require manual review instead of channel queries", () => {
+  const conflict = "渠道流水归属冲突，待人工核查";
+  assert.equal(isChannelTransactionConflict(` ${conflict} `), true);
+  assert.equal(isChannelSubmissionUnaccepted("WAIT_CALLBACK", conflict, null), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", conflict, null, null, "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", conflict, null, "WX-COLLISION", "wx_h5"), false);
+  assert.match(paymentDetailOperationSuggestions({ status: "WAIT_CALLBACK", latestAttemptStatus: conflict, notifyLogs: [] })[0], /人工核查.*勿主动查单/);
+  assert.match(paymentDetailOperationSuggestions({ status: "PAYING", latestAttemptStatus: conflict, notifyLogs: [] })[0], /人工核查.*勿主动查单/);
+  assert.match(paymentRecordQuerySuggestion({ paymentStatus: "支付中", latestAttemptStatus: conflict }), /人工核查.*勿主动查单/);
 });
 
 test("only closes unpaid local payment states without a channel attempt", () => {

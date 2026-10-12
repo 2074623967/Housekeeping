@@ -107,6 +107,9 @@ const alertSuggestions = computed(() => {
   if (alert.alertType === "CHANNEL_SUBMIT_UNCONFIRMED") {
     suggestions.push("先核对渠道受理与支付尝试日志，等待状态推进；勿主动查单或重复提交。");
   }
+  if (alert.alertType === "CHANNEL_TRANSACTION_CONFLICT") {
+    suggestions.push("渠道流水归属冲突，人工核查原始渠道事实及提交日志；勿主动查单、重复提交或绑定争议流水。");
+  }
   if (alert.alertTitle?.includes("待回调") || alert.alertMessage?.includes("待回调")) {
     suggestions.push("优先联查支付单管理页，确认是否存在 WAIT_CALLBACK 积压和渠道回调延迟。");
   }
@@ -143,10 +146,14 @@ const channelSuggestions = computed(() => {
   if ((channel.unacceptedCount || 0) > 0) {
     suggestions.push("当前渠道存在提交受理未确认支付，先核对渠道受理结果，勿主动查单或重复提交。");
   }
+  if (channel.riskHint?.includes("流水归属冲突")) {
+    suggestions.push("当前渠道存在流水归属冲突，需人工核查原始渠道事实；勿主动查单或重复提交。");
+  }
   if (isHighRiskChannel(channel)) {
     suggestions.push("当前渠道为高风险，建议检查渠道可用性、商户配置和返回码分布。");
   }
-  if ((channel.pendingCount || 0) === 0 && (channel.unacceptedCount || 0) === 0) {
+  if ((channel.pendingCount || 0) === 0 && (channel.unacceptedCount || 0) === 0
+    && !channel.riskHint?.includes("流水归属冲突")) {
     suggestions.push("当前渠道无待处理积压，可回看支付流水确认路由和回调轨迹是否稳定。");
   }
   return suggestions;

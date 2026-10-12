@@ -90,7 +90,7 @@
                                       ORDER BY attempt.created_at DESC, attempt.id DESC
                                       LIMIT 1
                                   )
-                                    AND latest_attempt.attempt_status = '渠道提交中'))
+                                    AND latest_attempt.attempt_status IN ('渠道提交中', '渠道流水归属冲突，待人工核查')))
             ), 0) AS pendingCallbackCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -504,6 +504,21 @@
                       AND latest_attempt.attempt_status = '渠道提交中')
     </sql>
 
+    <sql id="channelTransactionConflictForIssueAlert">
+        EXISTS (SELECT 1
+                FROM t_payment_attempt latest_attempt
+                WHERE latest_attempt.id = (
+                    SELECT attempt.id
+                    FROM t_payment_attempt attempt
+                    WHERE attempt.payment_order_id = po.payment_order_id
+                      AND CHAR_LENGTH(attempt.payment_order_id) = CHAR_LENGTH(po.payment_order_id)
+                      AND CAST(attempt.payment_order_id AS BINARY(256)) = CAST(po.payment_order_id AS BINARY(256))
+                    ORDER BY attempt.created_at DESC, attempt.id DESC
+                    LIMIT 1
+                )
+                  AND latest_attempt.attempt_status = '渠道流水归属冲突，待人工核查')
+    </sql>
+
     <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
         SELECT issue_sla.issue_no AS issueNo,
                issue_sla.payment_order_id AS paymentOrderId,
@@ -533,7 +548,10 @@
                    ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
                                LPAD(roster.effective_end_hour, 2, '0'), ':00')
                END AS effectiveWindow,
-               CASE WHEN issue_sla.submission_unconfirmed = 1
+               CASE WHEN issue_sla.channel_conflict = 1
+                    THEN CONCAT('支付异常 ', issue_sla.issue_no, ' 渠道流水归属冲突，已超过 ', issue_sla.severity,
+                                ' SLA，请人工核查渠道原始事实与流水归属，勿主动查单或重复提交。')
+                    WHEN issue_sla.submission_unconfirmed = 1
                     THEN CONCAT('支付异常 ', issue_sla.issue_no, ' 渠道受理未确认，已超过 ', issue_sla.severity,
                                 ' SLA，请核对渠道受理与提交日志，勿主动查单或重复提交。')
                     ELSE CONCAT('支付异常 ', issue_sla.issue_no, ' 已超过 ', issue_sla.severity,
@@ -546,6 +564,8 @@
                    'P1' AS severity,
                    CASE WHEN <include refid="unacceptedSubmissionForIssueAlert"/> THEN 1 ELSE 0 END
                        AS submission_unconfirmed,
+                   CASE WHEN <include refid="channelTransactionConflictForIssueAlert"/> THEN 1 ELSE 0 END
+                       AS channel_conflict,
                    po.created_at
             FROM t_payment_order po
             WHERE po.status = 'WAIT_CALLBACK'
@@ -555,6 +575,7 @@
                    '回调处理待跟进' AS issue_type,
                    'P1' AS severity,
                    0 AS submission_unconfirmed,
+                   0 AS channel_conflict,
                    pnl.created_at
             FROM t_payment_notify_log pnl
             WHERE pnl.notify_status = '待处理'
@@ -564,6 +585,7 @@
                    '下游事件发布失败' AS issue_type,
                    'P2' AS severity,
                    0 AS submission_unconfirmed,
+                   0 AS channel_conflict,
                    pe.created_at
             FROM t_payment_event pe
             WHERE <include refid="exactFailedOrDeadLetterEventStatus"/>
@@ -573,6 +595,7 @@
                    '退款提交结果待核查' AS issue_type,
                    'P1' AS severity,
                    0 AS submission_unconfirmed,
+                   0 AS channel_conflict,
                    COALESCE(pe.last_published_at, pe.created_at) AS created_at
             FROM t_payment_event pe
             WHERE pe.event_type = 'REFUND_SUBMIT'
@@ -583,6 +606,7 @@
                    '命中停用渠道' AS issue_type,
                    'P2' AS severity,
                    0 AS submission_unconfirmed,
+                   0 AS channel_conflict,
                    po.created_at
             FROM t_payment_order po
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
@@ -989,8 +1013,9 @@
     </sql>
 
     <sql id="acceptedPaymentQueryAttempt">
-        NOT (latest_attempt.attempt_status = '渠道提交中'
-             AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL)
+        latest_attempt.attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
+        AND NOT (latest_attempt.attempt_status = '渠道提交中'
+                 AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL)
     </sql>
 
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">

@@ -846,6 +846,13 @@ test("rejects empty or mismatched payment detail responses", async (context) => 
     normalizePaymentDetailResult(validDetail, "PAY-001"),
     validDetail
   );
+  const conflictDetail = { ...validDetail, status: "PAYING", statusType: "danger",
+    channelTransactionNo: null, latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null, successAt: null };
+  assert.deepEqual(normalizePaymentDetailResult(conflictDetail, "PAY-001"), conflictDetail);
+  assert.throws(() => normalizePaymentDetailResult({
+    ...conflictDetail, latestAttemptStatus: "处理中"
+  }, "PAY-001"), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL");
   assert.throws(
     () => normalizePaymentDetailResult({ ...validDetail, channelTransactionNo: undefined }, "PAY-001"),
     (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL"
@@ -942,6 +949,13 @@ test("rejects payment pages with inconsistent status and payment facts", () => {
     normalizePaymentListPage({ items: [validRow], total: 1 }).items,
     [validRow]
   );
+  const conflictRow = { ...validRow, status: "WAIT_CALLBACK", statusType: "danger",
+    channelTransactionNo: null, latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null };
+  assert.deepEqual(normalizePaymentListPage({ items: [conflictRow], total: 1 }).items, [conflictRow]);
+  assert.throws(() => normalizePaymentListPage({
+    items: [{ ...conflictRow, latestAttemptStatus: "处理中" }], total: 1
+  }), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-LIST");
   for (const prepayBindingIssue of ["MULTIPLE_PREPAY_BINDINGS", "PREPAY_BINDING_MISSING"]) {
     const diagnostic = { ...validRow, prepayBindingIssue, payScene: null,
       successFactIssue: "SUCCESS_FACT_MISMATCH" };
@@ -2107,6 +2121,13 @@ test("rejects payment record rows with invalid or reversed lifecycle timestamps"
     normalizePaymentRecordListPage({ items: [validRow], total: 1 }).items,
     [validRow]
   );
+  const conflictRow = { ...validRow, statusType: "danger",
+    externalTransactionNo: null, latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null };
+  assert.deepEqual(normalizePaymentRecordListPage({ items: [conflictRow], total: 1 }).items, [conflictRow]);
+  assert.throws(() => normalizePaymentRecordListPage({
+    items: [{ ...conflictRow, latestAttemptStatus: "处理中" }], total: 1
+  }), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-RECORD-LIST");
   for (const invalidRow of [
     { ...validRow, expireTime: "not-a-datetime" },
     { ...validRow, updatedAt: "2026-09-27 09:59:59" },
@@ -8178,6 +8199,14 @@ test("rejects incomplete or mismatched admin prepay responses", async (context) 
     latestAttemptCompletedAt: null
   };
   assert.doesNotThrow(() => normalizePaymentPrepayResult(failedPrepay, "ORD-001"));
+  const conflictPrepay = { ...validPrepay, paymentStatus: "PAYING",
+    cashierStatus: "结果待确认", cashierStatusType: "danger",
+    latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null };
+  assert.doesNotThrow(() => normalizePaymentPrepayResult(conflictPrepay, "ORD-001"));
+  assert.throws(() => normalizePaymentPrepayResult({
+    ...conflictPrepay, latestAttemptStatus: "处理中"
+  }, "ORD-001"), (error) => error.code === "PAYMENT-CLIENT-INVALID-PREPAY");
   for (const attemptFacts of [
     { latestAttemptStatus: "FAILED", latestAttemptStatusType: "success" },
     { latestAttemptStatus: "SUCCESS", latestAttemptStatusType: "success" }

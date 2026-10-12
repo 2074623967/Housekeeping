@@ -5,7 +5,7 @@ import { matchesPaymentDetailSnapshot, paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl, buildReconciliationChainUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute, paymentsRoute } from "../router/listRoutes";
-import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentDetailOperationSuggestions } from "../utils/paymentAction";
+import { canClosePaymentLocally, canQueryPaymentChannel, isChannelSubmissionUnaccepted, isChannelTransactionConflict, paymentDetailOperationSuggestions } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -183,6 +183,9 @@ function canRunQuery() {
 function queryActionAvailabilityHint() {
   if (canRunQuery()) {
     return "当前可执行";
+  }
+  if (isChannelTransactionConflict(detail.value?.latestAttemptStatus)) {
+    return "渠道流水归属冲突，需人工核查，当前不可查单";
   }
   if (isChannelSubmissionUnaccepted(
     detail.value?.status, detail.value?.latestAttemptStatus, detail.value?.channelTransactionNo
@@ -392,7 +395,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           </div>
           <div class="detail-card">
             <div class="detail-label">当前状态</div>
-            <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.status, detail.latestAttemptStatus, detail.channelTransactionNo)" class="badge warn">渠道受理未确认</span></div>
+            <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.status, detail.latestAttemptStatus, detail.channelTransactionNo)" class="badge warn">渠道受理未确认</span> <span v-if="isChannelTransactionConflict(detail.latestAttemptStatus)" class="badge danger">渠道流水归属冲突</span></div>
           </div>
         </div>
 

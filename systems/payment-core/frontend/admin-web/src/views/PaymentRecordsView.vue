@@ -5,7 +5,7 @@ import { paymentRecordApi } from "../api/client";
 import { paymentRecordDetailRoute } from "../router/detailRoutes";
 import { refundsRoute } from "../router/listRoutes";
 import { sumPaymentAmounts } from "../utils/paymentAmount";
-import { isChannelSubmissionUnaccepted } from "../utils/paymentAction";
+import { isChannelSubmissionUnaccepted, isChannelTransactionConflict } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -323,6 +323,7 @@ onMounted(loadRows);
                   </span>
                   <span v-if="column.key === 'paymentStatus' && row.successFactIssue"> · {{ row.successFactIssue }}</span>
                   <span v-if="column.key === 'paymentStatus' && isChannelSubmissionUnaccepted(row.paymentStatus, row.latestAttemptStatus, row.externalTransactionNo)" class="badge warn">渠道受理未确认</span>
+                  <span v-if="column.key === 'paymentStatus' && isChannelTransactionConflict(row.latestAttemptStatus)" class="badge danger">渠道流水归属冲突</span>
                   <span v-if="column.key === 'paymentType' && row.prepayBindingIssue" class="badge warn">{{ row.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付缺失待核查" : "多预付待核查" }}</span>
                   <span v-if="column.key === 'refundedAmount' && row.unverifiedRefundCount > 0" class="badge warn">
                     {{ row.unverifiedRefundCount }} 笔待核查
@@ -348,7 +349,7 @@ onMounted(loadRows);
               <div class="detail-card"><span>支付场景</span><strong>{{ selectedRow.payScene || "—" }}</strong></div>
               <div v-if="selectedRow.prepayBindingIssue" class="detail-card"><span>预付归属</span><strong>{{ selectedRow.prepayBindingIssue === "PREPAY_BINDING_MISSING" ? "预付归属缺失，待人工核查" : "多预付冲突，待人工核查" }}</strong></div>
               <div class="detail-card"><span>业务订单号</span><strong>{{ selectedRow.businessOrderNo || "—" }}</strong></div>
-              <div class="detail-card"><span>支付状态</span><strong>{{ selectedRow.paymentStatus || "—" }} <span v-if="isChannelSubmissionUnaccepted(selectedRow.paymentStatus, selectedRow.latestAttemptStatus, selectedRow.externalTransactionNo)" class="badge warn">渠道受理未确认</span></strong></div>
+              <div class="detail-card"><span>支付状态</span><strong>{{ selectedRow.paymentStatus || "—" }} <span v-if="isChannelSubmissionUnaccepted(selectedRow.paymentStatus, selectedRow.latestAttemptStatus, selectedRow.externalTransactionNo)" class="badge warn">渠道受理未确认</span> <span v-if="isChannelTransactionConflict(selectedRow.latestAttemptStatus)" class="badge danger">渠道流水归属冲突</span></strong></div>
               <div class="detail-card"><span>最近尝试</span><strong>{{ selectedRow.latestAttemptStatus || "—" }}</strong></div>
               <div v-if="selectedRow.successFactIssue" class="detail-card"><span>支付成功事实</span><strong>{{ selectedRow.successFactIssue }}</strong></div>
               <div class="detail-card"><span>支付类型</span><strong>{{ selectedRow.paymentType || "—" }}</strong></div>
@@ -369,6 +370,7 @@ onMounted(loadRows);
               <div class="ops-row"><span>优先联查</span><span>{{ selectedRow.successFactIssue ? "支付记录详情 / 支付请求 / 处理日志；成功支付详情不可用" : "支付记录详情 / 支付单详情 / 支付请求" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>状态、已退金额、外部流水号、通知地址</span></div>
               <div v-if="isChannelSubmissionUnaccepted(selectedRow.paymentStatus, selectedRow.latestAttemptStatus, selectedRow.externalTransactionNo)" class="ops-row"><span>当前阶段</span><span>渠道受理未确认，先核对最近支付尝试与提交日志，等待状态推进；勿主动查单或重复提交。</span></div>
+              <div v-else-if="isChannelTransactionConflict(selectedRow.latestAttemptStatus)" class="ops-row"><span>当前阶段</span><span>渠道流水归属冲突，需人工核查渠道原始事实与流水归属；勿主动查单、重复提交或绑定争议流水。</span></div>
               <div v-else class="ops-row"><span>典型场景</span><span>收款已成功但业务未收口、部分退款后复核</span></div>
             </div>
           </div>

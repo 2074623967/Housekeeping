@@ -25,6 +25,22 @@
                       AND latest_attempt.attempt_status = '渠道提交中')
     </sql>
 
+    <sql id="channelTransactionConflict">
+        p.status = 'WAIT_CALLBACK'
+        AND EXISTS (SELECT 1
+                    FROM t_payment_attempt latest_attempt
+                    WHERE latest_attempt.id = (
+                        SELECT attempt.id
+                        FROM t_payment_attempt attempt
+                        WHERE attempt.payment_order_id = p.payment_order_id
+                          AND CHAR_LENGTH(attempt.payment_order_id) = CHAR_LENGTH(p.payment_order_id)
+                          AND CAST(attempt.payment_order_id AS BINARY(256)) = CAST(p.payment_order_id AS BINARY(256))
+                        ORDER BY attempt.created_at DESC, attempt.id DESC
+                        LIMIT 1
+                    )
+                      AND latest_attempt.attempt_status = '渠道流水归属冲突，待人工核查')
+    </sql>
+
     <select id="findSummary" resultType="com.abc123.hsp.dto.PaymentMonitorSummaryDTO">
         SELECT payment_summary.total_count AS totalCount,
                payment_summary.success_count AS successCount,
@@ -38,6 +54,7 @@
                (
                    CASE WHEN payment_summary.wait_callback_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_summary.unaccepted_submit_count &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN payment_summary.channel_conflict_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_summary.missing_success_time_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_success_fact_summary.mismatch_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(refund_summary.missing_success_time_count, 0) &gt; 0 THEN 1 ELSE 0 END +
@@ -55,10 +72,13 @@
                    COALESCE(SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END), 0)
                        AS pending_payment_count,
                    COALESCE(SUM(CASE WHEN p.status = 'WAIT_CALLBACK'
-                        AND NOT (<include refid="unacceptedChannelSubmission"/>) THEN 1 ELSE 0 END), 0)
+                        AND NOT (<include refid="unacceptedChannelSubmission"/>)
+                        AND NOT (<include refid="channelTransactionConflict"/>) THEN 1 ELSE 0 END), 0)
                        AS wait_callback_count,
                    COALESCE(SUM(CASE WHEN <include refid="unacceptedChannelSubmission"/>
                         THEN 1 ELSE 0 END), 0) AS unaccepted_submit_count,
+                   COALESCE(SUM(CASE WHEN <include refid="channelTransactionConflict"/>
+                        THEN 1 ELSE 0 END), 0) AS channel_conflict_count,
                    COALESCE(SUM(CASE WHEN status = 'SUCCESS' AND success_at IS NULL THEN 1 ELSE 0 END), 0)
                        AS missing_success_time_count,
                    COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0) AS closed_payment_count
@@ -135,9 +155,10 @@
                    '%'
                ) AS successRate,
                CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN trusted_success = 1 THEN amount ELSE 0 END), 0), 2)) AS successAmount,
-               SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) AS pendingCount,
+               SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 AND channel_conflict = 0 THEN 1 ELSE 0 END) AS pendingCount,
                SUM(unaccepted_submit) AS unacceptedCount,
                CASE
+                   WHEN SUM(channel_conflict) &gt; 0 THEN 'P1'
                    WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
                    WHEN SUM(unaccepted_submit) &gt; 0 THEN 'P2'
                    WHEN (
@@ -148,6 +169,7 @@
                    ELSE '正常'
                END AS riskLevel,
                CASE
+                   WHEN SUM(channel_conflict) &gt; 0 THEN 'danger'
                    WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
                    WHEN SUM(unaccepted_submit) &gt; 0 THEN 'warn'
                    WHEN (
@@ -158,6 +180,7 @@
                    ELSE 'success'
                END AS riskLevelType,
                CASE
+                   WHEN SUM(channel_conflict) &gt; 0 THEN '存在渠道流水归属冲突，需人工核查，勿主动查单或重复提交。'
                    WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' AND unaccepted_submit = 0 THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
                    WHEN SUM(unaccepted_submit) &gt; 0 THEN '渠道受理未确认，先核对渠道受理结果，勿主动查单或重复提交。'
                    WHEN (
@@ -168,7 +191,8 @@
                    ELSE '当前渠道表现稳定，可持续观察。'
                END AS riskHint
         FROM (SELECT p.*, CASE WHEN <include refid="trustedSuccess"/> THEN 1 ELSE 0 END AS trusted_success,
-                     CASE WHEN <include refid="unacceptedChannelSubmission"/> THEN 1 ELSE 0 END AS unaccepted_submit
+                     CASE WHEN <include refid="unacceptedChannelSubmission"/> THEN 1 ELSE 0 END AS unaccepted_submit,
+                     CASE WHEN <include refid="channelTransactionConflict"/> THEN 1 ELSE 0 END AS channel_conflict
               FROM t_payment_order p) payment_facts
         WHERE EXISTS (
             SELECT 1
@@ -201,6 +225,22 @@
         FROM t_payment_order p
         WHERE p.status = 'WAIT_CALLBACK'
           AND NOT (<include refid="unacceptedChannelSubmission"/>)
+          AND NOT (<include refid="channelTransactionConflict"/>)
+        HAVING COUNT(1) &gt; 0
+
+        UNION ALL
+
+        SELECT 9 AS alertSortNo,
+               'CHANNEL_TRANSACTION_CONFLICT' AS alertType,
+               '渠道流水归属冲突待核查' AS alertTitle,
+               '渠道流水已被其他支付单占用，本单不得绑定争议流水。' AS alertMessage,
+               'P1' AS alertLevel,
+               'danger' AS alertLevelType,
+               COUNT(1) AS affectedCount,
+               '人工核查渠道流水归属和提交日志，勿主动查单或重复提交。' AS suggestedAction,
+               '/payment-issues?issueType=待回调未收口' AS actionRoute
+        FROM t_payment_order p
+        WHERE <include refid="channelTransactionConflict"/>
         HAVING COUNT(1) &gt; 0
 
         UNION ALL

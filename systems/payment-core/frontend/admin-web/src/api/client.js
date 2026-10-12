@@ -682,7 +682,7 @@ export function normalizePaymentActionResult(
         && normalizeAmountForComparison(data.amount) !== normalizeAmountForComparison(expectedAmount))
       || typeof data.status !== "string"
       || !data.status.trim()
-      || !isConsistentPaymentOrderStatus(data.status, data.statusType)
+      || !isConsistentPaymentOrderStatus(data.status, data.statusType, data.latestAttemptStatus)
       || !isConsistentPaymentSuccessTime(data.status, data.successAt)
       || !isConsistentPaymentChannel(data.status, data.channel)
       || !isConsistentPaymentChannelTransaction(data.status, data.channelTransactionNo)
@@ -728,7 +728,7 @@ export function normalizePaymentDetailResult(data, expectedPaymentOrderId) {
       || !data.paymentMethod.trim()
       || typeof data.channel !== "string"
       || !data.channel.trim()
-      || !isConsistentPaymentOrderStatus(data.status, data.statusType)
+      || !isConsistentPaymentOrderStatus(data.status, data.statusType, data.latestAttemptStatus)
       || !isConsistentPaymentSuccessTime(data.status, data.successAt)
       || !isConsistentPaymentChannelTransaction(data.status, data.channelTransactionNo)
       || !isValidOptionalStatusPair(data.latestAttemptStatus, data.latestAttemptStatusType)
@@ -762,7 +762,7 @@ function isOptionalCollection(value) {
   return value == null || Array.isArray(value);
 }
 
-function isConsistentPaymentOrderStatus(status, statusType) {
+function isConsistentPaymentOrderStatus(status, statusType, latestAttemptStatus = null, issueSummary = null) {
   if (typeof status !== "string" || !status.trim()
       || typeof statusType !== "string" || !statusType.trim()) {
     return false;
@@ -778,6 +778,12 @@ function isConsistentPaymentOrderStatus(status, statusType) {
     CLOSED: "danger",
     FAIL: "danger"
   }[status.trim().toUpperCase()];
+  if (["WAIT_CALLBACK", "PAYING"].includes(status.trim().toUpperCase())
+      && statusType.trim().toLowerCase() === "danger"
+      && (latestAttemptStatus === "渠道流水归属冲突，待人工核查"
+        || (typeof issueSummary === "string" && issueSummary.includes("渠道流水归属冲突")))) {
+    return true;
+  }
   return Boolean(expectedType) && statusType.trim().toLowerCase() === expectedType;
 }
 
@@ -915,7 +921,7 @@ export function normalizePaymentListPage(data) {
             || (item.latestAttemptStatusType !== null && typeof item.latestAttemptStatusType !== "string")
             || (item.latestAttemptCompletedAt !== null && !isValidDateTime(item.latestAttemptCompletedAt))
           ))
-          || (!isSuccessFactIssue && (!isConsistentPaymentOrderStatus(item.status, item.statusType)
+          || (!isSuccessFactIssue && (!isConsistentPaymentOrderStatus(item.status, item.statusType, item.latestAttemptStatus)
             || typeof item.channel !== "string"
             || !item.channel.trim()
             || !isConsistentPaymentChannelTransaction(item.status, item.channelTransactionNo)
@@ -986,7 +992,7 @@ export function normalizePaymentRecordDetailResult(data, expectedPaymentOrderId)
       || !Number.isFinite(normalizeAmount(data.paymentAmount))
       || typeof data.paymentStatus !== "string"
       || !data.paymentStatus.trim()
-      || !isConsistentPaymentRecordStatus(data.paymentStatus, data.statusType)
+      || !isConsistentPaymentRecordStatus(data.paymentStatus, data.statusType, data.latestAttemptStatus)
       || !isValidPaymentRecordFactSnapshot(data)
       || !isConsistentPaymentRecordTimes(data.expireTime, data.createdAt, data.updatedAt,
         data.prepayBindingIssue != null)
@@ -1039,7 +1045,7 @@ export function matchesPaymentRecordDetailSnapshot(snapshot, result) {
       === normalizeAmountForComparison(snapshot.paymentAmount));
 }
 
-function isConsistentPaymentRecordStatus(status, statusType) {
+function isConsistentPaymentRecordStatus(status, statusType, latestAttemptStatus = null) {
   if (typeof status !== "string" || !status.trim()
       || typeof statusType !== "string" || !statusType.trim()) {
     return false;
@@ -1050,6 +1056,10 @@ function isConsistentPaymentRecordStatus(status, statusType) {
     "已关闭": "danger",
     "支付失败": "danger"
   }[status.trim()];
+  if (status.trim() === "支付中" && statusType.trim().toLowerCase() === "danger"
+      && latestAttemptStatus === "渠道流水归属冲突，待人工核查") {
+    return true;
+  }
   return Boolean(expectedType) && statusType.trim().toLowerCase() === expectedType;
 }
 
@@ -1217,7 +1227,7 @@ export function normalizePaymentRecordListPage(data) {
           || !item.paymentChannel.trim()
           || typeof item.paymentType !== "string"
           || !item.paymentType.trim()
-          || !isConsistentPaymentRecordStatus(item.paymentStatus, item.statusType)
+          || !isConsistentPaymentRecordStatus(item.paymentStatus, item.statusType, item.latestAttemptStatus)
           || !isValidPaymentRecordFactSnapshot(item)
           || !isConsistentPaymentRecordAttemptStatus(
             item.latestAttemptStatus, item.latestAttemptStatusType
@@ -2319,7 +2329,7 @@ function isConsistentPaymentIssueDetailStatus(data) {
     "订单成功收款超额": "danger"
   })
     && isConsistentPaymentIssueStatus(data.severity, data.severityType, { P1: "danger", P2: "warn" })
-    && isConsistentPaymentOrderStatus(data.paymentStatus, data.paymentStatusType)
+    && isConsistentPaymentOrderStatus(data.paymentStatus, data.paymentStatusType, null, data.issueSummary)
     && isConsistentPaymentIssueStatus(data.handlingStatus, data.handlingStatusType, {
       "待分派": "warn",
       "已分派": "info",
@@ -2409,7 +2419,7 @@ export function normalizePaymentIssueListPage(data) {
           || !item.channelCode.trim()
           || !isConsistentPaymentIssueStatus(item.issueType, item.issueTypeTag, issueTypeTypes)
           || !isConsistentPaymentIssueStatus(item.severity, item.severityType, severityTypes)
-          || !isConsistentPaymentOrderStatus(item.paymentStatus, item.paymentStatusType)
+          || !isConsistentPaymentOrderStatus(item.paymentStatus, item.paymentStatusType, null, item.issueSummary)
           || !isConsistentPaymentIssueStatus(item.handlingStatus, item.handlingStatusType, handlingStatusTypes)
           || typeof item.assignee !== "string"
           || !item.assignee.trim()
@@ -3579,7 +3589,7 @@ export function normalizePaymentPrepayResult(
       || !PAYMENT_STATUSES.has(data.paymentStatus.trim().toUpperCase())
       || typeof data.cashierStatus !== "string"
       || CASHIER_STATUS_TYPES.get(data.cashierStatus.trim()) !== data.cashierStatusType
-      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus)
+      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus, data.latestAttemptStatus)
       || !isConsistentPaymentSuccessTime(data.paymentStatus, data.successAt)
       || !isConsistentPaymentChannelTransaction(data.paymentStatus, data.channelTransactionNo)
       || !isValidOptionalStatusPair(data.latestAttemptStatus, data.latestAttemptStatusType)
@@ -3616,7 +3626,10 @@ export function normalizePaymentPrepayResult(
   return data;
 }
 
-function isConsistentPaymentCashierStatus(paymentStatus, cashierStatus) {
+function isConsistentPaymentCashierStatus(paymentStatus, cashierStatus, latestAttemptStatus) {
+  if (paymentStatus.trim().toUpperCase() === "PAYING" && cashierStatus.trim() === "结果待确认") {
+    return latestAttemptStatus === "渠道流水归属冲突，待人工核查";
+  }
   const expectedCashierStatuses = PAYMENT_CASHIER_STATUSES.get(
     paymentStatus.trim().toUpperCase()
   );

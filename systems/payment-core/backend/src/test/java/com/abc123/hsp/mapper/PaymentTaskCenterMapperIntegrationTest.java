@@ -325,6 +325,33 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldKeepChannelTransactionConflictOutOfQueriesAndEscalateForManualReview() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            int acceptedCallbacks = mapper.findOverviewSummary().getPendingCallbackCount();
+            statement.executeUpdate("UPDATE t_payment_order SET created_at = TIMESTAMPADD(MINUTE, -61, NOW()) "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道流水归属冲突，待人工核查' "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            session.clearCache();
+
+            assertEquals(acceptedCallbacks - 1, mapper.findOverviewSummary().getPendingCallbackCount());
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 20, 100).contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100).contains("PAY-NO-HISTORY"));
+            assertEquals(5, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(2, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
+            PaymentIssueAlertCandidateDTO alert = mapper.findOverdueIssueAlertCandidates(100).stream()
+                    .filter(candidate -> "ISSUE-WAIT-PAY-NO-HISTORY".equals(candidate.getIssueNo()))
+                    .findFirst().get();
+            org.junit.jupiter.api.Assertions.assertTrue(alert.getAlertContent().contains("渠道流水归属冲突"));
+            org.junit.jupiter.api.Assertions.assertTrue(alert.getAlertContent().contains("勿主动查单"));
+        }
+    }
+
+    @Test
     void shouldNotCountUnacceptedChannelSubmissionAsPendingCallback() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

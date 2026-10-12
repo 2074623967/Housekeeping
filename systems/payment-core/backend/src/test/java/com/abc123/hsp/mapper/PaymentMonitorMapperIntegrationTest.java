@@ -193,6 +193,32 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
+    void shouldAlertOnChannelTransactionConflictWithoutTreatingItAsCallbackBacklog() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道流水归属冲突，待人工核查' "
+                    + "WHERE payment_order_id = 'PAY-002'");
+            session.clearCache();
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+
+            PaymentAlertItemDTO conflict = mapper.findAlerts().stream()
+                    .filter(alert -> "CHANNEL_TRANSACTION_CONFLICT".equals(alert.getAlertType()))
+                    .findFirst().get();
+            assertEquals(Integer.valueOf(1), conflict.getAffectedCount());
+            org.junit.jupiter.api.Assertions.assertTrue(conflict.getSuggestedAction().contains("勿主动查单"));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.findAlerts().stream()
+                    .anyMatch(alert -> "WAIT_CALLBACK_TIMEOUT".equals(alert.getAlertType())
+                            || "CHANNEL_SUBMIT_UNCONFIRMED".equals(alert.getAlertType())));
+            assertEquals(Integer.valueOf(mapper.findAlerts().size()), mapper.findSummary().getAlertCount());
+            PaymentChannelMetricDTO metric = mapper.findChannelMetrics().stream()
+                    .filter(item -> "channel-b".equals(item.getChannelCode())).findFirst().get();
+            assertEquals(Integer.valueOf(0), metric.getPendingCount());
+            assertEquals(Integer.valueOf(0), metric.getUnacceptedCount());
+            org.junit.jupiter.api.Assertions.assertTrue(metric.getRiskHint().contains("流水归属冲突"));
+        }
+    }
+
+    @Test
     void shouldExposeMissingSuccessTimeAsGlobalP1Alert() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

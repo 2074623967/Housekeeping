@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { matchesPaymentRecordDetailSnapshot, paymentApi, paymentRecordApi } from "../api/client";
 import { normalizePaymentRecordType, paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute, refundsRoute } from "../router/listRoutes";
-import { canQueryPaymentChannel, isChannelSubmissionUnaccepted, paymentRecordQuerySuggestion } from "../utils/paymentAction";
+import { canQueryPaymentChannel, isChannelSubmissionUnaccepted, isChannelTransactionConflict, paymentRecordQuerySuggestion } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -200,7 +200,8 @@ const operationSuggestions = computed(() => {
   }
   const querySuggestion = paymentRecordQuerySuggestion(detail.value);
   if ((detail.value.notifyLogs || []).length === 0
-    && !isChannelSubmissionUnaccepted(detail.value.paymentStatus, detail.value.latestAttemptStatus, detail.value.externalTransactionNo)) {
+    && !isChannelSubmissionUnaccepted(detail.value.paymentStatus, detail.value.latestAttemptStatus, detail.value.externalTransactionNo)
+    && !isChannelTransactionConflict(detail.value.latestAttemptStatus)) {
     suggestions.push("当前无回调轨迹，优先核对渠道回调是否到达与通知地址是否配置正确。");
   }
   if ((detail.value.eventLogs || []).length === 0) {
@@ -323,7 +324,7 @@ watch(currentPaymentOrderId, (paymentOrderId) => {
           <div class="detail-card">
             <div class="detail-label">支付状态</div>
             <div class="detail-value">
-              <span :class="['badge', detail.statusType]">{{ formatValue(detail.paymentStatus) }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.paymentStatus, detail.latestAttemptStatus, detail.externalTransactionNo)" class="badge warn">渠道受理未确认</span>
+              <span :class="['badge', detail.statusType]">{{ formatValue(detail.paymentStatus) }}</span> <span v-if="isChannelSubmissionUnaccepted(detail.paymentStatus, detail.latestAttemptStatus, detail.externalTransactionNo)" class="badge warn">渠道受理未确认</span> <span v-if="isChannelTransactionConflict(detail.latestAttemptStatus)" class="badge danger">渠道流水归属冲突</span>
             </div>
           </div>
           <div class="detail-card">

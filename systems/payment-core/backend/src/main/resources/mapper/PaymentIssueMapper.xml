@@ -9,6 +9,10 @@
         AND NULLIF(TRIM(po.channel_transaction_no), '') IS NULL
     </sql>
 
+    <sql id="channelTransactionConflict">
+        latest_attempt.attempt_status = '渠道流水归属冲突，待人工核查'
+    </sql>
+
     <sql id="issueUnion">
         SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
                po.payment_order_id,
@@ -22,20 +26,27 @@
                'danger' AS severity_type,
                po.status AS payment_status,
                po.status_type AS payment_status_type,
-               CASE WHEN <include refid="unacceptedWaitCallback"/>
+               CASE WHEN <include refid="channelTransactionConflict"/>
+                    THEN '渠道流水归属冲突，需人工核查原始渠道事实与流水归属'
+                    WHEN <include refid="unacceptedWaitCallback"/>
                     THEN '渠道受理未确认，支付提交结果仍待核查'
                     ELSE CONCAT('支付单仍处于待回调状态，最新回调结果=', COALESCE(latest_notify.notify_status, '无回调记录'))
                END AS issue_summary,
-               CASE WHEN <include refid="unacceptedWaitCallback"/>
+               CASE WHEN <include refid="channelTransactionConflict"/>
+                    THEN '最近支付尝试=渠道流水归属冲突，待人工核查；勿主动查单、重复提交或绑定争议流水。'
+                    WHEN <include refid="unacceptedWaitCallback"/>
                     THEN '最近支付尝试=渠道提交中；先核对提交日志与渠道受理事实，勿主动查单或重复提交。'
                     ELSE CONCAT('最近支付尝试=', COALESCE(latest_attempt.attempt_status, '无支付尝试'), '；建议优先主动查单并核对回调验签与状态收口。')
                END AS root_cause_hint,
-               CASE WHEN <include refid="unacceptedWaitCallback"/>
+               CASE WHEN <include refid="channelTransactionConflict"/>
+                    THEN '人工核查渠道流水归属与提交日志，勿主动查单或重复提交'
+                    WHEN <include refid="unacceptedWaitCallback"/>
                     THEN '查看支付单并核对渠道受理结果与提交日志，等待状态推进'
                     ELSE '查看支付单并核对回调、日志和查单结果'
                END AS recommended_action,
                CONCAT('/payments/', po.payment_order_id) AS recommended_route,
                CASE WHEN <include refid="unacceptedWaitCallback"/> THEN 1 ELSE 0 END AS submission_unconfirmed,
+               CASE WHEN <include refid="channelTransactionConflict"/> THEN 1 ELSE 0 END AS channel_conflict,
                DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_order po
                  LEFT JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
@@ -77,6 +88,7 @@
                '进入支付处理日志页，联查回调报文与处理日志' AS recommended_action,
                CONCAT('/payment-logs?paymentOrderId=', pnl.payment_order_id, '&amp;processStage=渠道回调') AS recommended_route,
                0 AS submission_unconfirmed,
+               0 AS channel_conflict,
                DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_notify_log pnl
                  INNER JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
@@ -103,6 +115,7 @@
                '进入支付事件出站页，复核发布状态并执行重发' AS recommended_action,
                CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id) AS recommended_route,
                0 AS submission_unconfirmed,
+               0 AS channel_conflict,
                DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
@@ -131,6 +144,7 @@
                CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id,
                       '&amp;publishStatus=UNKNOWN') AS recommended_route,
                0 AS submission_unconfirmed,
+               0 AS channel_conflict,
                DATE_FORMAT(COALESCE(pe.last_published_at, pe.created_at), '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
@@ -158,6 +172,7 @@
                '进入支付渠道与路由页，复核渠道状态和路由规则' AS recommended_action,
                '/payment-config?channelStatus=DISABLED' AS recommended_route,
                0 AS submission_unconfirmed,
+               0 AS channel_conflict,
                DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_order po
                  INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
@@ -187,6 +202,7 @@
                '冻结后续结算并核对超额资金，确认后发起退款或受控调账' AS recommended_action,
                CONCAT('/payments/', po.payment_order_id) AS recommended_route,
                0 AS submission_unconfirmed,
+               0 AS channel_conflict,
                DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM (
             SELECT success_payment.order_no,
@@ -241,6 +257,7 @@
                    ELSE 'info'
                END AS responsibilityGroupType,
                CASE
+                   WHEN payment_issue_union.channel_conflict = 1 THEN '人工核查渠道流水归属与提交日志，勿主动查单或重复提交'
                    WHEN payment_issue_union.submission_unconfirmed = 1 THEN '先核对渠道受理结果与提交日志，勿主动查单或重复提交'
                    WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
                    WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN '优先核对订单应收、成功支付总额、渠道流水和退款差错处理'
@@ -419,6 +436,7 @@
                    ELSE 'info'
                END AS responsibilityGroupType,
                CASE
+                   WHEN payment_issue_union.channel_conflict = 1 THEN '人工核查渠道流水归属与提交日志，勿主动查单或重复提交'
                    WHEN payment_issue_union.submission_unconfirmed = 1 THEN '先核对渠道受理结果与提交日志，勿主动查单或重复提交'
                    WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
                    WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN '优先核对订单应收、成功支付总额、渠道流水和退款差错处理'
@@ -619,6 +637,7 @@
                        ELSE 'info'
                    END AS responsibility_group_type,
                    CASE
+                       WHEN payment_issue_union.channel_conflict = 1 THEN '人工核查渠道流水归属与提交日志，勿主动查单或重复提交'
                        WHEN payment_issue_union.submission_unconfirmed = 1 THEN '先核对渠道受理结果与提交日志，勿主动查单或重复提交'
                        WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
                        WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN '优先核对订单应收、成功支付总额、渠道流水和退款差错处理'

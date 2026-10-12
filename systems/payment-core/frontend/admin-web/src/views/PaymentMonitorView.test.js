@@ -26,3 +26,10 @@ test("keeps unaccepted channel submissions visible without suggesting premature 
   assert.match(source, /channel\.pendingCount \|\| 0\) === 0 && \(channel\.unacceptedCount \|\| 0\) === 0/);
   assert.match(source, /<th>受理未确认<\/th>[\s\S]*?\{\{ item\.unacceptedCount \}\}/);
 });
+
+test("routes channel transaction conflicts to manual review without calling them callback backlog", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /alert\.alertType === "CHANNEL_TRANSACTION_CONFLICT"[\s\S]*?人工核查.*勿主动查单/);
+  assert.match(source, /channel\.riskHint\?\.includes\("流水归属冲突"\)[\s\S]*?人工核查/);
+  assert.match(source, /!channel\.riskHint\?\.includes\("流水归属冲突"\)/);
+});
