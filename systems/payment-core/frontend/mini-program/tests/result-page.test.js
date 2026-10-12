@@ -157,8 +157,12 @@ test("keeps PAYING result read-only until channel acceptance is confirmed", asyn
 test("shows disputed channel transactions without automatic queries or polling", async () => {
   let detailReads = 0;
   let queryCalls = 0;
+  let failNextRead = false;
   paymentApi.getDetail = () => {
     detailReads += 1;
+    if (failNextRead) {
+      return Promise.reject(new Error("网络暂不可用"));
+    }
     return Promise.resolve({
       ...paymentDetail("PAYING"), statusType: "danger", channelTransactionNo: null,
       latestAttemptStatus: "渠道流水归属冲突，待人工核查",
@@ -175,12 +179,24 @@ test("shows disputed channel transactions without automatic queries or polling",
     assert.match(page.data.meta.hint, /人工核对.*勿重复付款/);
     assert.equal(page.data.canQuery, false);
     assert.equal(page.data.canClose, false);
+    assert.equal(page.data.channelTransactionConflict, true);
     assert.equal(page.autoRefreshTimer == null, true);
     await page.queryPayment();
     assert.equal(queryCalls, 0);
     await page.loadDetail();
     assert.equal(detailReads, 2);
     assert.equal(page.autoRefreshTimer == null, true);
+    failNextRead = true;
+    await page.loadDetail();
+    assert.equal(page.data.staleDetail, true);
+    assert.equal(page.data.channelTransactionConflict, true);
+    assert.equal(page.data.canQuery, false);
+    assert.equal(page.autoRefreshTimer == null, true);
+    const template = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "../pages/result/index.wxml"), "utf8");
+    assert.match(template, /channelTransactionConflict \? '人工核查中' : '主动查单'/);
+    assert.match(template, /最新支付结果未能确认，\{\{channelTransactionConflict \? '上次读取为渠道流水归属冲突/);
+    assert.match(template, /请手动刷新结果并联系运营人工核查/);
   } finally {
     page.onUnload();
   }

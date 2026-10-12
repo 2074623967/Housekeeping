@@ -14,7 +14,7 @@
   <block wx:else>
     <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
     <view wx:if="{{successMessage}}" class="success-banner">{{successMessage}}</view>
-    <view wx:if="{{staleDetail}}" class="error-banner">最新支付结果未能确认，当前详情仅供核对上次读取的事实；请勿重复付款，等待自动重试或手动刷新结果。</view>
+    <view wx:if="{{staleDetail}}" class="error-banner">最新支付结果未能确认，{{channelTransactionConflict ? '上次读取为渠道流水归属冲突；勿重复付款或主动查单，请手动刷新结果并联系运营人工核查。' : '当前详情仅供核对上次读取的事实；请勿重复付款，等待自动重试或手动刷新结果。'}}</view>
     <view wx:if="{{autoRefreshPaused}}" class="error-banner">自动刷新已暂停，当前展示上次成功查询的状态；请刷新结果或联系服务方。</view>
 
     <view class="panel result-summary result-{{meta.tone}}">
@@ -61,7 +61,7 @@
       <view class="section-title">结果操作</view>
       <view class="button-row button-row-single">
         <button class="primary-button" loading="{{actionName === 'query'}}" disabled="{{loading || actionName || !canQuery}}" bindtap="queryPayment">
-          {{actionName === 'query' ? '查单中...' : '主动查单'}}
+          {{actionName === 'query' ? '查单中...' : channelTransactionConflict ? '人工核查中' : '主动查单'}}
         </button>
         <button wx:if="{{canClose}}" class="danger-button" loading="{{actionName === 'close'}}" disabled="{{loading || actionName}}" bindtap="closePayment">关闭支付单</button>
         <button class="secondary-button" disabled="{{loading || actionName}}" bindtap="loadDetail">刷新结果</button>

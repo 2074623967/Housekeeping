@@ -1,6 +1,7 @@
 const {
   canClosePayment,
   canQueryPayment,
+  isChannelTransactionConflict,
   normalizeAmount,
   PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS,
   resolvePaymentDetailRefreshDelay,
@@ -68,6 +69,7 @@ Page({
     staleDetail: false,
     canQuery: false,
     canClose: false,
+    channelTransactionConflict: false,
     autoRefreshPaused: false
   },
 
@@ -145,7 +147,9 @@ Page({
         mergedDetail.status,
         mergedDetail.channelTransactionNo,
         mergedDetail.latestAttemptStatus
-      ))
+      )),
+      channelTransactionConflict: Boolean(mergedDetail
+        && isChannelTransactionConflict(mergedDetail.latestAttemptStatus))
     });
   },
 

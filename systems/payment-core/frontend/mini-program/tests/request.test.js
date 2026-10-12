@@ -120,6 +120,22 @@ test("normalizes mini program timeout failures", async () => {
   );
 });
 
+test("preserves the first channel collision business error for cashier readback", async () => {
+  installRequestMock((options) => {
+    assert.equal(options.url, "http://localhost:18081/api/payments/submit");
+    options.success({
+      statusCode: 409,
+      data: { code: "PAYMENT-1016", message: "渠道流水归属冲突，待人工核查", requestId: "REQ-COLLISION" }
+    });
+  });
+  await assert.rejects(
+    paymentApi.submit({ prepayOrderNo: "PRE-COLLISION" }),
+    (error) => error.code === "PAYMENT-1016"
+      && error.requestId === "REQ-COLLISION"
+      && error.message.includes("渠道流水归属冲突，待人工核查")
+  );
+});
+
 test("trims mini program identifiers and API base URL across the payment flow", async () => {
   const calls = [];
   const paymentResult = {
