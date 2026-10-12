@@ -28509,3 +28509,7 @@ H2 Mapper 红测插入 TTL 已过、状态为 ` active ` 的令牌：`hasActiveS
 在退款中心完成精确幂等键、成功 outbox JSON 编码及成功回调原子性改动后，使用隔离 H2/demo 执行 `tools/dev/local-stack.sh verify payment-chain` 和 `tools/dev/local-stack.sh verify payment-query-chain`，两次写前隔离检查、九服务 HTTP 冒烟与完整 happy-path 均以退出码 `0` 通过。支付分别经 `CALLBACK` 和 `GATEWAY_QUERY` 收口；支付成功、清分、结算、退款成功、账务入账和对账事实齐备，两条链路均为 `COMPLETED`、`4/4` 阶段完成且本地可关账。对应支付单分别为 `PAY179176239025799c100ae`、`PAY17917625595996989eb24`；每次验证结束由脚本停止本轮九服务，查单变体也停止本地上游 mock。
 
 沙箱内首次尝试后台服务被回收且无应用日志，清理后在受控本机权限重跑成功；失败的首次尝试不计为链路通过。本地 H2/demo 证据不替代目标 MySQL 8、多实例竞态、可信商户身份、真实渠道资金或生产发布验收。
+
+### 10.1044 2026-10-12 退款支付来源精确归属后的九服务回归
+
+独立退款中心将支付成功来源锁行、累计退款额度和列表/详情来源关联改为原支付单号精确字符与二进制匹配后，重新隔离执行 `tools/dev/local-stack.sh verify payment-chain` 和 `tools/dev/local-stack.sh verify payment-query-chain`。两次均通过写前隔离、九服务 HTTP 冒烟和完整 happy-path，退出码各为 `0`；支付单 `PAY179176315010750ba6e82` 经 `CALLBACK`、`PAY1791763323241e989f963` 经 `GATEWAY_QUERY` 收口。支付、清分、结算、退款成功 outbox、账务与对账事实齐备，链路 `COMPLETED`、`4/4` 且本地可关账；脚本在每次结束时停止本轮九服务和查单变体的本机上游 mock。此复验不替代目标 MySQL 8 历史别名与多实例、真实渠道资金、可信身份或生产发布验收。

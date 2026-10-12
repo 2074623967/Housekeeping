@@ -10,6 +10,8 @@
                ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
+            AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
+            AND CAST(ps.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
         <where>
             <if test="refundOrderId != null and refundOrderId != ''">
                 AND t_refund_order.refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
@@ -53,6 +55,8 @@
                ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
+            AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
+            AND CAST(ps.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
         WHERE t_refund_order.refund_order_id = #{refundOrderId}
     </select>
 
@@ -62,6 +66,8 @@
                ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
+            AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
+            AND CAST(ps.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
         WHERE t_refund_order.idempotency_key = #{idempotencyKey}
           AND CHAR_LENGTH(t_refund_order.idempotency_key) = CHAR_LENGTH(#{idempotencyKey})
           AND CAST(t_refund_order.idempotency_key AS BINARY(512)) = CAST(#{idempotencyKey} AS BINARY(512))
@@ -79,12 +85,16 @@
         SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, pay_scene, paid_at
         FROM t_refund_payment_source
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
     </select>
 
     <select id="findPaymentSourceForUpdate" resultType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
         SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, pay_scene, paid_at
         FROM t_refund_payment_source
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
         FOR UPDATE
     </select>
 
@@ -92,6 +102,8 @@
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
         WHERE payment_order_id = #{paymentOrderId}
+          AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+          AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND status IN ('REVIEWING', 'APPROVED', 'PROCESSING', 'SUCCESS')
     </select>
 
