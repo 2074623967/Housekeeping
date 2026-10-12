@@ -75,6 +75,7 @@ import org.springframework.util.StringUtils;
 public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PaymentServiceImpl.class);
+    private static final String CHANNEL_TRANSACTION_CONFLICT_ATTEMPT_STATUS = "渠道流水归属冲突，待人工核查";
 
     private static final int BUSINESS_ORDER_NO_MAX_LENGTH = 64;
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
@@ -360,7 +361,7 @@ public class PaymentServiceImpl implements PaymentService {
             requireWaitingChannelSubmissionFact(normalizedPaymentOrderId, detail);
             if (isUnacceptedChannelSubmit(detail)) {
                 detail.setStatus("PAYING");
-                detail.setStatusType("info");
+                detail.setStatusType(isChannelTransactionConflict(detail) ? "danger" : "info");
             }
         } else if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             validatePaymentSuccessFacts(detail);
@@ -421,11 +422,13 @@ public class PaymentServiceImpl implements PaymentService {
             if (!virtualSource) {
                 validateActivePrepayOrderFacts(activePrepay, customerName, remainAmount);
             }
+            boolean channelTransactionConflict = false;
             if ("WAIT_CALLBACK".equalsIgnoreCase(activePrepay.getPaymentStatus())) {
                 PaymentDetailDTO submissionFact = paymentMapper.findSubmissionFact(activePrepay.getPaymentOrderId());
                 requireWaitingChannelSubmissionFact(activePrepay.getPaymentOrderId(), submissionFact);
                 if (isUnacceptedChannelSubmit(activePrepay, submissionFact)) {
                     activePrepay.setPaymentStatus("PAYING");
+                    channelTransactionConflict = isChannelTransactionConflict(submissionFact);
                 }
             }
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
@@ -437,8 +440,8 @@ public class PaymentServiceImpl implements PaymentService {
                 reusablePrepay.setCashierStatus("待风控复核");
                 reusablePrepay.setCashierStatusType("warn");
             } else if ("PAYING".equalsIgnoreCase(reusablePrepay.getPaymentStatus())) {
-                reusablePrepay.setCashierStatus("支付中");
-                reusablePrepay.setCashierStatusType("info");
+                reusablePrepay.setCashierStatus(channelTransactionConflict ? "结果待确认" : "支付中");
+                reusablePrepay.setCashierStatusType(channelTransactionConflict ? "danger" : "info");
             } else if ("WAIT_CALLBACK".equalsIgnoreCase(reusablePrepay.getPaymentStatus())
                     && !("待回调".equals(reusablePrepay.getCashierStatus())
                     && "warn".equals(reusablePrepay.getCashierStatusType()))
@@ -690,14 +693,21 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private boolean isUnacceptedChannelSubmit(PrepayOrderDTO prepay, PaymentDetailDTO detail) {
-        return "支付中".equals(prepay.getCashierStatus()) && isUnacceptedChannelSubmit(detail);
+        return isUnacceptedChannelSubmit(detail)
+                && ("支付中".equals(prepay.getCashierStatus()) || isChannelTransactionConflict(detail));
     }
 
     private boolean isUnacceptedChannelSubmit(PaymentDetailDTO detail) {
         return detail != null && "WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
-                && "渠道提交中".equals(detail.getLatestAttemptStatus())
+                && ("渠道提交中".equals(detail.getLatestAttemptStatus())
+                    || isChannelTransactionConflict(detail))
                 && !StringUtils.hasText(detail.getChannelTransactionNo())
                 && detail.getLatestAttemptCompletedAt() == null;
+    }
+
+    private boolean isChannelTransactionConflict(PaymentDetailDTO detail) {
+        return detail != null
+                && CHANNEL_TRANSACTION_CONFLICT_ATTEMPT_STATUS.equals(detail.getLatestAttemptStatus());
     }
 
     private void recordPrepayRemark(
@@ -761,6 +771,11 @@ public class PaymentServiceImpl implements PaymentService {
                 cashierPage.setPaymentStatus("PAYING");
             }
             applyCashierPaymentStatus(cashierPage);
+            if (isChannelTransactionConflict(submissionFact)
+                    && "PAYING".equals(cashierPage.getPaymentStatus())) {
+                cashierPage.setStatus("结果待确认");
+                cashierPage.setStatusType("danger");
+            }
         }
         if ("WAIT_CALLBACK".equalsIgnoreCase(cashierPage.getPaymentStatus())) {
             requireWaitingChannelSubmissionFact(prepayOrder.getPaymentOrderId(), submissionFact);
@@ -1120,10 +1135,16 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (RuntimeException exception) {
             PaymentChannelSubmitResultDTO uncertainResult = submitResult;
             try {
+                boolean foreignChannelTransaction = uncertainResult != null
+                        && exception instanceof SanitizedSubmitTransactionException
+                        && ((SanitizedSubmitTransactionException) exception).duplicateKey
+                        && paymentMapper.existsOtherPaymentByChannelTransactionNo(
+                                paymentOrderId, resolvedChannelCode,
+                                uncertainResult.getChannelTransactionNo());
                 executeSubmitTransaction(() -> {
                     markSubmitResultUnknown(
                             paymentOrderId, request.getPaymentMethod(),
-                            resolvedChannelCode, attemptNo, uncertainResult);
+                            resolvedChannelCode, attemptNo, uncertainResult, foreignChannelTransaction);
                     return null;
                 });
             } catch (RuntimeException recoveryException) {
@@ -1407,9 +1428,10 @@ public class PaymentServiceImpl implements PaymentService {
             String paymentMethod,
             String resolvedChannelCode,
             String attemptNo,
-            PaymentChannelSubmitResultDTO submitResult) {
+            PaymentChannelSubmitResultDTO submitResult,
+            boolean foreignChannelTransaction) {
         String responsePayload = submitResult == null ? null : submitResult.getResponsePayload();
-        String channelTransactionNo = submitResult == null
+        String channelTransactionNo = submitResult == null || foreignChannelTransaction
                 ? null : submitResult.getChannelTransactionNo();
         if (paymentMapper.markPaymentSubmitResultUnknown(
                 paymentOrderId, attemptNo, paymentMethod, channelTransactionNo) != 1) {
@@ -1439,7 +1461,8 @@ public class PaymentServiceImpl implements PaymentService {
                     "payment submit result recovery was not applied atomically");
         }
         updatePaymentAttemptSubmitResult(
-                attemptNo, responsePayload, "结果未知，待查单", "danger");
+                attemptNo, responsePayload,
+                foreignChannelTransaction ? CHANNEL_TRANSACTION_CONFLICT_ATTEMPT_STATUS : "结果未知，待查单", "danger");
         recordPaymentAttemptGateway(attemptNo, submitResult);
         if (paymentMapper.updatePrepayStatusByPaymentOrderId(
                 paymentOrderId, "结果待确认", "danger") != 1) {

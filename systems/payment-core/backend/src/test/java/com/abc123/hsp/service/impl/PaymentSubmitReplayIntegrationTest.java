@@ -11,6 +11,10 @@ import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.CashierPageDTO;
+import com.abc123.hsp.dto.PaymentCloseRequestDTO;
+import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
@@ -55,6 +59,116 @@ class PaymentSubmitReplayIntegrationTest {
 
     private static final String LONG_CHANNEL_CODE = "LONG-" + String.join("", java.util.Collections.nCopies(59, "C"));
 
+    @Order(5)
+    private static class CollidingChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+
+        private final AtomicInteger calls;
+
+        CollidingChannelSubmitAdapter(AtomicInteger calls) {
+            this.calls = calls;
+        }
+
+        @Override
+        public boolean supports(String channelCode) {
+            return "wx_h5".equals(channelCode);
+        }
+
+        @Override
+        public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
+            calls.incrementAndGet();
+            PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
+            result.setChannelTransactionNo("WX-COLLISION-001");
+            result.setChannelReturnCode("USERPAYING");
+            result.setAttemptStatus("处理中");
+            result.setAttemptStatusType("info");
+            result.setResponsePayload("{\"channelTransactionNo\":\"WX-COLLISION-001\"}");
+            return result;
+        }
+    }
+
+    @Test
+    void shouldPreserveUnknownAttemptWhenChannelTransactionBelongsToAnotherPayment() {
+        AtomicInteger calls = new AtomicInteger();
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        application.addInitializers(context -> context.getBeanFactory().registerSingleton(
+                "collidingChannelSubmitAdapter", new CollidingChannelSubmitAdapter(calls)));
+        String databaseUrl = "jdbc:h2:mem:payment_channel_transaction_recovery_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--payment.ops-config.enabled=false",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            PaymentService paymentService = context.getBean(PaymentService.class);
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            jdbcTemplate.update("INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, "
+                            + "amount, payment_method, channel_code, channel_transaction_no, status, "
+                            + "status_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                    "PAY-COLLISION-OWNER", "ORD-COLLISION-OWNER", "original owner", new BigDecimal("88.00"),
+                    "微信支付", "wx_h5", "WX-COLLISION-001", "WAIT_CALLBACK", "warn");
+            PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+            prepayRequest.setOrderNo("DEMO-CHANNEL-TX-RECOVERY");
+            prepayRequest.setPayScene("HOME_CLEAN");
+            prepayRequest.setCustomerName("collision recovery");
+            prepayRequest.setAmount(new BigDecimal("88.00"));
+            PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+
+            PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+            request.setPrepayOrderNo(prepay.getPrepayOrderNo());
+            request.setPaymentMethod("微信支付");
+            request.setChannelCode("wx_h5");
+            request.setSourceAppId("housekeeping-h5-web");
+            request.setMerchantNo("MCH_WX_10001");
+            request.setAccessToken("token-housekeeping-h5-web");
+            request.setTerminal("H5");
+            request.setClientIp("127.0.0.1");
+            request.setIdempotencyKey("COLLISION-RECOVERY-001");
+
+            assertThrows(RuntimeException.class, () -> paymentService.submit(request));
+            assertEquals(1, calls.get());
+            assertEquals("danger", jdbcTemplate.queryForObject(
+                    "SELECT status_type FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertNull(jdbcTemplate.queryForObject(
+                    "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertEquals("渠道流水归属冲突，待人工核查", jdbcTemplate.queryForObject(
+                    "SELECT attempt_status FROM t_payment_attempt WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertEquals("结果待确认", jdbcTemplate.queryForObject(
+                    "SELECT cashier_status FROM t_prepay_order WHERE prepay_order_no = ?",
+                    String.class, prepay.getPrepayOrderNo()));
+            assertEquals("PAY-COLLISION-OWNER", jdbcTemplate.queryForObject(
+                    "SELECT payment_order_id FROM t_payment_order WHERE channel_transaction_no = ?",
+                    String.class, "WX-COLLISION-001"));
+            PaymentDetailDTO detail = paymentService.detail(prepay.getPaymentOrderId());
+            assertEquals("PAYING", detail.getStatus());
+            assertEquals("danger", detail.getStatusType());
+            assertEquals("渠道流水归属冲突，待人工核查", detail.getLatestAttemptStatus());
+            CashierPageDTO cashier = paymentService.cashier(prepay.getPrepayOrderNo(), "H5");
+            assertEquals("PAYING", cashier.getPaymentStatus());
+            assertEquals("结果待确认", cashier.getStatus());
+            assertEquals("danger", cashier.getStatusType());
+            PrepayOrderDTO reused = paymentService.prepay(prepayRequest);
+            assertEquals(prepay.getPrepayOrderNo(), reused.getPrepayOrderNo());
+            assertEquals("结果待确认", reused.getCashierStatus());
+            BusinessException replay = assertThrows(BusinessException.class, () -> paymentService.submit(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, replay.getCode());
+            PaymentQueryRequestDTO query = new PaymentQueryRequestDTO();
+            query.setPaymentOrderId(prepay.getPaymentOrderId());
+            BusinessException queryBlocked = assertThrows(BusinessException.class, () -> paymentService.query(query));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, queryBlocked.getCode());
+            PaymentCloseRequestDTO close = new PaymentCloseRequestDTO();
+            close.setPaymentOrderId(prepay.getPaymentOrderId());
+            BusinessException closeBlocked = assertThrows(BusinessException.class, () -> paymentService.close(close));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, closeBlocked.getCode());
+            assertEquals(1, calls.get());
+        }
+    }
+
     @Test
     void shouldNotBindOneChannelTransactionToDifferentPaymentOrders() {
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
@@ -79,6 +193,11 @@ class PaymentSubmitReplayIntegrationTest {
                             + "WHERE payment_order_id = 'PAY202607180074'"));
             jdbcTemplate.execute("ALTER TABLE t_payment_order "
                     + "ALTER COLUMN channel_transaction_no VARCHAR_IGNORECASE(128)");
+            PaymentMapper mapper = context.getBean(PaymentMapper.class);
+            assertTrue(mapper.existsOtherPaymentByChannelTransactionNo(
+                    "PAY202607190002", "wx_jsapi", "wx99887766"));
+            assertFalse(mapper.existsOtherPaymentByChannelTransactionNo(
+                    "PAY202607190001", "wx_jsapi", "wx99887766"));
             assertThrows(DuplicateKeyException.class, () -> jdbcTemplate.update(
                     "UPDATE t_payment_order SET channel_code = 'wx_jsapi', "
                             + "channel_transaction_no = 'wx99887766' WHERE payment_order_id = 'PAY202607190002'"));

@@ -249,6 +249,10 @@ public interface PaymentMapper {
             @Param("paymentMethod") String paymentMethod,
             @Param("channelTransactionNo") String channelTransactionNo);
 
+    boolean existsOtherPaymentByChannelTransactionNo(@Param("paymentOrderId") String paymentOrderId,
+            @Param("channelCode") String channelCode,
+            @Param("channelTransactionNo") String channelTransactionNo);
+
     /**
      * 校验终态快回调属于当前支付单的末次尝试。
      */

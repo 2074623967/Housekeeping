@@ -1291,6 +1291,16 @@
           AND <include refid="matchingOpenPaymentSubmitAttempt"/>
     </update>
 
+    <select id="existsOtherPaymentByChannelTransactionNo" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM t_payment_order
+        WHERE channel_code = #{channelCode}
+          AND channel_transaction_no = #{channelTransactionNo}
+          AND NOT (payment_order_id = #{paymentOrderId}
+                   AND CHAR_LENGTH(payment_order_id) = CHAR_LENGTH(#{paymentOrderId})
+                   AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256)))
+    </select>
+
     <select id="isLatestPaymentAttemptForOrder" resultType="boolean">
         SELECT COUNT(1) = 1
         FROM t_payment_attempt current_attempt
