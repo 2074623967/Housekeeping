@@ -124,7 +124,7 @@ test("preserves the first channel collision business error for cashier readback"
   installRequestMock((options) => {
     assert.equal(options.url, "http://localhost:18081/api/payments/submit");
     options.success({
-      statusCode: 409,
+      statusCode: 200,
       data: { code: "PAYMENT-1016", message: "渠道流水归属冲突，待人工核查", requestId: "REQ-COLLISION" }
     });
   });

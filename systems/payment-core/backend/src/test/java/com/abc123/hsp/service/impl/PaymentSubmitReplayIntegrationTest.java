@@ -88,10 +88,9 @@ class PaymentSubmitReplayIntegrationTest {
     }
 
     @Test
-    void shouldPreserveUnknownAttemptWhenChannelTransactionBelongsToAnotherPayment() {
+    void shouldPreserveUnknownAttemptWhenChannelTransactionBelongsToAnotherPayment() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
-        application.setWebApplicationType(WebApplicationType.NONE);
         application.addInitializers(context -> context.getBeanFactory().registerSingleton(
                 "collidingChannelSubmitAdapter", new CollidingChannelSubmitAdapter(calls)));
         String databaseUrl = "jdbc:h2:mem:payment_channel_transaction_recovery_" + System.nanoTime()
@@ -99,12 +98,16 @@ class PaymentSubmitReplayIntegrationTest {
         try (ConfigurableApplicationContext context = application.run(
                 "--spring.profiles.active=demo",
                 "--spring.datasource.url=" + databaseUrl,
+                "--server.address=127.0.0.1",
+                "--server.port=0",
                 "--payment.ops-config.enabled=false",
                 "--payment.scheduling.enabled=false",
                 "--spring.rabbitmq.listener.simple.auto-startup=false",
                 "--spring.rabbitmq.listener.direct.auto-startup=false")) {
             PaymentService paymentService = context.getBean(PaymentService.class);
             JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
             jdbcTemplate.update("INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, "
                             + "amount, payment_method, channel_code, channel_transaction_no, status, "
                             + "status_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
@@ -128,10 +131,11 @@ class PaymentSubmitReplayIntegrationTest {
             request.setClientIp("127.0.0.1");
             request.setIdempotencyKey("COLLISION-RECOVERY-001");
 
-            BusinessException firstSubmit = assertThrows(BusinessException.class,
-                    () -> paymentService.submit(request));
-            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, firstSubmit.getCode());
-            assertEquals("渠道流水归属冲突，待人工核查", firstSubmit.getMessage());
+            JsonNode firstSubmit = post(objectMapper, port, objectMapper.writeValueAsString(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, firstSubmit.path("code").asText());
+            assertEquals("渠道流水归属冲突，待人工核查", firstSubmit.path("message").asText());
+            assertTrue(firstSubmit.path("requestId").isTextual());
+            assertFalse(firstSubmit.path("requestId").asText().isEmpty());
             assertEquals(1, calls.get());
             assertEquals("danger", jdbcTemplate.queryForObject(
                     "SELECT status_type FROM t_payment_order WHERE payment_order_id = ?",
