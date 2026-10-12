@@ -574,3 +574,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 68. 2026-10-12 同键重放风控顺序修复后的支付链双路径复验
 
 在 `a156f625` 基线上分别使用独立临时运行目录执行 `bash tools/dev/local-stack.sh verify payment-chain` 与 `verify payment-query-chain`，两轮均通过写前环境/PID/端口隔离门禁、九服务 HTTP 冒烟和 happy-path，退出码为 `0`。支付单 `PAY179175963019731fec661` 经 `CALLBACK` 收口，`PAY17917598148020c8cf727` 经本机 `GATEWAY_QUERY` 桩收口；支付成功事件、清分、结算、账务、退款及对账事实贯通，两轮均为 `COMPLETED/4/4`、`reconciliationFinancialCloseable=true`。脚本停止九服务及查询桩后，两个临时 PID 目录均为空，目标端口无监听。该结果只证明本机 H2/demo、模拟渠道和本机查单桩在此提交上未回退，不代表目标 MySQL 8 多实例竞态、真实资金渠道、可信身份、审批或生产发布验收。
+
+## 69. 2026-10-13 AMQP 发布修复后本机 HTTP 双路径复验
+
+在 `296d42db` 基线，`doctor payment-chain` 的 JDK 8、Maven 缓存和 Node 检查通过，九服务初始均为 `DOWN`。`node --test tools/dev/cross-system-happy-path.test.mjs` 为 `64/64`；隔离执行 `verify payment-chain` 与 `verify payment-query-chain` 均通过九服务 HTTP 冒烟和 happy-path，退出码为 `0`。支付单 `PAY1791847629110e7339754` 经 `CALLBACK` 收口，`PAY1791847823115b126b3f9` 经本机 `GATEWAY_QUERY` 收口；支付成功、清分、结算、账务、退款及七项对账事实贯通，均为 `COMPLETED/4/4` 且 `reconciliationFinancialCloseable=true`。脚本分别停服，复核九后端 `DOWN`、本机查单桩已停止且 18190 无监听。此证据只覆盖 H2/demo、HTTP 与模拟渠道，不验证 RabbitMQ 正/重试/死信、目标 MySQL 8 多实例、正式身份或真实资金。

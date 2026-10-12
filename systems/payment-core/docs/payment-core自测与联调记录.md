@@ -28657,3 +28657,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1079 2026-10-13 隔离 RabbitMQ 拓扑推荐配置回归
 
 本机回环 Management API mock 红测复现原脚本输出的 `HSP_PAYMENT_EVENT_ROUTING_KEY` 不被 payment-core 识别，且缺支付、清分 AMQP 派发开关。修正后输出 `HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY`、两端派发模式及死信 intake 开关；suffix 与 TTL 非法时不发管理写入。Node `2/2`、`bash -n` 与 `git diff --check` 通过。mock 收到 12 次持久队列声明、20 次绑定请求，但 Docker daemon 未运行，未连接真实 RabbitMQ，也未验证生产 ACL/TLS、队列实际声明、重试和资金结果。
+
+### 10.1080 2026-10-13 当前基线本机支付双路径事实复核
+
+在 `296d42db` 基线上 `doctor payment-chain` 通过，九后端初始均 `DOWN`，跨系统 happy-path 断言单测 `64/64`。两次 `local-stack.sh verify` 均为退出码 `0`：回调路径 `PAY1791847629110e7339754`，网关主动查单路径 `PAY1791847823115b126b3f9`；两轮均有清分、结算、账务、退款及对账 `COMPLETED/4/4`，`financialCloseable=true`。退出后九服务 `DOWN`，本机查询桩停止、18190 无监听。该 H2/demo HTTP 证据不覆盖本轮 AMQP 变更的真实 broker 投递，也不证明目标 MySQL 8 多实例、可信主体、真实资金或生产发布。
