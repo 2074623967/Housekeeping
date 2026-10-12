@@ -59,13 +59,14 @@ class AccountingEventControllerTest {
     }
 
     @Test
-    void shouldConsumeRefundSuccessEvent() {
+    void shouldConsumeRefundSuccessEvent() throws Exception {
         AccountingEventController controller = controller();
         RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
+        String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeRefundSuccess(request);
+        controller.consumeRefundSuccess(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
 
-        verify(accountingEventService).consumeRefundSuccess(request);
+        verify(accountingEventService).consumeRefundSuccess(argThat(received -> received != null));
     }
 
     @Test
@@ -79,6 +80,6 @@ class AccountingEventControllerTest {
     }
 
     private AccountingEventController controller() {
-        return new AccountingEventController(accountingEventService, new ObjectMapper(), TEST_SECRET);
+        return new AccountingEventController(accountingEventService, new ObjectMapper(), TEST_SECRET, TEST_SECRET);
     }
 }

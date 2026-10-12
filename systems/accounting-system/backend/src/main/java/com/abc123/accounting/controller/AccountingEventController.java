@@ -29,15 +29,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/accounting/events")
 public class AccountingEventController {
 
+    private static final String REFUND_EVENT_SIGNATURE_HEADER = "X-HSP-Refund-Event-Signature";
+
     private final AccountingEventService accountingEventService;
     private final ObjectMapper objectMapper;
     private final String paymentEventSecret;
+    private final String refundEventSecret;
 
     public AccountingEventController(AccountingEventService accountingEventService, ObjectMapper objectMapper,
-            @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret) {
+            @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret,
+            @Value("${HSP_REFUND_SUCCESS_HTTP_SECRET:}") String refundEventSecret) {
         this.accountingEventService = accountingEventService;
         this.objectMapper = objectMapper;
         this.paymentEventSecret = paymentEventSecret;
+        this.refundEventSecret = refundEventSecret;
     }
 
     @GetMapping
@@ -71,8 +76,19 @@ public class AccountingEventController {
     }
 
     @PostMapping("/refunds/success")
-    public ApiResponse<AccountEventDTO> consumeRefundSuccess(@RequestBody RefundSuccessEventRequestDTO request) {
-        return ApiResponse.success(accountingEventService.consumeRefundSuccess(request));
+    public ResponseEntity<ApiResponse<AccountEventDTO>> consumeRefundSuccess(@RequestBody String body,
+            @RequestHeader(value = REFUND_EVENT_SIGNATURE_HEADER, required = false) String signature) {
+        if (!PaymentEventHttpSignature.matches(body, signature, refundEventSecret)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure("REFUND_EVENT_UNAUTHORIZED", "退款事件签名校验失败"));
+        }
+        try {
+            RefundSuccessEventRequestDTO request = objectMapper.readValue(body, RefundSuccessEventRequestDTO.class);
+            return ResponseEntity.ok(ApiResponse.success(accountingEventService.consumeRefundSuccess(request)));
+        } catch (JsonProcessingException exception) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.failure("REFUND_EVENT_INVALID", "退款事件载荷无效"));
+        }
     }
 
     @PostMapping("/settlements/compensations")

@@ -1,6 +1,7 @@
 package com.abc123.refund.service.impl;
 
 import com.abc123.refund.common.BusinessException;
+import com.abc123.refund.common.RefundEventHttpSignature;
 import com.abc123.refund.dao.RefundDao;
 import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.dto.PaymentSuccessProjectionDTO;
@@ -19,6 +20,8 @@ import com.abc123.refund.entity.RefundOrderEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.abc123.refund.dto.RefundOperationLogDTO;
 import com.abc123.refund.service.RefundService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -33,6 +36,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -56,6 +62,7 @@ public class RefundServiceImpl implements RefundService {
     private static final DateTimeFormatter ID_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final RefundDao refundDao;
     private final String operator;
@@ -64,6 +71,7 @@ public class RefundServiceImpl implements RefundService {
     private final String accountingRefundSuccessAccountNo;
     private final String reconciliationFactUrl;
     private final RestTemplate restTemplate;
+    private final String refundSuccessHttpSecret;
 
     @Autowired
     public RefundServiceImpl(RefundDao refundDao,
@@ -73,9 +81,10 @@ public class RefundServiceImpl implements RefundService {
                              String accountingRefundSuccessUrl,
                              @Value("${refund-center.downstream.accounting.refund-success-account-no:ACT10003}")
                              String accountingRefundSuccessAccountNo,
-                             @Value("${refund-center.downstream.reconciliation.fact-url:}") String reconciliationFactUrl) {
+                             @Value("${refund-center.downstream.reconciliation.fact-url:}") String reconciliationFactUrl,
+                             @Value("${HSP_REFUND_SUCCESS_HTTP_SECRET:}") String refundSuccessHttpSecret) {
         this(refundDao, operator, outboxDispatchMode, accountingRefundSuccessUrl,
-                accountingRefundSuccessAccountNo, reconciliationFactUrl, new RestTemplate());
+                accountingRefundSuccessAccountNo, reconciliationFactUrl, new RestTemplate(), refundSuccessHttpSecret);
     }
 
     RefundServiceImpl(RefundDao refundDao, String operator) {
@@ -89,6 +98,18 @@ public class RefundServiceImpl implements RefundService {
                       String accountingRefundSuccessAccountNo,
                       String reconciliationFactUrl,
                       RestTemplate restTemplate) {
+        this(refundDao, operator, outboxDispatchMode, accountingRefundSuccessUrl,
+                accountingRefundSuccessAccountNo, reconciliationFactUrl, restTemplate, "");
+    }
+
+    RefundServiceImpl(RefundDao refundDao,
+                      String operator,
+                      String outboxDispatchMode,
+                      String accountingRefundSuccessUrl,
+                      String accountingRefundSuccessAccountNo,
+                      String reconciliationFactUrl,
+                      RestTemplate restTemplate,
+                      String refundSuccessHttpSecret) {
         this.refundDao = refundDao;
         this.operator = operator;
         this.outboxDispatchMode = outboxDispatchMode;
@@ -96,6 +117,7 @@ public class RefundServiceImpl implements RefundService {
         this.accountingRefundSuccessAccountNo = accountingRefundSuccessAccountNo;
         this.reconciliationFactUrl = reconciliationFactUrl;
         this.restTemplate = restTemplate;
+        this.refundSuccessHttpSecret = refundSuccessHttpSecret;
     }
 
     @Override
@@ -436,14 +458,14 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("退款成功事实不存在或状态异常");
         }
         String businessChainId = refund.getBusinessChainId();
-        postForSuccess(accountingRefundSuccessUrl, new AccountingRefundSuccessPayload(
+        postForSuccess(accountingRefundSuccessUrl, signedAccountingPayload(new AccountingRefundSuccessPayload(
                 businessChainId,
                 accountingRefundSuccessAccountNo,
                 refund.getRefundOrderId(),
                 refund.getPaymentOrderId(),
                 refund.getPayScene(),
                 refund.getRefundAmount(),
-                "退款成功后冲回原支付入账"));
+                "退款成功后冲回原支付入账")));
         postForSuccess(reconciliationFactUrl, new ReconciliationFactPayload(
                 businessChainId,
                 "refund-center",
@@ -455,6 +477,22 @@ public class RefundServiceImpl implements RefundService {
                 refund.getPayScene(),
                 "退款成功事实，原支付单号=" + trim(refund.getPaymentOrderId())
                         + "，支付场景=" + trim(refund.getPayScene())));
+    }
+
+    private Object signedAccountingPayload(Object payload) {
+        if (!StringUtils.hasText(refundSuccessHttpSecret)) {
+            return payload;
+        }
+        try {
+            String body = JSON_MAPPER.writeValueAsString(payload);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set(RefundEventHttpSignature.HEADER_NAME,
+                    RefundEventHttpSignature.sign(body, refundSuccessHttpSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("退款成功事件签名序列化失败", exception);
+        }
     }
 
     private void postForSuccess(String url, Object payload) {

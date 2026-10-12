@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.refund.common.BusinessException;
+import com.abc123.refund.common.RefundEventHttpSignature;
 import com.abc123.refund.dao.RefundDao;
 import com.abc123.refund.dto.PaymentSuccessProjectionDTO;
 import com.abc123.refund.dto.RefundActionRequestDTO;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpEntity;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -568,6 +570,39 @@ class RefundServiceImplTest {
                 new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("businessChainId").asText());
         assertEquals("退款成功事实，原支付单号=PAY-3，支付场景=HOME_CLEAN",
                 new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("payload").asText());
+    }
+
+    @Test
+    void shouldSignExactRefundSuccessBodyForAccounting() throws Exception {
+        String secret = "local-refund-event-test-secret";
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate, secret);
+        RefundOutboxEventEntity event = outboxEvent("REVT-SIGNED", "REF-SIGNED");
+        when(refundDao.findOutboxByEventId("REVT-SIGNED")).thenReturn(event);
+        when(refundDao.findByRefundOrderId("REF-SIGNED"))
+                .thenReturn(successfulRefund("REF-SIGNED", "PAY-SIGNED", "10.00"));
+        when(refundDao.markOutboxDispatching("REVT-SIGNED")).thenReturn(1);
+        when(refundDao.markOutboxSent("REVT-SIGNED")).thenReturn(1);
+        RefundOutboxEventEntity sent = outboxEvent("REVT-SIGNED", "REF-SIGNED");
+        sent.setStatus("SENT");
+        when(refundDao.findOutboxByEventId("REVT-SIGNED")).thenReturn(event, sent);
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+
+        assertEquals("SENT", service.dispatchOutbox("REVT-SIGNED", new RefundOutboxDispatchRequestDTO()).getStatus());
+
+        org.mockito.ArgumentCaptor<Object> request = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate).postForEntity(
+                eq("http://accounting/refunds/success"), request.capture(), eq(java.util.Map.class));
+        assertTrue(request.getValue() instanceof HttpEntity);
+        HttpEntity<?> signed = (HttpEntity<?>) request.getValue();
+        String body = (String) signed.getBody();
+        assertEquals(RefundEventHttpSignature.sign(body, secret),
+                signed.getHeaders().getFirst(RefundEventHttpSignature.HEADER_NAME));
+        assertEquals("REF-SIGNED", new ObjectMapper().readTree(body).get("refundOrderId").asText());
     }
 
     @Test

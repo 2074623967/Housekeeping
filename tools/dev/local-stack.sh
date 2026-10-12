@@ -11,6 +11,7 @@ readonly START_TIMEOUT_SECONDS="${HSP_LOCAL_START_TIMEOUT_SECONDS:-90}"
 STACK_SCOPE=""
 QUERY_ACCESS_KEY=""
 PAYMENT_EVENT_SECRET=""
+REFUND_EVENT_SECRET=""
 
 resolve_maven_bin() {
   if [[ -n "${HSP_MAVEN_BIN:-}" ]]; then
@@ -259,7 +260,7 @@ start_backend() {
   local pid=""
   local -a backend_env=(JAVA_HOME="$JAVA_HOME_PATH" MAVEN_OPTS="$LOCAL_JAVA_OPTS")
   local -a payment_query_env=()
-  local -a payment_signature_env=()
+  local -a event_signature_env=()
   local payment_profile="demo"
 
   if [[ "$name" == "risk-control-system" && "$scope" == "risk-review" ]]; then
@@ -286,7 +287,11 @@ start_backend() {
   fi
   if [[ -n "$PAYMENT_EVENT_SECRET" ]] \
     && [[ "$name" == "payment-core" || "$name" == "clearing-system" || "$name" == "accounting-system" ]]; then
-    payment_signature_env+=(HSP_PAYMENT_SUCCESS_HTTP_SECRET="$PAYMENT_EVENT_SECRET")
+    event_signature_env+=(HSP_PAYMENT_SUCCESS_HTTP_SECRET="$PAYMENT_EVENT_SECRET")
+  fi
+  if [[ -n "$REFUND_EVENT_SECRET" ]] \
+    && [[ "$name" == "refund-center" || "$name" == "accounting-system" ]]; then
+    event_signature_env+=(HSP_REFUND_SUCCESS_HTTP_SECRET="$REFUND_EVENT_SECRET")
   fi
 
   if [[ -f "$pid_file" ]]; then
@@ -315,7 +320,7 @@ start_backend() {
         JAVA_HOME="$JAVA_HOME_PATH" \
         MAVEN_OPTS="$LOCAL_JAVA_OPTS" \
         ${payment_query_env[@]+"${payment_query_env[@]}"} \
-        ${payment_signature_env[@]+"${payment_signature_env[@]}"} \
+        ${event_signature_env[@]+"${event_signature_env[@]}"} \
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
@@ -328,7 +333,7 @@ start_backend() {
     else
       nohup env \
         "${backend_env[@]}" \
-        ${payment_signature_env[@]+"${payment_signature_env[@]}"} \
+        ${event_signature_env[@]+"${event_signature_env[@]}"} \
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
@@ -619,6 +624,7 @@ guard_local_payment_chain_verify() {
       SPRING_*|DATABASE_URL|HSP_DB_*|HSP_DEMO_DB_*|HSP_RABBITMQ_*|HSP_*_BASE_URL|HSP_GATEWAY_*_URL|HSP_PAYMENT_*_URL|\
       HSP_PAYMENT_CORE_PORT|HSP_PAYMENT_SUBMIT_GATEWAY_ENABLED|HSP_PAYMENT_EVENT_DISPATCH_MODE|\
       HSP_PAYMENT_SUCCESS_HTTP_SECRET|\
+      HSP_REFUND_SUCCESS_HTTP_SECRET|\
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|HSP_LOCAL_JAVA_OPTS|\
       JAVA_TOOL_OPTIONS|JDK_JAVA_OPTIONS|MAVEN_OPTS|\
       OPS_CONFIG_*|RISK_CONTROL_*|REFUND_CENTER_*|RECONCILIATION_*)
@@ -710,6 +716,7 @@ run_verify() {
     guard_local_payment_chain_verify "$scope" || return $?
     verification_mode="payment-chain"
     PAYMENT_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    REFUND_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     if [[ "$scope" == "payment-query-chain" ]]; then
       verification_mode="payment-query-chain"
       QUERY_ACCESS_KEY="local-query-$RANDOM-$RANDOM-$RANDOM"
