@@ -1,7 +1,10 @@
 package com.abc123.accounting.controller;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.accounting.common.PaymentEventHttpSignature;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 /**
  * 账务事件控制器测试。
@@ -71,17 +75,29 @@ class AccountingEventControllerTest {
     }
 
     @Test
-    void shouldConsumeSettlementCompensationEvent() {
+    void shouldConsumeSettlementCompensationEvent() throws Exception {
         AccountingEventController controller = controller();
         SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeSettlementCompensation(request);
+        controller.consumeSettlementCompensation(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
 
-        verify(accountingEventService).consumeSettlementCompensation(request);
+        verify(accountingEventService).consumeSettlementCompensation(argThat(received -> received != null));
+    }
+
+    @Test
+    void shouldRejectCompensationWhenSecretIsNotConfigured() {
+        AccountingEventController controller = new AccountingEventController(accountingEventService,
+                new ObjectMapper(), TEST_SECRET, TEST_SECRET, TEST_SECRET, "");
+
+        assertEquals(HttpStatus.FORBIDDEN, controller.consumeSettlementCompensation(
+                "{}", PaymentEventHttpSignature.sign("{}", TEST_SECRET)).getStatusCode());
+
+        verify(accountingEventService, never()).consumeSettlementCompensation(any());
     }
 
     private AccountingEventController controller() {
         return new AccountingEventController(accountingEventService, new ObjectMapper(),
-                TEST_SECRET, TEST_SECRET, TEST_SECRET);
+                TEST_SECRET, TEST_SECRET, TEST_SECRET, TEST_SECRET);
     }
 }

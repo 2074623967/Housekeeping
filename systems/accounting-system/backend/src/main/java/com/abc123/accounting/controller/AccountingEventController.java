@@ -31,22 +31,26 @@ public class AccountingEventController {
 
     private static final String REFUND_EVENT_SIGNATURE_HEADER = "X-HSP-Refund-Event-Signature";
     private static final String CLEARING_EVENT_SIGNATURE_HEADER = "X-HSP-Clearing-Event-Signature";
+    private static final String SETTLEMENT_COMPENSATION_SIGNATURE_HEADER = "X-HSP-Settlement-Compensation-Signature";
 
     private final AccountingEventService accountingEventService;
     private final ObjectMapper objectMapper;
     private final String paymentEventSecret;
     private final String refundEventSecret;
     private final String clearingEventSecret;
+    private final String settlementCompensationSecret;
 
     public AccountingEventController(AccountingEventService accountingEventService, ObjectMapper objectMapper,
             @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret,
             @Value("${HSP_REFUND_SUCCESS_HTTP_SECRET:}") String refundEventSecret,
-            @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}") String clearingEventSecret) {
+            @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}") String clearingEventSecret,
+            @Value("${HSP_SETTLEMENT_COMPENSATION_HTTP_SECRET:}") String settlementCompensationSecret) {
         this.accountingEventService = accountingEventService;
         this.objectMapper = objectMapper;
         this.paymentEventSecret = paymentEventSecret;
         this.refundEventSecret = refundEventSecret;
         this.clearingEventSecret = clearingEventSecret;
+        this.settlementCompensationSecret = settlementCompensationSecret;
     }
 
     @GetMapping
@@ -107,8 +111,19 @@ public class AccountingEventController {
     }
 
     @PostMapping("/settlements/compensations")
-    public ApiResponse<AccountEventDTO> consumeSettlementCompensation(
-            @RequestBody SettlementCompensationEventRequestDTO request) {
-        return ApiResponse.success(accountingEventService.consumeSettlementCompensation(request));
+    public ResponseEntity<ApiResponse<AccountEventDTO>> consumeSettlementCompensation(@RequestBody String body,
+            @RequestHeader(value = SETTLEMENT_COMPENSATION_SIGNATURE_HEADER, required = false) String signature) {
+        if (!PaymentEventHttpSignature.matches(body, signature, settlementCompensationSecret)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure("SETTLEMENT_COMPENSATION_UNAUTHORIZED", "结算补偿签名校验失败"));
+        }
+        try {
+            SettlementCompensationEventRequestDTO request = objectMapper.readValue(
+                    body, SettlementCompensationEventRequestDTO.class);
+            return ResponseEntity.ok(ApiResponse.success(accountingEventService.consumeSettlementCompensation(request)));
+        } catch (JsonProcessingException exception) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.failure("SETTLEMENT_COMPENSATION_INVALID", "结算补偿载荷无效"));
+        }
     }
 }
