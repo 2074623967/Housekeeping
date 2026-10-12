@@ -710,6 +710,13 @@ public class PaymentServiceImpl implements PaymentService {
                 && CHANNEL_TRANSACTION_CONFLICT_ATTEMPT_STATUS.equals(detail.getLatestAttemptStatus());
     }
 
+    private void requireNoChannelTransactionConflict(PaymentDetailDTO detail) {
+        if (isChannelTransactionConflict(detail)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "渠道流水归属冲突，待人工核查");
+        }
+    }
+
     private void recordPrepayRemark(
             PrepayRequestDTO request, String paymentOrderId, String orderNo, String prepayOrderNo) {
         if (!StringUtils.hasText(request.getRemark())) {
@@ -1607,6 +1614,7 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentDetailDTO detail = requireRequestedPaymentDetail(
                 paymentMapper.findDetail(request.getPaymentOrderId()), request.getPaymentOrderId());
         requireNonSuccessfulPaymentPrepayBinding(detail);
+        requireNoChannelTransactionConflict(detail);
         validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
@@ -1620,6 +1628,7 @@ public class PaymentServiceImpl implements PaymentService {
         requireChannelSubmissionFact(detail);
         if (paySuccess) {
             detail = lockAndReloadPaymentForSettlement(detail);
+            requireNoChannelTransactionConflict(detail);
             validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
             requireChannelSubmissionFact(detail);
             parseAmount(detail.getAmount());
@@ -1640,6 +1649,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess && callbackSuccessRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
             latestDetail = requirePaymentDetailResponse(latestDetail);
+            requireNoChannelTransactionConflict(latestDetail);
             if (!"SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
                     && (!"CLOSED".equalsIgnoreCase(latestDetail.getStatus())
                     || !Boolean.TRUE.equals(latestDetail.getPrepayAmountBindingValid()))) {
@@ -1666,6 +1676,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!paySuccess && callbackPendingRows != 1) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
             requireNonSuccessfulPaymentPrepayBinding(latestDetail);
+            requireNoChannelTransactionConflict(latestDetail);
             validatePaymentCallbackBinding(
                     normalizedChannel, request.getChannelTransactionNo(), latestDetail);
             return outwardDetail(latestDetail);

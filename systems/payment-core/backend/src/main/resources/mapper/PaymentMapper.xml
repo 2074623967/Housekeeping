@@ -860,6 +860,7 @@
                 ORDER BY latest_binding_attempt.created_at DESC, latest_binding_attempt.id DESC
                 LIMIT 1
               )
+              AND binding_attempt.attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
               AND binding_attempt.channel_code = t_payment_order.channel_code
               AND CHAR_LENGTH(binding_attempt.channel_code) = CHAR_LENGTH(t_payment_order.channel_code)
               AND CAST(binding_attempt.channel_code AS BINARY(256)) = CAST(t_payment_order.channel_code AS BINARY(256))
@@ -1033,6 +1034,7 @@
                 LIMIT 1
               )
               AND submitted_attempt.completed_at IS NULL
+              AND submitted_attempt.attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
               AND submitted_attempt.channel_code = t_payment_order.channel_code
               AND CHAR_LENGTH(submitted_attempt.channel_code) = CHAR_LENGTH(t_payment_order.channel_code)
               AND CAST(submitted_attempt.channel_code AS BINARY(256)) = CAST(t_payment_order.channel_code AS BINARY(256))

@@ -13,6 +13,7 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
+import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
@@ -165,6 +166,39 @@ class PaymentSubmitReplayIntegrationTest {
             close.setPaymentOrderId(prepay.getPaymentOrderId());
             BusinessException closeBlocked = assertThrows(BusinessException.class, () -> paymentService.close(close));
             assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, closeBlocked.getCode());
+            for (String tradeStatus : Arrays.asList("PROCESSING", "WAIT_CALLBACK", "PAYING", "SUCCESS")) {
+                PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+                callback.setPaymentOrderId(prepay.getPaymentOrderId());
+                callback.setChannelTransactionNo("WX-COLLISION-OTHER");
+                callback.setTradeStatus(tradeStatus);
+                BusinessException blocked = assertThrows(BusinessException.class,
+                        () -> paymentService.callback("wx_h5", callback));
+                assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, blocked.getCode());
+            }
+            PaymentCallbackRequestDTO disputedCallback = new PaymentCallbackRequestDTO();
+            disputedCallback.setPaymentOrderId(prepay.getPaymentOrderId());
+            disputedCallback.setChannelTransactionNo("WX-COLLISION-001");
+            disputedCallback.setTradeStatus("SUCCESS");
+            BusinessException disputedBlocked = assertThrows(BusinessException.class,
+                    () -> paymentService.callback("wx_h5", disputedCallback));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, disputedBlocked.getCode());
+            PaymentMapper mapper = context.getBean(PaymentMapper.class);
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    prepay.getPaymentOrderId(), "WX-COLLISION-OTHER"));
+            assertEquals(0, mapper.markPaymentSuccessFromChannelResult(
+                    prepay.getPaymentOrderId(), "WX-COLLISION-OTHER"));
+            assertEquals("WAIT_CALLBACK", jdbcTemplate.queryForObject(
+                    "SELECT status FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertNull(jdbcTemplate.queryForObject(
+                    "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertEquals("渠道流水归属冲突，待人工核查", jdbcTemplate.queryForObject(
+                    "SELECT attempt_status FROM t_payment_attempt WHERE payment_order_id = ?",
+                    String.class, prepay.getPaymentOrderId()));
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_notify_log WHERE payment_order_id = ?",
+                    Integer.class, prepay.getPaymentOrderId()).intValue());
             assertEquals(1, calls.get());
         }
     }
