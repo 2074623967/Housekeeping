@@ -4,15 +4,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-
-import com.abc123.clearing.common.PaymentEventAmqpSignature;
 import static org.mockito.Mockito.when;
 
+import com.abc123.clearing.common.PaymentEventAmqpSignature;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.clearing.service.ClearingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,6 +21,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /**
@@ -37,6 +40,15 @@ class ClearingPaymentSuccessAmqpConsumerTest {
     @Mock
     private Channel channel;
 
+    @BeforeEach
+    void confirmForwardedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+    }
+
     @Test
     void shouldDeadLetterUnsignedMessageBeforeClearing() throws Exception {
         Message unsigned = message(0);
@@ -45,7 +57,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(unsigned, channel, 17L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.clearing.dlq.v1"), any(Message.class));
+                eq("payment.success.clearing.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(17L, false);
         verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -55,7 +67,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         consumer(3, " ").consume(message(0), channel, 20L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.clearing.dlq.v1"), any(Message.class));
+                eq("payment.success.clearing.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(20L, false);
         verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -69,8 +81,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(tampered, channel, 18L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.clearing.dlq.v1"), any(Message.class));
-        verify(rabbitTemplate, never()).send(eq("payment.trade.retry"), any(), any(Message.class));
+                eq("payment.success.clearing.dlq.v1"), any(Message.class), any(CorrelationData.class));
+        verify(rabbitTemplate, never()).send(eq("payment.trade.retry"), any(), any(Message.class), any(CorrelationData.class));
         verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
 
@@ -80,12 +92,64 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).send(eq("payment.trade.dlq"),
-                        eq("payment.success.clearing.dlq.v1"), any(Message.class));
+                        eq("payment.success.clearing.dlq.v1"), any(Message.class), any(CorrelationData.class));
 
         consumer(3).consume(unsigned, channel, 19L);
 
         verify(channel).basicNack(19L, false, true);
         verify(channel, never()).basicAck(19L, false);
+    }
+
+    @Test
+    void shouldNotAckUntrustedMessageBeforeDeadLetterConfirmation() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doAnswer(invocation -> null).when(rabbitTemplate)
+                .send(eq("payment.trade.dlq"), eq("payment.success.clearing.dlq.v1"),
+                        any(Message.class), any(CorrelationData.class));
+        ClearingPaymentSuccessAmqpConsumer consumer = consumer(3);
+        setConfirmTimeout(consumer, 1L);
+
+        consumer.consume(unsigned, channel, 28L);
+
+        verify(channel).basicNack(28L, false, true);
+        verify(channel, never()).basicAck(28L, false);
+    }
+
+    @Test
+    void shouldNackWhenBrokerReturnsDeadLetterDespitePositiveConfirm() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.setReturned(new ReturnedMessage(unsigned, 312, "NO_ROUTE",
+                    "payment.trade.dlq", "payment.success.clearing.dlq.v1"));
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(eq("payment.trade.dlq"),
+                eq("payment.success.clearing.dlq.v1"), any(Message.class), any(CorrelationData.class));
+
+        consumer(3).consume(unsigned, channel, 29L);
+
+        verify(channel).basicNack(29L, false, true);
+        verify(channel, never()).basicAck(29L, false);
+    }
+
+    @Test
+    void shouldNackWhenBrokerNegativelyConfirmsRetry() throws Exception {
+        org.mockito.Mockito.doThrow(new IllegalStateException("business failure"))
+                .when(clearingEventService).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(false, "broker nack"));
+            return null;
+        }).when(rabbitTemplate).send(eq("payment.trade.retry"),
+                eq("payment.success.clearing.retry.v1"), any(Message.class), any(CorrelationData.class));
+
+        consumer(3).consume(message(0), channel, 30L);
+
+        verify(channel).basicNack(30L, false, true);
+        verify(channel, never()).basicAck(30L, false);
     }
 
     @Test
@@ -96,7 +160,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
 
         verify(clearingEventService).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
         verify(channel).basicAck(11L, false);
-        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class));
+        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class), any(CorrelationData.class));
     }
 
     @Test
@@ -108,7 +172,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         consumer.consume(message(0), channel, 12L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"),
+                retryMessage.capture(), any(CorrelationData.class));
         verify(channel).basicAck(12L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1, retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
     }
@@ -121,7 +186,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
 
         consumer.consume(message(3), channel, 13L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.clearing.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.clearing.dlq.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(13L, false);
     }
 
@@ -131,7 +197,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         org.mockito.Mockito.doThrow(new IllegalStateException("business failure"))
                 .when(clearingEventService).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
-                .when(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
+                .when(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"),
+                        any(Message.class), any(CorrelationData.class));
 
         consumer.consume(message(0), channel, 14L);
 
@@ -151,7 +218,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
 
         consumer.consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 15L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(15L, false);
         verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -168,7 +236,8 @@ class ClearingPaymentSuccessAmqpConsumerTest {
 
         consumer.consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 16L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(16L, false);
         verify(clearingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -188,6 +257,16 @@ class ClearingPaymentSuccessAmqpConsumerTest {
                 "payment.success.clearing.dlq.v1",
                 maxRetryCount,
                 secret);
+    }
+
+    private void setConfirmTimeout(ClearingPaymentSuccessAmqpConsumer consumer, long timeoutMs) {
+        try {
+            Field field = ClearingPaymentSuccessAmqpConsumer.class.getDeclaredField("forwardConfirmTimeoutMs");
+            field.setAccessible(true);
+            field.setLong(consumer, timeoutMs);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private Message message(int retryCount) throws Exception {
