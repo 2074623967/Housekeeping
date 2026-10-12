@@ -526,6 +526,13 @@ public class RefundServiceImpl implements RefundService {
         String id = required(request.getRefundOrderId(), "退款单号不能为空");
         int affected = refundDao.updateStatus(id, from, to, null);
         if (affected == 0) {
+            if (PROCESSING.equals(to)) {
+                RefundListItemDTO existing = refundDao.findByRefundOrderId(id);
+                if (existing != null && APPROVED.equals(existing.getStatus())
+                        && !StringUtils.hasText(existing.getChannelCode())) {
+                    throw new BusinessException("退款单缺少原支付渠道事实，待人工核查");
+                }
+            }
             throw new BusinessException("退款单状态不允许执行当前操作");
         }
         refundDao.insertLog(id, actionCode, actionName, from, to, operator,

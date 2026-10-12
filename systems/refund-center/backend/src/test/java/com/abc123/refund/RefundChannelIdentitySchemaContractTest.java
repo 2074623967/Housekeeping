@@ -38,6 +38,8 @@ class RefundChannelIdentitySchemaContractTest {
                 + "(channel_code, channel_refund_id)"));
         assertFalse(migration.contains("UPDATE t_refund_order"));
         assertTrue(mapper.contains("#{paymentOrderId}, #{channelCode}, #{orderNo}"));
+        assertTrue(mapper.contains("#{targetStatus} &lt;&gt; 'PROCESSING' "
+                + "OR NULLIF(TRIM(channel_code), '') IS NOT NULL"));
         assertTrue(mapper.contains("NULLIF(TRIM(channel_code), '') IS NOT NULL"));
     }
 

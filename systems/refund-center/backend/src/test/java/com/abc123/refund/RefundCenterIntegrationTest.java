@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -49,6 +50,9 @@ class RefundCenterIntegrationTest {
 
     @Autowired
     private RefundMapper refundMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -292,7 +296,13 @@ class RefundCenterIntegrationTest {
         RefundActionRequestDTO action = new RefundActionRequestDTO();
         action.setRefundOrderId(refundOrderId);
         refundService.approve(action);
-        refundService.submit(action);
+        BusinessException submitError = assertThrows(BusinessException.class, () -> refundService.submit(action));
+        assertEquals("退款单缺少原支付渠道事实，待人工核查", submitError.getMessage());
+        assertEquals("APPROVED", refundService.detail(refundOrderId).getStatus());
+        assertEquals(2, refundService.detail(refundOrderId).getOperationLogs().size());
+
+        assertEquals(1, jdbcTemplate.update("UPDATE t_refund_order SET status = 'PROCESSING' "
+                + "WHERE refund_order_id = ?", refundOrderId));
 
         RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
         callback.setRefundOrderId(refundOrderId);
@@ -303,7 +313,7 @@ class RefundCenterIntegrationTest {
         RefundDetailDTO detail = refundService.detail(refundOrderId);
         assertEquals("PROCESSING", detail.getStatus());
         assertNull(detail.getChannelRefundId());
-        assertEquals(3, detail.getOperationLogs().size());
+        assertEquals(2, detail.getOperationLogs().size());
         RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
         query.setAggregateId(refundOrderId);
         assertEquals(0L, refundService.listOutbox(query).getTotal());
