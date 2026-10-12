@@ -7,6 +7,7 @@ import {
   canQueryPaymentChannel,
   canRetryReviewedPayment,
   canShowDesktopQrPlaceholder,
+  isChannelTransactionConflict,
   isCashierExpired,
   isPaymentSubmissionPending,
   resolvePaymentChannelCode,
@@ -342,9 +343,10 @@ const canQueryPayment = computed(() => {
     paymentSnapshot?.channel
   );
 });
-const queryUnavailableGuidance = computed(() => cashier.value?.paymentStatus === "PAYING"
-  ? PAYING_SUBMIT_HINT
-  : "当前不满足主动查单条件，请刷新收银台核对支付状态，未确认资金前勿重复付款。");
+const queryUnavailableGuidance = computed(() => isChannelTransactionConflict(cashier.value?.latestAttemptStatus)
+  ? "渠道流水归属冲突，需人工核查渠道原始事实与流水归属；勿主动查单、重复付款或关闭支付单。"
+  : cashier.value?.paymentStatus === "PAYING" ? PAYING_SUBMIT_HINT
+    : "当前不满足主动查单条件，请刷新收银台核对支付状态，未确认资金前勿重复付款。");
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
@@ -382,6 +384,9 @@ const submitBlockedHint = computed(() => {
   const status = cashier.value?.status;
   if (cashierSnapshotStale.value) {
     return "收银台状态未能重新核实，请先刷新收银台，避免重复提交。";
+  }
+  if (isChannelTransactionConflict(cashier.value?.latestAttemptStatus)) {
+    return queryUnavailableGuidance.value;
   }
   if (pendingSubmitAttempt.value?.confirmed) {
     return "支付响应已返回，但本机未决记录未能清理；请查单核对原支付结果，勿重复付款。";
@@ -701,7 +706,7 @@ async function pay() {
       return;
     }
     if (cashier.value?.paymentStatus === "PAYING") {
-      message.value = PAYING_SUBMIT_HINT;
+      message.value = queryUnavailableGuidance.value;
     } else {
       message.value = submissionPending.value
         ? canQueryPayment.value

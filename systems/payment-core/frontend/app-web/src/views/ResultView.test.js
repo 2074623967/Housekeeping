@@ -20,6 +20,15 @@ test("guides PAYING results to refresh rather than channel query", () => {
   assert.doesNotMatch(payingChecklist, /pendingHint|优先主动查单/);
 });
 
+test("separates collided channel transactions from ordinary in-flight payments", () => {
+  const source = readFileSync(viewPath, "utf8");
+  const conflictChecklist = source.split('if (resultState.value === "conflict") {')[1]?.split('\n  }')[0];
+  assert.ok(conflictChecklist);
+  assert.match(conflictChecklist, /人工核查[\s\S]*勿重复付款、主动查单或关闭支付单/);
+  assert.match(source, /resolvePaymentResultState\(\s*paymentDetail\.value\.status, paymentDetail\.value\.latestAttemptStatus/);
+  assert.match(source, /resolvePaymentDetailRefreshDelay\([\s\S]*paymentDetail\.value\?\.latestAttemptStatus/);
+});
+
 test("guides FAIL results to verify payment facts without unavailable actions", () => {
   const source = readFileSync(viewPath, "utf8");
   const failChecklist = source.split('if (resultState.value === "fail") {')[1]?.split('\n  }')[0];

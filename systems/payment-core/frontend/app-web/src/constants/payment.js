@@ -30,6 +30,10 @@ export const PAYMENT_RESULT_STATE_META = {
     title: "支付提交处理中",
     hint: "渠道受理尚未确认，请刷新支付详情并等待状态推进，勿重复付款。"
   },
+  conflict: {
+    title: "渠道流水归属待核查",
+    hint: "渠道流水归属冲突，需人工核对渠道原始事实；请勿重复付款、主动查单或关闭支付单。"
+  },
   fail: {
     title: "支付结果待核查",
     hint: "当前支付结果尚未确认，请勿重复付款；请刷新支付详情或联系服务方核查渠道与订单事实。"
@@ -74,7 +78,16 @@ export function canRetryReviewedPayment(cashier, paymentMethod) {
     && PAYMENT_METHOD_CHANNEL_MAP[paymentMethod]?.toLowerCase() === cashier.reviewChannelCode.toLowerCase();
 }
 
-export function resolvePaymentResultState(paymentStatus) {
+export function isChannelTransactionConflict(latestAttemptStatus) {
+  return typeof latestAttemptStatus === "string"
+    && latestAttemptStatus.trim() === "渠道流水归属冲突，待人工核查";
+}
+
+export function resolvePaymentResultState(paymentStatus, latestAttemptStatus) {
+  if (["PAYING", "WAIT_CALLBACK"].includes(paymentStatus)
+      && isChannelTransactionConflict(latestAttemptStatus)) {
+    return "conflict";
+  }
   if (paymentStatus === "SUCCESS") {
     return "success";
   }
@@ -105,18 +118,21 @@ export function resolvePaymentResultState(paymentStatus) {
   return "pending";
 }
 
-export function shouldAutoRefreshPaymentDetail(paymentStatus) {
+export function shouldAutoRefreshPaymentDetail(paymentStatus, latestAttemptStatus) {
+  if (isChannelTransactionConflict(latestAttemptStatus)) {
+    return false;
+  }
   if (typeof paymentStatus !== "string") {
     return false;
   }
   return ["WAIT_CALLBACK", "PAYING", "RISK_REVIEW"].includes(paymentStatus.trim().toUpperCase());
 }
 
-export function resolvePaymentDetailRefreshDelay(paymentStatus, completedAttempts) {
+export function resolvePaymentDetailRefreshDelay(paymentStatus, completedAttempts, latestAttemptStatus) {
   if (!Number.isInteger(completedAttempts)
       || completedAttempts < 0
       || completedAttempts >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS
-      || !shouldAutoRefreshPaymentDetail(paymentStatus)) {
+      || !shouldAutoRefreshPaymentDetail(paymentStatus, latestAttemptStatus)) {
     return null;
   }
   return PAYMENT_DETAIL_REFRESH_INTERVAL_MS;
@@ -136,6 +152,9 @@ export function canShowDesktopQrPlaceholder({ terminalVariant, hasValidCashierSn
 }
 
 export function canQueryPaymentChannel(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
+  if (isChannelTransactionConflict(latestAttemptStatus)) {
+    return false;
+  }
   if (status === "SUCCESS") {
     return true;
   }

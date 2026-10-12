@@ -21,6 +21,12 @@ test("does not recommend channel queries before the cashier permits them", () =>
   assert.match(source, /class="ops-description">\s*\{\{ canQueryPayment \? "扫码后若前端仍停留在支付中/);
 });
 
+test("directs channel transaction collisions to human review instead of waiting for submission", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /isChannelTransactionConflict\(cashier\.value\?\.latestAttemptStatus\)[\s\S]*人工核查渠道原始事实与流水归属/);
+  assert.match(source, /if \(isChannelTransactionConflict\(cashier\.value\?\.latestAttemptStatus\)\) \{\s*return queryUnavailableGuidance\.value/);
+});
+
 test("queries using the attempt and channel facts from one cashier snapshot", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /const paymentSnapshot = latestQueriedDetail\.value \|\| cashier\.value;[\s\S]*canQueryPaymentChannel\([\s\S]*paymentSnapshot\?\.latestAttemptStatus,[\s\S]*paymentSnapshot\?\.latestAttemptCompletedAt,[\s\S]*paymentSnapshot\?\.channelTransactionNo,[\s\S]*paymentSnapshot\?\.channel/);

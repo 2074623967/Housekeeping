@@ -150,7 +150,7 @@ const canQueryPayment = computed(() => hasValidPaymentSnapshot.value && !hasStal
   paymentDetail.value?.channel
 ));
 const autoRefreshPaused = computed(() => hasValidPaymentSnapshot.value
-  && shouldAutoRefreshPaymentDetail(paymentDetail.value?.status)
+  && shouldAutoRefreshPaymentDetail(paymentDetail.value?.status, paymentDetail.value?.latestAttemptStatus)
   && autoRefreshAttempts.value >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS);
 const sourceAppId = computed(() => {
   if (props.terminalVariant === "pc") {
@@ -221,6 +221,12 @@ const nextStepChecklist = computed(() => {
     return [
       "渠道受理尚未确认，请刷新支付详情并等待状态推进，不要重复付款或更换幂等键。",
       "此时不可主动查单或关单；长时间未推进请保留支付单号联系运营核查。"
+    ];
+  }
+  if (resultState.value === "conflict") {
+    return [
+      "渠道流水归属冲突，不能把争议流水当成本单支付成功或失败事实。",
+      "请保留支付单号联系运营人工核查渠道原始事实；勿重复付款、主动查单或关闭支付单。"
     ];
   }
   if (resultState.value === "fail") {
@@ -302,7 +308,9 @@ function syncStatusByDetail() {
     resultState.value = "pending";
     return;
   }
-  resultState.value = resolvePaymentResultState(paymentDetail.value.status);
+  resultState.value = resolvePaymentResultState(
+    paymentDetail.value.status, paymentDetail.value.latestAttemptStatus
+  );
 }
 
 function stopAutoRefresh() {
@@ -319,7 +327,8 @@ function scheduleAutoRefresh() {
   }
   const refreshDelay = resolvePaymentDetailRefreshDelay(
     paymentDetail.value?.status,
-    autoRefreshAttempts.value
+    autoRefreshAttempts.value,
+    paymentDetail.value?.latestAttemptStatus
   );
   if (refreshDelay == null) {
     return;

@@ -338,6 +338,21 @@ test("accepts a prepay response whose business identifiers contain boundary whit
   }, "ORDER-001", "68.00"));
 });
 
+test("accepts an unresolved channel transaction collision only with matching prepay facts", () => {
+  const conflictPrepay = {
+    prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", amount: "68.00", paymentStatus: "PAYING",
+    cashierStatus: "结果待确认", cashierStatusType: "danger",
+    latestAttemptStatus: "渠道流水归属冲突，待人工核查", latestAttemptStatusType: "danger",
+    latestAttemptCompletedAt: null, createdAt: "2026-09-27 11:59:00",
+    expiresAt: "2026-09-27 12:00:00"
+  };
+  assert.deepEqual(normalizePrepayResult(conflictPrepay, "ORDER-001", "68.00"), conflictPrepay);
+  assert.throws(() => normalizePrepayResult({
+    ...conflictPrepay, latestAttemptStatus: "处理中"
+  }), (error) => error.code === "PAYMENT-CLIENT-INVALID-PREPAY");
+});
+
 test("trims the payment result identifier before requesting and matching the response", async (context) => {
   let requestedUrl = "";
   context.mock.method(globalThis, "fetch", async (url) => {
@@ -382,6 +397,13 @@ test("rejects cashier responses with unknown status, style, or channel facts", (
     channels: ["微信支付"]
   };
   assert.deepEqual(normalizeCashierPageResult(validResult), validResult);
+  const conflictCashier = { ...validResult, status: "结果待确认", statusType: "danger",
+    paymentStatus: "PAYING", latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null };
+  assert.deepEqual(normalizeCashierPageResult(conflictCashier), conflictCashier);
+  assert.throws(() => normalizeCashierPageResult({
+    ...conflictCashier, latestAttemptStatus: "处理中"
+  }), (error) => error.code === "PAYMENT-CLIENT-INVALID-CASHIER");
   const waitingResult = {
     ...validResult, status: "待回调", statusType: "warn", paymentStatus: "WAIT_CALLBACK",
     latestAttemptStatus: "处理中", latestAttemptStatusType: "info",
@@ -1219,6 +1241,14 @@ test("rejects a refund detail response without a refund order number", async (co
 test("rejects a payment detail response without a payment order number", async (context) => {
   const validResult = { paymentOrderId: "PAY-001", prepayOrderNo: "PRE-001", businessChainId: "CHAIN-PAY-001", orderNo: "ORDER-001", amount: "68.00", status: "SUCCESS", statusType: "success", channel: "WX_H5", channelTransactionNo: "WX-001", successAt: "2026-09-27 12:01:00", createdAt: "2026-09-27 11:59:00", latestAttemptStatus: "成功", latestAttemptStatusType: "success", latestAttemptCompletedAt: "2026-09-27 12:00:00", routeLogs: [], notifyLogs: [], eventLogs: [] };
   assert.deepEqual(normalizePaymentDetailResult(validResult), validResult);
+  const conflictDetail = { ...validResult, status: "PAYING", statusType: "danger",
+    channelTransactionNo: null, successAt: null,
+    latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null };
+  assert.deepEqual(normalizePaymentDetailResult(conflictDetail), conflictDetail);
+  assert.throws(() => normalizePaymentDetailResult({
+    ...conflictDetail, latestAttemptStatus: "处理中"
+  }), (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL");
   assert.throws(
     () => normalizePaymentDetailResult({ ...validResult, payScene: "WALLET_RECHARGE_APP" }, "PAY-001", "BALANCE_PAY_APP"),
     (error) => error.code === "PAYMENT-CLIENT-INVALID-PAYMENT-DETAIL"

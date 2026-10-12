@@ -5,6 +5,7 @@ import {
   canRetryReviewedPayment,
   canQueryPaymentChannel,
   canShowDesktopQrPlaceholder,
+  isChannelTransactionConflict,
   isCashierExpired,
   isPaymentSubmissionPending,
   PAYMENT_RESULT_STATE_META,
@@ -117,6 +118,19 @@ test("keeps channel submission in progress distinct from accepted callback waiti
   assert.equal(resolvePaymentResultState("WAIT_CALLBACK"), "wait_callback");
   assert.match(PAYMENT_RESULT_STATE_META.paying.hint, /刷新/);
   assert.doesNotMatch(PAYMENT_RESULT_STATE_META.paying.hint, /已提交到渠道|主动查单/);
+});
+
+test("keeps channel transaction collisions in manual review without auto queries", () => {
+  const conflict = "渠道流水归属冲突，待人工核查";
+  assert.equal(isChannelTransactionConflict(conflict), true);
+  assert.equal(resolvePaymentResultState("PAYING", conflict), "conflict");
+  assert.equal(resolvePaymentResultState("WAIT_CALLBACK", conflict), "conflict");
+  assert.equal(resolvePaymentResultState("SUCCESS", conflict), "success");
+  assert.match(PAYMENT_RESULT_STATE_META.conflict.hint, /人工核对.*勿重复付款/);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", conflict, null, "WX-OTHER", "wx_h5"), false);
+  assert.equal(canQueryPaymentChannel("PAYING", conflict, null, null, "wx_h5"), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("PAYING", conflict), false);
+  assert.equal(resolvePaymentDetailRefreshDelay("PAYING", 0, conflict), null);
 });
 
 test("only auto refreshes payment states that can advance asynchronously", () => {
