@@ -9444,4 +9444,8 @@ App 的浏览器证据不能代替 H5 与 PC 各自的打包入口、终端文�
 
 ### 10.979 2026-10-13 支付成功 AMQP 发布路由确认
 
-支付核心原以 `waitForConfirmsOrDie` 判断支付成功事件发布成功；broker 即使肯定确认一个不可路由的 mandatory 消息，事件仍会被标为 `SUCCESS`。现在以关联确认和退回结果共同收口发布状态，NACK、退回、超时均保留事件失败/重试处理；本地模拟正向与异常场景及 payment-core H2/demo 全量通过。死信人工重放、清分生成发布仍使用旧式等待确认而未核对 mandatory return，需继续治理；正式 RabbitMQ 路由与持久性、目标 MySQL 8 多实例和真实资金不由本轮模拟证明。
+支付核心原以 `waitForConfirmsOrDie` 判断支付成功事件发布成功；broker 即使肯定确认一个不可路由的 mandatory 消息，事件仍会被标为 `SUCCESS`。现在以关联确认和退回结果共同收口发布状态，NACK、退回、超时均保留事件失败/重试处理；本地模拟正向与异常场景及 payment-core H2/demo 全量通过。清分生成发布仍使用旧式等待确认而未核对 mandatory return，需继续治理；正式 RabbitMQ 路由与持久性、目标 MySQL 8 多实例和真实资金不由本轮模拟证明。
+
+### 10.980 2026-10-13 死信人工重放路由确认
+
+支付核心人工重放原在 publisher confirm ACK 后直接标 `REPLAYED`，忽略 mandatory return。现携带关联确认并检查退回；不可路由、NACK、超时和发送异常均不标重放成功，进入脱敏失败状态供人工复核。定向与 payment-core H2/demo 全量通过。broker 收到但确认丢失时仍可能重投，业务端幂等、真实 RabbitMQ 正/死信/重放路由、持久队列、目标 MySQL 8 多实例和资金验收仍是独立缺口。

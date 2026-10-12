@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +30,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /** MQ 死信补偿任务服务测试。 */
@@ -39,6 +42,15 @@ class PaymentDeadLetterTaskServiceImplTest {
     private PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper;
     @Mock
     private RabbitTemplate rabbitTemplate;
+
+    @BeforeEach
+    void confirmReplayedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+    }
 
     @Test
     void shouldCreateTraceableTaskForDedicatedDeadLetterRoute() {
@@ -169,7 +181,6 @@ class PaymentDeadLetterTaskServiceImplTest {
         when(paymentDeadLetterTaskMapper.markReplaying(
                 "DLQ-001", "支付运营", "接管超时未完成的重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> null);
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
 
         PaymentDeadLetterTaskEntity result = service().replay(
@@ -281,16 +292,12 @@ class PaymentDeadLetterTaskServiceImplTest {
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         PaymentDeadLetterTaskEntity result = service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
         ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("payment.trade.replay"), eq("payment.success.clearing.replay.v1"), messageCaptor.capture());
-        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        verify(rabbitTemplate).send(eq("payment.trade.replay"), eq("payment.success.clearing.replay.v1"),
+                messageCaptor.capture(), any(CorrelationData.class));
         verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
         assertEquals("MSG-001", messageCaptor.getValue().getMessageProperties().getMessageId());
         org.junit.jupiter.api.Assertions.assertTrue(
@@ -304,6 +311,65 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     @Test
+    void shouldNotCloseReplayWhenBrokerReturnsUnroutableMessage() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]"))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.setReturned(new ReturnedMessage(
+                    new Message(new byte[0], new MessageProperties()), 312, "NO_ROUTE",
+                    "payment.trade.replay", "payment.success.clearing.replay.v1"));
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(eq("payment.trade.replay"),
+                eq("payment.success.clearing.replay.v1"), any(Message.class), any(CorrelationData.class));
+
+        service().replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+        verify(paymentDeadLetterTaskMapper, never()).markReplayed("DLQ-001");
+    }
+
+    @Test
+    void shouldNotCloseReplayWhenBrokerNegativelyConfirms() {
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(replayTask());
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]"))
+                .thenReturn(1);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(false, "broker nack"));
+            return null;
+        }).when(rabbitTemplate).send(eq("payment.trade.replay"),
+                eq("payment.success.clearing.replay.v1"), any(Message.class), any(CorrelationData.class));
+
+        service().replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+        verify(paymentDeadLetterTaskMapper, never()).markReplayed("DLQ-001");
+    }
+
+    @Test
+    void shouldNotCloseReplayBeforeConfirmationTimeout() {
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(replayTask());
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]"))
+                .thenReturn(1);
+        org.mockito.Mockito.doAnswer(invocation -> null).when(rabbitTemplate)
+                .send(eq("payment.trade.replay"), eq("payment.success.clearing.replay.v1"),
+                        any(Message.class), any(CorrelationData.class));
+
+        service(1L).replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+        verify(paymentDeadLetterTaskMapper, never()).markReplayed("DLQ-001");
+    }
+
+    @Test
     void shouldSignClearingDeadLetterReplayWithClearingSecret() {
         PaymentDeadLetterTaskEntity task = replayTask();
         task.setDeadLetterRoutingKey("clearing.generated.settlement.dlq.v1");
@@ -313,16 +379,12 @@ class PaymentDeadLetterTaskServiceImplTest {
         when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         service().replay("DLQ-001", action("支付运营", "核对完成"));
 
         ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
         verify(rabbitTemplate).send(eq("clearing.trade.replay"),
-                eq("clearing.generated.settlement.replay.v1"), messageCaptor.capture());
+                eq("clearing.generated.settlement.replay.v1"), messageCaptor.capture(), any(CorrelationData.class));
         assertEquals(PaymentEventAmqpSignature.sign(messageCaptor.getValue().getBody(),
                         "local-clearing-amqp-test-secret"),
                 messageCaptor.getValue().getMessageProperties().getHeaders()
@@ -339,7 +401,7 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         service().replay("DLQ-001", action("支付运营", "核对完成"));
 
-        verify(rabbitTemplate, never()).invoke(any());
+        verifyNoInteractions(rabbitTemplate);
         verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
     }
 
@@ -353,7 +415,7 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         service().replay("DLQ-001", action("支付运营", "核对完成"));
 
-        verify(rabbitTemplate, never()).invoke(any());
+        verifyNoInteractions(rabbitTemplate);
         verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
     }
 
@@ -368,7 +430,7 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         service.replay("DLQ-001", action("支付运营", "核对完成"));
 
-        verify(rabbitTemplate, never()).invoke(any());
+        verifyNoInteractions(rabbitTemplate);
         verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
     }
 
@@ -379,15 +441,10 @@ class PaymentDeadLetterTaskServiceImplTest {
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
+        PaymentDeadLetterTaskServiceImpl service = service(120000L);
+        service.replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
-        service(120000L)
-                .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
-
-        verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
+        assertEquals(60000L, getField(service, "publisherConfirmTimeoutMs"));
         verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
     }
 
@@ -398,15 +455,10 @@ class PaymentDeadLetterTaskServiceImplTest {
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
+        PaymentDeadLetterTaskServiceImpl service = service(-1L);
+        service.replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
-        service(-1L)
-                .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
-
-        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        assertEquals(5000L, getField(service, "publisherConfirmTimeoutMs"));
         verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
     }
 
@@ -416,7 +468,8 @@ class PaymentDeadLetterTaskServiceImplTest {
         when(paymentDeadLetterTaskMapper.markReplaying(
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
-        when(rabbitTemplate.invoke(any())).thenThrow(new IllegalStateException("broker unavailable"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
         when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(1);
 
         service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
@@ -430,7 +483,8 @@ class PaymentDeadLetterTaskServiceImplTest {
         when(paymentDeadLetterTaskMapper.markReplaying(
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
-        when(rabbitTemplate.invoke(any())).thenThrow(new IllegalStateException("broker unavailable"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
         when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(0);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -446,10 +500,6 @@ class PaymentDeadLetterTaskServiceImplTest {
         when(paymentDeadLetterTaskMapper.markReplaying(
                 "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
         when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(0);
         when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(1);
 
@@ -580,6 +630,16 @@ class PaymentDeadLetterTaskServiceImplTest {
             Field field = target.getClass().getDeclaredField(name);
             field.setAccessible(true);
             field.set(target, value);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private Object getField(Object target, String name) {
+        try {
+            Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            return field.get(target);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }

@@ -19,10 +19,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -190,13 +194,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
             if (!StringUtils.hasText(signatureSecret)) {
                 throw new IllegalStateException("死信重放签名密钥未配置");
             }
-            rabbitTemplate.invoke(operations -> {
-                operations.send(replayExchange, replayRoutingKey,
-                        buildReplayMessage(task.getPayloadSnapshot(), normalizedTaskNo,
-                                replayMessageId, replayCorrelationId, expectedRoute, signatureSecret));
-                operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
-                return null;
-            });
+            sendConfirmedReplay(replayExchange, replayRoutingKey,
+                    buildReplayMessage(task.getPayloadSnapshot(), normalizedTaskNo,
+                            replayMessageId, replayCorrelationId, expectedRoute, signatureSecret));
             if (paymentDeadLetterTaskMapper.markReplayed(normalizedTaskNo) != 1) {
                 throw new IllegalStateException("死信重放状态更新失败");
             }
@@ -211,6 +211,23 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
             }
         }
         return maskedTaskCopy(findRequiredTask(normalizedTaskNo));
+    }
+
+    private void sendConfirmedReplay(String exchange, String routingKey, Message message) {
+        CorrelationData correlationData = new CorrelationData();
+        rabbitTemplate.send(exchange, routingKey, message, correlationData);
+        try {
+            CorrelationData.Confirm confirm = correlationData.getFuture()
+                    .get(publisherConfirmTimeoutMs, TimeUnit.MILLISECONDS);
+            if (confirm == null || !confirm.isAck() || correlationData.getReturned() != null) {
+                throw new IllegalStateException("死信重放未被目标队列确认");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("死信重放确认中断", exception);
+        } catch (ExecutionException | TimeoutException exception) {
+            throw new IllegalStateException("死信重放确认失败", exception);
+        }
     }
 
     private Message buildReplayMessage(String payloadSnapshot,
