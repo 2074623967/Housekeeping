@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     refund_order_id VARCHAR(64) NOT NULL COMMENT '退款单号',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '原支付单号',
+    channel_code VARCHAR(64) COMMENT '原支付渠道快照',
     order_no VARCHAR(64) NOT NULL COMMENT '业务订单号',
     customer_name VARCHAR(128) COMMENT '客户名称',
     paid_amount DECIMAL(18,2) NOT NULL COMMENT '原支付金额',
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS t_refund_order (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT uk_refund_order_id UNIQUE (refund_order_id),
+    CONSTRAINT uk_refund_channel_identity UNIQUE (channel_code, channel_refund_id),
     CONSTRAINT uk_refund_idempotency_bytes UNIQUE (idempotency_key_bytes)
 );
 

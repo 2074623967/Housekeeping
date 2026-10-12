@@ -16,6 +16,8 @@ public class RefundOrderEntity {
     private String refundOrderId;
     /** 原支付单号。 */
     private String paymentOrderId;
+    /** 原支付渠道快照。 */
+    private String channelCode;
     /** 业务订单号。 */
     private String orderNo;
     /** 客户名称。 */

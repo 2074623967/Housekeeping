@@ -37,6 +37,7 @@ class RefundSuccessOutboxRollbackIntegrationTest {
         source.setPaymentOrderId(paymentOrderId);
         source.setOrderNo("ORDER-OUTBOX");
         source.setPaidAmount(new BigDecimal("20.00"));
+        source.setChannelCode("WECHAT");
         refundService.projectPaymentSuccess(source);
 
         RefundApplyRequestDTO apply = new RefundApplyRequestDTO();

@@ -188,6 +188,7 @@ class RefundCenterIntegrationTest {
         source.setPaymentOrderId(paymentOrderId);
         source.setOrderNo("ORDER-IT-BOUNDARY");
         source.setPaidAmount(new BigDecimal("100.00"));
+        source.setChannelCode("WECHAT");
         refundService.projectPaymentSuccess(source);
 
         RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
@@ -221,6 +222,94 @@ class RefundCenterIntegrationTest {
     }
 
     @Test
+    void shouldNotAcceptOneChannelRefundIdForTwoDifferentRefunds() {
+        String[] refundOrderIds = new String[2];
+        for (int index = 0; index < refundOrderIds.length; index++) {
+            String paymentOrderId = "PAY-CHANNEL-OWNER-" + UUID.randomUUID();
+            PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+            source.setPaymentOrderId(paymentOrderId);
+            source.setOrderNo("ORDER-CHANNEL-OWNER-" + index);
+            source.setPaidAmount(new BigDecimal("100.00"));
+            source.setChannelCode("WECHAT");
+            refundService.projectPaymentSuccess(source);
+
+            RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+            apply.setPaymentOrderId(paymentOrderId);
+            apply.setRefundAmount(new BigDecimal("10.00"));
+            refundOrderIds[index] = refundService.apply(apply).getRefundOrderId();
+            RefundActionRequestDTO action = new RefundActionRequestDTO();
+            action.setRefundOrderId(refundOrderIds[index]);
+            refundService.approve(action);
+            refundService.submit(action);
+        }
+
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setResult("SUCCESS");
+        callback.setChannelRefundId("WECHAT-REFUND-SHARED-" + UUID.randomUUID());
+        callback.setRefundOrderId(refundOrderIds[0]);
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        callback.setRefundOrderId(refundOrderIds[1]);
+        assertThrows(BusinessException.class, () -> refundService.callback(callback));
+        assertEquals("PROCESSING", refundService.detail(refundOrderIds[1]).getStatus());
+        assertNull(refundService.detail(refundOrderIds[1]).getChannelRefundId());
+        assertEquals(3, refundService.detail(refundOrderIds[1]).getOperationLogs().size());
+        assertEquals(callback.getChannelRefundId(), refundService.detail(refundOrderIds[0]).getChannelRefundId());
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setAggregateId(refundOrderIds[1]);
+        assertEquals(0L, refundService.listOutbox(query).getTotal());
+
+        String otherChannelPaymentId = "PAY-OTHER-CHANNEL-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO otherChannelSource = new PaymentSuccessProjectionDTO();
+        otherChannelSource.setPaymentOrderId(otherChannelPaymentId);
+        otherChannelSource.setOrderNo("ORDER-OTHER-CHANNEL");
+        otherChannelSource.setPaidAmount(new BigDecimal("100.00"));
+        otherChannelSource.setChannelCode("ALIPAY");
+        refundService.projectPaymentSuccess(otherChannelSource);
+        RefundApplyRequestDTO otherChannelApply = new RefundApplyRequestDTO();
+        otherChannelApply.setPaymentOrderId(otherChannelPaymentId);
+        otherChannelApply.setRefundAmount(new BigDecimal("10.00"));
+        String otherChannelRefundId = refundService.apply(otherChannelApply).getRefundOrderId();
+        RefundActionRequestDTO otherChannelAction = new RefundActionRequestDTO();
+        otherChannelAction.setRefundOrderId(otherChannelRefundId);
+        refundService.approve(otherChannelAction);
+        refundService.submit(otherChannelAction);
+        callback.setRefundOrderId(otherChannelRefundId);
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+    }
+
+    @Test
+    void shouldNotBindChannelRefundIdWithoutOriginalChannelSnapshot() {
+        String paymentOrderId = "PAY-UNKNOWN-CHANNEL-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-UNKNOWN-CHANNEL");
+        source.setPaidAmount(new BigDecimal("100.00"));
+        refundService.projectPaymentSuccess(source);
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("10.00"));
+        String refundOrderId = refundService.apply(apply).getRefundOrderId();
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(refundOrderId);
+        refundService.approve(action);
+        refundService.submit(action);
+
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setRefundOrderId(refundOrderId);
+        callback.setResult("SUCCESS");
+        callback.setChannelRefundId("UNVERIFIED-" + UUID.randomUUID());
+        BusinessException error = assertThrows(BusinessException.class, () -> refundService.callback(callback));
+        assertEquals("退款单缺少原支付渠道事实，待人工核查", error.getMessage());
+        RefundDetailDTO detail = refundService.detail(refundOrderId);
+        assertEquals("PROCESSING", detail.getStatus());
+        assertNull(detail.getChannelRefundId());
+        assertEquals(3, detail.getOperationLogs().size());
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setAggregateId(refundOrderId);
+        assertEquals(0L, refundService.listOutbox(query).getTotal());
+    }
+
+    @Test
     void shouldStoreValidSuccessOutboxJsonForEscapedPaymentScene() throws Exception {
         String paymentOrderId = "PAY-IT-JSON-\"" + UUID.randomUUID();
         String payScene = "HOME_\"CLEAN\\WEEK\nLY";
@@ -228,6 +317,7 @@ class RefundCenterIntegrationTest {
         source.setPaymentOrderId(paymentOrderId);
         source.setOrderNo("ORDER-IT-JSON");
         source.setPaidAmount(new BigDecimal("30.00"));
+        source.setChannelCode("WECHAT");
         source.setPayScene(payScene);
         refundService.projectPaymentSuccess(source);
 

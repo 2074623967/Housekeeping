@@ -7,7 +7,7 @@
     <select id="findList" resultType="com.abc123.refund.dto.RefundListItemDTO">
         SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
                t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
-               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
+               t_refund_order.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
             AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
@@ -52,7 +52,7 @@
     <select id="findByRefundOrderId" resultType="com.abc123.refund.dto.RefundListItemDTO">
         SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
                t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
-               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
+               t_refund_order.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
             AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
@@ -65,7 +65,7 @@
     <select id="findByIdempotencyKey" resultType="com.abc123.refund.dto.RefundListItemDTO">
         SELECT t_refund_order.refund_order_id, t_refund_order.payment_order_id, ps.pay_scene, t_refund_order.order_no, t_refund_order.customer_name, t_refund_order.paid_amount,
                t_refund_order.refund_amount, t_refund_order.refund_method, t_refund_order.refund_reason, t_refund_order.status, t_refund_order.channel_refund_id, t_refund_order.failure_code,
-               ps.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
+               t_refund_order.channel_code, submitted_at AS channel_submitted_at, applied_at, success_at, terminal_at
         FROM t_refund_order
         LEFT JOIN t_refund_payment_source ps ON ps.payment_order_id = t_refund_order.payment_order_id
             AND CHAR_LENGTH(ps.payment_order_id) = CHAR_LENGTH(t_refund_order.payment_order_id)
@@ -122,10 +122,10 @@
 
     <insert id="insertRefund" parameterType="com.abc123.refund.entity.RefundOrderEntity">
         INSERT INTO t_refund_order
-        (refund_order_id, payment_order_id, order_no, customer_name, paid_amount, refund_amount,
+        (refund_order_id, payment_order_id, channel_code, order_no, customer_name, paid_amount, refund_amount,
          refund_method, refund_reason, status, idempotency_key)
         VALUES
-        (#{refundOrderId}, #{paymentOrderId}, #{orderNo}, #{customerName}, #{paidAmount}, #{refundAmount},
+        (#{refundOrderId}, #{paymentOrderId}, #{channelCode}, #{orderNo}, #{customerName}, #{paidAmount}, #{refundAmount},
          #{refundMethod}, #{refundReason}, #{status}, #{idempotencyKey})
     </insert>
 
@@ -156,6 +156,7 @@
           AND CHAR_LENGTH(refund_order_id) = CHAR_LENGTH(#{refundOrderId})
           AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = 'PROCESSING'
+          AND (#{channelRefundId} IS NULL OR NULLIF(TRIM(channel_code), '') IS NOT NULL)
     </update>
 
     <insert id="insertLog">

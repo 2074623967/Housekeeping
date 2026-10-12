@@ -118,6 +118,7 @@ class RefundIdempotencyCasefoldIntegrationTest {
         source.setPaymentOrderId(paymentOrderId);
         source.setOrderNo("ORDER-ACTION");
         source.setPaidAmount(new BigDecimal("100.00"));
+        source.setChannelCode("WECHAT");
         refundService.projectPaymentSuccess(source);
 
         RefundApplyRequestDTO apply = new RefundApplyRequestDTO();

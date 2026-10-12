@@ -31,6 +31,7 @@ import java.util.UUID;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -244,6 +245,7 @@ public class RefundServiceImpl implements RefundService {
         RefundOrderEntity entity = new RefundOrderEntity();
         entity.setRefundOrderId(newRefundOrderId(LocalDateTime.now()));
         entity.setPaymentOrderId(paymentOrderId);
+        entity.setChannelCode(source.getChannelCode());
         entity.setOrderNo(source.getOrderNo());
         entity.setCustomerName(source.getCustomerName());
         entity.setPaidAmount(source.getPaidAmount());
@@ -331,11 +333,20 @@ public class RefundServiceImpl implements RefundService {
         if (SUCCESS.equals(target) && !StringUtils.hasText(channelRefundId)) {
             throw new BusinessException("退款成功回调缺少渠道退款流水号");
         }
-        int affected = refundDao.updateCallback(id, target, channelRefundId, failureCode);
+        int affected;
+        try {
+            affected = refundDao.updateCallback(id, target, channelRefundId, failureCode);
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException("渠道退款流水归属冲突，待人工核查");
+        }
         if (affected == 0) {
             RefundListItemDTO existing = refundDao.findByRefundOrderId(id);
             if (existing == null) {
                 throw new BusinessException("退款单不存在");
+            }
+            if ("PROCESSING".equals(existing.getStatus())
+                    && channelRefundId != null && !StringUtils.hasText(existing.getChannelCode())) {
+                throw new BusinessException("退款单缺少原支付渠道事实，待人工核查");
             }
             if (SUCCESS.equals(target) && SUCCESS.equals(existing.getStatus())) {
                 assertSameSuccessfulCallback(existing, channelRefundId);
