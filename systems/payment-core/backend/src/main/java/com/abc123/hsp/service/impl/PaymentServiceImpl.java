@@ -999,6 +999,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (isUnacceptedChannelSubmit(currentPrepay, currentDetail)) {
             validateSubmitIdempotencyOwnership(
                     idempotencyKey, request.getPrepayOrderNo(), paymentOrderId, requestFingerprint);
+            requireNoChannelTransactionConflict(currentDetail);
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
         }
         if (("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
@@ -1141,6 +1142,7 @@ public class PaymentServiceImpl implements PaymentService {
                     finalSubmitResult));
         } catch (RuntimeException exception) {
             PaymentChannelSubmitResultDTO uncertainResult = submitResult;
+            boolean collisionRecovered = false;
             try {
                 boolean foreignChannelTransaction = uncertainResult != null
                         && exception instanceof SanitizedSubmitTransactionException
@@ -1154,8 +1156,13 @@ public class PaymentServiceImpl implements PaymentService {
                             resolvedChannelCode, attemptNo, uncertainResult, foreignChannelTransaction);
                     return null;
                 });
+                collisionRecovered = foreignChannelTransaction;
             } catch (RuntimeException recoveryException) {
                 exception.addSuppressed(recoveryException);
+            }
+            if (collisionRecovered) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "渠道流水归属冲突，待人工核查");
             }
             throw exception;
         }

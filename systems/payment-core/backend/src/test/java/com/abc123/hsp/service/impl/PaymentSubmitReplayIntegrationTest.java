@@ -128,7 +128,10 @@ class PaymentSubmitReplayIntegrationTest {
             request.setClientIp("127.0.0.1");
             request.setIdempotencyKey("COLLISION-RECOVERY-001");
 
-            assertThrows(RuntimeException.class, () -> paymentService.submit(request));
+            BusinessException firstSubmit = assertThrows(BusinessException.class,
+                    () -> paymentService.submit(request));
+            assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, firstSubmit.getCode());
+            assertEquals("渠道流水归属冲突，待人工核查", firstSubmit.getMessage());
             assertEquals(1, calls.get());
             assertEquals("danger", jdbcTemplate.queryForObject(
                     "SELECT status_type FROM t_payment_order WHERE payment_order_id = ?",
@@ -158,6 +161,7 @@ class PaymentSubmitReplayIntegrationTest {
             assertEquals("结果待确认", reused.getCashierStatus());
             BusinessException replay = assertThrows(BusinessException.class, () -> paymentService.submit(request));
             assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, replay.getCode());
+            assertEquals("渠道流水归属冲突，待人工核查", replay.getMessage());
             PaymentQueryRequestDTO query = new PaymentQueryRequestDTO();
             query.setPaymentOrderId(prepay.getPaymentOrderId());
             BusinessException queryBlocked = assertThrows(BusinessException.class, () -> paymentService.query(query));
