@@ -1834,6 +1834,7 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentDetailDTO detail = requireRequestedPaymentDetail(
                 paymentMapper.findDetail(request.getPaymentOrderId()), request.getPaymentOrderId());
         requireNonSuccessfulPaymentPrepayBinding(detail);
+        requireNoChannelTransactionConflict(detail);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             validatePaymentSuccessFacts(detail);
             return outwardDetail(detail);
@@ -1858,6 +1859,7 @@ public class PaymentServiceImpl implements PaymentService {
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus());
         if (requiresSettlement) {
             detail = lockAndReloadPaymentForSettlement(detail);
+            requireNoChannelTransactionConflict(detail);
             requireChannelSubmissionFact(detail);
         }
         String queriedChannelTransactionNo = queryResult.getChannelTransactionNo();
@@ -1895,6 +1897,7 @@ public class PaymentServiceImpl implements PaymentService {
                 queryResult.getReturnCodeMappingMatched());
         if (snapshotRows == 0) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
+            requireNoChannelTransactionConflict(latestDetail);
             if (latestDetail != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
                 if (!detail.getChannel().equals(latestDetail.getChannel())
                         || StringUtils.hasText(queryResult.getChannelTransactionNo())

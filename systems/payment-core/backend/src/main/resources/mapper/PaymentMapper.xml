@@ -1339,6 +1339,23 @@
           AND CAST(payment_order_id AS BINARY(256)) = CAST(#{paymentOrderId} AS BINARY(256))
           AND status != 'SUCCESS'
           AND success_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt disputed_attempt
+            WHERE disputed_attempt.payment_order_id = t_payment_order.payment_order_id
+              AND CHAR_LENGTH(disputed_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+              AND CAST(disputed_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+              AND disputed_attempt.id = (
+                SELECT latest_attempt.id
+                FROM t_payment_attempt latest_attempt
+                WHERE latest_attempt.payment_order_id = t_payment_order.payment_order_id
+                  AND CHAR_LENGTH(latest_attempt.payment_order_id) = CHAR_LENGTH(t_payment_order.payment_order_id)
+                  AND CAST(latest_attempt.payment_order_id AS BINARY(256)) = CAST(t_payment_order.payment_order_id AS BINARY(256))
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1
+              )
+              AND disputed_attempt.attempt_status = '渠道流水归属冲突，待人工核查'
+          )
     </update>
 
     <update id="updateLatestPaymentAttemptStatus">

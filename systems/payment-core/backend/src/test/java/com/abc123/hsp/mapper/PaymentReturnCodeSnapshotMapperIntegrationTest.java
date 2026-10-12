@@ -96,6 +96,26 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotOverwriteDisputedChannelTransactionWithStaleQuerySnapshot() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(payment_order_id, attempt_status, created_at) VALUES "
+                    + "('PAY-SNAPSHOT-001', '渠道流水归属冲突，待人工核查', NOW())");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(0, mapper.updatePaymentReturnCodeSnapshot(
+                    "PAY-SNAPSHOT-001", "USERPAYING", null, null, null, null, null, null, null));
+            assertNull(mapper.findDetail("PAY-SNAPSHOT-001").getChannelReturnCode());
+
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '待回调' "
+                    + "WHERE payment_order_id = 'PAY-SNAPSHOT-001'");
+            assertEquals(1, mapper.updatePaymentReturnCodeSnapshot(
+                    "PAY-SNAPSHOT-001", "USERPAYING", null, null, null, null, null, null, null));
+        }
+    }
+
+    @Test
     void shouldOnlySettleBillBoundToPaymentPrepay() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);

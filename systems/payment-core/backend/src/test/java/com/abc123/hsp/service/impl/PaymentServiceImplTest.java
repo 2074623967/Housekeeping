@@ -6643,6 +6643,62 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectQueryWhenDisputedAttemptAppearsAfterChannelRead() {
+        PaymentDetailDTO pending = queryDetail("PAY-QUERY-DISPUTED-RACE", "WAIT_CALLBACK");
+        PaymentDetailDTO disputed = queryDetail("PAY-QUERY-DISPUTED-RACE", "WAIT_CALLBACK");
+        disputed.setLatestAttemptStatus("渠道流水归属冲突，待人工核查");
+        disputed.setStatusType("danger");
+        when(paymentMapper.findDetail("PAY-QUERY-DISPUTED-RACE")).thenReturn(pending, disputed);
+        when(paymentChannelQueryService.query(pending))
+                .thenReturn(queryResult("WAIT_CALLBACK", null, "GATEWAY_ACCESS_HTTP"));
+        when(paymentMapper.updatePaymentReturnCodeSnapshot(
+                eq("PAY-QUERY-DISPUTED-RACE"), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(0);
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-DISPUTED-RACE");
+        BusinessException blocked = assertThrows(BusinessException.class, () ->
+                new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService,
+                        paymentChannelRoutingService, paymentChannelQueryService,
+                        paymentChannelSubmitService).query(request));
+
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, blocked.getCode());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+    }
+
+    @Test
+    void shouldRejectSuccessfulQueryWhenDisputedAttemptAppearsBeforeSettlement() {
+        PaymentDetailDTO pending = queryDetail("PAY-QUERY-DISPUTED-SETTLEMENT", "WAIT_CALLBACK");
+        PaymentDetailDTO disputed = queryDetail("PAY-QUERY-DISPUTED-SETTLEMENT", "WAIT_CALLBACK");
+        disputed.setLatestAttemptStatus("渠道流水归属冲突，待人工核查");
+        disputed.setStatusType("danger");
+        when(paymentMapper.findDetail("PAY-QUERY-DISPUTED-SETTLEMENT")).thenReturn(pending, disputed);
+        when(paymentChannelQueryService.query(pending))
+                .thenReturn(queryResult("SUCCESS", "WX-QUERY-DISPUTED", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-DISPUTED-SETTLEMENT");
+        BusinessException blocked = assertThrows(BusinessException.class, () ->
+                new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService,
+                        paymentChannelRoutingService, paymentChannelQueryService,
+                        paymentChannelSubmitService).query(request));
+
+        assertEquals(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, blocked.getCode());
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+    }
+
+    @Test
     void shouldRejectPendingQueryWhenCallbackWinnerBindsDifferentTransaction() {
         PaymentDetailDTO pending = queryDetail("PAY-QUERY-PENDING-CONFLICT", "WAIT_CALLBACK");
         PaymentDetailDTO settled = queryDetail("PAY-QUERY-PENDING-CONFLICT", "SUCCESS");
