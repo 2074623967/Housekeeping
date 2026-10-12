@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.abc123.accounting.common.PaymentEventAmqpSignature;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,57 @@ class AccountingPaymentSuccessAmqpConsumerTest {
     private RabbitTemplate rabbitTemplate;
     @Mock
     private Channel channel;
+
+    @Test
+    void shouldDeadLetterUnsignedMessageBeforeCrediting() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
+
+        consumer(3).consume(unsigned, channel, 26L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"),
+                eq("payment.success.accounting.dlq.v1"), any(Message.class));
+        verify(channel).basicAck(26L, false);
+        verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldDeadLetterSignedMessageWhenSecretIsMissing() throws Exception {
+        consumer(3, " ").consume(message(0), channel, 28L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"),
+                eq("payment.success.accounting.dlq.v1"), any(Message.class));
+        verify(channel).basicAck(28L, false);
+        verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldNackWhenUntrustedDeadLetterPublishFails() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).send(eq("payment.trade.dlq"),
+                        eq("payment.success.accounting.dlq.v1"), any(Message.class));
+
+        consumer(3).consume(unsigned, channel, 29L);
+
+        verify(channel).basicNack(29L, false, true);
+        verify(channel, never()).basicAck(29L, false);
+    }
+
+    @Test
+    void shouldDeadLetterTamperedMessageWithoutRetry() throws Exception {
+        Message signed = message(0);
+        Message tampered = new Message("{\"paymentOrderId\":\"PAY-FORGED\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                signed.getMessageProperties());
+
+        consumer(3).consume(tampered, channel, 27L);
+
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"),
+                eq("payment.success.accounting.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate, never()).send(eq("payment.trade.retry"), any(), any(Message.class));
+        verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
+    }
 
     @Test
     void shouldConsumeAndAckWhenAccountingSucceeds() throws Exception {
@@ -77,7 +129,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         properties.setMessageId("EVT-001");
         properties.setHeader("x-retry-count", 0);
 
-        consumer(3).consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 24L);
+        consumer(3).consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 24L);
 
         verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
         verify(channel).basicAck(24L, false);
@@ -94,7 +146,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         properties.setHeader("schemaVersion", "2");
         properties.setHeader("x-retry-count", 0);
 
-        consumer(3).consume(new Message(objectMapper.writeValueAsBytes(request), properties), channel, 25L);
+        consumer(3).consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 25L);
 
         verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
         verify(channel).basicAck(25L, false);
@@ -102,6 +154,10 @@ class AccountingPaymentSuccessAmqpConsumerTest {
     }
 
     private AccountingPaymentSuccessAmqpConsumer consumer(int maxRetryCount) {
+        return consumer(maxRetryCount, "local-payment-amqp-test-secret");
+    }
+
+    private AccountingPaymentSuccessAmqpConsumer consumer(int maxRetryCount, String secret) {
         return new AccountingPaymentSuccessAmqpConsumer(
                 accountingEventService,
                 rabbitTemplate,
@@ -110,7 +166,8 @@ class AccountingPaymentSuccessAmqpConsumerTest {
                 "payment.success.accounting.retry.v1",
                 "payment.trade.dlq",
                 "payment.success.accounting.dlq.v1",
-                maxRetryCount);
+                maxRetryCount,
+                secret);
     }
 
     private Message message(int retryCount) throws Exception {
@@ -124,6 +181,12 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         properties.setMessageId("EVT-001");
         properties.setCorrelationId("EVT-001");
         properties.setHeader("x-retry-count", retryCount);
-        return new Message(objectMapper.writeValueAsBytes(request), properties);
+        return signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties));
+    }
+
+    private Message signedMessage(Message message) {
+        message.getMessageProperties().setHeader(PaymentEventAmqpSignature.HEADER_NAME,
+                PaymentEventAmqpSignature.sign(message.getBody(), "local-payment-amqp-test-secret"));
+        return message;
     }
 }

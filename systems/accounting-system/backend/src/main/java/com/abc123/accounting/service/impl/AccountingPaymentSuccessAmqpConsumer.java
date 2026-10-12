@@ -1,5 +1,6 @@
 package com.abc123.accounting.service.impl;
 
+import com.abc123.accounting.common.PaymentEventAmqpSignature;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,7 @@ public class AccountingPaymentSuccessAmqpConsumer {
     private final String deadLetterExchange;
     private final String deadLetterRoutingKey;
     private final int maxRetryCount;
+    private final String paymentSuccessAmqpSecret;
 
     public AccountingPaymentSuccessAmqpConsumer(
             AccountingEventService accountingEventService,
@@ -47,7 +49,8 @@ public class AccountingPaymentSuccessAmqpConsumer {
             @Value("${accounting.amqp.retry-routing-key:payment.success.accounting.retry.v1}") String retryRoutingKey,
             @Value("${accounting.amqp.dead-letter-exchange:payment.trade.dlq}") String deadLetterExchange,
             @Value("${accounting.amqp.dead-letter-routing-key:payment.success.accounting.dlq.v1}") String deadLetterRoutingKey,
-            @Value("${accounting.amqp.max-retry-count:3}") int maxRetryCount) {
+            @Value("${accounting.amqp.max-retry-count:3}") int maxRetryCount,
+            @Value("${HSP_PAYMENT_SUCCESS_AMQP_SECRET:}") String paymentSuccessAmqpSecret) {
         this.accountingEventService = accountingEventService;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
@@ -56,12 +59,19 @@ public class AccountingPaymentSuccessAmqpConsumer {
         this.deadLetterExchange = deadLetterExchange;
         this.deadLetterRoutingKey = deadLetterRoutingKey;
         this.maxRetryCount = maxRetryCount <= 0 ? 3 : maxRetryCount;
+        this.paymentSuccessAmqpSecret = paymentSuccessAmqpSecret;
     }
 
     @RabbitListener(queues = "${accounting.amqp.payment-success-queue:accounting.payment-success}", ackMode = "MANUAL")
     public void consume(Message message,
                         Channel channel,
                         @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
+        if (!PaymentEventAmqpSignature.matches(message.getBody(),
+                message.getMessageProperties().getHeaders().get(PaymentEventAmqpSignature.HEADER_NAME),
+                paymentSuccessAmqpSecret)) {
+            routeUntrusted(message, channel, deliveryTag);
+            return;
+        }
         try {
             PaymentSuccessEventRequestDTO request = objectMapper.readValue(message.getBody(), PaymentSuccessEventRequestDTO.class);
             validateEnvelope(message, request);
@@ -71,6 +81,15 @@ public class AccountingPaymentSuccessAmqpConsumer {
             return;
         }
         channel.basicAck(deliveryTag, false);
+    }
+
+    private void routeUntrusted(Message message, Channel channel, long deliveryTag) throws IOException {
+        try {
+            rabbitTemplate.send(deadLetterExchange, deadLetterRoutingKey, message);
+            channel.basicAck(deliveryTag, false);
+        } catch (RuntimeException exception) {
+            channel.basicNack(deliveryTag, false, true);
+        }
     }
 
     private void validateEnvelope(Message message, PaymentSuccessEventRequestDTO request) {
