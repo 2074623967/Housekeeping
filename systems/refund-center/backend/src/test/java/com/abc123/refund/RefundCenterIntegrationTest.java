@@ -379,15 +379,24 @@ class RefundCenterIntegrationTest {
         callback.setRefundOrderId(created.getRefundOrderId());
         callback.setResult("FAIL");
         callback.setFailureCode("CHANNEL_TIMEOUT");
+        callback.setChannelRefundId("CH-IT-FAIL-1");
         RefundListItemDTO failed = refundService.callback(callback);
 
         assertEquals("FAIL", failed.getStatus());
         assertNull(failed.getSuccessAt());
         assertEquals("CHANNEL_TIMEOUT", failed.getFailureCode());
+        assertEquals("CH-IT-FAIL-1", failed.getChannelRefundId());
         assertNotNull(failed.getTerminalAt());
         assertEquals(failed.getTerminalAt(), refundService.detail(created.getRefundOrderId()).getTerminalAt());
         assertEquals(failed.getTerminalAt(), refundService.callback(callback).getTerminalAt());
 
+        callback.setChannelRefundId("CH-IT-FAIL-OTHER");
+        assertThrows(BusinessException.class, () -> refundService.callback(callback));
+        callback.setChannelRefundId(null);
+        assertThrows(BusinessException.class, () -> refundService.callback(callback));
+        assertEquals("CH-IT-FAIL-1", refundService.detail(created.getRefundOrderId()).getChannelRefundId());
+        assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+        callback.setChannelRefundId("CH-IT-FAIL-1");
         callback.setFailureCode("CHANNEL_CONFLICT");
         org.junit.jupiter.api.Assertions.assertThrows(
                 com.abc123.refund.common.BusinessException.class,

@@ -378,6 +378,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = new RefundListItemDTO();
         result.setStatus("FAIL");
         result.setRefundOrderId("REF-2");
+        result.setChannelRefundId("CH-2");
         result.setFailureCode("E001");
         when(refundDao.findByRefundOrderId("REF-2")).thenReturn(result);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
@@ -396,6 +397,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = new RefundListItemDTO();
         result.setStatus("FAIL");
         result.setRefundOrderId("REF-2");
+        result.setChannelRefundId("CH-2");
         result.setFailureCode("E001");
         when(refundDao.findByRefundOrderId("REF-2")).thenReturn(result);
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();

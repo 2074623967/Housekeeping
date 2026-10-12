@@ -353,7 +353,7 @@ public class RefundServiceImpl implements RefundService {
                 return existing;
             }
             if (FAIL.equals(target) && FAIL.equals(existing.getStatus())) {
-                assertSameFailedCallback(existing, failureCode);
+                assertSameFailedCallback(existing, channelRefundId, failureCode);
                 return existing;
             }
             throw new BusinessException("退款单不在可回调状态，或回调已处理");
@@ -378,8 +378,9 @@ public class RefundServiceImpl implements RefundService {
         }
     }
 
-    private void assertSameFailedCallback(RefundListItemDTO existing, String failureCode) {
-        if (!Objects.equals(trim(existing.getFailureCode()), failureCode)) {
+    private void assertSameFailedCallback(RefundListItemDTO existing, String channelRefundId, String failureCode) {
+        if (!Objects.equals(trim(existing.getChannelRefundId()), channelRefundId)
+                || !Objects.equals(trim(existing.getFailureCode()), failureCode)) {
             throw new BusinessException("退款失败回调与已存在失败事实不一致");
         }
     }
