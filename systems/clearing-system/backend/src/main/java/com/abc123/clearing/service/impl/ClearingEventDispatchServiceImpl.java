@@ -1,5 +1,6 @@
 package com.abc123.clearing.service.impl;
 
+import com.abc123.clearing.common.ClearingEventAmqpSignature;
 import com.abc123.clearing.common.ClearingEventHttpSignature;
 import com.abc123.clearing.entity.ClearingOrderEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
@@ -51,6 +52,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
 
     @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}")
     private String clearingGeneratedHttpSecret;
+
+    @Value("${HSP_CLEARING_GENERATED_AMQP_SECRET:}")
+    private String clearingGeneratedAmqpSecret;
 
     @Autowired
     public ClearingEventDispatchServiceImpl(
@@ -167,7 +171,8 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
     }
 
     private void publishToAmqp(com.abc123.clearing.entity.ClearingEventEntity outboxEvent) {
-        if (rabbitTemplate == null || objectMapper == null || !StringUtils.hasText(clearingGeneratedExchange)
+        if (rabbitTemplate == null || objectMapper == null || !StringUtils.hasText(clearingGeneratedAmqpSecret)
+                || !StringUtils.hasText(clearingGeneratedExchange)
                 || !StringUtils.hasText(clearingGeneratedRoutingKey)) {
             throw new IllegalStateException("AMQP 清分结果事件配置不完整");
         }
@@ -193,6 +198,8 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             properties.setHeader("eventType", event.getEventType());
             properties.setHeader("schemaVersion", "1");
             properties.setHeader("clearingNo", event.getBizNo());
+            properties.setHeader(ClearingEventAmqpSignature.HEADER_NAME,
+                    ClearingEventAmqpSignature.sign(message.getBody(), clearingGeneratedAmqpSecret));
             return message;
         };
     }

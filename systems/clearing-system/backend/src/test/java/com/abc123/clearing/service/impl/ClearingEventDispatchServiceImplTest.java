@@ -10,11 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.clearing.entity.ClearingOrderEntity;
+import com.abc123.clearing.common.ClearingEventAmqpSignature;
 import com.abc123.clearing.common.ClearingEventHttpSignature;
 import com.abc123.clearing.entity.ClearingEventEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -288,22 +290,44 @@ class ClearingEventDispatchServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        boolean result = new ClearingEventDispatchServiceImpl(
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore,
                 rabbitTemplate,
                 new ObjectMapper(),
                 "clearing.trade",
-                "clearing.generated.v1").publishClearingGenerated("PAY-001");
+                "clearing.generated.v1");
+        setField(dispatchService, "clearingGeneratedAmqpSecret", "local-clearing-amqp-test-secret");
+        boolean result = dispatchService.publishClearingGenerated("PAY-001");
 
         ArgumentCaptor<MessagePostProcessor> processorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
         verify(rabbitTemplate).convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
                 eq(outboxEvent().getPayload()), processorCaptor.capture());
         verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
-        Message message = processorCaptor.getValue().postProcessMessage(new Message(new byte[0], new MessageProperties()));
+        Message message = processorCaptor.getValue().postProcessMessage(new Message(
+                outboxEvent().getPayload().getBytes(StandardCharsets.UTF_8), new MessageProperties()));
         assertTrue("EVT-001".equals(message.getMessageProperties().getMessageId()));
         assertTrue("CLR-001".equals(message.getMessageProperties().getHeaders().get("clearingNo")));
         assertTrue("1".equals(message.getMessageProperties().getHeaders().get("schemaVersion")));
+        assertEquals(ClearingEventAmqpSignature.sign(message.getBody(), "local-clearing-amqp-test-secret"),
+                message.getMessageProperties().getHeaders().get(ClearingEventAmqpSignature.HEADER_NAME));
         verify(clearingMemoryStore).markOutboxPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldKeepClearingOutboxRetryableWhenAmqpSecretIsMissing() {
+        ClearingOrderEntity clearingOrder = clearingOrder();
+        when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
+        when(clearingMemoryStore.sharesByClearingNo("CLR-001"))
+                .thenReturn(Collections.<ShareItemEntity>emptyList());
+        when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(true);
+
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, rabbitTemplate, new ObjectMapper(), "clearing.trade", "clearing.generated.v1");
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+        verify(rabbitTemplate, times(0)).invoke(any());
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
     }
 
     @Test
