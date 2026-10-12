@@ -1,5 +1,6 @@
 package com.abc123.settlement.service.impl;
 
+import com.abc123.settlement.common.ClearingEventAmqpSignature;
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.service.SettlementEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +35,7 @@ public class SettlementClearingGeneratedAmqpConsumer {
     private final String deadLetterExchange;
     private final String deadLetterRoutingKey;
     private final int maxRetryCount;
+    private final String clearingGeneratedAmqpSecret;
 
     public SettlementClearingGeneratedAmqpConsumer(SettlementEventService settlementEventService, RabbitTemplate rabbitTemplate,
                                                     ObjectMapper objectMapper,
@@ -41,7 +43,8 @@ public class SettlementClearingGeneratedAmqpConsumer {
                                                     @Value("${settlement.amqp.retry-routing-key:clearing.generated.settlement.retry.v1}") String retryRoutingKey,
                                                     @Value("${settlement.amqp.dead-letter-exchange:clearing.trade.dlq}") String deadLetterExchange,
                                                     @Value("${settlement.amqp.dead-letter-routing-key:clearing.generated.settlement.dlq.v1}") String deadLetterRoutingKey,
-                                                    @Value("${settlement.amqp.max-retry-count:3}") int maxRetryCount) {
+                                                    @Value("${settlement.amqp.max-retry-count:3}") int maxRetryCount,
+                                                    @Value("${HSP_CLEARING_GENERATED_AMQP_SECRET:}") String clearingGeneratedAmqpSecret) {
         this.settlementEventService = settlementEventService;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
@@ -50,10 +53,17 @@ public class SettlementClearingGeneratedAmqpConsumer {
         this.deadLetterExchange = deadLetterExchange;
         this.deadLetterRoutingKey = deadLetterRoutingKey;
         this.maxRetryCount = maxRetryCount <= 0 ? 3 : maxRetryCount;
+        this.clearingGeneratedAmqpSecret = clearingGeneratedAmqpSecret;
     }
 
     @RabbitListener(queues = "${settlement.amqp.clearing-generated-queue:settlement.clearing-generated}", ackMode = "MANUAL")
     public void consume(Message message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
+        if (!ClearingEventAmqpSignature.matches(message.getBody(),
+                message.getMessageProperties().getHeaders().get(ClearingEventAmqpSignature.HEADER_NAME),
+                clearingGeneratedAmqpSecret)) {
+            routeUntrusted(message, channel, deliveryTag);
+            return;
+        }
         try {
             ClearingGeneratedEventRequestDTO request = objectMapper.readValue(
                     message.getBody(), ClearingGeneratedEventRequestDTO.class);
@@ -64,6 +74,15 @@ public class SettlementClearingGeneratedAmqpConsumer {
             return;
         }
         channel.basicAck(deliveryTag, false);
+    }
+
+    private void routeUntrusted(Message message, Channel channel, long deliveryTag) throws IOException {
+        try {
+            rabbitTemplate.send(deadLetterExchange, deadLetterRoutingKey, message);
+            channel.basicAck(deliveryTag, false);
+        } catch (RuntimeException exception) {
+            channel.basicNack(deliveryTag, false, true);
+        }
     }
 
     private void validateEnvelope(Message message, ClearingGeneratedEventRequestDTO request) {
