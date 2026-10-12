@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.common.PaymentEventAmqpSignature;
 import com.abc123.hsp.common.PaymentEventHttpSignature;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
@@ -22,6 +23,7 @@ import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collections;
@@ -866,7 +868,7 @@ class PaymentEventDispatchServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        new PaymentEventDispatchServiceImpl(
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "ACT10003",
@@ -875,7 +877,9 @@ class PaymentEventDispatchServiceImplTest {
                 new ObjectMapper(),
                 "payment.trade",
                 "payment.success.v1"
-        ).publishPaymentSuccess("EVT-001", "PAY-001");
+        );
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<MessagePostProcessor> processorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
@@ -892,12 +896,15 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"paymentOrderId\":\"PAY-001\""));
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"accountNo\":\"ACT10003\""));
 
-        Message message = processorCaptor.getValue().postProcessMessage(new Message(new byte[0], new MessageProperties()));
+        Message message = processorCaptor.getValue().postProcessMessage(new Message(
+                String.valueOf(payloadCaptor.getValue()).getBytes(StandardCharsets.UTF_8), new MessageProperties()));
         Assertions.assertEquals("EVT-001", message.getMessageProperties().getMessageId());
         Assertions.assertEquals("EVT-001", message.getMessageProperties().getCorrelationId());
         Assertions.assertEquals("PAYMENT_SUCCESS", message.getMessageProperties().getHeaders().get("eventType"));
         Assertions.assertEquals("1", message.getMessageProperties().getHeaders().get("schemaVersion"));
         Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
+        Assertions.assertEquals(PaymentEventAmqpSignature.sign(message.getBody(), "local-payment-amqp-test-secret"),
+                message.getMessageProperties().getHeaders().get(PaymentEventAmqpSignature.HEADER_NAME));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
         verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
@@ -916,7 +923,7 @@ class PaymentEventDispatchServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        new PaymentEventDispatchServiceImpl(
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "ACT10003",
@@ -926,7 +933,9 @@ class PaymentEventDispatchServiceImplTest {
                 "payment.trade",
                 "payment.success.v1",
                 120000L
-        ).publishPaymentSuccess("EVT-001", "PAY-001");
+        );
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
 
         verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
@@ -943,7 +952,7 @@ class PaymentEventDispatchServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        new PaymentEventDispatchServiceImpl(
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "ACT10003",
@@ -953,7 +962,9 @@ class PaymentEventDispatchServiceImplTest {
                 "payment.trade",
                 "payment.success.v1",
                 0L
-        ).publishPaymentSuccess("EVT-001", "PAY-001");
+        );
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
 
         verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
@@ -979,7 +990,7 @@ class PaymentEventDispatchServiceImplTest {
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"), any(), any(MessagePostProcessor.class));
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "ACT10003",
@@ -988,7 +999,9 @@ class PaymentEventDispatchServiceImplTest {
                 new ObjectMapper(),
                 "payment.trade",
                 "payment.success.v1"
-        ).republish("EVT-001", " payment-event-scheduler ");
+        );
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        boolean success = service.republish("EVT-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-001");
@@ -1017,6 +1030,24 @@ class PaymentEventDispatchServiceImplTest {
         verify(rabbitTemplate, never()).invoke(any());
         verify(paymentEventMapper).markPublishFailed("EVT-AMQP-CONFIG-MISSING");
         verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMQP-CONFIG-MISSING");
+    }
+
+    @Test
+    void shouldRejectMissingAmqpSecretBeforePublishing() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-AMQP-SECRET-MISSING", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-AMQP-SECRET-MISSING")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper, "ACT10003", 3,
+                rabbitTemplate, new ObjectMapper(), "payment.trade", "payment.success.v1"
+        ).publishPaymentSuccess("EVT-AMQP-SECRET-MISSING", "PAY-001");
+
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-AMQP-SECRET-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMQP-SECRET-MISSING");
     }
 
     @Test

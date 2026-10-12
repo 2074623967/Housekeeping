@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.common.PaymentEventAmqpSignature;
 import com.abc123.hsp.common.PaymentEventHttpSignature;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
@@ -102,6 +103,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}")
     private String paymentSuccessHttpSecret;
+
+    @Value("${HSP_PAYMENT_SUCCESS_AMQP_SECRET:}")
+    private String paymentSuccessAmqpSecret;
 
     @Autowired
     public PaymentEventDispatchServiceImpl(
@@ -848,6 +852,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                String payScene,
                                BigDecimal amount) {
         if (rabbitTemplate == null || objectMapper == null
+                || !StringUtils.hasText(paymentSuccessAmqpSecret)
                 || !isValidConfiguredText(paymentSuccessExchange, AMQP_DESTINATION_MAX_LENGTH)
                 || !isValidConfiguredText(paymentSuccessRoutingKey, AMQP_DESTINATION_MAX_LENGTH)
                 || !isValidConfiguredText(accountingPaymentSuccessAccountNo, ACCOUNT_NO_MAX_LENGTH)) {
@@ -904,6 +909,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             properties.setHeader("eventType", PAYMENT_SUCCESS_EVENT_TYPE);
             properties.setHeader("schemaVersion", PAYMENT_SUCCESS_EVENT_SCHEMA_VERSION);
             properties.setHeader("paymentOrderId", paymentOrderId);
+            properties.setHeader(PaymentEventAmqpSignature.HEADER_NAME,
+                    PaymentEventAmqpSignature.sign(message.getBody(), paymentSuccessAmqpSecret));
             return message;
         };
     }

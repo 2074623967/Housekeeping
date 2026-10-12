@@ -5881,6 +5881,10 @@ App/H5/PC 在首次支付提交收到 `PAYMENT-1016` 且回读到有精确冲突
 
 `payment-core` 向清分与账务发送 `PAYMENT_SUCCESS` HTTP 请求时，配置 `HSP_PAYMENT_SUCCESS_HTTP_SECRET` 后，以发送的原始 UTF-8 JSON body 计算 HMAC-SHA256，再以 Base64 编码放入 `X-HSP-Payment-Event-Signature`；两消费端使用相同密钥验证原始 body，密钥缺失、请求未签名或 body 被修改时均返回 HTTP 403，且不得进入资金事件服务。发送端未配置密钥时仍可向受控 mock 发送旧格式用于代码测试，实际清分/账务接收端默认拒绝，不可将其部署为可用生产链路。隔离 `local-stack.sh verify payment-chain` 每轮随机生成一把仅供本轮三服务使用的临时密钥，不在日志或接口回执中输出。生产须由独立密钥管理、TLS/网络隔离和轮换机制接管；该签名只覆盖 HTTP 支付成功事件，不保护其他 HTTP 事件、MQ 消费、时间重放或服务端人员身份。
 
+### 14.578 支付成功 AMQP 事件载荷签名
+
+`payment-core` 的 AMQP 模式必须配置 `HSP_PAYMENT_SUCCESS_AMQP_SECRET`，未配置时在发布前失败并沿用事件失败/重试规则。发送端在 Rabbit 消息转换后，对实际 `message.getBody()` 计算 HMAC-SHA256/Base64，写入 `X-HSP-Payment-Event-AMQP-Signature` 头；清分和账务消费者在解析 JSON 及调用业务服务前使用同一密钥验证。缺密钥、缺签名、签名错误或 body 被篡改时跳过业务重试，原消息发 DLQ 后 ACK；发送 DLQ 抛错则 NACK/requeue。该签名与 HTTP 独立，现仅覆盖 `PAYMENT_SUCCESS` 的 AMQP body；不认证可修改的 Rabbit 消息头、不提供重放窗口或 DLQ 持久发布确认。生产仍须配置 Rabbit ACL、TLS/网络隔离、密钥安全分发与轮换，并在目标 RabbitMQ/MySQL 8 多实例及真实资金环境验收。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
