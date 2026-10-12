@@ -52,6 +52,10 @@ const metricCards = computed(() => [
 
 const selectedSuggestion = computed(() => {
   const status = selectedItem.value?.taskStatus;
+  if (selectedItem.value?.sourceSignatureVerified !== true
+      && ["PENDING_REVIEW", "READY_TO_REPLAY", "REPLAY_FAILED"].includes(status)) {
+    return "原消息来源未验签，不可授权或执行重放；请核对来源后人工结案。";
+  }
   if (status === "PENDING_REVIEW") {
     return "先核对原消息事实、目标消费者和幂等能力，再决定允许重放或人工结案。";
   }
@@ -149,9 +153,12 @@ async function loadTasks(preferredTaskNo = selectedItem.value?.taskNo, query = b
 
 async function runAction(item, action) {
   const currentItem = items.value.find((candidate) => candidate.taskNo === item.taskNo);
-  const isAllowedAction = action === "replay"
-    ? currentItem?.taskStatus === "READY_TO_REPLAY"
-    : ["ready", "resolve"].includes(action) && currentItem && canReview(currentItem);
+  const isAllowedAction = currentItem && (
+    (action === "replay" && currentItem.taskStatus === "READY_TO_REPLAY"
+      && currentItem.sourceSignatureVerified === true)
+    || (action === "ready" && canAuthorizeReplay(currentItem))
+    || (action === "resolve" && canReview(currentItem))
+  );
   if (isInteractionLocked.value || isSnapshotStale.value || !hasLoadedData.value
       || !loadedQuery.value || !isAllowedAction) {
     actionErrorMessage.value = "当前任务快照不可操作，请刷新成功后重新确认任务状态";
@@ -218,6 +225,10 @@ function goToPage(nextPage) {
 
 function canReview(item) {
   return ["PENDING_REVIEW", "REPLAY_FAILED"].includes(item.taskStatus);
+}
+
+function canAuthorizeReplay(item) {
+  return canReview(item) && item.sourceSignatureVerified === true;
 }
 
 function statusLabel(status) {
@@ -342,7 +353,7 @@ onMounted(loadTasks);
                       @click="openDetail(item)"
                     >详情</button>
                     <button
-                      v-if="canReview(item)"
+                      v-if="canAuthorizeReplay(item)"
                       class="link-button"
                       :disabled="isInteractionLocked || isSnapshotStale || !hasLoadedData"
                       @click="runAction(item, 'ready')"
@@ -354,11 +365,12 @@ onMounted(loadTasks);
                       @click="runAction(item, 'resolve')"
                     >人工结案</button>
                     <button
-                      v-if="item.taskStatus === 'READY_TO_REPLAY'"
+                      v-if="item.taskStatus === 'READY_TO_REPLAY' && item.sourceSignatureVerified === true"
                       class="link-button"
                       :disabled="isInteractionLocked || isSnapshotStale || !hasLoadedData"
                       @click="runAction(item, 'replay')"
                     >{{ activeAction === `${item.taskNo}:replay` ? "重放中..." : "执行重放" }}</button>
+                    <span v-if="item.sourceSignatureVerified !== true && ['PENDING_REVIEW', 'REPLAY_FAILED', 'READY_TO_REPLAY'].includes(item.taskStatus)" class="muted-text">来源未验签，不可重放</span>
                     <span v-if="!canReview(item) && item.taskStatus !== 'READY_TO_REPLAY'" class="muted-text">无需操作</span>
                   </div>
                 </td>

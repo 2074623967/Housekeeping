@@ -21,3 +21,11 @@ test("rechecks dead-letter status after an ambiguous action error and locks a fa
   assert.match(source, /const isSnapshotStale = computed\(\(\) => hasLoadedData\.value && Boolean\(loadErrorMessage\.value\)\)/);
   assert.match(source, /if \(isInteractionLocked\.value \|\| isSnapshotStale\.value \|\| !hasLoadedData\.value/);
 });
+
+test("keeps unsigned dead-letter tasks resolvable but not replayable", () => {
+  assert.match(source, /function canAuthorizeReplay\(item\) \{\s*return canReview\(item\) && item\.sourceSignatureVerified === true;/);
+  assert.match(source, /action === "ready" && canAuthorizeReplay\(currentItem\)/);
+  assert.match(source, /currentItem\.taskStatus === "READY_TO_REPLAY"\s*&& currentItem\.sourceSignatureVerified === true/);
+  assert.match(source, /@click="runAction\(item, 'resolve'\)"/);
+  assert.match(source, /来源未验签，不可重放/);
+});

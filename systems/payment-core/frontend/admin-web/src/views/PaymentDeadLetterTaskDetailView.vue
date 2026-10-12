@@ -111,6 +111,7 @@ watch(currentTaskNo, (taskNo) => {
               <div><strong>关联 ID：</strong>{{ formatValue(detail.correlationId) }}</div>
               <div><strong>目标系统：</strong>{{ formatValue(detail.targetSystem) }}</div>
               <div><strong>任务状态：</strong><span :class="['badge', detail.taskStatusType || 'info']">{{ statusLabel(detail.taskStatus) }}</span></div>
+              <div><strong>来源验签：</strong>{{ detail.sourceSignatureVerified === true ? "已验证" : "未验证，不可重放" }}</div>
               <div><strong>重放次数：</strong>{{ formatValue(detail.replayCount) }}</div>
               <div><strong>死信路由：</strong><span class="mono-text">{{ formatValue(detail.deadLetterRoutingKey) }}</span></div>
               <div><strong>重放交换机：</strong><span class="mono-text">{{ formatValue(detail.replayExchange) }}</span></div>
