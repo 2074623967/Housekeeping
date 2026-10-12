@@ -20,6 +20,7 @@ public class PaymentDeadLetterTaskEntity {
     private String resolutionNote;
     private String payloadSnapshot;
     private String headerSnapshot;
+    private Boolean sourceSignatureVerified;
     private Integer replayCount;
     private String lastReplayAt;
     private String operator;

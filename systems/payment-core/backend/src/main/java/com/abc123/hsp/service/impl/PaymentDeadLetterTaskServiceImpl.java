@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.common.PaymentEventAmqpSignature;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
@@ -12,6 +13,7 @@ import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +51,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final int RESOLUTION_NOTE_MAX_LENGTH = 512;
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
     private static final int MAX_CONFIRM_TIMEOUT_MS = 60000;
+    private static final String CLEARING_SIGNATURE_HEADER = "X-HSP-Clearing-Event-AMQP-Signature";
     private static final Pattern PAYMENT_DLQ_PATTERN = Pattern.compile(
             "^payment\\.success\\.(clearing|accounting)\\.dlq(?:\\.([^.]+))?\\.v1$");
     private static final Pattern CLEARING_DLQ_PATTERN = Pattern.compile(
@@ -59,6 +62,12 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private final ObjectMapper objectMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final long publisherConfirmTimeoutMs;
+
+    @Value("${HSP_PAYMENT_SUCCESS_AMQP_SECRET:}")
+    private String paymentSuccessAmqpSecret;
+
+    @Value("${HSP_CLEARING_GENERATED_AMQP_SECRET:}")
+    private String clearingGeneratedAmqpSecret;
 
     @Autowired
     public PaymentDeadLetterTaskServiceImpl(PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper,
@@ -106,6 +115,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         entity.setTaskStatusType("warn");
         entity.setPayloadSnapshot(new String(message.getBody(), StandardCharsets.UTF_8));
         entity.setHeaderSnapshot(sensitiveDataMasker.maskPayload(writeHeaders(properties.getHeaders())));
+        entity.setSourceSignatureVerified(isSourceSignatureVerified(message, replayRoute));
         entity.setReplayCount(0);
         paymentDeadLetterTaskMapper.insertIgnore(entity);
     }
@@ -169,10 +179,21 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
                     || task.getPayloadSnapshot() == null) {
                 throw new IllegalArgumentException("死信重放快照非法");
             }
+            ReplayRoute expectedRoute = ReplayRoute.fromDeadLetterRoutingKey(task.getDeadLetterRoutingKey());
+            if (!Boolean.TRUE.equals(task.getSourceSignatureVerified()) || expectedRoute == null
+                    || !expectedRoute.replayExchange.equals(replayExchange)
+                    || !expectedRoute.replayRoutingKey.equals(replayRoutingKey)
+                    || !expectedRoute.targetSystem.equals(task.getTargetSystem())) {
+                throw new IllegalArgumentException("死信来源未认证或重放路由不一致");
+            }
+            final String signatureSecret = signatureSecret(expectedRoute);
+            if (!StringUtils.hasText(signatureSecret)) {
+                throw new IllegalStateException("死信重放签名密钥未配置");
+            }
             rabbitTemplate.invoke(operations -> {
                 operations.send(replayExchange, replayRoutingKey,
                         buildReplayMessage(task.getPayloadSnapshot(), normalizedTaskNo,
-                                replayMessageId, replayCorrelationId));
+                                replayMessageId, replayCorrelationId, expectedRoute, signatureSecret));
                 operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
                 return null;
             });
@@ -195,14 +216,37 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private Message buildReplayMessage(String payloadSnapshot,
                                        String taskNo,
                                        String messageId,
-                                       String correlationId) {
+                                       String correlationId,
+                                       ReplayRoute route,
+                                       String signatureSecret) {
         MessageProperties properties = new MessageProperties();
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         properties.setMessageId(messageId);
         properties.setCorrelationId(correlationId);
         properties.setHeader("compensationTaskNo", taskNo);
         properties.setHeader("compensationReplay", true);
-        return new Message(payloadSnapshot.getBytes(StandardCharsets.UTF_8), properties);
+        byte[] body = payloadSnapshot.getBytes(StandardCharsets.UTF_8);
+        properties.setHeader(signatureHeader(route), PaymentEventAmqpSignature.sign(body, signatureSecret));
+        return new Message(body, properties);
+    }
+
+    private boolean isSourceSignatureVerified(Message message, ReplayRoute route) {
+        byte[] body = message.getBody();
+        if (!Arrays.equals(new String(body, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8), body)) {
+            return false;
+        }
+        return PaymentEventAmqpSignature.matches(body,
+                message.getMessageProperties().getHeaders().get(signatureHeader(route)), signatureSecret(route));
+    }
+
+    private String signatureSecret(ReplayRoute route) {
+        return "payment.trade.replay".equals(route.replayExchange)
+                ? paymentSuccessAmqpSecret : clearingGeneratedAmqpSecret;
+    }
+
+    private String signatureHeader(ReplayRoute route) {
+        return "payment.trade.replay".equals(route.replayExchange)
+                ? PaymentEventAmqpSignature.HEADER_NAME : CLEARING_SIGNATURE_HEADER;
     }
 
     private PaymentDeadLetterTaskEntity findRequiredTask(String taskNo) {

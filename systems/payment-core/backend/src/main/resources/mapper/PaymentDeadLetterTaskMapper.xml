@@ -8,11 +8,11 @@
         INSERT IGNORE INTO t_payment_dead_letter_task (
             task_no, message_id, correlation_id, dead_letter_routing_key, target_system,
             replay_exchange, replay_routing_key, task_status, task_status_type,
-            payload_snapshot, header_snapshot, replay_count, created_at, updated_at
+            payload_snapshot, header_snapshot, source_signature_verified, replay_count, created_at, updated_at
         ) VALUES (
             #{taskNo}, #{messageId}, #{correlationId}, #{deadLetterRoutingKey}, #{targetSystem},
             #{replayExchange}, #{replayRoutingKey}, #{taskStatus}, #{taskStatusType},
-            #{payloadSnapshot}, #{headerSnapshot}, #{replayCount}, NOW(), NOW()
+            #{payloadSnapshot}, #{headerSnapshot}, #{sourceSignatureVerified}, #{replayCount}, NOW(), NOW()
         )
     </insert>
 
@@ -29,6 +29,7 @@
                resolution_note AS resolutionNote,
                payload_snapshot AS payloadSnapshot,
                header_snapshot AS headerSnapshot,
+               source_signature_verified AS sourceSignatureVerified,
                replay_count AS replayCount,
                DATE_FORMAT(last_replay_at, '%Y-%m-%d %H:%i:%s') AS lastReplayAt,
                operator,
@@ -80,6 +81,7 @@
                resolution_note AS resolutionNote,
                payload_snapshot AS payloadSnapshot,
                header_snapshot AS headerSnapshot,
+               source_signature_verified AS sourceSignatureVerified,
                replay_count AS replayCount,
                DATE_FORMAT(last_replay_at, '%Y-%m-%d %H:%i:%s') AS lastReplayAt,
                operator,
@@ -96,6 +98,7 @@
             resolution_note = #{resolutionNote}, resolved_at = NOW(), updated_at = NOW()
         WHERE task_no = #{taskNo}
           AND task_status IN ('PENDING_REVIEW', 'REPLAY_FAILED')
+          AND source_signature_verified = 1
     </update>
 
     <update id="markManuallyResolved">
@@ -112,6 +115,7 @@
             resolution_note = #{resolutionNote}, replay_count = replay_count + 1,
             last_replay_at = NOW(), resolved_at = NOW(), updated_at = NOW()
         WHERE task_no = #{taskNo}
+          AND source_signature_verified = 1
           AND (task_status = 'READY_TO_REPLAY'
                OR (task_status = 'REPLAYING'
                    AND updated_at &lt;= TIMESTAMPADD(MINUTE, -10, NOW())))

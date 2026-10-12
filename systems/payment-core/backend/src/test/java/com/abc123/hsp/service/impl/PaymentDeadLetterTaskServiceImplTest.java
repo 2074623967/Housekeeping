@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.PaymentEventAmqpSignature;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
@@ -17,6 +19,7 @@ import com.abc123.hsp.entity.PaymentDeadLetterTaskEntity;
 import com.abc123.hsp.mapper.PaymentDeadLetterTaskMapper;
 import com.abc123.hsp.service.PaymentDeadLetterTaskService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -81,6 +84,33 @@ class PaymentDeadLetterTaskServiceImplTest {
         assertEquals("payment.trade.replay", task.getReplayExchange());
         assertEquals("payment.success.clearing.replay.20260803a.v1", task.getReplayRoutingKey());
         assertEquals("PENDING_REVIEW", task.getTaskStatus());
+        assertEquals(false, task.getSourceSignatureVerified());
+    }
+
+    @Test
+    void shouldOnlyTrustIntactSignedPaymentAndClearingDeadLetters() {
+        PaymentDeadLetterTaskServiceImpl service = service();
+        MessageProperties paymentProperties = new MessageProperties();
+        paymentProperties.setMessageId("MSG-PAYMENT");
+        byte[] paymentBody = "{\"paymentOrderId\":\"PAY-001\"}".getBytes(StandardCharsets.UTF_8);
+        paymentProperties.setHeader(PaymentEventAmqpSignature.HEADER_NAME,
+                PaymentEventAmqpSignature.sign(paymentBody, "local-payment-amqp-test-secret"));
+        service.intake(new Message(paymentBody, paymentProperties), "payment.success.clearing.dlq.v1");
+
+        MessageProperties clearingProperties = new MessageProperties();
+        clearingProperties.setMessageId("MSG-CLEARING");
+        byte[] clearingBody = "{\"clearingNo\":\"CLR-001\"}".getBytes(StandardCharsets.UTF_8);
+        clearingProperties.setHeader("X-HSP-Clearing-Event-AMQP-Signature",
+                PaymentEventAmqpSignature.sign(clearingBody, "local-clearing-amqp-test-secret"));
+        service.intake(new Message(clearingBody, clearingProperties), "clearing.generated.settlement.dlq.v1");
+        service.intake(new Message("{\"clearingNo\":\"CLR-FORGED\"}".getBytes(StandardCharsets.UTF_8),
+                clearingProperties), "clearing.generated.settlement.dlq.v1");
+
+        ArgumentCaptor<PaymentDeadLetterTaskEntity> captor = ArgumentCaptor.forClass(PaymentDeadLetterTaskEntity.class);
+        verify(paymentDeadLetterTaskMapper, org.mockito.Mockito.times(3)).insertIgnore(captor.capture());
+        assertEquals(true, captor.getAllValues().get(0).getSourceSignatureVerified());
+        assertEquals(true, captor.getAllValues().get(1).getSourceSignatureVerified());
+        assertEquals(false, captor.getAllValues().get(2).getSourceSignatureVerified());
     }
 
     @Test
@@ -267,8 +297,79 @@ class PaymentDeadLetterTaskServiceImplTest {
                 new String(messageCaptor.getValue().getBody(), StandardCharsets.UTF_8).contains("13800138000"));
         org.junit.jupiter.api.Assertions.assertFalse(messageCaptor.getValue().getMessageProperties().getHeaders()
                 .containsKey("x-retry-count"));
+        assertEquals(PaymentEventAmqpSignature.sign(messageCaptor.getValue().getBody(), "local-payment-amqp-test-secret"),
+                messageCaptor.getValue().getMessageProperties().getHeaders().get(PaymentEventAmqpSignature.HEADER_NAME));
         assertEquals("DLQ-001", result.getTaskNo());
         org.junit.jupiter.api.Assertions.assertFalse(result.getPayloadSnapshot().contains("13800138000"));
+    }
+
+    @Test
+    void shouldSignClearingDeadLetterReplayWithClearingSecret() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        task.setDeadLetterRoutingKey("clearing.generated.settlement.dlq.v1");
+        task.setReplayExchange("clearing.trade.replay");
+        task.setReplayRoutingKey("clearing.generated.settlement.replay.v1");
+        task.setTargetSystem("settlement-system");
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(paymentDeadLetterTaskMapper.markReplayed("DLQ-001")).thenReturn(1);
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
+
+        service().replay("DLQ-001", action("支付运营", "核对完成"));
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("clearing.trade.replay"),
+                eq("clearing.generated.settlement.replay.v1"), messageCaptor.capture());
+        assertEquals(PaymentEventAmqpSignature.sign(messageCaptor.getValue().getBody(),
+                        "local-clearing-amqp-test-secret"),
+                messageCaptor.getValue().getMessageProperties().getHeaders()
+                        .get("X-HSP-Clearing-Event-AMQP-Signature"));
+    }
+
+    @Test
+    void shouldNotElevateUnsignedDeadLetterDuringManualReplay() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        task.setSourceSignatureVerified(false);
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(1);
+
+        service().replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+    }
+
+    @Test
+    void shouldRejectReplayWhenStoredTargetDiffersFromDeadLetterRoute() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        task.setReplayRoutingKey("payment.success.accounting.replay.v1");
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(1);
+
+        service().replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+    }
+
+    @Test
+    void shouldNotReplayWithoutCurrentSigningSecret() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营", "核对完成")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(paymentDeadLetterTaskMapper.markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]")).thenReturn(1);
+        PaymentDeadLetterTaskServiceImpl service = service();
+        setField(service, "paymentSuccessAmqpSecret", " ");
+
+        service.replay("DLQ-001", action("支付运营", "核对完成"));
+
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
     }
 
     @Test
@@ -283,8 +384,7 @@ class PaymentDeadLetterTaskServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        new PaymentDeadLetterTaskServiceImpl(
-                paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), 120000L)
+        service(120000L)
                 .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
         verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
@@ -303,8 +403,7 @@ class PaymentDeadLetterTaskServiceImplTest {
             return callback.doInRabbit(rabbitTemplate);
         });
 
-        new PaymentDeadLetterTaskServiceImpl(
-                paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), -1L)
+        service(-1L)
                 .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
         verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
@@ -465,7 +564,25 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     private PaymentDeadLetterTaskServiceImpl service() {
-        return new PaymentDeadLetterTaskServiceImpl(paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), 5000L);
+        return service(5000L);
+    }
+
+    private PaymentDeadLetterTaskServiceImpl service(long timeoutMs) {
+        PaymentDeadLetterTaskServiceImpl service = new PaymentDeadLetterTaskServiceImpl(
+                paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), timeoutMs);
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        setField(service, "clearingGeneratedAmqpSecret", "local-clearing-amqp-test-secret");
+        return service;
+    }
+
+    private void setField(Object target, String name, Object value) {
+        try {
+            Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private PaymentDeadLetterTaskActionRequestDTO action(String operator, String resolutionNote) {
@@ -498,6 +615,9 @@ class PaymentDeadLetterTaskServiceImplTest {
         task.setCorrelationId("CORR-001");
         task.setReplayExchange("payment.trade.replay");
         task.setReplayRoutingKey("payment.success.clearing.replay.v1");
+        task.setDeadLetterRoutingKey("payment.success.clearing.dlq.v1");
+        task.setTargetSystem("clearing-system");
+        task.setSourceSignatureVerified(true);
         task.setPayloadSnapshot("{\"paymentOrderId\":\"PAY-001\",\"customer\":{\"phone\":\"13800138000\"}}");
         task.setHeaderSnapshot("{\"Authorization\":\"Bearer secret-token\",\"x-retry-count\":3}");
         return task;

@@ -2,6 +2,7 @@ package com.abc123.hsp.common;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -25,5 +26,12 @@ public final class PaymentEventAmqpSignature {
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("支付事件 AMQP 签名不可用", exception);
         }
+    }
+
+    public static boolean matches(byte[] body, Object signature, String secret) {
+        return body != null && StringUtils.hasText(secret) && signature instanceof String
+                && StringUtils.hasText((String) signature)
+                && MessageDigest.isEqual(sign(body, secret).getBytes(StandardCharsets.US_ASCII),
+                        ((String) signature).getBytes(StandardCharsets.US_ASCII));
     }
 }

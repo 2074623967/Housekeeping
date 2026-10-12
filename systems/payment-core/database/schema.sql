@@ -1341,6 +1341,7 @@ CREATE TABLE t_payment_dead_letter_task (
     resolution_note VARCHAR(512) DEFAULT NULL COMMENT '人工处置说明',
     payload_snapshot LONGTEXT NOT NULL COMMENT '原始消息体快照',
     header_snapshot TEXT DEFAULT NULL COMMENT '原始消息头快照',
+    source_signature_verified TINYINT(1) NOT NULL DEFAULT 0 COMMENT '原始消息来源签名已验证',
     replay_count INT NOT NULL DEFAULT 0 COMMENT '定向重放次数',
     last_replay_at DATETIME DEFAULT NULL COMMENT '最近重放时间',
     operator VARCHAR(64) DEFAULT NULL COMMENT '最后处置人',
