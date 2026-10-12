@@ -5891,7 +5891,7 @@ App/H5/PC 在首次支付提交收到 `PAYMENT-1016` 且回读到有精确冲突
 
 ### 14.580 支付成功 AMQP 发布状态与路由确认
 
-`PAYMENT_SUCCESS` 在 AMQP 模式下携带关联 `CorrelationData` 发布，并在有界时间内等待 broker publisher confirm；只有 ACK 且无 mandatory return 才将事件置为 `SUCCESS`。NACK、超时、发送异常或不可路由退回均沿用事件失败/重试/死信规则，不将消息仅进入 exchange 误记为目标队列可达。`publisher-confirm-type=correlated`、`publisher-returns=true` 与 `template.mandatory=true` 必须同时保持；超时配置 `payment.amqp.publisher-confirm-timeout-ms` 默认 5000ms、上限 60000ms。确认与未退回仅说明代理接受发布及当次路由，不能证明队列持久化、消费成功或清分入账；清分生成发布尚需单独补路由确认并以真实 RabbitMQ 验证。
+`PAYMENT_SUCCESS` 在 AMQP 模式下携带关联 `CorrelationData` 发布，并在有界时间内等待 broker publisher confirm；只有 ACK 且无 mandatory return 才将事件置为 `SUCCESS`。NACK、超时、发送异常或不可路由退回均沿用事件失败/重试/死信规则，不将消息仅进入 exchange 误记为目标队列可达。`publisher-confirm-type=correlated`、`publisher-returns=true` 与 `template.mandatory=true` 必须同时保持；超时配置 `payment.amqp.publisher-confirm-timeout-ms` 默认 5000ms、上限 60000ms。确认与未退回仅说明代理接受发布及当次路由，不能证明队列持久化、消费成功或清分入账；清分生成发布的代码级路由确认见清分系统接口文档，两个路径均尚需真实 RabbitMQ 验证。
 
 ### 14.581 死信人工重放发布路由确认
 

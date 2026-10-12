@@ -13,10 +13,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,7 +117,8 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         this.dispatchMode = dispatchMode;
         this.clearingGeneratedExchange = clearingGeneratedExchange;
         this.clearingGeneratedRoutingKey = clearingGeneratedRoutingKey;
-        this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0 ? 5000L : publisherConfirmTimeoutMs;
+        this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0 ? 5000L
+                : Math.min(publisherConfirmTimeoutMs, 60000L);
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
     }
@@ -178,12 +181,17 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         }
         try {
             objectMapper.readTree(outboxEvent.getPayload());
-            rabbitTemplate.invoke(operations -> {
-                operations.convertAndSend(clearingGeneratedExchange.trim(), clearingGeneratedRoutingKey.trim(),
-                        outboxEvent.getPayload(), buildMessagePostProcessor(outboxEvent));
-                operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
-                return null;
-            });
+            CorrelationData correlationData = new CorrelationData();
+            rabbitTemplate.convertAndSend(clearingGeneratedExchange.trim(), clearingGeneratedRoutingKey.trim(),
+                    outboxEvent.getPayload(), buildMessagePostProcessor(outboxEvent), correlationData);
+            CorrelationData.Confirm confirm = correlationData.getFuture()
+                    .get(publisherConfirmTimeoutMs, TimeUnit.MILLISECONDS);
+            if (confirm == null || !confirm.isAck() || correlationData.getReturned() != null) {
+                throw new IllegalStateException("清分结果事件发布未确认路由");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("清分结果事件发布确认中断", exception);
         } catch (Exception exception) {
             throw new IllegalStateException("清分结果事件投递失败", exception);
         }

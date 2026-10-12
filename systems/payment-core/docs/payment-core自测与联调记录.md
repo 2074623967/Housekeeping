@@ -28645,3 +28645,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1076 2026-10-13 死信重放发布路由确认
 
 红测模拟 broker ACK 且 mandatory 退回，旧任务仍调用 `markReplayed`。现重放签名消息时等待关联确认并检查退回，确认肯定且无退回才标记成功；失败、NACK、超时和发送异常均进入脱敏失败状态。定向 `PaymentDeadLetterTaskServiceImplTest` `32/32`；获准本机回环环境 JDK 8、离线 Maven、`-Pdemo` 后端全量 `2057/2057`，零失败/错误/跳过；`git diff --check` 通过。未连接真实 RabbitMQ，不能证明重投幂等、队列持久性、消费者资金处理或目标 MySQL 8 多实例；清分生成发布仍缺同类不可路由判断。
+
+### 10.1077 2026-10-13 清分生成 AMQP outbox 路由确认
+
+清分生成事件出站原以 `waitForConfirmsOrDie` 判成功，红测模拟 broker ACK 加 mandatory return 时仍标 outbox 成功。现在发送端使用关联确认，收到 NACK、退回、超时或发送异常就保留失败可重试。JDK 8、离线 Maven 清分全量 `75/75`，零失败/错误/跳过；`git diff --check` 通过。没有连接真实 RabbitMQ，不证明消息/队列持久化、结算与账务消费、重复投递幂等、目标 MySQL 8 多实例或真实资金。

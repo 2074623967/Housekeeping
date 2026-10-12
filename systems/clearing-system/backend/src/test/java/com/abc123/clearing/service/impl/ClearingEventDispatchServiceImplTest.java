@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -29,6 +30,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpEntity;
@@ -48,6 +51,16 @@ class ClearingEventDispatchServiceImplTest {
     private RestTemplate restTemplate;
     @Mock
     private RabbitTemplate rabbitTemplate;
+
+    @BeforeEach
+    void confirmPublishedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(any(), any(), any(),
+                any(MessagePostProcessor.class), any(CorrelationData.class));
+    }
 
     @Test
     void shouldSignExactClearingBodyForSettlementAndAccounting() throws Exception {
@@ -285,10 +298,6 @@ class ClearingEventDispatchServiceImplTest {
         when(clearingMemoryStore.sharesByClearingNo("CLR-001")).thenReturn(Collections.<ShareItemEntity>emptyList());
         when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
         when(clearingMemoryStore.tryClaimOutboxPublish("EVT-001")).thenReturn(true);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore,
@@ -301,8 +310,7 @@ class ClearingEventDispatchServiceImplTest {
 
         ArgumentCaptor<MessagePostProcessor> processorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
         verify(rabbitTemplate).convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
-                eq(outboxEvent().getPayload()), processorCaptor.capture());
-        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+                eq(outboxEvent().getPayload()), processorCaptor.capture(), any(CorrelationData.class));
         Message message = processorCaptor.getValue().postProcessMessage(new Message(
                 outboxEvent().getPayload().getBytes(StandardCharsets.UTF_8), new MessageProperties()));
         assertTrue("EVT-001".equals(message.getMessageProperties().getMessageId()));
@@ -311,6 +319,70 @@ class ClearingEventDispatchServiceImplTest {
         assertEquals(ClearingEventAmqpSignature.sign(message.getBody(), "local-clearing-amqp-test-secret"),
                 message.getMessageProperties().getHeaders().get(ClearingEventAmqpSignature.HEADER_NAME));
         verify(clearingMemoryStore).markOutboxPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkClearingOutboxPublishedWhenBrokerReturnsUnroutableMessage() {
+        stubClearingOutbox();
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.setReturned(new ReturnedMessage(
+                    new Message(new byte[0], new MessageProperties()), 312, "NO_ROUTE",
+                    "clearing.trade", "clearing.generated.v1"));
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
+                any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+        assertFalse(amqpDispatchService().publishClearingGenerated("PAY-001"));
+
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkClearingOutboxPublishedWhenBrokerNegativelyConfirms() {
+        stubClearingOutbox();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.getFuture().set(new CorrelationData.Confirm(false, "broker nack"));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
+                any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+
+        assertFalse(amqpDispatchService().publishClearingGenerated("PAY-001"));
+
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkClearingOutboxPublishedBeforeConfirmTimeout() {
+        stubClearingOutbox();
+        org.mockito.Mockito.doAnswer(invocation -> null).when(rabbitTemplate)
+                .convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
+                        any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, "", "", "ACT10002", "amqp", "clearing.trade",
+                "clearing.generated.v1", 1L, rabbitTemplate, new ObjectMapper());
+        setField(dispatchService, "clearingGeneratedAmqpSecret", "local-clearing-amqp-test-secret");
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkClearingOutboxPublishedWhenAmqpSendThrows() {
+        stubClearingOutbox();
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).convertAndSend(eq("clearing.trade"), eq("clearing.generated.v1"),
+                        any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+
+        assertFalse(amqpDispatchService().publishClearingGenerated("PAY-001"));
+
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
     }
 
     @Test
@@ -326,7 +398,8 @@ class ClearingEventDispatchServiceImplTest {
                 clearingMemoryStore, rabbitTemplate, new ObjectMapper(), "clearing.trade", "clearing.generated.v1");
 
         assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
-        verify(rabbitTemplate, times(0)).invoke(any());
+        verify(rabbitTemplate, times(0)).convertAndSend(any(), any(), any(),
+                any(MessagePostProcessor.class), any(CorrelationData.class));
         verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
     }
 
@@ -429,6 +502,13 @@ class ClearingEventDispatchServiceImplTest {
     private ClearingEventDispatchServiceImpl dispatchService() {
         return new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+    }
+
+    private ClearingEventDispatchServiceImpl amqpDispatchService() {
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, rabbitTemplate, new ObjectMapper(), "clearing.trade", "clearing.generated.v1");
+        setField(dispatchService, "clearingGeneratedAmqpSecret", "local-clearing-amqp-test-secret");
+        return dispatchService;
     }
 
     private ResponseEntity<Map> eventResponse(String businessChainId, String clearingNo) {
