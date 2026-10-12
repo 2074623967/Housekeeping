@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const scriptPath = fileURLToPath(new URL("./dlq-compensation-smoke.mjs", import.meta.url));
+const paymentSecret = "local-payment-amqp-drill-secret";
+const clearingSecret = "local-clearing-amqp-drill-secret";
 
 function startMockServer() {
   const tasks = new Map();
@@ -30,12 +33,17 @@ function startMockServer() {
       }
       const eventKind = body.properties.headers.eventType === "CLEARING_GENERATED"
         ? "clearing-generated" : "payment-success";
+      const signatureHeader = eventKind === "clearing-generated"
+        ? "X-HSP-Clearing-Event-AMQP-Signature" : "X-HSP-Payment-Event-AMQP-Signature";
+      const expectedSignature = createHmac("sha256", eventKind === "clearing-generated" ? clearingSecret : paymentSecret)
+        .update(body.payload, "utf8").digest("base64");
+      const sourceSignatureVerified = body.properties.headers[signatureHeader] === expectedSignature;
       const targetSystem = eventKind === "clearing-generated" ? "settlement" : "accounting";
       const taskNo = `TASK-${messageId}`;
       const replayRoutingKey = eventKind === "clearing-generated"
         ? "clearing.generated.settlement.replay.mock-a.v1"
         : "payment.success.accounting.replay.mock-a.v1";
-      tasks.set(messageId, { taskNo, taskStatus: "PENDING_REVIEW", replayRoutingKey });
+      tasks.set(messageId, { taskNo, taskStatus: "PENDING_REVIEW", replayRoutingKey, sourceSignatureVerified });
       json(200, { routed: true });
       return;
     }
@@ -52,8 +60,16 @@ function startMockServer() {
       const task = [...tasks.values()].find((item) => item.taskNo === taskMatch[1]);
       assert.ok(task, `unknown task ${taskMatch[1]}`);
       if (taskMatch[2] === "ready-to-replay") {
+        if (!task.sourceSignatureVerified) {
+          json(403, { code: "SOURCE_UNVERIFIED" });
+          return;
+        }
         task.taskStatus = "READY_TO_REPLAY";
       } else if (taskMatch[2] === "replay") {
+        if (!task.sourceSignatureVerified || task.taskStatus !== "READY_TO_REPLAY") {
+          json(403, { code: "REPLAY_NOT_ALLOWED" });
+          return;
+        }
         task.taskStatus = "REPLAYED";
         task.replayCount = 1;
       } else {
@@ -79,6 +95,8 @@ async function runSmoke(env, server) {
   const child = spawn(process.execPath, [scriptPath], {
     env: {
       ...process.env,
+      HSP_PAYMENT_SUCCESS_AMQP_SECRET: paymentSecret,
+      HSP_CLEARING_GENERATED_AMQP_SECRET: clearingSecret,
       ...env,
       HSP_PAYMENT_CORE_BASE_URL: baseUrl,
       HSP_ACCOUNTING_BASE_URL: baseUrl,
@@ -100,7 +118,7 @@ async function runSmoke(env, server) {
 }
 
 test("covers payment.success replay and manual resolution contracts", async (t) => {
-  const { server } = startMockServer();
+  const { server, tasks } = startMockServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => server.close());
 
@@ -116,10 +134,12 @@ test("covers payment.success replay and manual resolution contracts", async (t) 
   assert.match(result.stdout, /current-batch DLQ compensation smoke/);
   assert.match(result.stdout, /MANUAL_RESOLVED/);
   assert.match(result.stdout, /REPLAYED/);
+  assert.equal([...tasks.values()].filter((task) => task.taskStatus === "REPLAYED")[0].sourceSignatureVerified, true);
+  assert.equal([...tasks.values()].filter((task) => task.taskStatus === "MANUAL_RESOLVED")[0].sourceSignatureVerified, false);
 });
 
 test("covers clearing.generated settlement replay contract", async (t) => {
-  const { server } = startMockServer();
+  const { server, tasks } = startMockServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => server.close());
 
@@ -133,6 +153,7 @@ test("covers clearing.generated settlement replay contract", async (t) => {
   assert.equal(result.exitCode, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /clearing-generated/);
   assert.match(result.stdout, /REPLAYED/);
+  assert.equal([...tasks.values()][0].sourceSignatureVerified, true);
 });
 
 test("uses the business id from a custom payment payload", async (t) => {
@@ -208,6 +229,41 @@ test("reports malformed custom payload JSON clearly", async (t) => {
 
   assert.notEqual(result.exitCode, 0);
   assert.match(result.stderr, /HSP_DLQ_PAYLOAD_JSON must be valid JSON/);
+});
+
+test("requires matching event signing secrets before publishing replay samples", async (t) => {
+  const { server, tasks } = startMockServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+
+  const missing = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_PAYMENT_SUCCESS_AMQP_SECRET: " ",
+    HSP_DLQ_INCLUDE_MANUAL: "true"
+  }, server);
+  assert.notEqual(missing.exitCode, 0);
+  assert.match(missing.stderr, /HSP_PAYMENT_SUCCESS_AMQP_SECRET is required/);
+  assert.equal(tasks.size, 0);
+
+  const mismatched = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_PAYMENT_SUCCESS_AMQP_SECRET: "wrong-local-secret",
+    HSP_DLQ_INCLUDE_MANUAL: "true"
+  }, server);
+  assert.notEqual(mismatched.exitCode, 0);
+  assert.match(mismatched.stderr, /DLQ source signature was not verified/);
+  assert.equal(tasks.size, 1);
+  assert.equal([...tasks.values()][0].sourceSignatureVerified, false);
+
+  const missingClearing = await runSmoke({
+    HSP_DLQ_SUFFIX: "mock-a",
+    HSP_DLQ_EVENT_KIND: "clearing-generated",
+    HSP_DLQ_TARGET_SYSTEM: "settlement",
+    HSP_CLEARING_GENERATED_AMQP_SECRET: " "
+  }, server);
+  assert.notEqual(missingClearing.exitCode, 0);
+  assert.match(missingClearing.stderr, /HSP_CLEARING_GENERATED_AMQP_SECRET is required/);
+  assert.equal(tasks.size, 1);
 });
 
 test("reports unavailable RabbitMQ management clearly", async () => {

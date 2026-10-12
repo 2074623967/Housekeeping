@@ -28649,3 +28649,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1077 2026-10-13 清分生成 AMQP outbox 路由确认
 
 清分生成事件出站原以 `waitForConfirmsOrDie` 判成功，红测模拟 broker ACK 加 mandatory return 时仍标 outbox 成功。现在发送端使用关联确认，收到 NACK、退回、超时或发送异常就保留失败可重试。JDK 8、离线 Maven 清分全量 `75/75`，零失败/错误/跳过；`git diff --check` 通过。没有连接真实 RabbitMQ，不证明消息/队列持久化、结算与账务消费、重复投递幂等、目标 MySQL 8 多实例或真实资金。
+
+### 10.1078 2026-10-13 DLQ 演练脚本来源验签回归
+
+加强本地 mock：无签名来源任务的 `ready-to-replay` 与 `replay` 被拒，原脚本三个正向场景红测返回 `SOURCE_UNVERIFIED`。修正后对实际 Management API 载荷字节以对应 AMQP 环境密钥 HMAC-SHA256/Base64 签名，先核对任务 `sourceSignatureVerified=true`，无密钥时发布前退出；非法报文保持未签名并仅人工结案。获准回环环境 Node `9/9`，零失败/跳过；沙箱端口绑定为 `EPERM`，未连接 RabbitMQ（本机 Docker API socket 不存在）。该模拟不证明经主队列、retry TTL、死信转发和真实资金的端到端行为。

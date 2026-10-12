@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { createHmac } from "node:crypto";
+
 /**
  * Run a current-batch payment.success.* or clearing.generated.* DLQ smoke.
  *
@@ -58,6 +60,14 @@ const eventConfig = targetConfig[eventKind];
 const config = eventConfig && eventConfig[targetSystem];
 if (!config) {
   throw new Error(`unsupported event/target: ${eventKind}/${targetSystem}`);
+}
+const signatureSecretName = eventKind === "clearing-generated"
+  ? "HSP_CLEARING_GENERATED_AMQP_SECRET" : "HSP_PAYMENT_SUCCESS_AMQP_SECRET";
+const signatureHeader = eventKind === "clearing-generated"
+  ? "X-HSP-Clearing-Event-AMQP-Signature" : "X-HSP-Payment-Event-AMQP-Signature";
+const signatureSecret = process.env[signatureSecretName];
+if (!signatureSecret || !signatureSecret.trim()) {
+  throw new Error(`${signatureSecretName} is required for verified DLQ replay`);
 }
 
 function requiredEnv(name) {
@@ -121,6 +131,7 @@ async function paymentApi(path, options = {}) {
 }
 
 async function publishDeadLetter(messageId, payload, rawPayload = false) {
+  const payloadText = rawPayload ? payload : JSON.stringify(payload);
   const result = await requestJson(
     `${managementBaseUrl}/exchanges/%2F/${encodeURIComponent(eventConfig.exchange)}/publish`,
     {
@@ -134,11 +145,15 @@ async function publishDeadLetter(messageId, payload, rawPayload = false) {
           headers: {
             "x-retry-count": 3,
             eventType: eventConfig.eventType,
-            schemaVersion: "1"
+            schemaVersion: "1",
+            ...(!rawPayload && {
+              [signatureHeader]: createHmac("sha256", signatureSecret)
+                .update(payloadText, "utf8").digest("base64")
+            })
           }
         },
         routing_key: config.routingKey,
-        payload: rawPayload ? payload : JSON.stringify(payload),
+        payload: payloadText,
         payload_encoding: "string"
       })
     }
@@ -224,6 +239,8 @@ async function replayCurrentBatch() {
   );
   const task = taskFromPage(pending, messageId);
   assert(task.taskStatus === "PENDING_REVIEW", `unexpected initial task status: ${task.taskStatus}`);
+  assert(task.sourceSignatureVerified === true,
+    "DLQ source signature was not verified; check matching AMQP signing secrets before replay");
   assert(task.replayRoutingKey === config.replayRoutingKey,
     `unexpected replay route: ${task.replayRoutingKey}`);
 
@@ -281,6 +298,8 @@ async function resolveInvalidCurrentBatch() {
   );
   const task = taskFromPage(pending, messageId);
   assert(task.taskStatus === "PENDING_REVIEW", `unexpected invalid task status: ${task.taskStatus}`);
+  assert(task.sourceSignatureVerified === false,
+    "invalid manual-resolution sample unexpectedly passed source signature verification");
   const resolved = await paymentApi(`/api/payment-dead-letter-tasks/${encodeURIComponent(task.taskNo)}/resolve-manually`, {
     method: "POST",
     body: JSON.stringify({
@@ -300,15 +319,15 @@ async function resolveInvalidCurrentBatch() {
   };
 }
 
-Promise.all([
-  replayCurrentBatch(),
-  process.env.HSP_DLQ_INCLUDE_MANUAL === "true" ? resolveInvalidCurrentBatch() : Promise.resolve(null)
-])
-  .then(([result, manual]) => {
-    console.log("[PASS] current-batch DLQ compensation smoke");
-    console.log(JSON.stringify({ replay: result, manual }, null, 2));
-  })
-  .catch((error) => {
-    console.error(`[FAIL] ${error.message}`);
-    process.exitCode = 1;
-  });
+async function runSmoke() {
+  const result = await replayCurrentBatch();
+  const manual = process.env.HSP_DLQ_INCLUDE_MANUAL === "true"
+    ? await resolveInvalidCurrentBatch() : null;
+  console.log("[PASS] current-batch DLQ compensation smoke");
+  console.log(JSON.stringify({ replay: result, manual }, null, 2));
+}
+
+runSmoke().catch((error) => {
+  console.error(`[FAIL] ${error.message}`);
+  process.exitCode = 1;
+});

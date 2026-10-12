@@ -47,6 +47,8 @@ bash infra/rabbitmq/queue_snapshot.sh '20260803-a|payment.compensation'
 
 RabbitMQ 与 payment-core、下游消费者均启动后，可使用仓库内脚本生成新的同批次补偿证据：
 
+执行前在脚本进程中配置与运行中的 `payment-core` 一致的 `HSP_PAYMENT_SUCCESS_AMQP_SECRET`（支付成功模式）或 `HSP_CLEARING_GENERATED_AMQP_SECRET`（清分生成模式）。不要在命令行、日志或仓库文档中填写真实密钥。
+
 ```bash
 HSP_DLQ_SUFFIX=20260923-a \
 HSP_DLQ_TARGET_SYSTEM=accounting \
@@ -63,6 +65,8 @@ node tools/dev/dlq-compensation-smoke.mjs
 ```
 
 增加 `HSP_DLQ_INCLUDE_MANUAL=true` 可在同一运行中额外注入一条非法报文并核验 `MANUAL_RESOLVED`。脚本要求隔离 suffix，不接受历史任务号；会通过 Management API 发布新消息，轮询 `PENDING_REVIEW` 任务，执行人工处置和定向 replay，并查询对应下游事实。RabbitMQ 不可用时会直接失败，不会退回历史证据。
+
+脚本对将要发布的原始 UTF-8 JSON 字节签名；缺密钥时不发布，入站任务 `sourceSignatureVerified` 不为 `true` 时不发起复核或重放。可选非法报文样本故意不签名，只允许人工结案。脚本通过 Management API **直接向隔离 DLQ 注入合成消息**，只检查签名 intake、复核/重放及下游查询的局部接线；即便运行成功，也不能证明消息经过真实主队列消费者、重试 TTL、死信转发、生产身份审批或资金处理。真实链路须另行从主队列注入、采集队列快照和下游事实。
 
 可用 `HSP_DLQ_TIMEOUT_MS` 和 `HSP_DLQ_POLL_MS` 调整轮询超时与间隔，两者必须是正数；可用 `HSP_DLQ_PAYLOAD_JSON` 提供当前批次自定义 JSON 报文，必须是对象、事件类型必须匹配所选模式，且必须包含对应业务单号。参数或 JSON 非法时，脚本会在发布消息前失败，不产生伪造的运行态结果。
 
