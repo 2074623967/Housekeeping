@@ -5889,6 +5889,10 @@ App/H5/PC 在首次支付提交收到 `PAYMENT-1016` 且回读到有精确冲突
 
 支付成功与清分生成消费者改为默认拒绝未认证 AMQP 消息后，旧死信任务重放的无签名副本不能再被下游接收。支付核心死信 intake 依照原死信路由分别使用 `HSP_PAYMENT_SUCCESS_AMQP_SECRET` 或 `HSP_CLEARING_GENERATED_AMQP_SECRET` 核验**原始字节**签名；仅当正文为可原样往返的 UTF-8 且签名匹配时持久化 `sourceSignatureVerified=true`。未签名、篡改、缺密钥和旧任务均保留只读与人工结案，但不得标记为可重放，直接重放也被服务端拒绝。已验签任务复核后，重放按持久化的原死信路由确认目标一致，对持久化的原始正文快照以**当前**对应密钥重新签名，并保留发布确认与下游幂等边界；消息头中的尝试次数不沿用。管理端显示来源验签状态，未验证时不提供“允许重放”或“执行重放”。本变更必须先执行 `database/migrations/2026-10-13-add-dead-letter-source-signature.sql`，再部署新服务；历史任务默认未验证，不可凭人工声明升级。签名仅覆盖 body，且源验签结果不是可信审批或生产 ACL/时间重放证明；对历史真实死信的补救需独立核对、不能绕过该门禁。
 
+### 14.580 支付成功 AMQP 发布状态与路由确认
+
+`PAYMENT_SUCCESS` 在 AMQP 模式下携带关联 `CorrelationData` 发布，并在有界时间内等待 broker publisher confirm；只有 ACK 且无 mandatory return 才将事件置为 `SUCCESS`。NACK、超时、发送异常或不可路由退回均沿用事件失败/重试/死信规则，不将消息仅进入 exchange 误记为目标队列可达。`publisher-confirm-type=correlated`、`publisher-returns=true` 与 `template.mandatory=true` 必须同时保持；超时配置 `payment.amqp.publisher-confirm-timeout-ms` 默认 5000ms、上限 60000ms。确认与未退回仅说明代理接受发布及当次路由，不能证明队列持久化、消费成功或清分入账；死信人工重放与清分生成发布尚需单独补路由确认并以真实 RabbitMQ 验证。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

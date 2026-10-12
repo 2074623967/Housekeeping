@@ -9441,3 +9441,7 @@ App 的浏览器证据不能代替 H5 与 PC 各自的打包入口、终端文�
 ### 10.978 2026-10-13 四个资金 AMQP 消费者转发确认门禁
 
 清分支付成功、账务支付成功/清分生成、结算清分生成四个消费者原在 retry/DLQ 发送调用返回后直接 ACK 原消息。现通过 correlated publisher confirms + mandatory returns，仅在 broker 肯定确认且消息未退回时 ACK；异常、否定确认、超时或不可路由一律 NACK/requeue。三模块定向和全量本机通过；仍**不能视为生产持久死信验收**：未连接真实 RabbitMQ，未验证 exchange/queue/binding 与消息/队列持久性、故障切换及重复投递幂等；目标 MySQL 8 多实例、运营告警、正式 ACL/TLS、密钥轮换和真实资金仍待验收。
+
+### 10.979 2026-10-13 支付成功 AMQP 发布路由确认
+
+支付核心原以 `waitForConfirmsOrDie` 判断支付成功事件发布成功；broker 即使肯定确认一个不可路由的 mandatory 消息，事件仍会被标为 `SUCCESS`。现在以关联确认和退回结果共同收口发布状态，NACK、退回、超时均保留事件失败/重试处理；本地模拟正向与异常场景及 payment-core H2/demo 全量通过。死信人工重放、清分生成发布仍使用旧式等待确认而未核对 mandatory return，需继续治理；正式 RabbitMQ 路由与持久性、目标 MySQL 8 多实例和真实资金不由本轮模拟证明。

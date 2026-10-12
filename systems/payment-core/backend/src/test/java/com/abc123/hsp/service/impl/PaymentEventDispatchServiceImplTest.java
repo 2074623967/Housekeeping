@@ -40,6 +40,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpEntity;
@@ -93,6 +95,12 @@ class PaymentEventDispatchServiceImplTest {
         org.mockito.Mockito.lenient()
                 .when(paymentMapper.findPaidAmount("ORD-001"))
                 .thenReturn(new BigDecimal("168.00"));
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(any(), any(), any(),
+                any(MessagePostProcessor.class), any(CorrelationData.class));
     }
 
     @Test
@@ -863,10 +871,6 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -887,9 +891,9 @@ class PaymentEventDispatchServiceImplTest {
                 eq("payment.trade"),
                 eq("payment.success.v1"),
                 payloadCaptor.capture(),
-                processorCaptor.capture()
+                processorCaptor.capture(),
+                any(CorrelationData.class)
         );
-        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"eventNo\":\"EVT-001\""));
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"eventType\":\"PAYMENT_SUCCESS\""));
         Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"schemaVersion\":\"1\""));
@@ -913,15 +917,75 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldNotMarkAmqpEventPublishedWhenBrokerReturnsUnroutableMessage() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.setReturned(new ReturnedMessage(
+                    new Message(new byte[0], new MessageProperties()), 312, "NO_ROUTE",
+                    "payment.trade", "payment.success.v1"));
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"),
+                any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper, "ACT10003", 3, rabbitTemplate,
+                new ObjectMapper(), "payment.trade", "payment.success.v1");
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-001");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkAmqpEventPublishedWhenBrokerNegativelyConfirms() {
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(4);
+            correlationData.getFuture().set(new CorrelationData.Confirm(false, "broker nack"));
+            return null;
+        }).when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"),
+                any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper, "ACT10003", 3, rabbitTemplate,
+                new ObjectMapper(), "payment.trade", "payment.success.v1");
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-001");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldNotMarkAmqpEventPublishedBeforeConfirmTimeout() {
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        org.mockito.Mockito.doAnswer(invocation -> null).when(rabbitTemplate)
+                .convertAndSend(eq("payment.trade"), eq("payment.success.v1"),
+                        any(), any(MessagePostProcessor.class), any(CorrelationData.class));
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper, "ACT10003", 3, rabbitTemplate,
+                new ObjectMapper(), "payment.trade", "payment.success.v1", 1L);
+        setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+
+        service.publishPaymentSuccess("EVT-001", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-001");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-001");
+    }
+
+    @Test
     void shouldCapPaymentSuccessAmqpPublisherConfirmTimeout() {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -937,7 +1001,7 @@ class PaymentEventDispatchServiceImplTest {
         setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
         service.publishPaymentSuccess("EVT-001", "PAY-001");
 
-        verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
+        Assertions.assertEquals(60000L, getField(service, "publisherConfirmTimeoutMs"));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
     }
 
@@ -947,10 +1011,6 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
 
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -966,7 +1026,7 @@ class PaymentEventDispatchServiceImplTest {
         setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
         service.publishPaymentSuccess("EVT-001", "PAY-001");
 
-        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        Assertions.assertEquals(5000L, getField(service, "publisherConfirmTimeoutMs"));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
     }
 
@@ -983,12 +1043,9 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
-        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
-            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
-            return callback.doInRabbit(rabbitTemplate);
-        });
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
-                .when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"), any(), any(MessagePostProcessor.class));
+                .when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"), any(),
+                        any(MessagePostProcessor.class), any(CorrelationData.class));
 
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -1027,7 +1084,8 @@ class PaymentEventDispatchServiceImplTest {
                 "payment.success.v1"
         ).publishPaymentSuccess("EVT-AMQP-CONFIG-MISSING", "PAY-001");
 
-        verify(rabbitTemplate, never()).invoke(any());
+        verify(rabbitTemplate, never()).convertAndSend(any(), any(), any(),
+                any(MessagePostProcessor.class), any(CorrelationData.class));
         verify(paymentEventMapper).markPublishFailed("EVT-AMQP-CONFIG-MISSING");
         verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMQP-CONFIG-MISSING");
     }
@@ -1045,7 +1103,8 @@ class PaymentEventDispatchServiceImplTest {
                 rabbitTemplate, new ObjectMapper(), "payment.trade", "payment.success.v1"
         ).publishPaymentSuccess("EVT-AMQP-SECRET-MISSING", "PAY-001");
 
-        verify(rabbitTemplate, never()).invoke(any());
+        verify(rabbitTemplate, never()).convertAndSend(any(), any(), any(),
+                any(MessagePostProcessor.class), any(CorrelationData.class));
         verify(paymentEventMapper).markPublishFailed("EVT-AMQP-SECRET-MISSING");
         verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMQP-SECRET-MISSING");
     }
@@ -2320,6 +2379,16 @@ class PaymentEventDispatchServiceImplTest {
             field.set(target, value);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("无法设置测试字段 " + fieldName, exception);
+        }
+    }
+
+    private Object getField(Object target, String fieldName) {
+        try {
+            java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("无法读取测试字段 " + fieldName, exception);
         }
     }
 

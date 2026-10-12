@@ -27,8 +27,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -862,17 +866,21 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             final String payload = objectMapper.writeValueAsString(
                     buildAmqpPayload(eventNo, paymentOrderId, orderNo, customerName, workerName,
                             payScene, amount));
-            rabbitTemplate.invoke(operations -> {
-                operations.convertAndSend(
-                        paymentSuccessExchange.trim(),
-                        paymentSuccessRoutingKey.trim(),
-                        payload,
-                        buildMessagePostProcessor(eventNo, paymentOrderId));
-                operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
-                return null;
-            });
+            CorrelationData correlationData = new CorrelationData();
+            rabbitTemplate.convertAndSend(paymentSuccessExchange.trim(), paymentSuccessRoutingKey.trim(),
+                    payload, buildMessagePostProcessor(eventNo, paymentOrderId), correlationData);
+            CorrelationData.Confirm confirm = correlationData.getFuture()
+                    .get(publisherConfirmTimeoutMs, TimeUnit.MILLISECONDS);
+            if (confirm == null || !confirm.isAck() || correlationData.getReturned() != null) {
+                throw new IllegalStateException("AMQP 支付成功事件未被目标队列确认");
+            }
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("支付成功事件序列化失败", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("AMQP 支付成功事件确认中断", exception);
+        } catch (ExecutionException | TimeoutException exception) {
+            throw new IllegalStateException("AMQP 支付成功事件确认失败", exception);
         }
     }
 
