@@ -691,6 +691,7 @@ CREATE TABLE t_payment_order (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_payment_order_id (payment_order_id),
+    UNIQUE KEY uk_payment_channel_transaction (channel_code, channel_transaction_no),
     KEY idx_payment_order_no (order_no),
     KEY idx_payment_status_created (status, created_at),
     KEY idx_payment_status_success (status, success_at),

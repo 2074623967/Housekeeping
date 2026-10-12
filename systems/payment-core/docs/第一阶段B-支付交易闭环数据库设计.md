@@ -133,15 +133,28 @@ t_order
 | `amount` | 本次支付金额 |
 | `payment_method` | 支付方式 |
 | `channel_code` | 渠道编码 |
-| `channel_transaction_no` | 渠道流水号 |
+| `channel_transaction_no` | 渠道流水号；同一渠道内非空流水不得绑定不同支付单 |
 
 ### 4.5 已落地索引
 
 1. `t_payment_order`
    - `payment_order_id` 唯一索引
+   - `channel_code, channel_transaction_no` 唯一索引；允许未受理支付单的 `NULL` 渠道流水
    - `order_no` 索引
    - `status, created_at` 组合索引
    - `channel_code, created_at` 组合索引
+
+既有 MySQL 库新增上述渠道流水唯一键前，应先按目标库排序规则执行以下只读预检，逐笔核对渠道受理、支付单和到账事实；不能仅为迁移通过而删除、改名或合并历史资金事实。
+
+```sql
+SELECT channel_code, channel_transaction_no, COUNT(*) AS payment_count
+FROM t_payment_order
+WHERE channel_transaction_no IS NOT NULL
+GROUP BY channel_code, channel_transaction_no
+HAVING COUNT(*) > 1;
+```
+
+备份并完成 DDL 锁与回滚演练后，才可执行 `database/migrations/2026-10-12-add-payment-channel-transaction-unique.sql`。数据库唯一冲突应保留未知/异常态并人工查证，不能据此认定第二笔支付成功。
 2. `t_prepay_order`
    - `prepay_order_no` 唯一索引
    - `expires_at, payment_order_id` 组合索引

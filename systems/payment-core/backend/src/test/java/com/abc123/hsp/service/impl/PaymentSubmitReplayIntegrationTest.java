@@ -55,6 +55,36 @@ class PaymentSubmitReplayIntegrationTest {
 
     private static final String LONG_CHANNEL_CODE = "LONG-" + String.join("", java.util.Collections.nCopies(59, "C"));
 
+    @Test
+    void shouldNotBindOneChannelTransactionToDifferentPaymentOrders() {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        String databaseUrl = "jdbc:h2:mem:payment_channel_transaction_unique_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            assertThrows(DuplicateKeyException.class, () -> jdbcTemplate.update(
+                    "UPDATE t_payment_order SET channel_code = 'wx_jsapi', "
+                            + "channel_transaction_no = 'WX99887766' WHERE payment_order_id = 'PAY202607190002'"));
+            assertEquals("ALI77665544", jdbcTemplate.queryForObject(
+                    "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = 'PAY202607190002'",
+                    String.class));
+            assertEquals(1, jdbcTemplate.update(
+                    "UPDATE t_payment_order SET channel_transaction_no = 'WX99887766' "
+                            + "WHERE payment_order_id = 'PAY202607180074'"));
+            jdbcTemplate.execute("ALTER TABLE t_payment_order "
+                    + "ALTER COLUMN channel_transaction_no VARCHAR_IGNORECASE(128)");
+            assertThrows(DuplicateKeyException.class, () -> jdbcTemplate.update(
+                    "UPDATE t_payment_order SET channel_code = 'wx_jsapi', "
+                            + "channel_transaction_no = 'wx99887766' WHERE payment_order_id = 'PAY202607190002'"));
+        }
+    }
+
     @Order(5)
     private static class BlockingChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
         private final String channelCode;

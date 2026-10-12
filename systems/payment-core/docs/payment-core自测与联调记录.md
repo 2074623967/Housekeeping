@@ -28513,3 +28513,9 @@ H2 Mapper 红测插入 TTL 已过、状态为 ` active ` 的令牌：`hasActiveS
 ### 10.1044 2026-10-12 退款支付来源精确归属后的九服务回归
 
 独立退款中心将支付成功来源锁行、累计退款额度和列表/详情来源关联改为原支付单号精确字符与二进制匹配后，重新隔离执行 `tools/dev/local-stack.sh verify payment-chain` 和 `tools/dev/local-stack.sh verify payment-query-chain`。两次均通过写前隔离、九服务 HTTP 冒烟和完整 happy-path，退出码各为 `0`；支付单 `PAY179176315010750ba6e82` 经 `CALLBACK`、`PAY1791763323241e989f963` 经 `GATEWAY_QUERY` 收口。支付、清分、结算、退款成功 outbox、账务与对账事实齐备，链路 `COMPLETED`、`4/4` 且本地可关账；脚本在每次结束时停止本轮九服务和查单变体的本机上游 mock。此复验不替代目标 MySQL 8 历史别名与多实例、真实渠道资金、可信身份或生产发布验收。
+
+### 10.1045 2026-10-12 支付渠道流水跨单唯一约束
+
+隔离 Spring Boot/H2/demo 先以演示数据复现同一 `wx_jsapi / WX99887766` 可绑定两张支付单，再在 `t_payment_order` 基线增加 `(channel_code, channel_transaction_no)` 可空唯一键，提供只增量建索引的 MySQL 脚本。绿测确认同渠道重绑抛数据库唯一冲突且原行不变，不同渠道相同流水仍可保存；将 H2 渠道流水列改为大小写折叠后，小写别名也被拒绝。提交与回调都须经支付单行更新，唯一键阻止同渠道流水重复归属，但不证明外部渠道资金到账。
+
+本机权限下 payment-core 后端 H2/demo 全量 `2028/2028`，零失败、错误、跳过；随后增强大小写折叠断言的定向 `1/1` 通过，`git diff --check` 通过。首次沙箱全量的 `23` 个 HTTP 用例因回环端口权限产生上下文/Socket 错误，获准本机权限复跑才计通过。隔离九服务 `verify payment-chain` 与 `verify payment-query-chain` 分别经 `CALLBACK`、`GATEWAY_QUERY` 收口，支付、清分、结算、退款成功、账务和对账均齐备，链路 `COMPLETED`、`4/4`，两次退出码 `0` 且服务与查单 mock 已停。本轮没有执行 MySQL 增量脚本或修改生产/历史数据；历史同渠道重复与排序规则、真实渠道交易号、多实例竞争、可信身份及资金验收仍待独立核对。
