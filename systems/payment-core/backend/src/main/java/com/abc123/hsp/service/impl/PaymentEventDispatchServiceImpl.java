@@ -765,6 +765,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                         detail.getCreatedAt(), detail.getLatestAttemptCompletedAt(), detail.getSuccessAt())) {
             throw new IllegalArgumentException("支付成功事件与支付事实不一致");
         }
+        BigDecimal orderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
+        BigDecimal paidAmount = paymentMapper.findPaidAmount(detail.getOrderNo());
+        if ("STANDARD_ORDER".equals(detail.getSourceKind())
+                ? orderAmount == null || paidAmount == null
+                : orderAmount != null || paidAmount != null) {
+            throw new IllegalArgumentException("支付成功事件对应订单来源已变化");
+        }
     }
 
     private boolean isSamePaymentOrderNo(String eventBizNo, String detailOrderNo) {

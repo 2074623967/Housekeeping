@@ -83,6 +83,12 @@ class PaymentEventDispatchServiceImplTest {
         org.mockito.Mockito.lenient()
                 .when(refundMapper.insertOperationLog(any()))
                 .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(paymentMapper.findOrderAmount("ORD-001"))
+                .thenReturn(new BigDecimal("168.00"));
+        org.mockito.Mockito.lenient()
+                .when(paymentMapper.findPaidAmount("ORD-001"))
+                .thenReturn(new BigDecimal("168.00"));
     }
 
     @Test
@@ -1522,6 +1528,74 @@ class PaymentEventDispatchServiceImplTest {
         verify(restTemplate, never()).postForEntity(any(), any(), any());
         verify(rabbitTemplate, never()).invoke(any());
         verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectStandardPaymentSuccessEventWhenBusinessOrderDisappears() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-STANDARD-SOURCE-MISSING", 0);
+        when(paymentEventMapper.findByEventNoForUpdate(event.getEventNo())).thenReturn(event);
+        when(paymentEventMapper.findByEventNo(event.getEventNo())).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        org.mockito.Mockito.doReturn(null).when(paymentMapper).findOrderAmount("ORD-001");
+        org.mockito.Mockito.doReturn(null).when(paymentMapper).findPaidAmount("ORD-001");
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate).republish(event.getEventNo(), "payment-event-scheduler");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectVirtualPaymentSuccessEventWhenBusinessOrderAppears() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setSourceKind("VIRTUAL");
+        PaymentEventListItemDTO event = paymentEvent("EVT-VIRTUAL-SOURCE-CONFLICT", 0);
+        when(paymentEventMapper.findByEventNoForUpdate(event.getEventNo())).thenReturn(event);
+        when(paymentEventMapper.findByEventNo(event.getEventNo())).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate).republish(event.getEventNo(), "payment-event-scheduler");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldDispatchVirtualPaymentSuccessWhenNoBusinessOrderExists() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setSourceKind("VIRTUAL");
+        org.mockito.Mockito.doReturn(null).when(paymentMapper).findOrderAmount("ORD-001");
+        org.mockito.Mockito.doReturn(null).when(paymentMapper).findPaidAmount("ORD-001");
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentEventMapper.markPublishSuccess("EVT-VIRTUAL-SOURCE-VALID")).thenReturn(1);
+        when(restTemplate.postForEntity(any(String.class), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate).publishPaymentSuccess("EVT-VIRTUAL-SOURCE-VALID", "PAY-001");
+
+        verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(
+                any(String.class), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(paymentEventMapper).markPublishSuccess("EVT-VIRTUAL-SOURCE-VALID");
     }
 
     @Test
