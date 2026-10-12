@@ -75,12 +75,12 @@ async function openDetail(accountNo) {
 async function recharge() {
   message.value = "";
   try {
-    await walletApi.recharge({
+    const result = await walletApi.recharge({
       ...rechargeForm.value,
       amount: Number(rechargeForm.value.amount)
     });
     await load();
-    message.value = "充值成功";
+    message.value = result.status === "PENDING" ? "充值单已创建，待支付确认；余额未增加" : `充值单已存在，状态：${result.status}`;
   } catch (error) {
     message.value = error.message;
   }

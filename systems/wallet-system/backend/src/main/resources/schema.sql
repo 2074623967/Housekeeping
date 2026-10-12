@@ -43,7 +43,8 @@ CREATE TABLE t_wallet_recharge_order (
     status VARCHAR(32) NOT NULL COMMENT '处理状态',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_wallet_recharge_no (recharge_no)
+    UNIQUE KEY uk_wallet_recharge_no (recharge_no),
+    UNIQUE KEY uk_wallet_recharge_biz_no (biz_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包充值单表';
 
 CREATE TABLE t_wallet_withdraw_order (

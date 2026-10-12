@@ -38,6 +38,8 @@ public interface WalletMapper {
 
     com.abc123.wallet.entity.WalletRechargeOrderEntity findRechargeOrderByNo(@Param("rechargeNo") String rechargeNo);
 
+    com.abc123.wallet.entity.WalletRechargeOrderEntity findRechargeOrderByBizNo(@Param("bizNo") String bizNo);
+
     int insertWithdrawOrder(@Param("withdrawNo") String withdrawNo,
             @Param("accountNo") String accountNo,
             @Param("bizNo") String bizNo,

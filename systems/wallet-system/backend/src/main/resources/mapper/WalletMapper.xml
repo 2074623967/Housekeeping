@@ -92,6 +92,17 @@
         WHERE recharge_no = #{rechargeNo}
     </select>
 
+    <select id="findRechargeOrderByBizNo" resultType="com.abc123.wallet.entity.WalletRechargeOrderEntity">
+        SELECT recharge_no AS rechargeNo,
+               account_no AS accountNo,
+               biz_no AS bizNo,
+               amount,
+               status,
+               created_at AS createdAt
+        FROM t_wallet_recharge_order
+        WHERE biz_no = #{bizNo}
+    </select>
+
     <insert id="insertWithdrawOrder">
         INSERT INTO t_wallet_withdraw_order (withdraw_no, account_no, biz_no, amount, status, created_at)
         VALUES (#{withdrawNo}, #{accountNo}, #{bizNo}, #{amount}, #{status}, NOW())

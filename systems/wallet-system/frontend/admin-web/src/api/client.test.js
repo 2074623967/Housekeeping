@@ -4,8 +4,8 @@ import { normalizeWalletActionResult, walletApi } from "./client.js";
 
 test("validates wallet action business keys and rejects a mismatched key", () => {
   assert.deepEqual(
-    normalizeWalletActionResult({ rechargeNo: "RCH-001", status: "SUCCESS" }, "rechargeNo"),
-    { rechargeNo: "RCH-001", status: "SUCCESS" }
+    normalizeWalletActionResult({ rechargeNo: "RCH-001", status: "PENDING" }, "rechargeNo"),
+    { rechargeNo: "RCH-001", status: "PENDING" }
   );
   assert.throws(
     () => normalizeWalletActionResult({ rechargeNo: "" }, "rechargeNo"),
