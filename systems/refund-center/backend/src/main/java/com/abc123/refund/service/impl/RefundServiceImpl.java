@@ -529,9 +529,15 @@ public class RefundServiceImpl implements RefundService {
         if (affected == 0) {
             if (PROCESSING.equals(to)) {
                 RefundListItemDTO existing = refundDao.findByRefundOrderId(id);
-                if (existing != null && APPROVED.equals(existing.getStatus())
-                        && !StringUtils.hasText(existing.getChannelCode())) {
-                    throw new BusinessException("退款单缺少原支付渠道事实，待人工核查");
+                if (existing != null && from.equals(existing.getStatus())) {
+                    if (!StringUtils.hasText(existing.getChannelCode())) {
+                        throw new BusinessException("退款单缺少原支付渠道事实，待人工核查");
+                    }
+                    if (existing.getChannelRefundId() != null) {
+                        throw new BusinessException(FAIL.equals(from)
+                                ? "失败退款已有渠道流水，须人工核查后再处理"
+                                : "退款单已有渠道流水，须人工核查后再处理");
+                    }
                 }
             }
             throw new BusinessException("退款单状态不允许执行当前操作");

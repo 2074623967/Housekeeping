@@ -317,6 +317,13 @@ class RefundCenterIntegrationTest {
         RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
         query.setAggregateId(refundOrderId);
         assertEquals(0L, refundService.listOutbox(query).getTotal());
+
+        assertEquals(1, jdbcTemplate.update("UPDATE t_refund_order SET status = 'FAIL' "
+                + "WHERE refund_order_id = ?", refundOrderId));
+        BusinessException retryError = assertThrows(BusinessException.class, () -> refundService.retry(action));
+        assertEquals("退款单缺少原支付渠道事实，待人工核查", retryError.getMessage());
+        assertEquals("FAIL", refundService.detail(refundOrderId).getStatus());
+        assertEquals(2, refundService.detail(refundOrderId).getOperationLogs().size());
     }
 
     @Test
@@ -402,6 +409,55 @@ class RefundCenterIntegrationTest {
                 com.abc123.refund.common.BusinessException.class,
                 () -> refundService.callback(callback));
         assertEquals("CHANNEL_TIMEOUT", refundService.detail(created.getRefundOrderId()).getFailureCode());
+
+        BusinessException retryError = assertThrows(BusinessException.class, () -> refundService.retry(action));
+        assertEquals("失败退款已有渠道流水，须人工核查后再处理", retryError.getMessage());
+        RefundDetailDTO blocked = refundService.detail(created.getRefundOrderId());
+        assertEquals("FAIL", blocked.getStatus());
+        assertEquals("CH-IT-FAIL-1", blocked.getChannelRefundId());
+        assertEquals(failed.getTerminalAt(), blocked.getTerminalAt());
+        assertEquals(4, blocked.getOperationLogs().size());
+    }
+
+    @Test
+    void shouldClearTerminalFactsWhenRetryingFailedRefundWithoutChannelId() {
+        String paymentOrderId = "PAY-IT-RETRY-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-RETRY");
+        source.setPaidAmount(new BigDecimal("90.00"));
+        source.setChannelCode("WECHAT");
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("12.00"));
+        String refundOrderId = refundService.apply(apply).getRefundOrderId();
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(refundOrderId);
+        refundService.approve(action);
+        refundService.submit(action);
+
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setRefundOrderId(refundOrderId);
+        callback.setResult("FAIL");
+        callback.setFailureCode("CHANNEL_TIMEOUT");
+        assertNotNull(refundService.callback(callback).getTerminalAt());
+
+        RefundListItemDTO retried = refundService.retry(action);
+        assertEquals("PROCESSING", retried.getStatus());
+        assertNull(retried.getTerminalAt());
+        assertNull(retried.getFailureCode());
+        assertNull(retried.getChannelRefundId());
+        assertEquals(5, refundService.detail(refundOrderId).getOperationLogs().size());
+
+        callback.setResult("SUCCESS");
+        callback.setFailureCode(null);
+        callback.setChannelRefundId("CH-IT-RETRY-" + UUID.randomUUID());
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setAggregateId(refundOrderId);
+        assertEquals(1L, refundService.listOutbox(query).getTotal());
     }
 
     @Test

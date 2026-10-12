@@ -135,6 +135,7 @@
             failure_code = #{failureCode},
             approved_at = CASE WHEN #{targetStatus} = 'APPROVED' THEN CURRENT_TIMESTAMP ELSE approved_at END,
             submitted_at = CASE WHEN #{targetStatus} = 'PROCESSING' THEN CURRENT_TIMESTAMP ELSE submitted_at END,
+            terminal_at = CASE WHEN #{targetStatus} = 'PROCESSING' THEN NULL ELSE terminal_at END,
             version = version + 1,
             updated_at = CURRENT_TIMESTAMP
         WHERE refund_order_id = #{refundOrderId}
@@ -142,6 +143,7 @@
           AND CAST(refund_order_id AS BINARY(256)) = CAST(#{refundOrderId} AS BINARY(256))
           AND status = #{expectedStatus}
           AND (#{targetStatus} &lt;&gt; 'PROCESSING' OR NULLIF(TRIM(channel_code), '') IS NOT NULL)
+          AND (#{targetStatus} &lt;&gt; 'PROCESSING' OR channel_refund_id IS NULL)
     </update>
 
     <update id="updateCallback">

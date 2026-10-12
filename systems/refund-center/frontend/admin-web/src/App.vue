@@ -78,6 +78,13 @@ const outboxStatusClass = (status) => `status-${String(status || "").toLowerCase
 const selectedStatus = computed(() =>
   selectedRefund.value ? statusLabel[selectedRefund.value.status] || selectedRefund.value.status : ""
 );
+const retryBlockedReason = computed(() => {
+  const refund = selectedRefund.value;
+  if (refund?.status !== "FAIL") return "";
+  if (!String(refund.channelCode || "").trim()) return "退款单缺少原支付渠道事实，待人工核查";
+  if (refund.channelRefundId !== null) return "失败退款已有渠道流水，须人工核查后再处理";
+  return "";
+});
 
 async function loadOverview() {
   overviewError.value = "";
@@ -174,6 +181,10 @@ async function exportDetail(refundOrderId) {
 
 async function runAction(action, callbackResult = "SUCCESS") {
   if (!selectedRefund.value || activeOperation.value) return;
+  if (action === "retry" && retryBlockedReason.value) {
+    errorMessage.value = retryBlockedReason.value;
+    return;
+  }
   const operationKey = action === "callback"
     ? `refund:callback:${callbackResult}`
     : `refund:${action}`;
@@ -412,6 +423,8 @@ async function refreshCurrentView() {
           <div class="section-header"><div><span class="section-kicker">REFUND DETAIL</span><h2>{{ selectedRefund.refundOrderId }}</h2></div><span class="status-pill" :class="statusClass(selectedRefund.status, selectedRefund.statusType)">{{ selectedStatus }}</span></div>
           <div class="detail-grid">
             <div><span>原支付单号</span><strong>{{ selectedRefund.paymentOrderId }}</strong></div>
+            <div><span>原支付渠道</span><strong>{{ selectedRefund.channelCode || "-" }}</strong></div>
+            <div><span>渠道退款流水号</span><strong>{{ selectedRefund.channelRefundId || "-" }}</strong></div>
             <div><span>支付场景</span><strong>{{ selectedRefund.payScene || "-" }}</strong></div>
             <div><span>业务订单号</span><strong>{{ selectedRefund.orderNo }}</strong></div>
             <div><span>客户名称</span><strong>{{ selectedRefund.customerName }}</strong></div>
@@ -428,11 +441,12 @@ async function refreshCurrentView() {
             <button class="secondary-button" :disabled="!!activeOperation" @click="exportDetail(selectedRefund.refundOrderId)">导出快照</button>
             <button v-if="selectedRefund.status === 'REVIEWING'" class="primary-button" :disabled="!!activeOperation" @click="runAction('approve')">{{ activeOperation === "refund:approve" ? "审核中..." : "审核通过" }}</button>
             <button v-if="selectedRefund.status === 'APPROVED'" class="primary-button" :disabled="!!activeOperation" @click="runAction('submit')">{{ activeOperation === "refund:submit" ? "提交中..." : "提交渠道" }}</button>
-            <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" :disabled="!!activeOperation" @click="runAction('retry')">{{ activeOperation === "refund:retry" ? "重试中..." : "失败重试" }}</button>
+            <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" :disabled="!!activeOperation || !!retryBlockedReason" @click="runAction('retry')">{{ activeOperation === "refund:retry" ? "重试中..." : "失败重试" }}</button>
             <button v-if="selectedRefund.status === 'PROCESSING'" class="secondary-button" :disabled="!!activeOperation" @click="runAction('callback', 'SUCCESS')">{{ activeOperation === "refund:callback:SUCCESS" ? "回调中..." : "模拟成功回调" }}</button>
             <button v-if="selectedRefund.status === 'PROCESSING'" class="link-button danger-link" :disabled="!!activeOperation" @click="runAction('callback', 'FAIL')">{{ activeOperation === "refund:callback:FAIL" ? "回调中..." : "模拟失败回调" }}</button>
             <button class="secondary-button" :disabled="!!activeOperation" @click="showList">返回列表</button>
           </div>
+          <p v-if="retryBlockedReason" class="form-hint" role="status">{{ retryBlockedReason }}；请核对原始渠道回执，勿直接重复提交。</p>
         </section>
         <section v-if="selectedRefund" class="panel timeline-panel"><span class="section-kicker">AUDIT TRAIL</span><h3>操作日志</h3><div v-if="!selectedRefund.operationLogs.length" class="empty-state">暂无操作日志</div><ol v-else class="timeline"><li v-for="log in selectedRefund.operationLogs" :key="log.logNo"><span class="timeline-dot"></span><div><strong>{{ log.actionName }}</strong><small>{{ log.operatorName }} · {{ formatRefundTime(log.operatedAt) }}</small><p>{{ log.operationRemark }}</p></div><em>{{ statusLabel[log.toStatus] || log.toStatus }}</em></li></ol></section>
       </section>
