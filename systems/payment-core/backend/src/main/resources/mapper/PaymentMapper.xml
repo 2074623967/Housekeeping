@@ -978,6 +978,7 @@
             ) latest_attempt
         )
           AND completed_at IS NULL
+          AND attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
           AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
           AND EXISTS (
               SELECT 1
@@ -1357,6 +1358,7 @@
             ) latest_attempt
         )
           AND completed_at IS NULL
+          AND attempt_status &lt;&gt; '渠道流水归属冲突，待人工核查'
           AND UPPER(TRIM(attempt_status)) NOT IN ('成功', '支付成功', '失败', '支付失败', 'SUCCESS', 'FAIL', 'FAILED')
     </update>
 

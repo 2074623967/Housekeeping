@@ -1835,6 +1835,29 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldPreserveDisputedChannelTransactionAttemptFromStaleCallbackUpdates() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_attempt SET attempt_status = '渠道流水归属冲突，待人工核查', "
+                    + "attempt_status_type = 'danger' WHERE attempt_no = 'ATT-SUBMITTED-LATEST'");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(0, mapper.updateLatestPaymentAttemptStatus("PAY-SUBMITTED", "待回调", "warn"));
+            statement.executeUpdate("UPDATE t_payment_order SET status = 'SUCCESS', success_at = NOW() "
+                    + "WHERE payment_order_id = 'PAY-SUBMITTED'");
+            assertEquals(0, mapper.finalizeLatestPaymentAttemptSuccess("PAY-SUBMITTED"));
+            try (java.sql.ResultSet resultSet = statement.executeQuery(
+                    "SELECT attempt_status, attempt_status_type, completed_at "
+                            + "FROM t_payment_attempt WHERE attempt_no = 'ATT-SUBMITTED-LATEST'")) {
+                assertTrue(resultSet.next());
+                assertEquals("渠道流水归属冲突，待人工核查", resultSet.getString("attempt_status"));
+                assertEquals("danger", resultSet.getString("attempt_status_type"));
+                assertNull(resultSet.getTimestamp("completed_at"));
+            }
+        }
+    }
+
+    @Test
     void shouldOnlyUpdateLatestPaymentAttemptStatus() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
