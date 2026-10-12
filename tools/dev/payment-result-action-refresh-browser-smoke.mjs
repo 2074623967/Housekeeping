@@ -14,6 +14,7 @@ const chromeBinary = process.env.HSP_CHROME_BIN
   || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const paymentIds = {
   query: "PAY-RESULT-QUERY-001", close: "PAY-RESULT-CLOSE-001",
+  conflict: "PAY-RESULT-CONFLICT-001",
   submit: "PAY-RESULT-SUBMIT-001", submitOther: "PAY-RESULT-SUBMIT-002",
   submitCleanup: "PAY-RESULT-SUBMIT-CLEANUP-001",
   submitCleanupWrite: "PAY-RESULT-SUBMIT-CLEANUP-WRITE-001",
@@ -39,12 +40,14 @@ function paymentDetail(kind, status) {
     payScene: "HOME_CLEAN", amount: "68.00", paymentMethod: "支付宝",
     customerName: "本机用户", channel: submitted ? "alipay_h5" : null,
     channelTransactionNo: submitted && status !== "PAYING" ? "ALI-LOCAL-001" : null,
-    status, statusType: status === "SUCCESS" ? "success" : status === "CLOSED" ? "danger"
+    status, statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || kind === "conflict" ? "danger"
       : status === "WAIT_CALLBACK" ? "warn" : "info",
     successAt: status === "SUCCESS" ? "2026-10-10 10:00:03" : null,
     createdAt: "2026-10-10 10:00:00",
-    latestAttemptStatus: submitted ? status === "SUCCESS" ? "成功" : "处理中" : null,
-    latestAttemptStatusType: submitted ? status === "SUCCESS" ? "success" : "info" : null,
+    latestAttemptStatus: submitted ? kind === "conflict" ? "渠道流水归属冲突，待人工核查"
+      : status === "SUCCESS" ? "成功" : "处理中" : null,
+    latestAttemptStatusType: submitted ? kind === "conflict" ? "danger"
+      : status === "SUCCESS" ? "success" : "info" : null,
     latestAttemptCompletedAt: status === "SUCCESS" ? "2026-10-10 10:00:02" : null,
     routeLogs: [], notifyLogs: [], eventLogs: []
   };
@@ -56,8 +59,9 @@ function cashierPage(kind, status) {
     ...payment,
     paymentStatus: status,
     status: status === "SUCCESS" ? "支付成功" : status === "CLOSED" ? "已关闭"
+      : kind === "conflict" && status === "PAYING" ? "结果待确认"
       : status === "WAIT_CALLBACK" ? "待回调" : status === "PAYING" ? "支付中" : "待支付",
-    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" ? "danger"
+    statusType: status === "SUCCESS" ? "success" : status === "CLOSED" || kind === "conflict" ? "danger"
       : status === "PAYING" ? "info" : "warn",
     paymentMethod: kind !== "close" && status !== "PREPAY_CREATED" ? "支付宝" : null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -249,6 +253,41 @@ async function main() {
       "accepted cashier guidance");
     assert.equal(await evaluate("document.querySelector('.channel-tips')?.textContent.includes('继续查单')"), true);
     assert.equal(requests.slice(cashierPayingStart).filter((item) => item.method === "POST").length, 0);
+    kind = "conflict";
+    status = "PAYING";
+    const conflictStart = requests.length;
+    const conflictPath = `/api/payments/${paymentIds[kind]}`;
+    await send("Page.navigate", { url: `${baseUrl}/payment-result/${paymentIds[kind]}?payScene=HOME_CLEAN` });
+    await waitFor(() => evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim() === '渠道流水归属待核查'"),
+      "disputed channel transaction result");
+    assert.equal(await evaluate("document.body.innerText.includes('渠道流水归属冲突，待人工核查')"), true);
+    assert.equal(await evaluate(`${actionButton('人工核查中')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('关闭支付单')}.disabled`), true);
+    assert.equal(await evaluate(`${actionButton('刷新支付详情')}.disabled`), false);
+    await delay(5700);
+    assert.equal(requests.slice(conflictStart).filter((item) => item.pathname === conflictPath).length, 1,
+      "争议态不能自动轮询详情");
+    await evaluate(`${actionButton('刷新支付详情')}.click()`);
+    await waitFor(() => requests.slice(conflictStart)
+      .filter((item) => item.pathname === conflictPath).length === 2, "manual disputed result refresh");
+    await waitFor(() => evaluate(`document.body.innerText.includes('支付详情已刷新')
+      && ${actionButton('刷新支付详情')}.disabled === false`), "manual disputed result readback");
+    assert.equal(await evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim()"), "渠道流水归属待核查");
+    failReadback = true;
+    await evaluate(`${actionButton('刷新支付详情')}.click()`);
+    await waitFor(() => evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim() === '支付结果待核查'"),
+      "disputed result readback failure");
+    assert.equal(await evaluate("document.body.innerText.includes('上次读取为渠道流水归属冲突')"), true);
+    assert.equal(await evaluate("document.querySelector('.terminal-actions') === null"), true);
+    assert.equal(requests.slice(conflictStart).filter((item) => item.method === "POST").length, 0);
+    await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN` });
+    await waitFor(() => evaluate(`Array.from(document.querySelectorAll('.terminal-actions button'))
+      .filter((button) => button.textContent.trim() === '人工核查中').length === 2`), "disputed cashier actions");
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.terminal-actions button'))
+      .filter((button) => button.textContent.trim() === '人工核查中').every((button) => button.disabled)`), true);
+    assert.equal(await evaluate(`${actionButton('关闭本次支付')}.disabled`), true);
+    assert.equal(await evaluate("document.body.innerText.includes('勿主动查单、重复付款或关闭支付单')"), true);
+    assert.equal(requests.slice(conflictStart).filter((item) => item.method === "POST").length, 0);
     for (const scenario of ["query", "close"]) {
       for (const readbackFails of [false, true]) {
         kind = scenario;
@@ -565,7 +604,7 @@ async function main() {
     assert.equal(requests.slice(retryStart).filter((item) => item.method === "POST").length, 3);
     assert.equal(await evaluate(`Object.entries(sessionStorage).some(([key, value]) =>
       key.startsWith('hsp.paymentSubmitAttempt.v1.') && value === '{broken-json')`), true);
-    console.log("[PASS] User result and cashier actions, including corrupt attempt and final result");
+    console.log("[PASS] User result and cashier actions, including disputed channel facts and corrupt attempt");
   } finally {
     socket?.close();
     chrome.kill("SIGTERM");
