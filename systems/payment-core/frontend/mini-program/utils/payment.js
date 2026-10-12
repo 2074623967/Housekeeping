@@ -5,6 +5,7 @@ const MERCHANT_NO = "MCH_WX_10001";
 const TERMINAL = "MINI_PROGRAM";
 const PAYMENT_DETAIL_REFRESH_INTERVAL_MS = 5000;
 const PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS = 60;
+const CHANNEL_TRANSACTION_CONFLICT_STATUS = "渠道流水归属冲突，待人工核查";
 
 const SCENES = {
   recharge: {
@@ -99,7 +100,14 @@ function createIdempotencyKey(prepayOrderNo) {
   return normalized ? `MINI-${normalized}` : "";
 }
 
+function isChannelTransactionConflict(latestAttemptStatus) {
+  return latestAttemptStatus === CHANNEL_TRANSACTION_CONFLICT_STATUS;
+}
+
 function canQueryPayment(status, latestAttemptStatus, latestAttemptCompletedAt, channelTransactionNo, channel) {
+  if (isChannelTransactionConflict(latestAttemptStatus)) {
+    return false;
+  }
   if (status === "SUCCESS") {
     return true;
   }
@@ -308,24 +316,32 @@ function canClosePayment(status, channelTransactionNo, latestAttemptStatus) {
     && (!attemptStatus || attemptStatus === "-");
 }
 
-function shouldAutoRefreshPaymentDetail(status) {
+function shouldAutoRefreshPaymentDetail(status, latestAttemptStatus) {
   if (typeof status !== "string") {
     return false;
   }
-  return ["WAIT_CALLBACK", "PAYING", "RISK_REVIEW"].includes(status.trim().toUpperCase());
+  return !isChannelTransactionConflict(latestAttemptStatus)
+    && ["WAIT_CALLBACK", "PAYING", "RISK_REVIEW"].includes(status.trim().toUpperCase());
 }
 
-function resolvePaymentDetailRefreshDelay(status, completedAttempts) {
+function resolvePaymentDetailRefreshDelay(status, completedAttempts, latestAttemptStatus) {
   if (!Number.isInteger(completedAttempts)
       || completedAttempts < 0
       || completedAttempts >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS
-      || !shouldAutoRefreshPaymentDetail(status)) {
+      || !shouldAutoRefreshPaymentDetail(status, latestAttemptStatus)) {
     return null;
   }
   return PAYMENT_DETAIL_REFRESH_INTERVAL_MS;
 }
 
-function resultMeta(status) {
+function resultMeta(status, latestAttemptStatus) {
+  if (status === "PAYING" && isChannelTransactionConflict(latestAttemptStatus)) {
+    return {
+      title: "渠道流水归属待核查",
+      tone: "danger",
+      hint: "需人工核对渠道原始事实与流水归属；勿重复付款、主动查单或关闭支付单。可手动刷新结果。"
+    };
+  }
   if (status === "SUCCESS") {
     return { title: "支付成功", tone: "success", hint: "支付结果已经收口，可返回业务入口。" };
   }
@@ -375,6 +391,7 @@ module.exports = {
   matchesCashierSnapshot,
   createIdempotencyKey,
   createOrderNo,
+  isChannelTransactionConflict,
   normalizeAmount,
   normalizeNativePaymentParams,
   requestNativePayment,

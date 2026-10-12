@@ -12,6 +12,7 @@
   </view>
   <block wx:else>
     <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
+    <view wx:if="{{channelTransactionConflict}}" class="error-banner">渠道流水归属冲突，需人工核对渠道原始事实与流水归属；请勿重复付款、主动查单或关闭支付单。可手动刷新收银台。</view>
 
     <view class="panel amount-panel">
       <view class="field-label">本次应付</view>
@@ -56,7 +57,7 @@
 
       <view class="button-row button-row-single">
         <button class="primary-button" loading="{{actionName === 'submit'}}" disabled="{{!canSubmit || loading || actionName}}" bindtap="submitPayment">
-          {{actionName === 'submit' ? '提交中...' : cashier.paymentStatus === 'WAIT_CALLBACK' ? '等待原渠道回调' : cashier.paymentStatus === 'SUCCESS' ? '支付已完成' : cashier.paymentStatus === 'RISK_REVIEW' ? '审核通过后继续原支付' : '确认微信支付'}}
+          {{actionName === 'submit' ? '提交中...' : channelTransactionConflict ? '人工核查中' : cashier.paymentStatus === 'WAIT_CALLBACK' ? '等待原渠道回调' : cashier.paymentStatus === 'SUCCESS' ? '支付已完成' : cashier.paymentStatus === 'RISK_REVIEW' ? '审核通过后继续原支付' : '确认微信支付'}}
         </button>
         <button class="secondary-button" disabled="{{loading || actionName}}" bindtap="loadCashier">刷新收银台</button>
         <button class="secondary-button" disabled="{{actionName}}" bindtap="backToEntry">返回业务入口</button>

@@ -79,6 +79,56 @@ function pendingCashier() {
   };
 }
 
+function disputedCashier() {
+  return {
+    ...cashier(), status: "结果待确认", statusType: "danger", paymentStatus: "PAYING",
+    paymentMethod: "微信支付", channel: "wx_h5", channelTransactionNo: null,
+    latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null
+  };
+}
+
+test("keeps a recovered channel collision on the cashier with manual review guidance", async () => {
+  const previousGetApp = global.getApp;
+  const previousWx = global.wx;
+  let loads = 0;
+  let submits = 0;
+  let nativeCalls = 0;
+  global.getApp = () => ({ globalData: { paymentAccessToken: "mini-token" } });
+  global.wx = { requestPayment: () => { nativeCalls += 1; } };
+  paymentApi.getCashier = () => Promise.resolve(++loads === 1 ? cashier() : disputedCashier());
+  paymentApi.submit = () => {
+    submits += 1;
+    return Promise.reject(new Error("渠道流水归属冲突，待人工核查 [PAYMENT-1016]"));
+  };
+  const page = createPage();
+  page.onLoad({ prepayOrderNo: "PRE-001", scene: "balance-pay" });
+  try {
+    await flushPromises();
+    assert.equal(page.data.canSubmit, true);
+    await page.submitPayment();
+    assert.equal(page.data.channelTransactionConflict, true);
+    assert.equal(page.data.statusClass, "status-danger");
+    assert.equal(page.data.canSubmit, false);
+    assert.equal(page.data.staleCashier, false);
+    assert.match(page.data.errorMessage, /渠道流水归属冲突/);
+    await page.submitPayment();
+    assert.equal(submits, 1);
+    assert.equal(nativeCalls, 0);
+    assert.equal(page.data.idempotencyKey, "MINI-PRE-001");
+    await page.loadCashier();
+    assert.equal(page.data.channelTransactionConflict, true);
+    const template = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
+    assert.match(template, /wx:if="\{\{channelTransactionConflict\}\}"[^>]*>渠道流水归属冲突/);
+    assert.match(template, /channelTransactionConflict \? '人工核查中'/);
+  } finally {
+    page.onUnload();
+    global.getApp = previousGetApp;
+    global.wx = previousWx;
+  }
+});
+
 function terminalSubmitResult(paymentStatus) {
   const cashierStatuses = {
     SUCCESS: "支付成功", CLOSED: "已关闭", RISK_BLOCKED: "风控拦截",

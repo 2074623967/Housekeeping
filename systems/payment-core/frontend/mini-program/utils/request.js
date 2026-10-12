@@ -1,3 +1,5 @@
+const { isChannelTransactionConflict } = require("./payment");
+
 function resolveApiBaseUrl() {
   const configured = wx.getStorageSync("paymentApiBaseUrl");
   const app = getApp();
@@ -66,7 +68,7 @@ function isKnownStatus(value, statuses) {
   return typeof value === "string" && statuses.has(value.trim().toUpperCase());
 }
 
-function isConsistentPaymentStatus(status, statusType) {
+function isConsistentPaymentStatus(status, statusType, latestAttemptStatus) {
   if (typeof status !== "string" || !status.trim()
       || typeof statusType !== "string" || !statusType.trim()) {
     return false;
@@ -82,6 +84,9 @@ function isConsistentPaymentStatus(status, statusType) {
     CLOSED: "danger",
     FAIL: "danger"
   }[status.trim().toUpperCase()];
+  if (status.trim().toUpperCase() === "PAYING" && isChannelTransactionConflict(latestAttemptStatus)) {
+    return statusType.trim().toLowerCase() === "danger";
+  }
   return Boolean(expectedType) && statusType.trim().toLowerCase() === expectedType;
 }
 
@@ -169,9 +174,14 @@ function isConsistentPaymentAttemptCompletedAt(status, completedAt, createdAt) {
   return completedAt == null;
 }
 
-function isConsistentPaymentCashierStatus(paymentStatus, cashierStatus) {
+function isConsistentPaymentCashierStatus(paymentStatus, cashierStatus, latestAttemptStatus) {
   if (typeof paymentStatus !== "string" || typeof cashierStatus !== "string") {
     return false;
+  }
+  if (paymentStatus.trim().toUpperCase() === "PAYING") {
+    return isChannelTransactionConflict(latestAttemptStatus)
+      ? cashierStatus.trim() === "结果待确认"
+      : cashierStatus.trim() === "支付中";
   }
   const expectedCashierStatuses = PAYMENT_CASHIER_STATUSES.get(
     paymentStatus.trim().toUpperCase()
@@ -573,7 +583,7 @@ function normalizePrepayResult(
       || !isConsistentPrepayExpiryTimeOrder(data.createdAt, data.expiresAt)
       || typeof data.cashierStatus !== "string"
       || CASHIER_STATUS_TYPES.get(data.cashierStatus.trim()) !== data.cashierStatusType
-      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus)
+      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus, data.latestAttemptStatus)
       || (expectedPayScene != null && !matchesExpectedIdentifier(data.payScene, expectedPayScene))
       || (expectedOrderNo && data.orderNo !== expectedOrderNo)
       || (expectedCustomerName && data.customerName !== expectedCustomerName)
@@ -620,7 +630,7 @@ function normalizePaymentSubmitResult(
       || !isConsistentPrepayExpiryTimeOrder(data.createdAt, data.expiresAt)
       || typeof data.cashierStatus !== "string"
       || CASHIER_STATUS_TYPES.get(data.cashierStatus.trim()) !== data.cashierStatusType
-      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus)
+      || !isConsistentPaymentCashierStatus(data.paymentStatus, data.cashierStatus, data.latestAttemptStatus)
       || (expectedPayScene != null && !matchesExpectedIdentifier(data.payScene, expectedPayScene))
       || (data.nativePaymentParams != null
         && !isValidNativePaymentParams(data.nativePaymentParams))
@@ -670,7 +680,7 @@ function normalizePaymentActionResult(
       || !isValidAmount(data.amount)
       || typeof data.status !== "string" || !data.status.trim()
       || !isKnownStatus(data.status, PAYMENT_STATUSES)
-      || !isConsistentPaymentStatus(data.status, data.statusType)
+      || !isConsistentPaymentStatus(data.status, data.statusType, data.latestAttemptStatus)
       || !isConsistentPaymentSuccessTime(data.status, data.successAt)
       || !isConsistentPaymentChannel(data.status, data.channel)
       || !isConsistentPaymentChannelTransaction(data.status, data.channelTransactionNo)
@@ -744,7 +754,7 @@ function normalizeCashierPageResult(page, expectedPrepayOrderNo, expectedPayScen
       || typeof page.status !== "string" || !CASHIER_STATUS_TYPES.has(page.status.trim())
       || page.statusType !== CASHIER_STATUS_TYPES.get(page.status.trim())
       || typeof page.paymentStatus !== "string" || !isKnownStatus(page.paymentStatus, PAYMENT_STATUSES)
-      || !isConsistentPaymentCashierStatus(page.paymentStatus, page.status)
+      || !isConsistentPaymentCashierStatus(page.paymentStatus, page.status, page.latestAttemptStatus)
       || (["WAIT_CALLBACK", "SUCCESS"].includes(page.paymentStatus)
         && (typeof page.channel !== "string" || !page.channel.trim()))
       || (["WAIT_CALLBACK", "SUCCESS"].includes(page.paymentStatus)
@@ -790,7 +800,7 @@ function normalizePaymentDetailResult(detail, expectedPaymentOrderId, expectedPa
       || !isValidAmount(detail.amount)
       || typeof detail.status !== "string" || !detail.status.trim()
       || !isKnownStatus(detail.status, PAYMENT_STATUSES)
-      || !isConsistentPaymentStatus(detail.status, detail.statusType)
+      || !isConsistentPaymentStatus(detail.status, detail.statusType, detail.latestAttemptStatus)
       || !isConsistentPaymentSuccessTime(detail.status, detail.successAt)
       || !isConsistentPaymentChannel(detail.status, detail.channel)
       || !isConsistentPaymentChannelTransaction(detail.status, detail.channelTransactionNo)

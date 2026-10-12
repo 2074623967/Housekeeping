@@ -154,6 +154,38 @@ test("keeps PAYING result read-only until channel acceptance is confirmed", asyn
   }
 });
 
+test("shows disputed channel transactions without automatic queries or polling", async () => {
+  let detailReads = 0;
+  let queryCalls = 0;
+  paymentApi.getDetail = () => {
+    detailReads += 1;
+    return Promise.resolve({
+      ...paymentDetail("PAYING"), statusType: "danger", channelTransactionNo: null,
+      latestAttemptStatus: "渠道流水归属冲突，待人工核查",
+      latestAttemptStatusType: "danger", latestAttemptCompletedAt: null
+    });
+  };
+  paymentApi.query = () => { queryCalls += 1; return Promise.resolve(paymentDetail()); };
+  const page = createPage();
+  page.onLoad({ paymentOrderId: "PAY-1", prepayOrderNo: "PRE-TRUSTED", scene: "balance-pay" });
+  try {
+    await flushPromises();
+    assert.equal(page.data.meta.title, "渠道流水归属待核查");
+    assert.equal(page.data.meta.tone, "danger");
+    assert.match(page.data.meta.hint, /人工核对.*勿重复付款/);
+    assert.equal(page.data.canQuery, false);
+    assert.equal(page.data.canClose, false);
+    assert.equal(page.autoRefreshTimer == null, true);
+    await page.queryPayment();
+    assert.equal(queryCalls, 0);
+    await page.loadDetail();
+    assert.equal(detailReads, 2);
+    assert.equal(page.autoRefreshTimer == null, true);
+  } finally {
+    page.onUnload();
+  }
+});
+
 test("keeps a prewritten WAIT_CALLBACK result read-only before channel acceptance", async () => {
   let queryCalls = 0;
   paymentApi.getDetail = () => Promise.resolve({

@@ -35,6 +35,40 @@ test("rejects terminal attempts in pending mini program payment snapshots", () =
   }
 });
 
+test("accepts only evidenced channel collision snapshots for read-only mini program views", () => {
+  const conflict = "渠道流水归属冲突，待人工核查";
+  const prepay = {
+    prepayOrderNo: "PRE-COLLISION", paymentOrderId: "PAY-COLLISION",
+    businessChainId: "CHAIN-PAY-COLLISION", orderNo: "ORDER-COLLISION",
+    amount: "68.00", paymentStatus: "PAYING", cashierStatus: "结果待确认",
+    cashierStatusType: "danger", latestAttemptStatus: conflict,
+    latestAttemptStatusType: "danger", latestAttemptCompletedAt: null,
+    createdAt: "2026-09-27 11:59:00", expiresAt: "2026-09-27 12:00:00"
+  };
+  const cashier = {
+    ...prepay, status: "结果待确认", statusType: "danger", channels: ["微信支付"],
+    channel: "wx_h5", paymentMethod: "微信支付", channelTransactionNo: null
+  };
+  const detail = {
+    ...prepay, status: "PAYING", statusType: "danger", channel: "wx_h5",
+    channelTransactionNo: null
+  };
+  assert.doesNotThrow(() => normalizePrepayResult(prepay));
+  assert.doesNotThrow(() => normalizeCashierPageResult(cashier));
+  assert.doesNotThrow(() => normalizePaymentDetailResult(detail));
+  assert.doesNotThrow(() => normalizePaymentActionResult(detail));
+  for (const latestAttemptStatus of [null, "渠道提交中", `${conflict} `]) {
+    assert.throws(() => normalizePrepayResult({ ...prepay, latestAttemptStatus }),
+      (error) => error.code === "PAYMENT-MINI-INVALID-PREPAY");
+    assert.throws(() => normalizeCashierPageResult({ ...cashier, latestAttemptStatus }),
+      (error) => error.code === "PAYMENT-MINI-INVALID-CASHIER");
+    assert.throws(() => normalizePaymentDetailResult({ ...detail, latestAttemptStatus }),
+      (error) => error.code === "PAYMENT-MINI-INVALID-PAYMENT-DETAIL");
+  }
+  assert.throws(() => normalizePaymentDetailResult({ ...detail, statusType: "info" }),
+    (error) => error.code === "PAYMENT-MINI-INVALID-PAYMENT-DETAIL");
+});
+
 test("keeps mini program failed payment attempt styles and success facts consistent", () => {
   const failedPayment = {
     prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",

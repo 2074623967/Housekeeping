@@ -342,6 +342,9 @@ test("maps payment terminal states without inventing success", () => {
   assert.match(resultMeta("PAYING").hint, /刷新/);
   assert.match(resultMeta("PAYING").hint, /不可主动查单或关单/);
   assert.doesNotMatch(resultMeta("PAYING").hint, /请等待渠道回调|超时后可主动查单/);
+  const conflictMeta = resultMeta("PAYING", "渠道流水归属冲突，待人工核查");
+  assert.equal(conflictMeta.tone, "danger");
+  assert.match(conflictMeta.hint, /人工核对|勿重复付款|主动查单/);
 });
 
 test("auto refreshes only asynchronously advancing payment states", () => {
@@ -354,6 +357,9 @@ test("auto refreshes only asynchronously advancing payment states", () => {
   assert.equal(shouldAutoRefreshPaymentDetail("SUCCESS"), false);
   assert.equal(shouldAutoRefreshPaymentDetail("CLOSED"), false);
   assert.equal(shouldAutoRefreshPaymentDetail(null), false);
+  assert.equal(shouldAutoRefreshPaymentDetail("PAYING", "渠道流水归属冲突，待人工核查"), false);
+  assert.equal(resolvePaymentDetailRefreshDelay("PAYING", 0, "渠道流水归属冲突，待人工核查"), null);
+  assert.equal(canQueryPayment("WAIT_CALLBACK", "渠道流水归属冲突，待人工核查", null, "WX-1", "wx_h5"), false);
 });
 
 test("limits automatic payment detail refresh to five minutes", () => {

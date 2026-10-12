@@ -132,7 +132,7 @@ Page({
         ? mergedDetail.prepayOrderNo
         : this.data.prepayOrderNo,
       detail: mergedDetail,
-      meta: mergedDetail ? resultMeta(mergedDetail.status) : UNVERIFIED_META,
+      meta: mergedDetail ? resultMeta(mergedDetail.status, mergedDetail.latestAttemptStatus) : UNVERIFIED_META,
       staleDetail: false,
       errorMessage: "",
       successMessage: "",
@@ -172,12 +172,13 @@ Page({
     const detail = this.data.detail;
     this.setData({
       autoRefreshPaused: Boolean(detail
-        && shouldAutoRefreshPaymentDetail(detail.status)
+        && shouldAutoRefreshPaymentDetail(detail.status, detail.latestAttemptStatus)
         && this.autoRefreshAttempts >= PAYMENT_DETAIL_REFRESH_MAX_ATTEMPTS)
     });
     const delay = resolvePaymentDetailRefreshDelay(
       detail && detail.status,
-      this.autoRefreshAttempts || 0
+      this.autoRefreshAttempts || 0,
+      detail && detail.latestAttemptStatus
     );
     if (!this.pageActive || !detail || delay == null) {
       return;
@@ -193,7 +194,8 @@ Page({
     }
     if (resolvePaymentDetailRefreshDelay(
       this.data.detail.status,
-      this.autoRefreshAttempts || 0
+      this.autoRefreshAttempts || 0,
+      this.data.detail.latestAttemptStatus
     ) == null) {
       return;
     }

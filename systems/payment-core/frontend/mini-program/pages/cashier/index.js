@@ -7,6 +7,7 @@ const {
   canSubmitPayment,
   canRedirectAfterNativePayment,
   createIdempotencyKey,
+  isChannelTransactionConflict,
   matchesCashierSnapshot,
   matchesPaymentSubmission,
   requestNativePayment,
@@ -29,6 +30,7 @@ Page({
     staleCashier: false,
     idempotencyKey: "",
     canSubmit: false,
+    channelTransactionConflict: false,
     countdownSeconds: 0,
     countdownLabel: "00:00:00",
     statusClass: "status-warn"
@@ -84,6 +86,7 @@ Page({
     this.setData({
       canSubmit: !this.data.staleCashier && !this.submitInFlight
         && !this.resultNavigationStarted && canSubmitPayment(cashier),
+      channelTransactionConflict: isChannelTransactionConflict(cashier && cashier.latestAttemptStatus),
       statusClass: resolveCashierStatusClass(cashier && cashier.statusType)
     });
   },
