@@ -1503,6 +1503,50 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentSuccessEventWhenPrepayAmountBindingIsInvalid() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setPrepayAmountBindingValid(false);
+        PaymentEventListItemDTO event = paymentEvent("EVT-PREPAY-AMOUNT-INVALID", 0);
+        when(paymentEventMapper.findByEventNoForUpdate(event.getEventNo())).thenReturn(event);
+        when(paymentEventMapper.findByEventNo(event.getEventNo())).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate).republish(event.getEventNo(), "payment-event-scheduler");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectPaymentSuccessEventWhenCreationFollowsSuccessfulAttempt() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setCreatedAt("2026-09-27 12:00:01");
+        PaymentEventListItemDTO event = paymentEvent("EVT-CREATED-AFTER-ATTEMPT", 0);
+        when(paymentEventMapper.findByEventNoForUpdate(event.getEventNo())).thenReturn(event);
+        when(paymentEventMapper.findByEventNo(event.getEventNo())).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate).republish(event.getEventNo(), "payment-event-scheduler");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
     void shouldRejectPaymentSuccessEventWhenPaymentDetailBelongsToAnotherPayment() {
         PaymentDetailDTO detail = buildPaymentDetail();
         detail.setPaymentOrderId("PAY-OTHER");
@@ -2306,6 +2350,9 @@ class PaymentEventDispatchServiceImplTest {
         detail.setAmount("¥168.00");
         detail.setStatus("SUCCESS");
         detail.setStatusType("success");
+        detail.setPrepayAmountBindingValid(true);
+        detail.setSourceKind("STANDARD_ORDER");
+        detail.setCreatedAt("2026-09-27 11:59:00");
         detail.setChannel("wx_h5");
         detail.setPayScene("HOME_CLEAN");
         detail.setChannelTransactionNo("WX-001");

@@ -747,6 +747,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || !isSamePaymentOrderNo(eventBizNo, detail.getOrderNo())
                 || !"SUCCESS".equals(detail.getStatus())
                 || !"success".equalsIgnoreCase(detail.getStatusType())
+                || !Boolean.TRUE.equals(detail.getPrepayAmountBindingValid())
+                || !("STANDARD_ORDER".equals(detail.getSourceKind())
+                        || "VIRTUAL".equals(detail.getSourceKind()))
                 || !isValidConfiguredText(detail.getOrderNo(), ORDER_NO_MAX_LENGTH)
                 || !isValidConfiguredText(detail.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH)
                 || !isValidConfiguredText(detail.getChannel(), CHANNEL_CODE_MAX_LENGTH)
@@ -756,9 +759,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || !"success".equalsIgnoreCase(detail.getLatestAttemptStatusType())
                 || !StringUtils.hasText(detail.getLatestAttemptCompletedAt())
                 || !StringUtils.hasText(detail.getSuccessAt())
+                || !StringUtils.hasText(detail.getCreatedAt())
                 || !Boolean.TRUE.equals(detail.getPaymentFactTimelineValid())
                 || !isPaymentFactTimelineValid(
-                        detail.getLatestAttemptCompletedAt(), detail.getSuccessAt())) {
+                        detail.getCreatedAt(), detail.getLatestAttemptCompletedAt(), detail.getSuccessAt())) {
             throw new IllegalArgumentException("支付成功事件与支付事实不一致");
         }
     }
@@ -770,13 +774,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 && eventBizNo.equals(eventBizNo.trim());
     }
 
-    private boolean isPaymentFactTimelineValid(String attemptCompletedAt, String successAt) {
+    private boolean isPaymentFactTimelineValid(String createdAt, String attemptCompletedAt, String successAt) {
         try {
+            LocalDateTime created = LocalDateTime.parse(createdAt.trim(), PAYMENT_FACT_TIME_FORMATTER);
             LocalDateTime completedAt = LocalDateTime.parse(
                     attemptCompletedAt.trim(), PAYMENT_FACT_TIME_FORMATTER);
             LocalDateTime succeededAt = LocalDateTime.parse(
                     successAt.trim(), PAYMENT_FACT_TIME_FORMATTER);
-            return !completedAt.isAfter(succeededAt);
+            return !created.isAfter(completedAt) && !completedAt.isAfter(succeededAt);
         } catch (DateTimeParseException | NullPointerException exception) {
             return false;
         }

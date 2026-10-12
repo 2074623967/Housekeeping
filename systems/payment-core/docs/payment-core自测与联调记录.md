@@ -28605,3 +28605,7 @@ Node 请求夹具模拟与支付核心当前契约一致的 HTTP 200、非零 `P
 ### 10.1066 2026-10-13 H5/PC 争议结果页与首次提交浏览器回归
 
 同一隔离浏览器脚本支持 `h5`、`pc` 参数，各自从真实 Vite 构建产物加载；两端独立验证争议结果页的“渠道流水归属待核查”标题、禁用查单与关单，等待超过 5 秒仍仅一次详情 GET。新建待支付收银台点击一次终端对应的提交按钮，收到 HTTP 200 的 `PAYMENT-1016` 与请求号后精确回查当前收银台（不少于两次 GET），显示人工核查文案，禁用支付、查单与关单，且各只有首次一次支付 POST。H5/PC Node 各 `4/4`、Vite 构建、`node tools/dev/payment-result-action-refresh-browser-smoke.mjs h5` 与 `pc` 均 `[PASS]`，App 参数化后的原全场景也 `[PASS]`，语法及 `git diff --check` 通过。此证据仍为本机 Chrome/mock，不代表微信真机、正式后端、渠道真实资金、目标 MySQL 8 多实例或生产发布。
+
+### 10.1067 2026-10-13 支付成功事件派发拒绝异常预付与逆序创建事实
+
+`PaymentEventDispatchServiceImplTest` 新增红测：支付详情自称成功但 `prepayAmountBindingValid=false`，或创建时间晚于已成功尝试完成时间，原派发会先走服务者查询与下游 HTTP；修正后在下游调用前拒绝，既不调用 HTTP 也不调用 AMQP，且不标记发布成功。相同门禁同时限定来源标记为 `STANDARD_ORDER` 或 `VIRTUAL`。定向 `90/90`；完整 `-Pdemo` H2 回归首次在沙箱因内嵌 HTTP 绑定被拒导致 `24` 项环境错误，获准本机回环重跑 `2040/2040`，失败、错误、跳过均为 `0`，`git diff --check` 通过。没有核对目标 MySQL 8、多实例真实派发、正式渠道资金或生产下游回执；事件派发仍未替代实时业务来源复核。
