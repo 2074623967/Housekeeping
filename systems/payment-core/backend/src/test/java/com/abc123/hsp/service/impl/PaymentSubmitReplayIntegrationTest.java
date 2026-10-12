@@ -222,6 +222,9 @@ class PaymentSubmitReplayIntegrationTest {
             assertEquals(0, jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM t_payment_notify_log WHERE payment_order_id = ?",
                     Integer.class, prepay.getPaymentOrderId()).intValue());
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ?",
+                    Integer.class, prepay.getPaymentOrderId()).intValue());
             assertEquals(1, calls.get());
         }
     }
