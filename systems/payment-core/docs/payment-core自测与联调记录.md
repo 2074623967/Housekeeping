@@ -28665,3 +28665,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1081 2026-10-13 回调签名拼接字段歧义回归
 
 支付回调渠道流水号内含 `|时间戳`、退款回调 nonce 内含 `时间戳|` 的两组红测原先都通过签名验证并写入防重放 nonce；测试同时证实调整字段边界后 HMAC 签名完全相同。现签名正文拼接前拒绝业务字段、渠道和 nonce 中的分隔符以及缺失的业务字段，异常按 `PAYMENT_CALLBACK_SIGNATURE_INVALID` 返回，拒绝前不访问 nonce 写入。JDK 8、离线 Maven `-Pdemo` 定向支付/退款/HTTP 回调 `344/344`，获准本机回环环境全量 `2059/2059`，零失败、错误、跳过；初次沙箱定向 HTTP 测试因端口绑定 `Operation not permitted` 报错，回环环境复跑通过。`git diff --check` 通过。未联调正式渠道、不证明签名密钥托管、目标 MySQL 8 多实例或真实资金。
+
+### 10.1082 2026-10-13 退款严格验签 HTTP 拒收不落库
+
+延伸上一轮签名字段歧义修复的 HTTP 验证：真实 H2/demo 服务开启强制验签，使用当前 `offline_bank` HMAC 密钥提交 nonce 含 `|` 的退款成功回调，响应为 `PAYMENT_CALLBACK_SIGNATURE_INVALID`；随后读取退款单仍为 `PROCESSING`、该 nonce 条数为 `0`，合法签名回调继续正常收口到 `SUCCESS`。JDK 8、离线 Maven、本机回环定向 `RefundOutboxHttpIntegrationTest` `8/8`、payment-core 全量 `2059/2059`，零失败、错误、跳过，`git diff --check` 通过。未连接正式渠道、目标 MySQL 8 多实例或真实资金。

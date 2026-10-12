@@ -505,6 +505,17 @@ class RefundOutboxHttpIntegrationTest {
             assertEquals("PROCESSING", jdbcTemplate.queryForObject(
                     "SELECT status FROM t_refund_order WHERE refund_order_id = ?",
                     String.class, refundOrderId));
+            String ambiguousNonce = UUID.randomUUID() + "|callback";
+            assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
+                    post(objectMapper, port, "/api/refunds/callback/offline_bank",
+                            signedRefundCallback(refundOrderId, attemptNo,
+                                    channelRefundNo, ambiguousNonce)).path("code").asText());
+            assertEquals("PROCESSING", jdbcTemplate.queryForObject(
+                    "SELECT status FROM t_refund_order WHERE refund_order_id = ?",
+                    String.class, refundOrderId));
+            assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_callback_nonce WHERE channel_code = 'offline_bank' "
+                            + "AND nonce = ?", Integer.class, ambiguousNonce));
             String signedCallback = signedRefundCallback(
                     refundOrderId, attemptNo, channelRefundNo, UUID.randomUUID().toString());
             assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
