@@ -7,6 +7,7 @@ import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -86,6 +87,10 @@ public class AccountingEventServiceImpl implements AccountingEventService {
     @Override
     @Transactional
     public AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getOrderNo())
+                || !request.getOrderNo().equals(request.getOrderNo().trim())) {
+            throw new IllegalArgumentException("支付成功事件业务订单号非法");
+        }
         request.setBusinessChainId(normalizePaymentSuccessBusinessChainId(
                 request.getBusinessChainId(), request.getPaymentOrderId()));
         accountingMemoryStore.lockAccountBalance(request.getAccountNo());
@@ -93,6 +98,7 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         if (existingEvent != null) {
             validateExistingEventAccount(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", existingEvent.getBizNo());
             validateExistingEvent(existingEvent, request.getBusinessChainId(), request.getAmount(), request.getPayScene());
+            validateExistingPaymentOrderNo(existingEvent, request.getOrderNo());
             postReconciliationFact(existingEvent.getBusinessChainId(), existingEvent.getEventNo(),
                     existingEvent.getBizNo(), request.getAmount(), existingEvent.getSummary(), request.getPayScene());
             return existingEvent;
@@ -101,9 +107,7 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 "PAYMENT_SUCCESS",
                 request.getPaymentOrderId(),
                 "消费支付成功后自动入账",
-                "{\"orderNo\":\"" + request.getOrderNo()
-                        + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene())
-                        + "\",\"amount\":" + request.getAmount() + "}",
+                paymentSuccessPayload(request),
                 resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", request.getPaymentOrderId())) {
             accountingMemoryStore.credit(
@@ -306,6 +310,32 @@ public class AccountingEventServiceImpl implements AccountingEventService {
             throw exception;
         } catch (Exception exception) {
             throw new IllegalArgumentException("重复账务事件载荷无效", exception);
+        }
+    }
+
+    private void validateExistingPaymentOrderNo(AccountEventDTO existingEvent, String expectedOrderNo) {
+        try {
+            JsonNode payload = objectMapper.readTree(existingEvent.getPayload());
+            JsonNode orderNo = payload == null ? null : payload.get("orderNo");
+            if (orderNo == null || !orderNo.isTextual() || !expectedOrderNo.equals(orderNo.asText())) {
+                throw new IllegalArgumentException("重复支付成功事件订单号与原事件不一致");
+            }
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("重复支付成功事件载荷无效", exception);
+        }
+    }
+
+    private String paymentSuccessPayload(PaymentSuccessEventRequestDTO request) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderNo", request.getOrderNo());
+        payload.put("payScene", request.getPayScene() == null ? "" : request.getPayScene());
+        payload.put("amount", request.getAmount());
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("支付成功事件载荷无效", exception);
         }
     }
 

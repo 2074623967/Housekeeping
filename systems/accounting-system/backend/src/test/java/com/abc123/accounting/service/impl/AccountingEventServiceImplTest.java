@@ -73,6 +73,56 @@ class AccountingEventServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentSuccessReplayWithDifferentBusinessOrder() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY-ORDER-DRIFT");
+        request.setOrderNo("ORD-ORIGINAL");
+        request.setAmount(new BigDecimal("20.00"));
+
+        eventService.consumePaymentSuccess(request);
+        request.setOrderNo("ORD-OTHER");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+        assertEquals("¥120.00", balanceService.detail("ACT10001").getAvailableAmount());
+        assertEquals(1, eventService.list("PAYMENT_SUCCESS", "PAY-ORDER-DRIFT", 1, 20).getTotal());
+    }
+
+    @Test
+    void shouldKeepPaymentSuccessPayloadValidForQuotedOrderNumber() throws Exception {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY-QUOTED-ORDER");
+        request.setOrderNo("ORD-\"QUOTED");
+        request.setPayScene("HOME_\"CLEAN");
+        request.setAmount(new BigDecimal("20.00"));
+
+        AccountEventDTO first = eventService.consumePaymentSuccess(request);
+        AccountEventDTO replay = eventService.consumePaymentSuccess(request);
+
+        assertEquals(first.getEventNo(), replay.getEventNo());
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(first.getPayload());
+        assertEquals(request.getOrderNo(), payload.get("orderNo").asText());
+        assertEquals(request.getPayScene(), payload.get("payScene").asText());
+        assertEquals("¥120.00", balanceService.detail("ACT10001").getAvailableAmount());
+    }
+
+    @Test
+    void shouldRejectLegacyPaymentSuccessReplayWithoutStoredOrderNumber() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY-LEGACY-NO-ORDER");
+        request.setOrderNo("ORD-UNVERIFIED");
+        request.setAmount(new BigDecimal("20.00"));
+        accountingMemoryStore.recordEvent("PAYMENT_SUCCESS", request.getPaymentOrderId(),
+                "历史支付事件", "{\"amount\":20.00}");
+
+        assertThrows(IllegalArgumentException.class, () -> eventService.consumePaymentSuccess(request));
+        assertEquals("¥100.00", balanceService.detail("ACT10001").getAvailableAmount());
+    }
+
+    @Test
     void shouldRejectPaymentSuccessReplayForDifferentAccount() {
         PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
         request.setAccountNo("ACT10001");
