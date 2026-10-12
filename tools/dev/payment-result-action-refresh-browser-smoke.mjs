@@ -9,7 +9,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../systems/payment-core/frontend/app-web/dist");
+const terminalVariant = process.argv[2] || "app";
+assert.ok(["app", "h5", "pc"].includes(terminalVariant), "Expected app, h5 or pc terminal");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
+  `../../systems/payment-core/frontend/${terminalVariant}-web/dist`);
 const chromeBinary = process.env.HSP_CHROME_BIN
   || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const paymentIds = {
@@ -231,6 +234,42 @@ async function main() {
       .find((button) => button.textContent.trim() === '${label}')`;
     await send("Page.enable");
     await send("Runtime.enable");
+    if (terminalVariant !== "app") {
+      const closeLabel = terminalVariant === "h5" ? "结束本次支付" : "关闭当前支付单";
+      const submitLabel = terminalVariant === "h5" ? "立即支付" : "确认并发起支付";
+      kind = "conflict";
+      status = "PAYING";
+      const disputeStart = requests.length;
+      const disputePath = `/api/payments/${paymentIds[kind]}`;
+      await send("Page.navigate", { url: `${baseUrl}/payment-result/${paymentIds[kind]}?payScene=HOME_CLEAN` });
+      await waitFor(() => evaluate("document.querySelector('.terminal-hero h1')?.textContent.trim() === '渠道流水归属待核查'"),
+        `${terminalVariant} disputed result`);
+      assert.equal(await evaluate(`${actionButton('人工核查中')}.disabled`), true);
+      assert.equal(await evaluate(`${actionButton(closeLabel)}.disabled`), true);
+      await delay(5700);
+      assert.equal(requests.slice(disputeStart).filter((item) => item.pathname === disputePath).length, 1,
+        `${terminalVariant} disputed result must not poll automatically`);
+      kind = "submitConflict";
+      status = "PREPAY_CREATED";
+      const submitStart = requests.length;
+      await send("Page.navigate", { url: `${baseUrl}/cashier/PRE-${paymentIds[kind]}?payScene=HOME_CLEAN&accessToken=local-test-token` });
+      await waitFor(() => evaluate(`${actionButton(submitLabel)}?.disabled === false`),
+        `${terminalVariant} cashier before disputed submit`);
+      await evaluate(`${actionButton(submitLabel)}.click()`);
+      await waitFor(() => evaluate(`document.body.innerText.includes('PAYMENT-1016 / REQ-COLLISION-BROWSER')
+        && Array.from(document.querySelectorAll('.terminal-actions button'))
+          .filter((button) => button.textContent.trim() === '人工核查中').length === 2`),
+      `${terminalVariant} first disputed submit readback`);
+      assert.equal(await evaluate(`Array.from(document.querySelectorAll('.terminal-actions button'))
+        .filter((button) => button.textContent.trim() === '人工核查中').every((button) => button.disabled)`), true);
+      assert.equal(await evaluate(`${actionButton(terminalVariant === "h5" ? "结束当前会话" : "关闭当前支付单")}.disabled`), true);
+      assert.equal(await evaluate("document.body.innerText.includes('勿主动查单、重复付款或关闭支付单')"), true);
+      assert.ok(requests.slice(submitStart).filter((item) => item.method === "GET"
+        && item.pathname === `/api/payments/cashier/PRE-${paymentIds[kind]}`).length >= 2);
+      assert.equal(requests.slice(submitStart).filter((item) => item.method === "POST").length, 1);
+      console.log(`[PASS] ${terminalVariant.toUpperCase()} disputed result and first submit actions`);
+      return;
+    }
     kind = "query";
     status = "PAYING";
     const payingStart = requests.length;
