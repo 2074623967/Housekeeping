@@ -330,6 +330,7 @@ const submissionPending = computed(() => {
     latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   );
 });
+const channelTransactionConflict = computed(() => isChannelTransactionConflict(cashier.value?.latestAttemptStatus));
 const canQueryPayment = computed(() => {
   const paymentSnapshot = latestQueriedDetail.value || cashier.value;
   const paymentStatus = latestQueriedDetail.value
@@ -343,7 +344,7 @@ const canQueryPayment = computed(() => {
     paymentSnapshot?.channel
   );
 });
-const queryUnavailableGuidance = computed(() => isChannelTransactionConflict(cashier.value?.latestAttemptStatus)
+const queryUnavailableGuidance = computed(() => channelTransactionConflict.value
   ? "渠道流水归属冲突，需人工核查渠道原始事实与流水归属；勿主动查单、重复付款或关闭支付单。"
   : cashier.value?.paymentStatus === "PAYING" ? PAYING_SUBMIT_HINT
     : "当前不满足主动查单条件，请刷新收银台核对支付状态，未确认资金前勿重复付款。");
@@ -385,7 +386,7 @@ const submitBlockedHint = computed(() => {
   if (cashierSnapshotStale.value) {
     return "收银台状态未能重新核实，请先刷新收银台，避免重复提交。";
   }
-  if (isChannelTransactionConflict(cashier.value?.latestAttemptStatus)) {
+  if (channelTransactionConflict.value) {
     return queryUnavailableGuidance.value;
   }
   if (pendingSubmitAttempt.value?.confirmed) {
@@ -953,7 +954,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
 
         <div class="terminal-actions">
           <button class="action-button primary" :disabled="actionRunning || !canSubmit" @click="pay">
-            {{ submitLoading ? "支付提交流转中..." : reviewRetryAllowed ? "审核通过后继续原支付" : terminalMeta.actionLabel }}
+            {{ submitLoading ? "支付提交流转中..." : channelTransactionConflict ? "人工核查中" : reviewRetryAllowed ? "审核通过后继续原支付" : terminalMeta.actionLabel }}
           </button>
           <button v-if="businessEntryPath" class="action-button secondary" :disabled="actionRunning" @click="backToBusinessEntry">
             返回业务入口
@@ -962,7 +963,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
             {{ refreshLoading ? "刷新中..." : terminalMeta.refreshLabel }}
           </button>
           <button class="action-button secondary" :disabled="actionRunning || !cashier?.paymentOrderId || !canQueryPayment" @click="queryCurrentPayment">
-            {{ queryLoading ? "查单中..." : "主动查单" }}
+            {{ queryLoading ? "查单中..." : channelTransactionConflict ? "人工核查中" : "主动查单" }}
           </button>
           <button class="action-button ghost" :disabled="actionRunning || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
