@@ -11,6 +11,7 @@ import com.abc123.accounting.service.AccountingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import java.math.BigDecimal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /**
@@ -35,6 +37,15 @@ class AccountingPaymentSuccessAmqpConsumerTest {
     @Mock
     private Channel channel;
 
+    @BeforeEach
+    void confirmForwardedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+    }
+
     @Test
     void shouldDeadLetterUnsignedMessageBeforeCrediting() throws Exception {
         Message unsigned = message(0);
@@ -43,7 +54,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(unsigned, channel, 26L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.accounting.dlq.v1"), any(Message.class));
+                eq("payment.success.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(26L, false);
         verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -53,7 +64,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         consumer(3, " ").consume(message(0), channel, 28L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.accounting.dlq.v1"), any(Message.class));
+                eq("payment.success.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(28L, false);
         verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -64,7 +75,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         unsigned.getMessageProperties().getHeaders().remove(PaymentEventAmqpSignature.HEADER_NAME);
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).send(eq("payment.trade.dlq"),
-                        eq("payment.success.accounting.dlq.v1"), any(Message.class));
+                        eq("payment.success.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
 
         consumer(3).consume(unsigned, channel, 29L);
 
@@ -81,8 +92,9 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(tampered, channel, 27L);
 
         verify(rabbitTemplate).send(eq("payment.trade.dlq"),
-                eq("payment.success.accounting.dlq.v1"), any(Message.class));
-        verify(rabbitTemplate, never()).send(eq("payment.trade.retry"), any(), any(Message.class));
+                eq("payment.success.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
+        verify(rabbitTemplate, never()).send(eq("payment.trade.retry"), any(),
+                any(Message.class), any(CorrelationData.class));
         verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
 
@@ -92,7 +104,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
 
         verify(accountingEventService).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
         verify(channel).basicAck(21L, false);
-        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class));
+        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class), any(CorrelationData.class));
     }
 
     @Test
@@ -103,7 +115,8 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(message(0), channel, 22L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"),
+                retryMessage.capture(), any(CorrelationData.class));
         verify(channel).basicAck(22L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1, retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
     }
@@ -115,7 +128,8 @@ class AccountingPaymentSuccessAmqpConsumerTest {
 
         consumer(3).consume(message(3), channel, 23L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.accounting.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.accounting.dlq.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(23L, false);
     }
 
@@ -131,7 +145,8 @@ class AccountingPaymentSuccessAmqpConsumerTest {
 
         consumer(3).consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 24L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(24L, false);
         verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }
@@ -148,7 +163,8 @@ class AccountingPaymentSuccessAmqpConsumerTest {
 
         consumer(3).consume(signedMessage(new Message(objectMapper.writeValueAsBytes(request), properties)), channel, 25L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(25L, false);
         verify(accountingEventService, never()).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
     }

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 /** 清分结果账务 AMQP 消费适配测试。 */
@@ -34,6 +36,15 @@ class AccountingClearingGeneratedAmqpConsumerTest {
     @Mock
     private Channel channel;
 
+    @BeforeEach
+    void confirmForwardedMessages() {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            CorrelationData correlationData = invocation.getArgument(3);
+            correlationData.getFuture().set(new CorrelationData.Confirm(true, null));
+            return null;
+        }).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+    }
+
     @Test
     void shouldDeadLetterUnsignedClearingEventBeforeCrediting() throws Exception {
         Message unsigned = message(0);
@@ -41,7 +52,7 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(unsigned, channel, 46L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
         verify(channel).basicAck(46L, false);
     }
@@ -55,8 +66,9 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(tampered, channel, 47L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
-        verify(rabbitTemplate, never()).send(eq("clearing.trade.retry"), any(), any(Message.class));
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
+        verify(rabbitTemplate, never()).send(eq("clearing.trade.retry"), any(),
+                any(Message.class), any(CorrelationData.class));
         verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
     }
 
@@ -65,7 +77,7 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3, " ").consume(message(0), channel, 48L);
 
         verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
         verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
     }
 
@@ -75,7 +87,7 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).send(eq("clearing.trade.dlq"),
-                        eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+                        eq("clearing.generated.accounting.dlq.v1"), any(Message.class), any(CorrelationData.class));
 
         consumer(3).consume(unsigned, channel, 49L);
 
@@ -89,7 +101,7 @@ class AccountingClearingGeneratedAmqpConsumerTest {
 
         verify(accountingEventService).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
         verify(channel).basicAck(41L, false);
-        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class));
+        verify(rabbitTemplate, never()).send(any(), any(), any(Message.class), any(CorrelationData.class));
     }
 
     @Test
@@ -100,7 +112,8 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0), channel, 42L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"),
+                retryMessage.capture(), any(CorrelationData.class));
         verify(channel).basicAck(42L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1,
                 retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
@@ -113,7 +126,8 @@ class AccountingClearingGeneratedAmqpConsumerTest {
 
         consumer(3).consume(message(3), channel, 43L);
 
-        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.accounting.dlq.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(43L, false);
     }
 
@@ -122,7 +136,8 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0, "OTHER_EVENT", null, null), channel, 44L);
 
         verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(44L, false);
     }
 
@@ -131,7 +146,8 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0, null, null, "2"), channel, 45L);
 
         verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.accounting.retry.v1"),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(45L, false);
     }
 
