@@ -28549,3 +28549,7 @@ H2 MySQL 模式红测复现：已标记“渠道流水归属冲突，待人工�
 ### 10.1052 2026-10-12 查单碰到争议流水的快照竞态
 
 H2 MySQL 模式红测复现：最新尝试已变成“渠道流水归属冲突，待人工核查”，直接调用 `updatePaymentReturnCodeSnapshot` 仍影响一行；服务层模拟渠道查单后出现冲突且快照零行时，原返回通用 `IllegalStateException`。绿测要求冲突时快照零行且不写返回码，无冲突时仍可更新；服务在快照失败回读返回 `PAYMENT_SUBMIT_IN_PROGRESS`，成功查询锁单重读遇冲突时不写快照或成功支付事实。获准本机回环的后端全量 H2/demo `2037/2037`，零失败、错误、跳过；`git diff --check` 通过。均为本机受控 H2/Mockito 模拟，未接目标 MySQL 8 或正式渠道资金，相关多实例竞态仍需受控验证。
+
+### 10.1053 2026-10-12 九服务支付与退款对账双路径本地复核
+
+当前 `test` HEAD `7658fd51` 下，先后在受控本机回环环境执行 `HSP_MAVEN_BIN=/Users/abc123/apache-maven-3.9.16/bin/mvn HSP_MAVEN_REPO=/Users/abc123/apache-maven-3.9.16/repository HSP_JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home bash tools/dev/local-stack.sh verify payment-query-chain` 与 `verify payment-chain`。两次均完成九后端 HTTP 冒烟及本地 happy-path：支付分别由 `GATEWAY_QUERY`、`CALLBACK` 收口，支付成功、清分、结算、账务、退款成功事实读回后，对账链均为 `COMPLETED`、`4/4`、本地 `financialCloseable=true`；退出码均为 `0`，服务和查单 mock 均停服，所用端口无残留监听。测试只操作本机隔离 H2/demo 数据，不代表真实渠道资金、生产 MySQL/MQ、财务审批或历史争议流水验收；人工核查状态不得因正常主路径通过而自动收口。
