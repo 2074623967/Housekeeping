@@ -28573,3 +28573,7 @@ Node 红测复现小程序校验器拒收有精确冲突尝试佐证的收银台
 ### 10.1058 2026-10-12 首次渠道冲突的本机 HTTP 传输核对
 
 原小程序夹具错误地将业务失败写成 HTTP 409；通用支付业务接口实为 HTTP 200 携非零 `ApiResponse.code`，渠道回调的非 2xx 规则不适用于该接口。现把 `PaymentSubmitReplayIntegrationTest` 的冲突恢复夹具从直接调用 service 改为本机随机端口 `POST /api/payments/submit`，H2/demo 模拟外单先占流水并验证首次响应的 `PAYMENT-1016`、人工核查文案、非空 `requestId`；随后仍核查支付单/尝试/收银台状态、同键重放、禁查单/关闭/回调及争议流水原归属。小程序请求夹具同步以 HTTP 200 非零码回归；后端定向 `1/1`、整类 `14/14`、获准回环的 H2/demo 全量 `2038/2038` 及小程序 Node 全量 `131/131` 通过，零失败、错误、跳过；`git diff --check` 通过。仅证明本机隔离传输和状态契约，不代表微信真机、正式渠道、目标 MySQL 8 多实例或真实资金验收。
+
+### 10.1059 2026-10-12 九服务支付与退款对账双路径再验证
+
+在 `test` 基线 `7506d4fd` 下，设置受控的 `HSP_MAVEN_BIN`、`HSP_MAVEN_REPO` 和 `HSP_JAVA_HOME` 后，依次执行 `bash tools/dev/local-stack.sh verify payment-query-chain` 与 `bash tools/dev/local-stack.sh verify payment-chain`。两次退出码均为 `0`，九服务 HTTP 冒烟通过，分别由 `GATEWAY_QUERY`、`CALLBACK` 收口支付；支付、清分、结算、账务、退款事实经 HTTP 读回后，对账链均为 `COMPLETED`、阶段 `4/4`、本地 `financialCloseable=true`。脚本停止全部九服务和查单 mock，复核十个相关端口均无残留监听。隔离 H2/demo 演练不构成争议流水归属处置、生产 MySQL/MQ、正式渠道资金、可信身份授权或财务审批验收。
