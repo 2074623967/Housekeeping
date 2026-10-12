@@ -76,6 +76,27 @@ function successfulResponse(data = {
   };
 }
 
+test("retains the channel collision code and request ID from a successful HTTP envelope", async (context) => {
+  context.mock.method(globalThis, "fetch", async (url) => {
+    assert.equal(url, "/api/payments/submit");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: "PAYMENT-1016",
+        message: "渠道流水归属冲突，待人工核查",
+        requestId: "REQ-COLLISION"
+      })
+    };
+  });
+  await assert.rejects(
+    paymentApi.submit({ prepayOrderNo: "PRE-COLLISION" }),
+    (error) => error.code === "PAYMENT-1016"
+      && error.requestId === "REQ-COLLISION"
+      && error.message.includes("渠道流水归属冲突，待人工核查 [PAYMENT-1016 / REQ-COLLISION]")
+  );
+});
+
 test("encodes cashier and payment detail identifiers as single path segments", async (context) => {
   const urls = [];
   context.mock.method(globalThis, "fetch", async (url) => {

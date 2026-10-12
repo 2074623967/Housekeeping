@@ -707,7 +707,9 @@ async function pay() {
       return;
     }
     if (cashier.value?.paymentStatus === "PAYING") {
-      message.value = queryUnavailableGuidance.value;
+      message.value = channelTransactionConflict.value
+        ? `${error.message}；${queryUnavailableGuidance.value}`
+        : queryUnavailableGuidance.value;
     } else {
       message.value = submissionPending.value
         ? canQueryPayment.value

@@ -28,6 +28,7 @@ test("directs channel transaction collisions to human review instead of waiting 
   assert.match(source, /const channelTransactionConflict = computed\(\(\) => isChannelTransactionConflict\(cashier\.value\?\.latestAttemptStatus\)\)/);
   assert.match(source, /channelTransactionConflict \? "人工核查中" : reviewRetryAllowed \? "审核通过后继续原支付" : terminalMeta\.actionLabel/);
   assert.match(source, /queryLoading \? "查单中\.\.\." : channelTransactionConflict \? "人工核查中" : "主动查单"/);
+  assert.match(source, /if \(cashier\.value\?\.paymentStatus === "PAYING"\) \{\s*message\.value = channelTransactionConflict\.value\s*\? `\$\{error\.message\}；\$\{queryUnavailableGuidance\.value\}`\s*: queryUnavailableGuidance\.value;/);
 });
 
 test("queries using the attempt and channel facts from one cashier snapshot", () => {
