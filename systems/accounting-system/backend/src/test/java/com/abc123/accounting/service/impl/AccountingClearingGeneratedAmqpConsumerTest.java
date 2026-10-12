@@ -5,11 +5,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.abc123.accounting.common.ClearingEventAmqpSignature;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,6 +33,55 @@ class AccountingClearingGeneratedAmqpConsumerTest {
     private RabbitTemplate rabbitTemplate;
     @Mock
     private Channel channel;
+
+    @Test
+    void shouldDeadLetterUnsignedClearingEventBeforeCrediting() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
+        consumer(3).consume(unsigned, channel, 46L);
+
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+        verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+        verify(channel).basicAck(46L, false);
+    }
+
+    @Test
+    void shouldDeadLetterTamperedClearingEventBeforeCrediting() throws Exception {
+        Message signed = message(0);
+        Message tampered = new Message("{\"clearingOrderNo\":\"CLR-FORGED\"}".getBytes(StandardCharsets.UTF_8),
+                signed.getMessageProperties());
+
+        consumer(3).consume(tampered, channel, 47L);
+
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate, never()).send(eq("clearing.trade.retry"), any(), any(Message.class));
+        verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldDeadLetterSignedClearingEventWhenSecretIsMissing() throws Exception {
+        consumer(3, " ").consume(message(0), channel, 48L);
+
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"),
+                eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+        verify(accountingEventService, never()).consumeClearingGenerated(any(ClearingGeneratedEventRequestDTO.class));
+    }
+
+    @Test
+    void shouldNackUntrustedMessageWhenDeadLetterPublishFails() throws Exception {
+        Message unsigned = message(0);
+        unsigned.getMessageProperties().getHeaders().remove(ClearingEventAmqpSignature.HEADER_NAME);
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).send(eq("clearing.trade.dlq"),
+                        eq("clearing.generated.accounting.dlq.v1"), any(Message.class));
+
+        consumer(3).consume(unsigned, channel, 49L);
+
+        verify(channel).basicNack(49L, false, true);
+        verify(channel, never()).basicAck(49L, false);
+    }
 
     @Test
     void shouldConsumeAndAckWhenAccountingSucceeds() throws Exception {
@@ -85,6 +136,10 @@ class AccountingClearingGeneratedAmqpConsumerTest {
     }
 
     private AccountingClearingGeneratedAmqpConsumer consumer(int maxRetryCount) {
+        return consumer(maxRetryCount, "local-clearing-amqp-test-secret");
+    }
+
+    private AccountingClearingGeneratedAmqpConsumer consumer(int maxRetryCount, String secret) {
         return new AccountingClearingGeneratedAmqpConsumer(
                 accountingEventService,
                 rabbitTemplate,
@@ -93,7 +148,8 @@ class AccountingClearingGeneratedAmqpConsumerTest {
                 "clearing.generated.accounting.retry.v1",
                 "clearing.trade.dlq",
                 "clearing.generated.accounting.dlq.v1",
-                maxRetryCount);
+                maxRetryCount,
+                secret);
     }
 
     private Message message(int retryCount) throws Exception {
@@ -117,6 +173,9 @@ class AccountingClearingGeneratedAmqpConsumerTest {
         if (headerSchemaVersion != null) {
             properties.setHeader("schemaVersion", headerSchemaVersion);
         }
-        return new Message(objectMapper.writeValueAsBytes(request), properties);
+        Message message = new Message(objectMapper.writeValueAsBytes(request), properties);
+        properties.setHeader(ClearingEventAmqpSignature.HEADER_NAME,
+                ClearingEventAmqpSignature.sign(message.getBody(), "local-clearing-amqp-test-secret"));
+        return message;
     }
 }
