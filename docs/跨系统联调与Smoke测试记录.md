@@ -664,3 +664,9 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 `verify payment-standard-chain` 仅在本轮 H2/demo payment-core 初始化时叠加 `payment-standard-chain-order.sql`，预置一笔未付 `LOCAL-HAPPY-STANDARD`；支付前断言订单中心有原始标准订单、无账单，支付后断言订单待履约、已付 `88.00`、欠款 `0.00`，账单通过原样标准订单来源关联。本机九服务 HTTP 冒烟和 happy-path 均 `[PASS]`：支付单 `PAY1791932697901db08ff43` 由 `CALLBACK` 收口，清分、结算、三类账务、退款及七项对账事实读回，对账 `COMPLETED/4/4`、本地 `financialCloseable=true`。原虚拟订单链路另以 `PAY1791932886023a4c7eabe` 回归通过，两轮退出码 `0`、九服务停服；两种外部环境覆盖均在启动前以退出码 `2` 拒绝。夹具不是业务订单创建能力，且不代表目标 MySQL 8 多实例、真实 RabbitMQ、正式渠道、用户身份或实际资金验收。
 
 共享脚本的原主动查单变体另以 `verify payment-query-chain` 复跑，支付单 `PAY179193317949834f0f0ad` 经本机 `GATEWAY_QUERY` 收口，九服务冒烟、happy-path、七条对账事实与 `COMPLETED/4/4` 均通过，退出码 `0`，九服务及查单桩停服；此项仍是虚拟订单模拟查单，不扩充标准订单的查单证据。
+
+## 91. 2026-10-14 标准订单经本机网关主动查单到九服务对账
+
+新增组合入口 `verify payment-standard-query-chain`，复用标准订单 H2 测试夹具与既有本机受控上游；启动前拒绝外部 SQL 初始化位置及变体标记覆盖、现存 PID 和端口占用，九服务与查单桩须由本轮启动。标准订单 `LOCAL-HAPPY-STANDARD` 支付前存在且无账单，支付单 `PAY17919335218615af4fd24` 经 `GATEWAY_QUERY` 成功收口后，订单待履约且已付 `88.00`、欠款 `0.00`，账单关联标准来源；清分、结算、三类账务、退款与七项对账事实均读回，对账 `COMPLETED/4/4`、本地 `financialCloseable=true`。九服务冒烟及 happy-path `[PASS]`、退出码 `0`，服务与查单桩自动停服。此项只关闭隔离 H2/demo 模拟协议的标准订单主动查单证据缺口，不构成正式渠道、生产身份、目标 MySQL 8 多实例、RabbitMQ 或真实资金验收。
+
+组合开关调整后单独复跑原虚拟订单 `verify payment-query-chain`，支付单 `PAY17919337578704c3afabf` 经 `GATEWAY_QUERY` 收口，九服务冒烟、happy-path 与七项对账事实均通过，退出码 `0`，服务及上游停服。

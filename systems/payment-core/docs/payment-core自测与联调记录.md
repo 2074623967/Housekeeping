@@ -28924,4 +28924,10 @@ App/H5/PC 共用收银台、支付结果和退款进度页原卸载时仅停止�
 
 新增 `local-stack.sh verify payment-standard-chain`：写前拒绝数据库、SQL 初始化位置及变体标记等外部覆盖、现存 PID 和目标端口占用；只在本轮 H2/demo payment-core 叠加测试订单 SQL。九服务先冒烟，再校验原始标准订单与未生成账单，支付回调后核对订单/账单结清和标准来源，随后完成清分、结算、三类账务、退款与七项对账事实。本机获准回环运行 `[PASS]`、`COMPLETED/4/4`、退出码 `0`；原虚拟订单变体独立复跑 `[PASS]`，退出后九服务全部 `DOWN`。脚本纯函数 `66/66`、Shell/Node 语法及补丁检查通过。仅为隔离 H2/demo HTTP 证据，非业务订单创建接口、真实 MQ/渠道/资金或目标 MySQL 8 多实例验收；详见跨系统记录第 90 节。
 
-共享启动参数的原主动查单变体也以隔离九服务 H2/demo `verify payment-query-chain` 复跑，`GATEWAY_QUERY`、七条对账事实、`COMPLETED/4/4` 均通过，退出后九服务及查单桩停服；未验证标准订单主动查单变体。
+共享启动参数的原主动查单变体也以隔离九服务 H2/demo `verify payment-query-chain` 复跑，`GATEWAY_QUERY`、七条对账事实、`COMPLETED/4/4` 均通过，退出后九服务及查单桩停服；该轮尚未验证标准订单主动查单变体。
+
+### 10.1141 2026-10-14 标准订单主动查单九服务闭环
+
+组合 `payment-standard-query-chain` 仅在受控 H2/demo payment-core 初始化时叠加未付标准订单 SQL，gateway-access 使用受控上游查单夹具；写前拒绝从外部覆盖 SQL 初始化位置和变体标记，均退出码 `2`。获准本机回环实跑九服务冒烟及 happy-path `[PASS]`、退出码 `0`：订单 `LOCAL-HAPPY-STANDARD` 由支付单 `PAY17919335218615af4fd24` 经 `GATEWAY_QUERY` 收口，账单和订单结清，清分、结算、三类账务、退款及七项对账事实 `COMPLETED/4/4`、本地可关账。九服务及查单桩停服；纯函数 `66/66`、Shell 语法和补丁检查通过。未声称真实渠道、生产 MQ、MySQL 8 多实例或资金验收，详见跨系统记录第 91 节。
+
+原虚拟订单 `verify payment-query-chain` 在组合开关调整后单独复跑，支付单 `PAY17919337578704c3afabf` 仍经 `GATEWAY_QUERY` 收口，九服务与上游停服，退出码 `0`。

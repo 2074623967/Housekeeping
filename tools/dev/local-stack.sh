@@ -181,6 +181,7 @@ scope:
   payment-chain  启动支付 happy-path 所需的后端依赖
   payment-query-chain  隔离运行网关主动查单到九服务对账的变体
   payment-standard-chain  隔离运行标准订单支付到九服务对账的变体
+  payment-standard-query-chain  隔离运行标准订单经网关主动查单到九服务对账的变体
   risk-review    仅启动支付核心与风控中心，验证本地人工复核回环
 EOF
 }
@@ -196,12 +197,20 @@ is_payment_chain_system() {
   esac
 }
 
+is_query_chain_scope() {
+  [[ "$1" == "payment-query-chain" || "$1" == "payment-standard-query-chain" ]]
+}
+
+is_standard_chain_scope() {
+  [[ "$1" == "payment-standard-chain" || "$1" == "payment-standard-query-chain" ]]
+}
+
 is_selected() {
   local scope="$1"
   local component="$2"
   local system_name="$3"
-  if [[ "$scope" == "payment-chain" || "$scope" == "payment-query-chain" \
-    || "$scope" == "payment-standard-chain" ]]; then
+  if [[ "$scope" == "payment-chain" ]] || is_query_chain_scope "$scope" \
+    || is_standard_chain_scope "$scope"; then
     [[ "$component" == "backends" ]] && is_payment_chain_system "$system_name"
     return $?
   fi
@@ -275,8 +284,9 @@ start_backend() {
 
   if [[ "$name" == "risk-control-system" && "$scope" == "risk-review" ]]; then
     backend_env+=(SPRING_PROFILES_ACTIVE=local-risk-review)
-  elif [[ "$verification_mode" == "payment-chain" || "$verification_mode" == "payment-query-chain" \
-    || "$verification_mode" == "payment-standard-chain" ]] \
+  elif { [[ "$verification_mode" == "payment-chain" ]] \
+    || is_query_chain_scope "$verification_mode" \
+    || is_standard_chain_scope "$verification_mode"; } \
     && is_payment_chain_system "$name"; then
     if [[ "$name" == "payment-core" ]]; then
       payment_profile="demo,local-payment-chain"
@@ -284,7 +294,7 @@ start_backend() {
       backend_env+=(SPRING_PROFILES_ACTIVE=local-payment-chain)
     fi
   fi
-  if [[ "$verification_mode" == "payment-query-chain" ]]; then
+  if is_query_chain_scope "$verification_mode"; then
     if [[ "$name" == "gateway-access" ]]; then
       backend_env+=(HSP_GATEWAY_PAYMENT_ACCESS_KEY="$QUERY_ACCESS_KEY"
         HSP_GATEWAY_WX_PAYMENT_QUERY_URL="http://127.0.0.1:18190/query"
@@ -296,7 +306,7 @@ start_backend() {
         HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL="http://127.0.0.1:8090/api/gateway/payment-orders/query")
     fi
   fi
-  if [[ "$verification_mode" == "payment-standard-chain" && "$name" == "payment-core" ]]; then
+  if is_standard_chain_scope "$verification_mode" && [[ "$name" == "payment-core" ]]; then
     payment_bootstrap_env+=(SPRING_SQL_INIT_DATA_LOCATIONS="classpath:data.sql,file:$ROOT_DIR/tools/dev/payment-standard-chain-order.sql")
   fi
   if [[ -n "$PAYMENT_EVENT_SECRET" ]] \
@@ -538,7 +548,7 @@ run_start() {
   local failures=0
   mkdir -p "$PID_DIR" "$LOG_DIR"
 
-  if [[ "$scope" == "payment-query-chain" ]]; then
+  if is_query_chain_scope "$scope"; then
     echo "[START] local/payment-query-upstream -> 127.0.0.1:18190"
     nohup node "$ROOT_DIR/tools/dev/local-payment-query-upstream.mjs" \
       >"$LOG_DIR/payment-query-upstream.log" 2>&1 &
@@ -585,7 +595,7 @@ run_stop() {
       fi
     done < <(backend_manifest)
   fi
-  if [[ "$scope" == "payment-query-chain" ]]; then
+  if is_query_chain_scope "$scope"; then
     stop_process "local/payment-query-upstream" "$PID_DIR/payment-query-upstream.pid" || failures=1
   fi
 
@@ -709,7 +719,7 @@ guard_local_payment_chain_verify() {
       fi
     done < <(frontend_manifest)
   fi
-  if [[ "$scope" == "payment-query-chain" ]]; then
+  if is_query_chain_scope "$scope"; then
     if [[ -f "$PID_DIR/payment-query-upstream.pid" ]] \
       || lsof -nP -iTCP:18190 -sTCP:LISTEN -t >/dev/null 2>&1 \
       || nc -z -w 1 127.0.0.1 18190 >/dev/null 2>&1; then
@@ -741,7 +751,7 @@ guard_started_local_payment_chain() {
       fi
     done < <(frontend_manifest)
   fi
-  if [[ "$scope" == "payment-query-chain" ]] \
+  if is_query_chain_scope "$scope" \
     && { [[ ! -f "$PID_DIR/payment-query-upstream.pid" ]] \
       || ! pid_is_running "$(cat "$PID_DIR/payment-query-upstream.pid")"; }; then
     echo "[FAIL] payment-query-chain 未确认本轮本机上游 mock" >&2
@@ -757,8 +767,8 @@ run_verify() {
 
   if [[ "$scope" != "all" && "$scope" != "payment-chain" \
     && "$scope" != "payment-query-chain" && "$scope" != "payment-standard-chain" \
-    && "$scope" != "risk-review" ]]; then
-    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain、payment-standard-chain 或 risk-review" >&2
+    && "$scope" != "payment-standard-query-chain" && "$scope" != "risk-review" ]]; then
+    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain、payment-standard-chain、payment-standard-query-chain 或 risk-review" >&2
     return 2
   fi
   if [[ "$scope" != "risk-review" ]]; then
@@ -774,8 +784,8 @@ run_verify() {
     ACCOUNTING_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     REFUND_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     PAYMENT_PROJECTION_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
-    if [[ "$scope" == "payment-query-chain" ]]; then
-      verification_mode="payment-query-chain"
+    if is_query_chain_scope "$scope"; then
+      verification_mode="$scope"
       QUERY_ACCESS_KEY="local-query-$RANDOM-$RANDOM-$RANDOM"
     elif [[ "$scope" == "payment-standard-chain" ]]; then
       verification_mode="payment-standard-chain"
@@ -823,6 +833,11 @@ run_verify() {
   if [[ "$result" -eq 0 ]]; then
     if [[ "$scope" == "risk-review" ]]; then
       HSP_LOCAL_RISK_REVIEW_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-risk-review.mjs" || result=$?
+    elif [[ "$scope" == "payment-standard-query-chain" ]]; then
+      HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
+        HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
+        HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED=true \
+        node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     elif [[ "$scope" == "payment-query-chain" ]]; then
       HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
         HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
