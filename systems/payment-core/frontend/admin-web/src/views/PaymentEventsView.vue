@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentEventApi } from "../api/client";
 import { paymentDetailRoute, paymentEventDetailRoute } from "../router/detailRoutes";
@@ -39,16 +39,23 @@ const loadedQuery = ref(null);
 const pageSize = 20;
 const activeEventNo = ref("");
 const republishOperator = ref("");
-const filters = ref({
-  paymentOrderId: typeof route.query.paymentOrderId === "string" ? route.query.paymentOrderId : "",
-  eventType: typeof route.query.eventType === "string" ? route.query.eventType : "全部",
-  publishStatus: typeof route.query.publishStatus === "string" ? route.query.publishStatus : "全部",
-  downstreamSystem: typeof route.query.downstreamSystem === "string" ? route.query.downstreamSystem : "全部",
-  eventTopic: typeof route.query.eventTopic === "string" ? route.query.eventTopic : "",
-  sortField: typeof route.query.sortField === "string" ? route.query.sortField : "createdAt",
-  sortOrder: typeof route.query.sortOrder === "string" ? route.query.sortOrder : "desc"
-});
 let latestLoadRequestId = 0;
+let eventRouteVersion = 0;
+let viewActive = true;
+
+function filtersFromRoute() {
+  return {
+    paymentOrderId: typeof route.query.paymentOrderId === "string" ? route.query.paymentOrderId : "",
+    eventType: typeof route.query.eventType === "string" ? route.query.eventType : "全部",
+    publishStatus: typeof route.query.publishStatus === "string" ? route.query.publishStatus : "全部",
+    downstreamSystem: typeof route.query.downstreamSystem === "string" ? route.query.downstreamSystem : "全部",
+    eventTopic: typeof route.query.eventTopic === "string" ? route.query.eventTopic : "",
+    sortField: typeof route.query.sortField === "string" ? route.query.sortField : "createdAt",
+    sortOrder: typeof route.query.sortOrder === "string" ? route.query.sortOrder : "desc"
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: overview.value.totalEventCount,
@@ -128,8 +135,8 @@ function openEventDetail(eventNo) {
   router.push(paymentEventDetailRoute(eventNo));
 }
 
-async function loadEvents(query = buildQuery()) {
-  if (activeEventNo.value) {
+async function loadEvents(query = buildQuery(), allowDuringAction = false) {
+  if (activeEventNo.value && !allowDuringAction) {
     return false;
   }
   const requestId = ++latestLoadRequestId;
@@ -172,6 +179,16 @@ async function loadEvents(query = buildQuery()) {
   }
 }
 
+function isCurrentEventRoute(routeVersion) {
+  return viewActive && routeVersion === eventRouteVersion;
+}
+
+async function refreshCurrentEventRoute() {
+  if (viewActive) {
+    await loadEvents(buildQuery(), true);
+  }
+}
+
 function exportEvents() {
   if (!canExport.value) {
     return;
@@ -198,9 +215,14 @@ async function republish(item) {
   activeEventNo.value = item.eventNo;
   actionErrorMessage.value = "";
   successMessage.value = "";
+  const routeVersion = eventRouteVersion;
   try {
     const query = { ...loadedQuery.value };
     const result = await paymentEventApi.republish(item.eventNo, operator, query);
+    if (!isCurrentEventRoute(routeVersion)) {
+      await refreshCurrentEventRoute();
+      return;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items.find((candidate) => candidate.eventNo === item.eventNo)
@@ -211,17 +233,29 @@ async function republish(item) {
     overviewRefreshErrorMessage.value = "";
     try {
       const overviewResult = await paymentEventApi.getOverview(query);
+      if (!isCurrentEventRoute(routeVersion)) {
+        return;
+      }
       overview.value = {
         ...overview.value,
         ...overviewResult
       };
     } catch (error) {
-      overviewRefreshErrorMessage.value = error.message;
+      if (isCurrentEventRoute(routeVersion)) {
+        overviewRefreshErrorMessage.value = error.message;
+      }
     }
   } catch (error) {
+    if (!isCurrentEventRoute(routeVersion)) {
+      await refreshCurrentEventRoute();
+      return;
+    }
     const failureMessage = `事件 ${item.eventNo} 重发失败：${error.message}`;
     activeEventNo.value = "";
     const refreshed = await loadEvents({ ...loadedQuery.value });
+    if (!isCurrentEventRoute(routeVersion)) {
+      return;
+    }
     actionErrorMessage.value = refreshed
       ? `${failureMessage}；事件状态已刷新，请核对待核查、失败或死信事实。`
       : `${failureMessage}；状态刷新失败，请勿按旧快照重发。`;
@@ -247,6 +281,25 @@ function openDrillDown(target) {
 }
 
 onMounted(loadEvents);
+
+onBeforeUnmount(() => {
+  viewActive = false;
+  latestLoadRequestId += 1;
+});
+
+watch(
+  () => [route.query.paymentOrderId, route.query.eventType, route.query.publishStatus,
+    route.query.downstreamSystem, route.query.eventTopic, route.query.sortField, route.query.sortOrder],
+  () => {
+    eventRouteVersion += 1;
+    actionErrorMessage.value = "";
+    successMessage.value = "";
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    loadEvents(buildQuery(), true);
+  },
+  { flush: "sync" }
+);
 </script>
 
 <template>

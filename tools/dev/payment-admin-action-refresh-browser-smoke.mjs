@@ -162,6 +162,8 @@ async function main() {
   assert.ok(existsSync(chromeBinary), `未找到 Chrome：${chromeBinary}`);
   let status = "FAILED";
   let failListOnce = false;
+  let holdEventRepublish = false;
+  let releaseEventRepublish;
   let refundStatus = "REVIEWING";
   let failDetailOnce = false;
   let failRefundListOnce = false;
@@ -202,6 +204,9 @@ async function main() {
         assert.deepEqual(body, { eventNo, operator: "local-operator" });
         assert.equal(status, "FAILED", "不得按旧快照重复重发");
         status = "UNKNOWN";
+        if (holdEventRepublish) {
+          await new Promise((resolve) => { releaseEventRepublish = resolve; });
+        }
         response.statusCode = 400;
         response.end(JSON.stringify({ code: "PAYMENT-400", message: "投递结果待核查" }));
       } else if (request.method === "GET" && pathname === "/api/payment-events/overview") {
@@ -218,7 +223,9 @@ async function main() {
             lastRepublishOperator: "local-operator", lastRepublishedAt: "2026-10-09 10:00:03",
             lastPublishedAt: "2026-10-09 10:00:03"
           };
-          response.end(JSON.stringify({ code: "0", data: { items: [item], total: 1 } }));
+          const publishStatus = new URL(request.url, "http://localhost").searchParams.get("publishStatus");
+          const filteredItems = publishStatus === "SUCCESS" ? [] : [item];
+          response.end(JSON.stringify({ code: "0", data: { items: filteredItems, total: filteredItems.length } }));
         }
       } else if (request.method === "POST" && pathname === "/api/refunds/approve") {
         const body = await new Promise((resolve) => {
@@ -539,6 +546,30 @@ async function main() {
       assert.ok(requests.slice(start).every((item) => item.method === "GET"
         || item.method === "POST" && item.pathname === "/api/payment-events/republish"));
     }
+    status = "FAILED";
+    failListOnce = false;
+    const eventRouteStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/payment-events` });
+    await waitFor(async () => (await evaluate(eventState))?.status === "FAILED", "筛选切换前支付事件");
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    holdEventRepublish = true;
+    await evaluate(`${eventButton}.click()`);
+    await waitFor(() => Boolean(releaseEventRepublish), "待返回的事件重发");
+    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-events?publishStatus=SUCCESS')");
+    await waitFor(() => evaluate("location.search === '?publishStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的支付事件')"),
+      "路由切换后的成功事件空列表");
+    releaseEventRepublish();
+    holdEventRepublish = false;
+    releaseEventRepublish = null;
+    await waitFor(() => requests.slice(eventRouteStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "SUCCESS").length >= 2,
+    "事件重发完成后当前筛选再次读回");
+    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付事件')"), true);
+    assert.equal(requests.slice(eventRouteStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "全部").length, 1,
+    "旧事件筛选不得回流");
+    console.log("[PASS] 管理端浏览器：事件重发期间切换筛选，旧事件不回流");
     const actionButton = `(Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent.trim() === '审核通过'))`;
     const refundState = `(() => { const button = ${actionButton}; return button && {
@@ -1202,6 +1233,7 @@ async function main() {
     assert.equal(await evaluate("sessionStorage.getItem('payment-issue-action-attempt:v1')"), "{broken-json");
     console.log("[PASS] 管理端浏览器：错误读回、双动作重放、已受理清键失败门禁及畸形记录拒绝提交");
   } finally {
+    releaseEventRepublish?.();
     releaseRefundApproval?.();
     releasePaymentAction?.();
     releaseIssueAction?.();
