@@ -401,8 +401,14 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         payload.put("payScene", payScene);
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", amount);
-        payload.put("payload", "{\"eventNo\":\"" + eventNo + "\",\"summary\":\""
-                + (summary == null ? "" : summary) + "\"}");
+        Map<String, String> factPayload = new LinkedHashMap<>();
+        factPayload.put("eventNo", eventNo);
+        factPayload.put("summary", summary == null ? "" : summary);
+        try {
+            payload.put("payload", objectMapper.writeValueAsString(factPayload));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("账务对账事实载荷序列化失败", exception);
+        }
         ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(),
                 signedReconciliationFact(payload), Map.class);
         Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");

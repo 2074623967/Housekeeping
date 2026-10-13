@@ -4,20 +4,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.entity.AccountEventEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
@@ -43,6 +48,24 @@ class AccountingReconciliationReceiptTest {
         AccountEventDTO result = service().consumePaymentSuccess(paymentRequest());
 
         assertEquals("AE-001", result.getEventNo());
+    }
+
+    @Test
+    void shouldEscapeSummaryInReconciliationFactPayload() throws Exception {
+        String summary = "账务\\事件\"摘要\n下一行";
+        stubEvent("PAYMENT_SUCCESS", "PAY-001").setSummary(summary);
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(Map.class)))
+                .thenReturn(response("CHAIN-PAY-001", "AE-001", "PAY-001", new BigDecimal("20.00")));
+
+        service().consumePaymentSuccess(paymentRequest());
+
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), requestCaptor.capture(), eq(Map.class));
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode outerPayload = mapper.readTree((String) requestCaptor.getValue().getBody());
+        JsonNode factPayload = mapper.readTree(outerPayload.get("payload").asText());
+        assertEquals("AE-001", factPayload.get("eventNo").asText());
+        assertEquals(summary, factPayload.get("summary").asText());
     }
 
     @Test
