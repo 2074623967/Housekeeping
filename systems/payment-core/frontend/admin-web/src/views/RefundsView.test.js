@@ -28,3 +28,15 @@ test("refreshes the refund list after failed applications and actions", () => {
   assert.match(source, /hasLoadedData\.value && \(loadErrorMessage\.value \|\| actionRefreshErrorMessage\.value\)/);
   assert.match(source, /退款动作后列表刷新失败，当前状态未经确认/);
 });
+
+test("does not replay refund mutations into an outdated route snapshot", () => {
+  const applyHandler = source.match(/async function handleApply\(\) \{([\s\S]*?)\n\}\n\nasync function runRefundAction/)?.[1];
+  const actionHandler = source.match(/async function runRefundAction\([^)]*\) \{([\s\S]*?)\n\}\n\nfunction goToPage/)?.[1];
+  assert.ok(applyHandler);
+  assert.ok(actionHandler);
+  assert.match(source, /refundRouteVersion \+= 1;[\s\S]*?\{ flush: "sync" \}/);
+  assert.match(applyHandler, /if \(!isCurrentRefundRoute\(routeVersion\)\) \{\s*activeAction\.value = "";\s*return;\s*\}/);
+  assert.match(applyHandler, /await refreshCurrentRefundRoute\(\)/);
+  assert.match(actionHandler, /if \(!isCurrentRefundRoute\(routeVersion\)\) \{\s*await refreshCurrentRefundRoute\(\);\s*return;/);
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*viewActive = false;/);
+});

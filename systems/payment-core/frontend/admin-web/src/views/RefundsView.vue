@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { matchesRefundActionSnapshot, refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
@@ -27,6 +27,8 @@ const loadedPageNo = ref(1);
 const loadedQuery = ref(null);
 const pageSize = 20;
 let latestLoadRequestId = 0;
+let refundRouteVersion = 0;
+let viewActive = true;
 const applyForm = ref({
   paymentOrderId: "",
   refundAmount: "",
@@ -204,6 +206,16 @@ function updateRefundSnapshot(refund) {
   selectedItem.value = updatedItem;
 }
 
+function isCurrentRefundRoute(routeVersion) {
+  return viewActive && routeVersion === refundRouteVersion;
+}
+
+async function refreshCurrentRefundRoute() {
+  if (viewActive) {
+    await loadRefunds(selectedItem.value?.refundOrderId, true, buildQuery());
+  }
+}
+
 async function handleApply() {
   if (isActionDisabled.value || !loadedQuery.value) {
     actionErrorMessage.value = "当前退款列表快照不可操作，请先完成查询或刷新。";
@@ -229,6 +241,7 @@ async function handleApply() {
     refundReason: applyForm.value.refundReason.trim(),
     operator
   };
+  const routeVersion = refundRouteVersion;
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
@@ -236,7 +249,13 @@ async function handleApply() {
   try {
     attempt = await resolveRefundApplicationAttempt(requestPayload);
   } catch (error) {
-    actionErrorMessage.value = error.message;
+    if (isCurrentRefundRoute(routeVersion)) {
+      actionErrorMessage.value = error.message;
+    }
+    activeAction.value = "";
+    return;
+  }
+  if (!isCurrentRefundRoute(routeVersion)) {
     activeAction.value = "";
     return;
   }
@@ -246,11 +265,12 @@ async function handleApply() {
       ...requestPayload,
       idempotencyKey: attempt.idempotencyKey
     });
-    actionResultMessage.value = `退款单 ${refund.refundOrderId} 申请已受理，当前状态为 ${refund.status}。`;
     try {
       clearRefundApplicationAttempt(attempt);
     } catch {
-      actionErrorMessage.value = "退款已受理，但本地申请键未能清理；同内容再次申请前请核对退款单，勿重复提交。";
+      if (isCurrentRefundRoute(routeVersion)) {
+        actionErrorMessage.value = "退款已受理，但本地申请键未能清理；同内容再次申请前请核对退款单，勿重复提交。";
+      }
     }
     applyForm.value = {
       paymentOrderId: "",
@@ -258,10 +278,19 @@ async function handleApply() {
       refundMethod: "原路退款",
       refundReason: ""
     };
+    if (!isCurrentRefundRoute(routeVersion)) {
+      await refreshCurrentRefundRoute();
+      return;
+    }
+    actionResultMessage.value = `退款单 ${refund.refundOrderId} 申请已受理，当前状态为 ${refund.status}。`;
     pageNo.value = 1;
     actionRefreshErrorMessage.value = "";
     await loadRefunds(refund.refundOrderId, true, query);
   } catch (error) {
+    if (!isCurrentRefundRoute(routeVersion)) {
+      await refreshCurrentRefundRoute();
+      return;
+    }
     actionErrorMessage.value = `发起退款请求失败：${error.message}；请以刷新后的退款事实为准。`;
     await loadRefunds(selectedItem.value?.refundOrderId, true, query);
   } finally {
@@ -284,6 +313,7 @@ async function runRefundAction(refundOrderId, actionName, actionLabel, actionRun
     return;
   }
   const query = { ...loadedQuery.value };
+  const routeVersion = refundRouteVersion;
   activeRefundOrderId.value = refundOrderId;
   activeAction.value = actionName;
   actionErrorMessage.value = "";
@@ -295,11 +325,19 @@ async function runRefundAction(refundOrderId, actionName, actionLabel, actionRun
     if (!matchesRefundActionSnapshot(refundItem, refund)) {
       throw new Error("退款动作响应为空或与当前支付单/金额快照不一致");
     }
+    if (!isCurrentRefundRoute(routeVersion)) {
+      await refreshCurrentRefundRoute();
+      return;
+    }
     updateRefundSnapshot(refund);
     actionResultMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
     actionRefreshErrorMessage.value = "";
     await loadRefunds(refundOrderId, true, query);
   } catch (error) {
+    if (!isCurrentRefundRoute(routeVersion)) {
+      await refreshCurrentRefundRoute();
+      return;
+    }
     actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}请求失败：${error.message}；请以刷新后的退款事实为准。`;
     await loadRefunds(refundOrderId, true, query);
   } finally {
@@ -319,6 +357,11 @@ function goToPage(nextPage) {
 
 onMounted(loadRefunds);
 
+onBeforeUnmount(() => {
+  viewActive = false;
+  latestLoadRequestId += 1;
+});
+
 watch(
   () => [
     route.query.refundOrderId,
@@ -327,10 +370,14 @@ watch(
     route.query.refundMethod
   ],
   () => {
+    refundRouteVersion += 1;
+    actionErrorMessage.value = "";
+    actionResultMessage.value = "";
     filters.value = refundListFiltersFromQuery(route.query);
     pageNo.value = 1;
     loadRefunds();
-  }
+  },
+  { flush: "sync" }
 );
 </script>
 

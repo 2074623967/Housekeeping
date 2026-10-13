@@ -165,6 +165,8 @@ async function main() {
   let refundStatus = "REVIEWING";
   let failDetailOnce = false;
   let failRefundListOnce = false;
+  let holdRefundApproval = false;
+  let releaseRefundApproval;
   let paymentStatus = "PREPAY_CREATED";
   let paymentScenario = "close";
   let querySubmissionUnaccepted = false;
@@ -185,7 +187,7 @@ async function main() {
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
     if (pathname.startsWith("/api/")) {
-      requests.push({ method: request.method, pathname });
+      requests.push({ method: request.method, pathname, search: new URL(request.url, "http://localhost").search });
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       if (request.method === "POST" && pathname === "/api/payment-events/republish") {
         const body = await new Promise((resolve) => {
@@ -223,6 +225,9 @@ async function main() {
         assert.deepEqual(body, { refundOrderId, operator: "local-operator", remark: "" });
         assert.equal(refundStatus, "REVIEWING", "不得按旧快照重复审核");
         refundStatus = "PROCESSING";
+        if (holdRefundApproval) {
+          await new Promise((resolve) => { releaseRefundApproval = resolve; });
+        }
         response.statusCode = 400;
         response.end(JSON.stringify({ code: "PAYMENT-400", message: "渠道受理状态待核查" }));
       } else if (request.method === "POST" && pathname === "/api/refunds/apply") {
@@ -262,7 +267,7 @@ async function main() {
           response.statusCode = 503;
           response.end(JSON.stringify({ code: "PAYMENT-503", message: "临时不可用" }));
         } else {
-          const items = [{
+          const items = new URL(request.url, "http://localhost").searchParams.get("refundStatus") === "SUCCESS" ? [] : [{
             ...initialRefund, customerName: "本地测试用户", refundMethod: "原路退款",
             status: refundStatus, statusType: "warn"
           }];
@@ -593,6 +598,30 @@ async function main() {
       assert.ok(requests.slice(start).every((item) => item.method === "GET"
         || item.method === "POST" && item.pathname === "/api/refunds/approve"));
     }
+    refundStatus = "REVIEWING";
+    const routeChangeStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/refunds` });
+    await waitFor(async () => (await evaluate(listState))?.status === "REVIEWING", "路由切换前退款列表");
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    holdRefundApproval = true;
+    await evaluate(`${listButton}.click()`);
+    await waitFor(() => Boolean(releaseRefundApproval), "待返回的退款审核");
+    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/refunds?refundStatus=SUCCESS')");
+    await waitFor(async () => await evaluate("location.search === '?refundStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的退款单数据')"),
+      "路由切换后的成功退款空列表");
+    releaseRefundApproval();
+    holdRefundApproval = false;
+    releaseRefundApproval = null;
+    await waitFor(() => requests.slice(routeChangeStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "SUCCESS").length >= 2,
+    "审核完成后当前筛选再次读回");
+    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的退款单数据')"), true,
+      "旧退款审核响应不得覆盖新路由快照");
+    assert.equal(requests.slice(routeChangeStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "全部").length, 1,
+    "旧审核响应不得在新路由上重新查询原筛选");
+    console.log("[PASS] 管理端浏览器：退款动作期间切换路由，旧筛选不回流且新筛选重新读回");
     failRefundListOnce = false;
     const start = requests.length;
     await send("Page.navigate", { url: `${baseUrl}/refunds` });
@@ -649,6 +678,8 @@ async function main() {
     await waitFor(() => evaluate("document.body.innerText.includes('申请已受理，当前状态为 REVIEWING')"
       + " && document.body.innerText.includes('本地申请键未能清理')"), "同键申请受理但清键失败");
     assert.equal(applicationRequests.length, 2);
+    await waitFor(() => evaluate(`Array.from(document.querySelectorAll('tbody tr')).some(
+      (row) => row.querySelector('td')?.textContent.trim() === '${appliedRefundOrderId}')`), "已受理退款列表读回");
     assert.equal(await evaluate(`Array.from(document.querySelectorAll('tbody tr')).filter(
       (row) => row.querySelector('td')?.textContent.trim() === '${appliedRefundOrderId}').length`), 1);
     assert.equal(await evaluate("document.querySelector('input[placeholder=\"请输入金额\"]')?.value"), "");
@@ -1071,6 +1102,7 @@ async function main() {
     assert.equal(await evaluate("sessionStorage.getItem('payment-issue-action-attempt:v1')"), "{broken-json");
     console.log("[PASS] 管理端浏览器：错误读回、双动作重放、已受理清键失败门禁及畸形记录拒绝提交");
   } finally {
+    releaseRefundApproval?.();
     socket?.close();
     chrome.kill("SIGTERM");
     await Promise.race([new Promise((resolve) => chrome.once("exit", resolve)), delay(3000)]);
