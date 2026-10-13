@@ -1988,8 +1988,8 @@ export async function verifyLocalDemoTargets(targets, request = api, environment
   }
 }
 
-async function verifyPaymentRequestStatus(paymentOrderId, status, style, countField) {
-  const filter = `paymentOrderId=${encodeURIComponent(paymentOrderId)}&requestStatus=${encodeURIComponent(status)}`;
+async function verifyPaymentRequestStatus(paymentOrderId, orderNo, status, style, countField) {
+  const filter = `paymentOrderId=${encodeURIComponent(paymentOrderId)}&orderNo=${encodeURIComponent(orderNo)}&requestStatus=${encodeURIComponent(status)}`;
   const page = await api(`${paymentBaseUrl}/api/payment-requests?${filter}`);
   const overview = await api(`${paymentBaseUrl}/api/payment-requests/overview?${filter}`);
   const requestNo = page?.items?.[0]?.requestNo;
@@ -2106,7 +2106,7 @@ async function main() {
     `unexpected submitted payment state: ${submitted.status}/${submitted.statusType}`);
   assert(submitted.channelTransactionNo, "channel transaction number was not created");
   const pendingRequest = await verifyPaymentRequestStatus(
-    prepay.paymentOrderId, "处理中", "info", "processingRequestCount"
+    prepay.paymentOrderId, orderNo, "处理中", "info", "processingRequestCount"
   );
 
   const waitingCashier = assertBoundCashierPage(
@@ -2211,7 +2211,7 @@ async function main() {
     expectedPayScene
   );
   const successfulRequest = await verifyPaymentRequestStatus(
-    prepay.paymentOrderId, "成功", "success", "successRequestCount"
+    prepay.paymentOrderId, orderNo, "成功", "success", "successRequestCount"
   );
   assert(successfulRequest.requestNo === pendingRequest.requestNo,
     "payment completion changed the original submitted request number");
