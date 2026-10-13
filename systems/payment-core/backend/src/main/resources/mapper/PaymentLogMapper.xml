@@ -16,10 +16,10 @@
     <sql id="paymentLogWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.processStage != null and query.processStage != '' and query.processStage != '全部'">
                 AND process_stage = #{query.processStage}
@@ -28,10 +28,10 @@
                 AND log_level = #{query.logLevel}
             </if>
             <if test="query.source != null and query.source != ''">
-                AND source LIKE CONCAT('%', #{query.source}, '%')
+                AND source LIKE CONCAT('%', #{query.sourceLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.keyword != null and query.keyword != ''">
-                AND message LIKE CONCAT('%', #{query.keyword}, '%')
+                AND message LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
     </sql>

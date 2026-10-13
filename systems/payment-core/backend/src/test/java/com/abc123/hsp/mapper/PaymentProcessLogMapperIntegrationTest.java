@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -98,6 +99,58 @@ public class PaymentProcessLogMapperIntegrationTest {
             assertEquals(1L, overview.getErrorLogCount());
             assertEquals(1, overview.getCallbackErrorCount());
         }
+    }
+
+    @Test
+    void shouldSearchLogIdentifiersAndMessageByLiteralSubstring() throws Exception {
+        String suffix = "%_!\\\"";
+        String paymentOrderId = "PAY-LOG-" + suffix;
+        String orderNo = "ORD-LOG-" + suffix;
+        String source = "source-" + suffix;
+        String message = "message-" + suffix;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement();
+             PreparedStatement insert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_process_log (log_no, payment_order_id, order_no, "
+                             + "source_type, source_no, process_stage, log_level, log_level_type, "
+                             + "message, source, created_at) VALUES "
+                             + "('LOG-LITERAL', ?, ?, 'LOCAL_TEST', 'LITERAL', "
+                             + "'本地隔离', 'INFO', 'info', ?, ?, NOW())")) {
+            insert.setString(1, paymentOrderId);
+            insert.setString(2, orderNo);
+            insert.setString(3, message);
+            insert.setString(4, source);
+            assertEquals(1, insert.executeUpdate());
+            statement.executeUpdate("INSERT INTO t_payment_process_log (log_no, payment_order_id, "
+                    + "order_no, source_type, source_no, process_stage, log_level, log_level_type, "
+                    + "message, source, created_at) VALUES "
+                    + "('LOG-PLAIN', 'PAY-LOG-PLAIN', 'ORD-LOG-PLAIN', 'LOCAL_TEST', 'PLAIN', "
+                    + "'本地隔离', 'INFO', 'info', 'message-plain', 'source-plain', NOW())");
+
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", suffix)) {
+                PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+                query.setProcessStage("本地隔离");
+                query.setPaymentOrderId(fragment);
+                assertLiteralLogResults(mapper, query);
+                query.setPaymentOrderId(null);
+                query.setOrderNo(fragment);
+                assertLiteralLogResults(mapper, query);
+                query.setOrderNo(null);
+                query.setSource(fragment);
+                assertLiteralLogResults(mapper, query);
+                query.setSource(null);
+                query.setKeyword(fragment);
+                assertLiteralLogResults(mapper, query);
+            }
+        }
+    }
+
+    private void assertLiteralLogResults(PaymentLogMapper mapper, PaymentLogQueryDTO query) {
+        assertEquals(1L, mapper.count(query), query.toString());
+        assertEquals(Arrays.asList("LOG-LITERAL"), logNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList("LOG-LITERAL"), logNos(mapper.findAllForExport(query)));
+        assertEquals(1L, mapper.findOverviewSummary(query).getTotalLogCount());
     }
 
     @Test

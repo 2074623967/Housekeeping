@@ -40,4 +40,20 @@ public class PaymentLogQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+
+    public String getOrderNoLikePattern() {
+        return LikePattern.escape(orderNo);
+    }
+
+    public String getSourceLikePattern() {
+        return LikePattern.escape(source);
+    }
+
+    public String getKeywordLikePattern() {
+        return LikePattern.escape(keyword);
+    }
 }
