@@ -20,10 +20,31 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 class GatewayAccessRefundChannelQueryAdapterTest {
+
+    @Test
+    void shouldRejectNonOkTransportDespiteSuccessfulRefundQueryEnvelope() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundStatus("SUCCESS");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
+                new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
+        response.setCode("0");
+        response.setData(data);
+        for (HttpStatus status : new HttpStatus[]{HttpStatus.ACCEPTED, HttpStatus.BAD_GATEWAY}) {
+            when(restTemplate.exchange(eq("http://gateway/refunds/query"), eq(HttpMethod.POST), any(HttpEntity.class),
+                    eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class)))
+                    .thenReturn(ResponseEntity.status(status).body(response));
+            BusinessException failure = assertThrows(BusinessException.class,
+                    () -> adapter(restTemplate).query(refund()));
+            assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, failure.getCode());
+        }
+    }
 
     @Test
     void shouldOnlySupportConfiguredChannelsWhenEnabled() {

@@ -21,10 +21,31 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 class GatewayAccessPaymentChannelQueryAdapterTest {
+
+    @Test
+    void shouldRejectNonOkTransportDespiteSuccessfulQueryEnvelope() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentChannelQueryResultDTO data = new PaymentChannelQueryResultDTO();
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo("WX-1001");
+        GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
+                new GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse();
+        response.setCode("0");
+        response.setData(data);
+        for (HttpStatus status : new HttpStatus[]{HttpStatus.ACCEPTED, HttpStatus.BAD_GATEWAY}) {
+            when(restTemplate.exchange(eq("http://gateway/query"), eq(HttpMethod.POST), any(HttpEntity.class),
+                    eq(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse.class)))
+                    .thenReturn(ResponseEntity.status(status).body(response));
+            BusinessException failure = assertThrows(BusinessException.class,
+                    () -> adapter(restTemplate).query(paymentDetail()));
+            assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, failure.getCode());
+        }
+    }
 
     @Test
     void shouldOnlySupportConfiguredChannelsWhenEnabled() {

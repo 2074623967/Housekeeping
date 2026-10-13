@@ -17,6 +17,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -84,6 +85,9 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
             ResponseEntity<GatewayRefundQueryResponse> responseEntity = restTemplate.exchange(
                     queryUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers),
                     GatewayRefundQueryResponse.class);
+            if (responseEntity == null || responseEntity.getStatusCode() != HttpStatus.OK) {
+                throw queryFailed("gateway-access refund query failed, please retry later");
+            }
             GatewayRefundQueryResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
                 throw queryFailed("gateway-access rejected refund query");

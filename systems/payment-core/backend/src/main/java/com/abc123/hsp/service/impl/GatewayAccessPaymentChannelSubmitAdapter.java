@@ -20,6 +20,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -89,6 +90,9 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
             ResponseEntity<GatewaySubmitResponse> responseEntity = restTemplate.exchange(
                     submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(normalizedRequest, headers),
                     GatewaySubmitResponse.class);
+            if (responseEntity == null || responseEntity.getStatusCode() != HttpStatus.OK) {
+                throw submitFailed("gateway-access payment submit failed; query before retrying");
+            }
             GatewaySubmitResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
                 throw submitFailed("gateway-access rejected payment submit");

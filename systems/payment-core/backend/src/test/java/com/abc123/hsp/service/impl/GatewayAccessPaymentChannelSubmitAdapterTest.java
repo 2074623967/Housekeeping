@@ -25,10 +25,34 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 class GatewayAccessPaymentChannelSubmitAdapterTest {
+
+    @Test
+    void shouldRejectNonOkTransportDespiteSuccessfulSubmitEnvelope() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setGatewayCode("GW_WX");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
+                new GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        for (HttpStatus status : new HttpStatus[]{HttpStatus.ACCEPTED, HttpStatus.BAD_GATEWAY}) {
+            when(restTemplate.exchange(eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                    eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class)))
+                    .thenReturn(ResponseEntity.status(status).body(response));
+            BusinessException failure = assertThrows(BusinessException.class,
+                    () -> adapter(restTemplate).submit(request()));
+            assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, failure.getCode());
+        }
+    }
 
     @Test
     void shouldOnlySupportFullyConfiguredChannels() {

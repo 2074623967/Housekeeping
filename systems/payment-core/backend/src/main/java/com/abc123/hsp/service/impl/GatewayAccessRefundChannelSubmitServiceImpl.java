@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -90,6 +91,9 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
             ResponseEntity<GatewayRefundSubmitResponse> responseEntity = restTemplate.exchange(
                     submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(normalizedRequest, headers),
                     GatewayRefundSubmitResponse.class);
+            if (responseEntity == null || responseEntity.getStatusCode() != HttpStatus.OK) {
+                throw submitFailed("gateway-access refund submit failed; query before retrying", true);
+            }
             GatewayRefundSubmitResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
                 boolean resultUnknown = response == null

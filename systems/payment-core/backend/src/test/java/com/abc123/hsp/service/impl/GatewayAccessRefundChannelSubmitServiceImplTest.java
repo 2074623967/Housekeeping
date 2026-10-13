@@ -29,11 +29,33 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 class GatewayAccessRefundChannelSubmitServiceImplTest {
+
+    @Test
+    void shouldTreatNonOkTransportWithSuccessfulEnvelopeAsUnknownRefundSubmit() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setChannelRefundNo("WX-R-1001");
+        data.setStatus("PROCESSING");
+        data.setStatusType("warn");
+        GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse response =
+                new GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        for (HttpStatus status : new HttpStatus[]{HttpStatus.ACCEPTED, HttpStatus.BAD_GATEWAY}) {
+            when(restTemplate.exchange(eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                    eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                    .thenReturn(ResponseEntity.status(status).body(response));
+            RefundChannelSubmitException failure = assertThrows(RefundChannelSubmitException.class,
+                    () -> adapter(restTemplate).submit(request()));
+            assertTrue(failure.isResultUnknown());
+        }
+    }
 
     @Test
     void shouldExchangeGatewayRefundContractOverLoopbackHttp() throws Exception {

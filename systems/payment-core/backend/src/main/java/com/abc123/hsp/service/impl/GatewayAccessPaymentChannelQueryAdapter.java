@@ -17,6 +17,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -91,6 +92,11 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
             headers.set("X-Gateway-Access-Key", accessKey);
             ResponseEntity<GatewayQueryResponse> responseEntity = restTemplate.exchange(
                     queryUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers), GatewayQueryResponse.class);
+            if (responseEntity == null || responseEntity.getStatusCode() != HttpStatus.OK) {
+                throw BusinessException.sanitized(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "gateway-access payment query failed, please retry later");
+            }
             GatewayQueryResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode())) {
                 throw BusinessException.sanitized(
