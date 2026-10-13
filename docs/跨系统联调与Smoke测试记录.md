@@ -586,3 +586,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 71. 2026-10-13 当前提交 H2/demo 双路径再验证
 
 在 `e5a01e48` 基线上先确认九后端 `DOWN`，`doctor payment-chain` 通过，`cross-system-happy-path.test.mjs` `64/64`。首次沙箱运行九服务立即退出且日志为空，不作为运行态证据；允许本机回环后分别运行 `verify payment-chain` 与 `verify payment-query-chain`，两轮退出码 `0`、九服务 HTTP 冒烟和 happy-path `[PASS]`。支付单 `PAY179185297722731d4be88` 经 `CALLBACK`、`PAY1791853153950503bf507` 经 `GATEWAY_QUERY` 收口；两轮均有支付事件、清分、结算、三类账务事件、退款及七项对账事实，对账 `COMPLETED/4/4`、`financialCloseable=true`。退出后九后端均为 `DOWN`，18190 查询桩无监听。仅证明本机 H2/demo HTTP 模拟链路在当前提交可重复，不能替代真实 RabbitMQ、目标 MySQL 8 多实例、正式渠道 ACK/查单、可信身份及资金验收。
+
+## 72. 2026-10-13 清分事件入口收口后的双路径复验
+
+在 `dd585c95` 基线上，清分管理页已改为事件只读核对，人工重放 HTTP 入口需独立服务端签名。首次受限沙箱运行九服务立即退出、不作为业务验证；获准本机回环后分别执行 `verify payment-chain` 和 `verify payment-query-chain`，两轮均以 `0` 退出，九服务 HTTP 冒烟及 happy-path `[PASS]`。支付单 `PAY17918587527717495b799` 经 `CALLBACK`，`PAY179185893473807e04d69` 经本机 `GATEWAY_QUERY` 收口；清分、结算、三类账务事件、退款和七项对账事实读回，对账均为 `COMPLETED/4/4`、`financialCloseable=true`。脚本停止九服务与查询桩，复核九后端 `DOWN`、18190 无监听。仅验证隔离 H2/demo HTTP 双路径，不证明人工重放的真实身份/审批、RabbitMQ、目标 MySQL 8、多实例、正式渠道和资金验收。
