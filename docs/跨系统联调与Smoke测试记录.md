@@ -590,3 +590,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 72. 2026-10-13 清分事件入口收口后的双路径复验
 
 在 `dd585c95` 基线上，清分管理页已改为事件只读核对，人工重放 HTTP 入口需独立服务端签名。首次受限沙箱运行九服务立即退出、不作为业务验证；获准本机回环后分别执行 `verify payment-chain` 和 `verify payment-query-chain`，两轮均以 `0` 退出，九服务 HTTP 冒烟及 happy-path `[PASS]`。支付单 `PAY17918587527717495b799` 经 `CALLBACK`，`PAY179185893473807e04d69` 经本机 `GATEWAY_QUERY` 收口；清分、结算、三类账务事件、退款和七项对账事实读回，对账均为 `COMPLETED/4/4`、`financialCloseable=true`。脚本停止九服务与查询桩，复核九后端 `DOWN`、18190 无监听。仅验证隔离 H2/demo HTTP 双路径，不证明人工重放的真实身份/审批、RabbitMQ、目标 MySQL 8、多实例、正式渠道和资金验收。
+
+## 73. 2026-10-13 支付成功 HTTP 发送端缺密钥门禁后双路径复验
+
+支付核心发送端不再向下游发送未签名 `PAYMENT_SUCCESS` HTTP 事件。获准本机回环后独立执行 `verify payment-chain` 和 `verify payment-query-chain`：支付单 `PAY179186033232150f39ccf` 经 `CALLBACK`、`PAY17918605050559d85b9c1` 经 `GATEWAY_QUERY` 收口；两轮九服务 HTTP 冒烟与 happy-path `[PASS]`，支付成功、清分、结算、三类账务、退款和七项对账事实读回，对账均 `COMPLETED/4/4`、`financialCloseable=true`。脚本以 `0` 退出并停服，九后端 `DOWN`、查单桩 18190 无监听。仅为 H2/demo 的模拟 HTTP 主路径，未验 RabbitMQ、目标 MySQL 8、多实例、正式渠道资金与生产身份/权限。

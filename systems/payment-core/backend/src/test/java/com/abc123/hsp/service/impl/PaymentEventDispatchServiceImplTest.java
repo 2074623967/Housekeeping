@@ -1121,14 +1121,14 @@ class PaymentEventDispatchServiceImplTest {
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse());
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).publishPaymentSuccess("EVT-001", "PAY-001");
+        )).publishPaymentSuccess("EVT-001", "PAY-001");
 
         verify(restTemplate).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
         verify(restTemplate).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
@@ -1136,8 +1136,8 @@ class PaymentEventDispatchServiceImplTest {
         verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(
                 any(String.class), payloadCaptor.capture(),
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
-        Assertions.assertTrue(new ObjectMapper().writeValueAsString(payloadCaptor.getAllValues().get(0))
-                .contains("\"payScene\":\"HOME_CLEAN\""));
+        Assertions.assertEquals("HOME_CLEAN", signedPayload(payloadCaptor.getAllValues().get(0))
+                .get("payScene").asText());
         verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-001");
         verify(paymentEventMapper).markPaymentSuccessHttpCompleted("EVT-001");
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
@@ -1282,14 +1282,14 @@ class PaymentEventDispatchServiceImplTest {
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        boolean success = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-001", " payment-event-scheduler ");
+        )).republish("EVT-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-001");
@@ -1312,14 +1312,14 @@ class PaymentEventDispatchServiceImplTest {
                 .thenReturn(successResponse());
         when(paymentEventMapper.markPublishSuccess("EVT-ACCOUNTING-RETRY")).thenReturn(1);
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        boolean success = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-ACCOUNTING-RETRY", " payment-event-scheduler ");
+        )).republish("EVT-ACCOUNTING-RETRY", " payment-event-scheduler ");
 
         Assertions.assertTrue(success);
         verify(restTemplate, never()).postForEntity(
@@ -1412,7 +1412,7 @@ class PaymentEventDispatchServiceImplTest {
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        boolean success = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
@@ -1420,7 +1420,7 @@ class PaymentEventDispatchServiceImplTest {
                 "ACT10003",
                 3,
                 restTemplate
-        ).republish("EVT-RETRY-003", " payment-event-scheduler ");
+        )).republish("EVT-RETRY-003", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishDeadLetter("EVT-RETRY-003");
@@ -1680,11 +1680,11 @@ class PaymentEventDispatchServiceImplTest {
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse());
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper, paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
-                "ACT10003", restTemplate).publishPaymentSuccess("EVT-VIRTUAL-SOURCE-VALID", "PAY-001");
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-VIRTUAL-SOURCE-VALID", "PAY-001");
 
         verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(
                 any(String.class), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
@@ -1986,22 +1986,21 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentEventMapper.markPublishSuccess("EVT-PARTY-NORMALIZED")).thenReturn(1);
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
-                restTemplate).publishPaymentSuccess("EVT-PARTY-NORMALIZED", "PAY-001");
+                restTemplate)).publishPaymentSuccess("EVT-PARTY-NORMALIZED", "PAY-001");
 
         verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(
                 any(String.class), payloadCaptor.capture(),
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
-        ObjectMapper objectMapper = new ObjectMapper();
         com.fasterxml.jackson.databind.JsonNode clearingPayload =
-                objectMapper.valueToTree(payloadCaptor.getAllValues().get(0));
+                signedPayload(payloadCaptor.getAllValues().get(0));
         com.fasterxml.jackson.databind.JsonNode accountingPayload =
-                objectMapper.valueToTree(payloadCaptor.getAllValues().get(1));
+                signedPayload(payloadCaptor.getAllValues().get(1));
         Assertions.assertEquals("ORD-001", clearingPayload.get("orderNo").asText());
         Assertions.assertEquals("张女士", clearingPayload.get("customerName").asText());
         Assertions.assertEquals("李阿姨", clearingPayload.get("workerName").asText());
@@ -2047,6 +2046,41 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldNotSendUnsignedPaymentSuccessWhenHttpSecretIsMissing() {
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate);
+
+        service.publishPaymentSuccess("EVT-UNSIGNED-HTTP", "PAY-001");
+
+        org.mockito.Mockito.verifyNoInteractions(restTemplate);
+        verify(paymentEventMapper).markPublishFailed("EVT-UNSIGNED-HTTP");
+    }
+
+    @Test
+    void shouldNotSendAccountingRetryWhenHttpSecretIsBlank() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-UNSIGNED-ACCOUNTING", 1);
+        event.setPaymentSuccessHttpStage("CLEARING_ACCEPTED");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-UNSIGNED-ACCOUNTING")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate);
+        setField(service, "paymentSuccessHttpSecret", "  ");
+
+        Assertions.assertFalse(service.republish("EVT-UNSIGNED-ACCOUNTING", "payment-event-scheduler"));
+
+        org.mockito.Mockito.verifyNoInteractions(restTemplate);
+        verify(paymentEventMapper).markPublishFailed("EVT-UNSIGNED-ACCOUNTING");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
+    }
+
+    @Test
     void shouldRejectInvalidWorkerNameBeforeCallingDownstream() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-WORKER-INVALID", 0);
@@ -2085,14 +2119,14 @@ class PaymentEventDispatchServiceImplTest {
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        boolean success = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-CLEARING-FAIL", " payment-event-scheduler ");
+        )).republish("EVT-CLEARING-FAIL", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-CLEARING-FAIL");
@@ -2158,14 +2192,14 @@ class PaymentEventDispatchServiceImplTest {
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(response("CLEARING-FAILED", HttpStatus.OK));
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).publishPaymentSuccess("EVT-BUSINESS-FAIL", "PAY-001");
+        )).publishPaymentSuccess("EVT-BUSINESS-FAIL", "PAY-001");
 
         verify(paymentEventMapper).markPublishFailed("EVT-BUSINESS-FAIL");
         verify(paymentEventMapper, never()).markPublishSuccess("EVT-BUSINESS-FAIL");
@@ -2186,10 +2220,10 @@ class PaymentEventDispatchServiceImplTest {
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse("PAY-OTHER"));
 
-        new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
-                "ACT10003", restTemplate).publishPaymentSuccess("EVT-WRONG-CLEARING-ACK", "PAY-001");
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-WRONG-CLEARING-ACK", "PAY-001");
 
         verify(paymentEventMapper).markPublishFailed("EVT-WRONG-CLEARING-ACK");
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted("EVT-WRONG-CLEARING-ACK");
@@ -2212,10 +2246,10 @@ class PaymentEventDispatchServiceImplTest {
                 .thenReturn(new ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse>(
                         response, HttpStatus.OK));
 
-        new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
-                "ACT10003", restTemplate).publishPaymentSuccess("EVT-MALFORMED-CLEARING-ACK", "PAY-001");
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-MALFORMED-CLEARING-ACK", "PAY-001");
 
         verify(paymentEventMapper).markPublishFailed("EVT-MALFORMED-CLEARING-ACK");
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted("EVT-MALFORMED-CLEARING-ACK");
@@ -2236,10 +2270,10 @@ class PaymentEventDispatchServiceImplTest {
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse("PAY-OTHER"));
 
-        new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
-                "ACT10003", restTemplate).publishPaymentSuccess("EVT-WRONG-ACCOUNTING-ACK", "PAY-001");
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-WRONG-ACCOUNTING-ACK", "PAY-001");
 
         verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-WRONG-ACCOUNTING-ACK");
         verify(paymentEventMapper).markPublishFailed("EVT-WRONG-ACCOUNTING-ACK");
@@ -2269,13 +2303,13 @@ class PaymentEventDispatchServiceImplTest {
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(response("RECONCILIATION_UNAVAILABLE", HttpStatus.BAD_GATEWAY));
 
-        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+        PaymentEventDispatchServiceImpl service = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
-                restTemplate);
+                restTemplate));
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
 
         service.publishPaymentSuccess("EVT-RECONCILIATION-FAIL", "PAY-001");
@@ -2351,7 +2385,13 @@ class PaymentEventDispatchServiceImplTest {
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003", restTemplate);
+        setField(service, "paymentSuccessHttpSecret", "local-payment-event-test-secret");
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+        return service;
+    }
+
+    private PaymentEventDispatchServiceImpl signedHttpDispatch(PaymentEventDispatchServiceImpl service) {
+        setField(service, "paymentSuccessHttpSecret", "local-payment-event-test-secret");
         return service;
     }
 
@@ -2416,14 +2456,14 @@ class PaymentEventDispatchServiceImplTest {
                 .thenReturn(successResponse());
         when(paymentEventMapper.markPublishSuccess("EVT-STATUS-CONFLICT")).thenReturn(0);
 
-        boolean success = new PaymentEventDispatchServiceImpl(
+        boolean success = signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-STATUS-CONFLICT", " payment-event-scheduler ");
+        )).republish("EVT-STATUS-CONFLICT", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-STATUS-CONFLICT");
@@ -2460,14 +2500,14 @@ class PaymentEventDispatchServiceImplTest {
                         (PaymentEventDispatchServiceImpl.DownstreamApiResponse) null,
                         HttpStatus.OK));
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).publishPaymentSuccess("EVT-EMPTY-RESPONSE", "PAY-001");
+        )).publishPaymentSuccess("EVT-EMPTY-RESPONSE", "PAY-001");
 
         verify(paymentEventMapper).markPublishFailed("EVT-EMPTY-RESPONSE");
         verify(paymentEventMapper, never()).markPublishSuccess("EVT-EMPTY-RESPONSE");
@@ -2484,14 +2524,14 @@ class PaymentEventDispatchServiceImplTest {
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse());
 
-        new PaymentEventDispatchServiceImpl(
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
                 "http://127.0.0.1:18120/api/clearing/events/payments/success",
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).publishPaymentSuccess("EVT-001", "PAY-001");
+        )).publishPaymentSuccess("EVT-001", "PAY-001");
 
         ArgumentCaptor<Object> clearingCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<Object> accountingCaptor = ArgumentCaptor.forClass(Object.class);
@@ -2505,10 +2545,10 @@ class PaymentEventDispatchServiceImplTest {
                 accountingCaptor.capture(),
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)
         );
-        Assertions.assertEquals("PAY-001", invokeGetter(clearingCaptor.getValue(), "getPaymentOrderId"));
-        Assertions.assertEquals("李阿姨", invokeGetter(clearingCaptor.getValue(), "getWorkerName"));
-        Assertions.assertEquals("ACT10003", invokeGetter(accountingCaptor.getValue(), "getAccountNo"));
-        Assertions.assertEquals("PAY-001", invokeGetter(accountingCaptor.getValue(), "getPaymentOrderId"));
+        Assertions.assertEquals("PAY-001", signedPayload(clearingCaptor.getValue()).get("paymentOrderId").asText());
+        Assertions.assertEquals("李阿姨", signedPayload(clearingCaptor.getValue()).get("workerName").asText());
+        Assertions.assertEquals("ACT10003", signedPayload(accountingCaptor.getValue()).get("accountNo").asText());
+        Assertions.assertEquals("PAY-001", signedPayload(accountingCaptor.getValue()).get("paymentOrderId").asText());
     }
 
     @Test
@@ -2533,21 +2573,21 @@ class PaymentEventDispatchServiceImplTest {
                     .thenReturn(successResponse());
             ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
 
-            new PaymentEventDispatchServiceImpl(
+            signedHttpDispatch(new PaymentEventDispatchServiceImpl(
                     paymentMapper,
                     paymentEventMapper,
                     "http://127.0.0.1:18120/api/clearing/events/payments/success",
                     "http://127.0.0.1:18110/api/accounting/events/payments/success",
                     "ACT10003",
                     restTemplate
-            ).publishPaymentSuccess("EVT-BUSINESS-DATE", "PAY-001");
+            )).publishPaymentSuccess("EVT-BUSINESS-DATE", "PAY-001");
 
             verify(restTemplate).postForEntity(
                     eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
                     payloadCaptor.capture(),
                     eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
             Assertions.assertEquals(
-                    businessToday.toString(), invokeGetter(payloadCaptor.getValue(), "getBatchDate"));
+                    businessToday.toString(), signedPayload(payloadCaptor.getValue()).get("batchDate").asText());
         } finally {
             TimeZone.setDefault(previousTimeZone);
         }
@@ -2651,13 +2691,12 @@ class PaymentEventDispatchServiceImplTest {
         return request;
     }
 
-    private Object invokeGetter(Object target, String methodName) {
+    private com.fasterxml.jackson.databind.JsonNode signedPayload(Object request) {
+        Assertions.assertTrue(request instanceof HttpEntity);
         try {
-            Method method = target.getClass().getMethod(methodName);
-            method.setAccessible(true);
-            return method.invoke(target);
+            return new ObjectMapper().readTree((String) ((HttpEntity<?>) request).getBody());
         } catch (Exception exception) {
-            throw new IllegalStateException(exception);
+            throw new AssertionError("支付事件请求体不是 JSON", exception);
         }
     }
 }

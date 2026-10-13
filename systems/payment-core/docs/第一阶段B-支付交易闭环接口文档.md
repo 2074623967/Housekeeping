@@ -5879,7 +5879,7 @@ App/H5/PC 在首次支付提交收到 `PAYMENT-1016` 且回读到有精确冲突
 
 ### 14.577 支付成功 HTTP 事件载荷签名
 
-`payment-core` 向清分与账务发送 `PAYMENT_SUCCESS` HTTP 请求时，配置 `HSP_PAYMENT_SUCCESS_HTTP_SECRET` 后，每次派发（含重试）生成当前 UTC Unix 秒数，写入 `X-HSP-Payment-Event-Timestamp`；以该秒数字符串、换行符 `\n` 和实际发送的原始 UTF-8 JSON body 拼接，计算 HMAC-SHA256/Base64，写入 `X-HSP-Payment-Event-Signature`。两消费端使用相同密钥验证原始 body、规范十进制秒数和签名，接收时钟与请求时间相差超过 300 秒、时间戳缺失/异常、旧版仅签 body、签名缺失或正文篡改均返回 HTTP 403，不进入资金事件服务。发送端未配置密钥时仍可向受控 mock 发送旧格式用于代码测试，实际清分/账务接收端默认拒绝。隔离 `local-stack.sh verify payment-chain` 每轮随机生成一把仅供本轮三服务使用的临时密钥。协议不兼容旧版发送或接收端；不得在真实待派发 outbox 未排空时直接混合滚动升级，须有三方协调切换、回滚和时钟同步方案。300 秒内合法报文仍可重放，依赖业务幂等；生产还需独立密钥管理、TLS/网络隔离、轮换和目标环境验证。本时间窗只覆盖 HTTP 支付成功，不覆盖其他 HTTP 事件、AMQP 或人员身份。
+`payment-core` 向清分与账务发送 `PAYMENT_SUCCESS` HTTP 请求时，必须配置 `HSP_PAYMENT_SUCCESS_HTTP_SECRET`；每次派发（含重试）生成当前 UTC Unix 秒数，写入 `X-HSP-Payment-Event-Timestamp`；以该秒数字符串、换行符 `\n` 和实际发送的原始 UTF-8 JSON body 拼接，计算 HMAC-SHA256/Base64，写入 `X-HSP-Payment-Event-Signature`。缺失或空白密钥时，发送端在首次派发或账务阶段重试前直接拒绝 HTTP 调用，将事件保留为失败待补偿；不会向 mock 或实际下游发未签名请求。两消费端使用相同密钥验证原始 body、规范十进制秒数和签名，接收时钟与请求时间相差超过 300 秒、时间戳缺失/异常、旧版仅签 body、签名缺失或正文篡改均返回 HTTP 403，不进入资金事件服务。隔离 `local-stack.sh verify payment-chain` 每轮随机生成一把仅供本轮三服务使用的临时密钥。协议不兼容旧版发送或接收端；不得在真实待派发 outbox 未排空时直接混合滚动升级，须有三方协调切换、回滚和时钟同步方案。300 秒内合法报文仍可重放，依赖业务幂等；生产还需独立密钥管理、TLS/网络隔离、轮换和目标环境验证。本时间窗只覆盖 HTTP 支付成功，不覆盖其他 HTTP 事件、AMQP 或人员身份。
 
 ### 14.578 支付成功 AMQP 事件载荷签名
 

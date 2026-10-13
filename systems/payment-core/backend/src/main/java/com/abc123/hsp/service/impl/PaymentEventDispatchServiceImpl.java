@@ -949,6 +949,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private void validateHttpDispatchConfiguration() {
         if (restTemplate == null
+                || !StringUtils.hasText(paymentSuccessHttpSecret)
                 || !isValidConfiguredText(clearingUrl, DOWNSTREAM_URL_MAX_LENGTH)
                 || !isValidConfiguredText(accountingUrl, DOWNSTREAM_URL_MAX_LENGTH)
                 || !isValidConfiguredText(accountingPaymentSuccessAccountNo, ACCOUNT_NO_MAX_LENGTH)) {
@@ -969,20 +970,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private void postPaymentEventForSuccess(String url, Object payload, String paymentOrderId) {
-        Object request = payload;
-        if (StringUtils.hasText(paymentSuccessHttpSecret)) {
-            try {
-                String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                String timestamp = Long.toString(Instant.now().getEpochSecond());
-                headers.set(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp);
-                headers.set(PaymentEventHttpSignature.HEADER_NAME,
-                        PaymentEventHttpSignature.sign(body, timestamp, paymentSuccessHttpSecret));
-                request = new HttpEntity<>(body, headers);
-            } catch (JsonProcessingException exception) {
-                throw new IllegalStateException("支付成功事件签名序列化失败", exception);
-            }
+        HttpEntity<String> request;
+        try {
+            String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            headers.set(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp);
+            headers.set(PaymentEventHttpSignature.HEADER_NAME,
+                    PaymentEventHttpSignature.sign(body, timestamp, paymentSuccessHttpSecret));
+            request = new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("支付成功事件签名序列化失败", exception);
         }
         Object data = postForSuccess(url, request).getData();
         if (!(data instanceof Map)) {
