@@ -622,3 +622,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 80. 2026-10-14 当前回调与查单双路径复核
 
 以 `2f59b6a6` 基线隔离运行 `bash tools/dev/local-stack.sh verify payment-chain` 与 `verify payment-query-chain`；两轮九服务 HTTP 冒烟、跨系统 happy-path 均 `[PASS]`，退出码 `0`。支付单 `PAY179191228479435399fa1` 经 `CALLBACK`、`PAY179191246070669c051c5` 经本机受控 `GATEWAY_QUERY` 收口；均读回清分、结算、支付/清分/退款三类账务、退款成功及七条对账事实，链路 `COMPLETED/4/4`、本地 `financialCloseable=true`。状态复核九后端全部 `DOWN`、18190 查单桩无监听。只证明 H2/demo 当前 HTTP 主链，不能替代真实 RabbitMQ、目标 MySQL 8 多实例、正式渠道与真实资金、可信身份审批或生产验收。
+
+## 81. 2026-10-14 清分与结算事件留痕修复后双路径复验
+
+在 `c6661b4e` 基线隔离执行 `verify payment-chain` 和 `verify payment-query-chain`：支付单 `PAY179191401260902cb4f5c` 经 `CALLBACK`、`PAY1791914192261aacfb1de` 经本机受控 `GATEWAY_QUERY` 收口，两轮九服务 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`、退出码 `0`。支付、清分、结算、支付/清分/退款三类账务、退款及七项对账事实读回，对账均为 `COMPLETED/4/4`、本地 `financialCloseable=true`。状态复核九后端均 `DOWN`，查询桩 18190 无监听。这里验证普通本机 H2/demo HTTP 链路没有回归；特殊字符的生产投递、真实 RabbitMQ、目标 MySQL 8 多实例、可信身份审批与实际资金另需验收。
