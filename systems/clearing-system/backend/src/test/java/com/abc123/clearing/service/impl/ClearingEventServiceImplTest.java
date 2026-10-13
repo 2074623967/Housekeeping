@@ -12,6 +12,8 @@ import com.abc123.clearing.dto.ShareItemDTO;
 import com.abc123.clearing.entity.ClearingEventEntity;
 import com.abc123.clearing.mapper.ClearingDataMapper;
 import com.abc123.clearing.service.ShareService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -64,6 +66,32 @@ class ClearingEventServiceImplTest {
         assertEquals("HOME_CLEAN", orders.getItems().get(0).getPayScene());
         assertEquals("{\"paymentOrderId\":\"PAY202607200099\",\"orderNo\":\"ORD202607200099\","
                 + "\"businessChainId\":\"CHAIN-PAY202607200099\",\"payScene\":\"HOME_CLEAN\"}", result.getPayload());
+    }
+
+    @Test
+    void shouldKeepPaymentAndClearingOutboxPayloadsValidForSpecialCharacters() throws Exception {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setPaymentOrderId("PAY-\"QUOTED\\ID");
+        request.setOrderNo("ORD-\"QUOTED");
+        request.setPayScene("HOME_\\CLEAN\nNEXT");
+        request.setAmount(new BigDecimal("200.00"));
+
+        ClearingEventDTO first = clearingEventService.consumePaymentSuccess(request);
+        ClearingEventDTO replay = clearingEventService.consumePaymentSuccess(request);
+        String clearingNo = clearingOrderService.list("", "", request.getPaymentOrderId(), "", 1, 20)
+                .getItems().get(0).getClearingNo();
+        ClearingEventEntity outbox = clearingDataMapper.findEventByTypeAndBizNo("CLEARING_GENERATED", clearingNo);
+        ObjectMapper mapper = new ObjectMapper();
+
+        assertEquals(first.getEventNo(), replay.getEventNo());
+        JsonNode paymentPayload = mapper.readTree(first.getPayload());
+        assertEquals(request.getPaymentOrderId(), paymentPayload.get("paymentOrderId").asText());
+        assertEquals(request.getOrderNo(), paymentPayload.get("orderNo").asText());
+        assertEquals(request.getPayScene(), paymentPayload.get("payScene").asText());
+        JsonNode clearingPayload = mapper.readTree(outbox.getPayload());
+        assertEquals(request.getPaymentOrderId(), clearingPayload.get("paymentOrderId").asText());
+        assertEquals(request.getPayScene(), clearingPayload.get("payScene").asText());
+        assertEquals("李阿姨", clearingPayload.get("targetName").asText());
     }
 
     @Test

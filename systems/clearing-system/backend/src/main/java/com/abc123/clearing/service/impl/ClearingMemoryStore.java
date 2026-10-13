@@ -8,6 +8,8 @@ import com.abc123.clearing.entity.ClearingRuleEntity;
 import com.abc123.clearing.entity.FeeRuleEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
 import com.abc123.clearing.mapper.ClearingDataMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -15,7 +17,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -33,6 +37,7 @@ public class ClearingMemoryStore {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int PAYMENT_IDENTIFIER_MAX_LENGTH = 64;
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final AtomicLong batchSeq = new AtomicLong(10000L);
     private final AtomicLong orderSeq = new AtomicLong(20000L);
@@ -404,11 +409,12 @@ public class ClearingMemoryStore {
         event.setEventType("PAYMENT_SUCCESS");
         event.setBizNo(request.getPaymentOrderId());
         event.setSummary(request.getCustomerName() + " 支付成功后触发清分");
-        event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId()
-                + "\",\"orderNo\":\"" + request.getOrderNo()
-                + "\",\"businessChainId\":\"" + request.getBusinessChainId()
-                + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene())
-                + "\"}");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("paymentOrderId", request.getPaymentOrderId());
+        payload.put("orderNo", request.getOrderNo());
+        payload.put("businessChainId", request.getBusinessChainId());
+        payload.put("payScene", request.getPayScene() == null ? "" : request.getPayScene());
+        event.setPayload(serializePayload(payload));
         event.setEventStatus("已消费");
         event.setPublishStatus("NOT_APPLICABLE");
         event.setRetryCount(0);
@@ -437,27 +443,40 @@ public class ClearingMemoryStore {
         event.setEventType("CLEARING_GENERATED");
         event.setBizNo(clearingOrder.getClearingNo());
         event.setSummary("清分结果已生成，等待结算和账务消费");
-        event.setPayload("{\"eventNo\":\"" + event.getEventNo()
-                + "\",\"eventType\":\"CLEARING_GENERATED\",\"schemaVersion\":\"1\""
-                + ",\"accountNo\":\"" + accountingClearingGeneratedAccountNo
-                + "\",\"clearingNo\":\"" + clearingOrder.getClearingNo()
-                + "\",\"businessChainId\":\"" + clearingOrder.getBusinessChainId()
-                + "\",\"clearingOrderNo\":\"" + clearingOrder.getClearingNo()
-                + "\",\"paymentOrderId\":\"" + clearingOrder.getPaymentOrderId()
-                + "\",\"payScene\":\"" + (clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene())
-                + "\",\"bizNo\":\"" + clearingOrder.getPaymentOrderId()
-                + "\",\"targetType\":\"WORKER\",\"targetNo\":\"" + targetNo
-                + "\",\"targetName\":\"" + targetName
-                + "\",\"shouldSettleAmount\":" + workerAmount
-                + ",\"deductAmount\":0,\"netSettleAmount\":" + workerAmount
-                + ",\"amount\":" + workerAmount
-                + ",\"summary\":\"清分结果入账至服务者应收\"}");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventNo", event.getEventNo());
+        payload.put("eventType", "CLEARING_GENERATED");
+        payload.put("schemaVersion", "1");
+        payload.put("accountNo", String.valueOf(accountingClearingGeneratedAccountNo));
+        payload.put("clearingNo", clearingOrder.getClearingNo());
+        payload.put("businessChainId", clearingOrder.getBusinessChainId());
+        payload.put("clearingOrderNo", clearingOrder.getClearingNo());
+        payload.put("paymentOrderId", clearingOrder.getPaymentOrderId());
+        payload.put("payScene", clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene());
+        payload.put("bizNo", clearingOrder.getPaymentOrderId());
+        payload.put("targetType", "WORKER");
+        payload.put("targetNo", String.valueOf(targetNo));
+        payload.put("targetName", String.valueOf(targetName));
+        payload.put("shouldSettleAmount", workerAmount);
+        payload.put("deductAmount", 0);
+        payload.put("netSettleAmount", workerAmount);
+        payload.put("amount", workerAmount);
+        payload.put("summary", "清分结果入账至服务者应收");
+        event.setPayload(serializePayload(payload));
         event.setEventStatus("待投递");
         event.setPublishStatus("PENDING");
         event.setRetryCount(0);
         event.setCreatedAt(now());
         clearingDataMapper.insertEvent(event);
         return event;
+    }
+
+    private String serializePayload(Map<String, Object> payload) {
+        try {
+            return JSON_MAPPER.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("清分事件载荷序列化失败", exception);
+        }
     }
 
     private String resolveBusinessChainId(String businessChainId, String businessNo) {
