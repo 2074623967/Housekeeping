@@ -7,6 +7,8 @@ import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.SettlementEventDTO;
 import com.abc123.settlement.dto.SettlementOrderDTO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +56,29 @@ class SettlementEventServiceImplTest {
         assertEquals("CHAIN-PAY88888", orderResult.getItems().get(0).getBusinessChainId());
         assertEquals("HOME_CLEAN", orderResult.getItems().get(0).getPayScene());
         assertEquals("{\"clearingNo\":\"CLO88888\",\"payScene\":\"HOME_CLEAN\"}", result.getPayload());
+    }
+
+    @Test
+    void shouldKeepClearingEventPayloadValidForSpecialCharacters() throws Exception {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setClearingNo("CLO-\"QUOTED\\NO");
+        request.setPaymentOrderId("PAY-QUOTED-NO");
+        request.setPayScene("HOME_\"CLEAN\nNEXT");
+        request.setTargetType("WORKER");
+        request.setTargetNo("WRK-QUOTED-NO");
+        request.setTargetName("赵阿姨");
+        request.setShouldSettleAmount(new BigDecimal("100.00"));
+        request.setDeductAmount(new BigDecimal("10.00"));
+        request.setNetSettleAmount(new BigDecimal("90.00"));
+
+        SettlementEventDTO first = settlementEventService.consumeClearingGenerated(request);
+        SettlementEventDTO replay = settlementEventService.consumeClearingGenerated(request);
+
+        assertEquals(first.getEventNo(), replay.getEventNo());
+        JsonNode payload = new ObjectMapper().readTree(first.getPayload());
+        assertEquals(request.getClearingNo(), payload.get("clearingNo").asText());
+        assertEquals(request.getPayScene(), payload.get("payScene").asText());
+        assertEquals(1, settlementEventService.list("CLEARING_GENERATED", request.getClearingNo(), 1, 20).getTotal());
     }
 
     @Test

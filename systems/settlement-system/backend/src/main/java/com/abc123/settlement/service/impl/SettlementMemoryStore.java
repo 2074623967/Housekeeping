@@ -10,15 +10,19 @@ import com.abc123.settlement.entity.SettlementEventEntity;
 import com.abc123.settlement.entity.SettlementItemEntity;
 import com.abc123.settlement.entity.SettlementOrderEntity;
 import com.abc123.settlement.mapper.SettlementDataMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -33,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettlementMemoryStore {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final AtomicLong batchSeq = new AtomicLong(10000L);
     private final AtomicLong orderSeq = new AtomicLong(20000L);
@@ -574,8 +579,14 @@ public class SettlementMemoryStore {
         entity.setEventType("CLEARING_GENERATED");
         entity.setBizNo(clearingNo);
         entity.setSummary("清分结果生成后自动生成结算单");
-        entity.setPayload("{\"clearingNo\":\"" + clearingNo
-                + "\",\"payScene\":\"" + (payScene == null ? "" : payScene) + "\"}");
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("clearingNo", String.valueOf(clearingNo));
+        payload.put("payScene", payScene == null ? "" : payScene);
+        try {
+            entity.setPayload(JSON_MAPPER.writeValueAsString(payload));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("结算事件载荷序列化失败", exception);
+        }
         entity.setEventStatus("已消费");
         entity.setCreatedAt(now());
         settlementDataMapper.insertEvent(entity);
