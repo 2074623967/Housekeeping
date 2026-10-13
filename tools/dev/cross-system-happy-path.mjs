@@ -2242,6 +2242,17 @@ async function main() {
   normalizeCashierPageResult(paidCashier, prepay.prepayOrderNo, expectedPayScene);
   miniProgramPayment.normalizeCashierPageResult(paidCashier, prepay.prepayOrderNo, expectedPayScene);
   assertPaymentBusinessFacts(paidCashier, billNo, "local happy path", "successful cashier");
+  const cashierSessionFilter = new URLSearchParams({
+    sessionNo: prepay.prepayOrderNo, paymentOrderId: prepay.paymentOrderId, orderNo
+  });
+  const cashierSessions = await api(`${paymentBaseUrl}/api/cashier-sessions?${cashierSessionFilter}`);
+  const cashierOverview = await api(`${paymentBaseUrl}/api/cashier-sessions/overview?${cashierSessionFilter}`);
+  assert(cashierSessions?.total === 1 && cashierSessions.items?.length === 1
+    && cashierOverview?.totalSessionCount === 1
+    && matchesIdentifier(cashierSessions.items[0].sessionNo, prepay.prepayOrderNo)
+    && matchesIdentifier(cashierSessions.items[0].paymentOrderId, prepay.paymentOrderId)
+    && matchesIdentifier(cashierSessions.items[0].orderNo, orderNo),
+  "cashier session list and overview did not preserve the paid order identity");
 
   const paymentRecordQuery = new URLSearchParams({
     businessOrderNo: orderNo,
