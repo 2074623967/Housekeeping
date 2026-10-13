@@ -116,7 +116,8 @@ async function main() {
         paymentOrderId: upstreamQueries.length === 1
           ? upstreamCalls[0].paymentOrderId : submitted.paymentOrderId,
         orderNo: submitted.orderNo,
-        tradeStatus: "SUCCESS", channelTransactionNo: "LOCAL-TX-2",
+        tradeStatus: "SUCCESS",
+        channelTransactionNo: upstreamQueries.length === 2 ? "LOCAL-TX-1" : "LOCAL-TX-2",
         querySource: "LOCAL_UPSTREAM_STUB"
       } }));
       return;
@@ -245,13 +246,21 @@ async function main() {
     }
     const queryRequest = { paymentOrderId: mismatched.prepay.paymentOrderId };
     const rejectedQuery = await request(`${paymentUrl}/api/payments/query`, queryRequest);
-    if (rejectedQuery.code === "0") {
+    if (rejectedQuery.code !== "PAYMENT-1026") {
       throw new Error("Cross-payment query receipt was accepted");
     }
     expectData(await request(`${paymentUrl}/api/payments/` + mismatched.prepay.paymentOrderId),
       (data) => data?.status === "WAIT_CALLBACK" && !data?.channelTransactionNo
         && data?.latestAttemptStatus === "结果未知，待查单",
       "Rejected query changed the original payment attempt");
+    const collidingQuery = await request(`${paymentUrl}/api/payments/query`, queryRequest);
+    if (collidingQuery.code !== "PAYMENT-1026") {
+      throw new Error(`Another payment's channel transaction was not rejected safely: ${collidingQuery.code}`);
+    }
+    expectData(await request(`${paymentUrl}/api/payments/` + mismatched.prepay.paymentOrderId),
+      (data) => data?.status === "WAIT_CALLBACK" && !data?.channelTransactionNo
+        && data?.latestAttemptStatus === "结果未知，待查单",
+      "Colliding query changed the original payment attempt");
     expectData(await request(`${paymentUrl}/api/payments/query`, queryRequest),
       (data) => data?.status === "SUCCESS" && data?.channelTransactionNo === "LOCAL-TX-2"
         && data?.latestAttemptStatus === "成功" && data?.latestAttemptStatusType === "success",
@@ -259,7 +268,7 @@ async function main() {
     expectData(await request(`${paymentUrl}/api/payments/query`, queryRequest),
       (data) => data?.status === "SUCCESS" && data?.channelTransactionNo === "LOCAL-TX-2",
       "Terminal payment query was not idempotent");
-    if (upstreamQueries.length !== 2 || upstreamCalls.length !== 2
+    if (upstreamQueries.length !== 3 || upstreamCalls.length !== 2
         || upstreamQueries.some((item) => item.paymentOrderId !== mismatched.prepay.paymentOrderId
           || item.orderNo !== mismatched.orderNo || item.channelCode !== "wx_h5"
           || item.channelTransactionNo)) {
@@ -276,10 +285,10 @@ async function main() {
     const queryAudits = audits.records.filter((item) => item.operationType === "PAYMENT_QUERY"
       && item.clientIp === "127.0.0.1");
     if (queryAudits.filter((item) => item.resultStatus === "FAILED").length !== 1
-        || queryAudits.filter((item) => item.resultStatus === "SUCCESS").length !== 1) {
-      throw new Error("Gateway did not audit rejected and accepted payment queries");
+        || queryAudits.filter((item) => item.resultStatus === "SUCCESS").length !== 2) {
+      throw new Error("Gateway did not audit upstream query failures and accepted receipts");
     }
-    console.log("[PASS] payment-core -> gateway-access -> local payment upstream: unknown submit recovered by original payment query without blind retry");
+    console.log("[PASS] payment-core -> gateway-access -> local payment upstream: foreign query transaction rejected, original unknown submit recovered without blind retry");
   } catch (error) {
     for (const { name, logPath } of launched) {
       const log = await readFile(logPath, "utf8").catch(() => "");

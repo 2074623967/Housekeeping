@@ -6822,6 +6822,39 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectChannelQueryTransactionOwnedByAnotherPaymentBeforeWritingSnapshot() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-FOREIGN-TXN", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-FOREIGN-TXN")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("SUCCESS", "WX-FOREIGN-TXN", "GATEWAY_ACCESS_HTTP"));
+        when(paymentMapper.existsOtherPaymentByChannelTransactionNo(
+                "PAY-QUERY-FOREIGN-TXN", "wx_h5", "WX-FOREIGN-TXN")).thenReturn(true);
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-FOREIGN-TXN");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService, paymentEventDispatchService)
+                .query(request));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-FOREIGN-TXN"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
+                eq("查单失败"), eq("danger"));
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldRejectSuccessfulChannelQueryWithoutTransactionBeforeRecordingSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-MISSING-TXN", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-MISSING-TXN")).thenReturn(detail, detail);

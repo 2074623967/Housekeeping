@@ -1882,6 +1882,15 @@ public class PaymentServiceImpl implements PaymentService {
         String channelTransactionNo = StringUtils.hasText(queriedChannelTransactionNo)
                 ? queriedChannelTransactionNo
                 : detail.getChannelTransactionNo();
+        if (StringUtils.hasText(channelTransactionNo)
+                && paymentMapper.existsOtherPaymentByChannelTransactionNo(
+                        detail.getPaymentOrderId(), detail.getChannel(), channelTransactionNo)) {
+            BusinessException queryFailure = new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                    "channel query transaction belongs to another payment");
+            recordChannelQueryFailure(detail, queryFailure, operator);
+            throw queryFailure;
+        }
         if ("SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus())
                 && !StringUtils.hasText(channelTransactionNo)) {
