@@ -28669,3 +28669,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1082 2026-10-13 退款严格验签 HTTP 拒收不落库
 
 延伸上一轮签名字段歧义修复的 HTTP 验证：真实 H2/demo 服务开启强制验签，使用当前 `offline_bank` HMAC 密钥提交 nonce 含 `|` 的退款成功回调，响应为 `PAYMENT_CALLBACK_SIGNATURE_INVALID`；随后读取退款单仍为 `PROCESSING`、该 nonce 条数为 `0`，合法签名回调继续正常收口到 `SUCCESS`。JDK 8、离线 Maven、本机回环定向 `RefundOutboxHttpIntegrationTest` `8/8`、payment-core 全量 `2059/2059`，零失败、错误、跳过，`git diff --check` 通过。未连接正式渠道、目标 MySQL 8 多实例或真实资金。
+
+### 10.1083 2026-10-13 退款回调传输层非确认回归
+
+红测用实际 HTTP 发送损坏 JSON，原退款回调返回 HTTP 200，渠道可能据此停止重试。扩展既有 `GlobalExceptionHandler` 的回调专用响应门禁后，退款错误响应保留原 `ApiResponse.code/requestId`，但传输层改为 503；支付回调既有规则不变。定向回归验证退款损坏 JSON 与空对象、无签名/非法 nonce/篡改/重复 nonce，以及成功、幂等成功的 HTTP 200 和支付查询错误仍为 HTTP 200。首次定向失败仅是把退款空对象误期望为通用 `PAYMENT-400`，校准为既有 `PAYMENT-1039` 后回环定向通过；JDK 8、离线 Maven、`-Pdemo` 全量 `2059/2059`，零失败、错误、跳过，`git diff --check` 通过。该状态码不是正式微信、支付宝或银行的 ACK 协议证明，也不证明真实重试、目标 MySQL 8 或资金结果。

@@ -35,11 +35,13 @@ public class GlobalExceptionHandler implements ResponseBodyAdvice<ApiResponse<?>
     public ApiResponse<?> beforeBodyWrite(ApiResponse<?> body, MethodParameter returnType,
             MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> selectedConverterType,
             ServerHttpRequest request, ServerHttpResponse response) {
-        if (body != null && !"0".equals(body.getCode()) && request instanceof ServletServerHttpRequest
-                && "/api/payments/callback/{channel}".equals(
-                        ((ServletServerHttpRequest) request).getServletRequest()
-                                .getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE))) {
-            response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+        if (body != null && !"0".equals(body.getCode()) && request instanceof ServletServerHttpRequest) {
+            Object matchedPattern = ((ServletServerHttpRequest) request).getServletRequest()
+                    .getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            if ("/api/payments/callback/{channel}".equals(matchedPattern)
+                    || "/api/refunds/callback/{channel}".equals(matchedPattern)) {
+                response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+            }
         }
         return body;
     }

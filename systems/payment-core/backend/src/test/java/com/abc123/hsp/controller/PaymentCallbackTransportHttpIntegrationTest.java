@@ -54,6 +54,10 @@ class PaymentCallbackTransportHttpIntegrationTest {
                     "/api/payments/callback/wx_h5", "{", 503).path("code").asText());
             assertEquals(ErrorCode.VALIDATION_ERROR, post(objectMapper, port,
                     "/api/payments/callback/wx_h5", "{}", 503).path("code").asText());
+            assertEquals(ErrorCode.VALIDATION_ERROR, post(objectMapper, port,
+                    "/api/refunds/callback/wx_h5", "{", 503).path("code").asText());
+            assertEquals(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID, post(objectMapper, port,
+                    "/api/refunds/callback/wx_h5", "{}", 503).path("code").asText());
             assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, post(objectMapper, port,
                     "/api/payments/query", "{}", 200).path("code").asText());
 

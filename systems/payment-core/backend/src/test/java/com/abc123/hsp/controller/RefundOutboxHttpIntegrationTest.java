@@ -500,7 +500,7 @@ class RefundOutboxHttpIntegrationTest {
                     + "\",\"channelRefundNo\":\"" + channelRefundNo
                     + "\",\"refundStatus\":\"SUCCESS\"}";
             assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
-                    post(objectMapper, port, "/api/refunds/callback/offline_bank", callbackBody)
+                    post(objectMapper, port, "/api/refunds/callback/offline_bank", callbackBody, 503)
                             .path("code").asText());
             assertEquals("PROCESSING", jdbcTemplate.queryForObject(
                     "SELECT status FROM t_refund_order WHERE refund_order_id = ?",
@@ -509,7 +509,7 @@ class RefundOutboxHttpIntegrationTest {
             assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
                     post(objectMapper, port, "/api/refunds/callback/offline_bank",
                             signedRefundCallback(refundOrderId, attemptNo,
-                                    channelRefundNo, ambiguousNonce)).path("code").asText());
+                                    channelRefundNo, ambiguousNonce), 503).path("code").asText());
             assertEquals("PROCESSING", jdbcTemplate.queryForObject(
                     "SELECT status FROM t_refund_order WHERE refund_order_id = ?",
                     String.class, refundOrderId));
@@ -521,7 +521,7 @@ class RefundOutboxHttpIntegrationTest {
             assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
                     post(objectMapper, port, "/api/refunds/callback/offline_bank",
                             signedCallback.replace("\"refundStatus\":\"SUCCESS\"",
-                                    "\"refundStatus\":\"FAIL\""))
+                                    "\"refundStatus\":\"FAIL\""), 503)
                             .path("code").asText());
             JsonNode callback = post(objectMapper, port,
                     "/api/refunds/callback/offline_bank", signedCallback);
@@ -535,7 +535,7 @@ class RefundOutboxHttpIntegrationTest {
                             + "AND status = 'SUCCESS' AND terminal_at IS NOT NULL", Integer.class,
                     refundOrderId));
             assertEquals(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, post(objectMapper, port,
-                    "/api/refunds/callback/offline_bank", signedCallback).path("code").asText());
+                    "/api/refunds/callback/offline_bank", signedCallback, 503).path("code").asText());
             assertEquals("SUCCESS", post(objectMapper, port,
                     "/api/refunds/callback/offline_bank",
                     signedRefundCallback(refundOrderId, attemptNo, channelRefundNo, UUID.randomUUID().toString()))
@@ -721,6 +721,11 @@ class RefundOutboxHttpIntegrationTest {
     }
 
     private JsonNode post(ObjectMapper objectMapper, int port, String path, String body) throws Exception {
+        return post(objectMapper, port, path, body, 200);
+    }
+
+    private JsonNode post(ObjectMapper objectMapper, int port, String path, String body,
+            int expectedStatus) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + port + path)
                 .openConnection();
         connection.setRequestMethod("POST");
@@ -732,8 +737,9 @@ class RefundOutboxHttpIntegrationTest {
             try (OutputStream output = connection.getOutputStream()) {
                 output.write(body.getBytes(StandardCharsets.UTF_8));
             }
-            assertEquals(200, connection.getResponseCode());
-            try (InputStream response = connection.getInputStream()) {
+            assertEquals(expectedStatus, connection.getResponseCode());
+            try (InputStream response = expectedStatus >= 400
+                    ? connection.getErrorStream() : connection.getInputStream()) {
                 return objectMapper.readTree(response);
             }
         } finally {
