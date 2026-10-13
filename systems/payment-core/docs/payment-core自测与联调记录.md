@@ -28673,3 +28673,7 @@ Mockito 红测分别移除标准订单当前应收与已付、为虚拟来源插
 ### 10.1083 2026-10-13 退款回调传输层非确认回归
 
 红测用实际 HTTP 发送损坏 JSON，原退款回调返回 HTTP 200，渠道可能据此停止重试。扩展既有 `GlobalExceptionHandler` 的回调专用响应门禁后，退款错误响应保留原 `ApiResponse.code/requestId`，但传输层改为 503；支付回调既有规则不变。定向回归验证退款损坏 JSON 与空对象、无签名/非法 nonce/篡改/重复 nonce，以及成功、幂等成功的 HTTP 200 和支付查询错误仍为 HTTP 200。首次定向失败仅是把退款空对象误期望为通用 `PAYMENT-400`，校准为既有 `PAYMENT-1039` 后回环定向通过；JDK 8、离线 Maven、`-Pdemo` 全量 `2059/2059`，零失败、错误、跳过，`git diff --check` 通过。该状态码不是正式微信、支付宝或银行的 ACK 协议证明，也不证明真实重试、目标 MySQL 8 或资金结果。
+
+### 10.1084 2026-10-13 当前支付回调与主动查单双路径复核
+
+基线 `4fbd0622`，`doctor payment-chain` 通过，九服务初始 `DOWN`，跨系统断言 `64/64`。独立临时目录执行回调和网关主动查单两次 `local-stack.sh verify`，均在写前 PID/端口隔离门禁后以 `0` 退出、九服务 HTTP 冒烟与 happy-path `[PASS]`。支付单 `PAY179185058753410a6f50f` 经 `CALLBACK`、`PAY1791850782131799f5452` 经 `GATEWAY_QUERY`；两轮均有清分、结算、账务、退款及七项对账事实，`COMPLETED/4/4`、`financialCloseable=true`。停服后九服务 `DOWN`、查单桩 18190 无监听、PID 目录无文件。此为 H2/demo HTTP 主路径证据，不能替代真实 RabbitMQ、正式渠道拒收重试、目标 MySQL 8 多实例或真实资金验收。
