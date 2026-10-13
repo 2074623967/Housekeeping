@@ -20,4 +20,8 @@ public class DepositFlowQueryDTO {
     public int getOffset() {
         return (pageNo - 1) * pageSize;
     }
+
+    public String getReferenceNoLikePattern() {
+        return LikePattern.escape(referenceNo);
+    }
 }

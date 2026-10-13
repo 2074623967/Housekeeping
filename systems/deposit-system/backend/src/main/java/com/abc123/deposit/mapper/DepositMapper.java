@@ -56,16 +56,16 @@ public interface DepositMapper {
 
     List<DepositFlowDTO> findFlows(@Param("accountNo") String accountNo,
                                    @Param("flowType") String flowType,
-                                   @Param("referenceNo") String referenceNo);
+                                   @Param("referenceNoLikePattern") String referenceNoLikePattern);
 
     List<DepositFlowDTO> findFlowsPage(@Param("accountNo") String accountNo,
                                    @Param("flowType") String flowType,
-                                   @Param("referenceNo") String referenceNo,
+                                   @Param("referenceNoLikePattern") String referenceNoLikePattern,
                                    @Param("pageNo") int pageNo,
                                    @Param("pageSize") int pageSize,
                                    @Param("offset") int offset);
 
     long countFlows(@Param("accountNo") String accountNo,
                     @Param("flowType") String flowType,
-                    @Param("referenceNo") String referenceNo);
+                    @Param("referenceNoLikePattern") String referenceNoLikePattern);
 }
