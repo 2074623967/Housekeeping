@@ -38,16 +38,16 @@
     <sql id="routeExecutionWhereClause">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                prr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                prr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND po.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.routeRule != null and query.routeRule != ''">
-                AND prr.route_rule LIKE CONCAT('%', #{query.routeRule}, '%')
+                AND prr.route_rule LIKE CONCAT('%', #{query.routeRuleLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.channelCode != null and query.channelCode != ''">
-                AND prr.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                AND prr.channel_code LIKE CONCAT('%', #{query.channelCodeLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND latest_pa.payment_method = #{query.paymentMethod}

@@ -42,4 +42,20 @@ public class PaymentRouteExecutionQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+
+    public String getOrderNoLikePattern() {
+        return LikePattern.escape(orderNo);
+    }
+
+    public String getRouteRuleLikePattern() {
+        return LikePattern.escape(routeRule);
+    }
+
+    public String getChannelCodeLikePattern() {
+        return LikePattern.escape(channelCode);
+    }
 }

@@ -9,8 +9,10 @@ import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -77,6 +79,63 @@ class PaymentRouteExecutionMapperIntegrationTest {
             miniProgramQuery.setTerminal("MINI_PROGRAM");
             assertEquals("ROUTE-MINI", mapper.findAllForExport(miniProgramQuery).get(0).getRouteNo());
         }
+    }
+
+    @Test
+    void shouldSearchRouteIdentifiersAndRulesByLiteralSubstring() throws Exception {
+        String suffix = "%_!\\\"";
+        String paymentOrderId = "PAY-ROUTE-" + suffix;
+        String orderNo = "ORD-ROUTE-" + suffix;
+        String routeRule = "rule-" + suffix;
+        String channelCode = "channel-" + suffix;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement();
+             PreparedStatement paymentInsert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_order (payment_order_id, order_no, amount) "
+                             + "VALUES (?, ?, 88.00)");
+             PreparedStatement routeInsert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_route_record (route_no, payment_order_id, "
+                             + "channel_code, route_rule, route_result, created_at) "
+                             + "VALUES ('ROUTE-LITERAL', ?, ?, ?, 'LOCAL_LITERAL', NOW())")) {
+            paymentInsert.setString(1, paymentOrderId);
+            paymentInsert.setString(2, orderNo);
+            paymentInsert.executeUpdate();
+            routeInsert.setString(1, paymentOrderId);
+            routeInsert.setString(2, channelCode);
+            routeInsert.setString(3, routeRule);
+            routeInsert.executeUpdate();
+            statement.executeUpdate("INSERT INTO t_payment_order (payment_order_id, order_no, amount) "
+                    + "VALUES ('PAY-ROUTE-PLAIN', 'ORD-ROUTE-PLAIN', 88.00)");
+            statement.executeUpdate("INSERT INTO t_payment_route_record (route_no, payment_order_id, "
+                    + "channel_code, route_rule, route_result, created_at) VALUES "
+                    + "('ROUTE-PLAIN', 'PAY-ROUTE-PLAIN', 'channel-plain', 'rule-plain', "
+                    + "'LOCAL_LITERAL', NOW())");
+
+            PaymentRouteExecutionMapper mapper = session.getMapper(PaymentRouteExecutionMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", suffix)) {
+                PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+                query.setRouteResult("LOCAL_LITERAL");
+                query.setPaymentOrderId(fragment);
+                assertLiteralRouteResults(mapper, query);
+                query.setPaymentOrderId(null);
+                query.setOrderNo(fragment);
+                assertLiteralRouteResults(mapper, query);
+                query.setOrderNo(null);
+                query.setRouteRule(fragment);
+                assertLiteralRouteResults(mapper, query);
+                query.setRouteRule(null);
+                query.setChannelCode(fragment);
+                assertLiteralRouteResults(mapper, query);
+            }
+        }
+    }
+
+    private void assertLiteralRouteResults(PaymentRouteExecutionMapper mapper,
+                                           PaymentRouteExecutionQueryDTO query) {
+        assertEquals(1L, mapper.count(query), query.toString());
+        assertEquals("ROUTE-LITERAL", mapper.findAll(query).get(0).getRouteNo());
+        assertEquals("ROUTE-LITERAL", mapper.findAllForExport(query).get(0).getRouteNo());
+        assertEquals(1L, mapper.findOverview(query).getTotalRouteCount());
     }
 
     @Test
