@@ -99,14 +99,28 @@ async function main() {
   assertLocalGatewaySmokeEnvironment(process.env);
   const directory = await mkdtemp(path.join(os.tmpdir(), "payment-gateway-submit-"));
   const upstreamCalls = [];
+  const upstreamQueries = [];
   const upstream = createServer(async (incoming, outgoing) => {
-    if (incoming.method !== "POST" || incoming.url !== "/payment/submit") {
+    if (incoming.method !== "POST"
+        || (incoming.url !== "/payment/submit" && incoming.url !== "/payment/query")) {
       outgoing.writeHead(404).end();
       return;
     }
     const chunks = [];
     for await (const chunk of incoming) chunks.push(chunk);
     const submitted = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (incoming.url === "/payment/query") {
+      upstreamQueries.push(submitted);
+      outgoing.writeHead(200, { "Content-Type": "application/json" });
+      outgoing.end(JSON.stringify({ code: "0", data: {
+        paymentOrderId: upstreamQueries.length === 1
+          ? upstreamCalls[0].paymentOrderId : submitted.paymentOrderId,
+        orderNo: submitted.orderNo,
+        tradeStatus: "SUCCESS", channelTransactionNo: "LOCAL-TX-2",
+        querySource: "LOCAL_UPSTREAM_STUB"
+      } }));
+      return;
+    }
     upstreamCalls.push(submitted);
     outgoing.writeHead(200, { "Content-Type": "application/json" });
     outgoing.end(JSON.stringify({ code: "0", data: {
@@ -139,7 +153,8 @@ async function main() {
       gateway: { transaction: {
         "access-key": accessKey,
         channels: { wx_h5: {
-          "payment-submit-url": `http://127.0.0.1:${upstream.address().port}/payment/submit`
+          "payment-submit-url": `http://127.0.0.1:${upstream.address().port}/payment/submit`,
+          "payment-query-url": `http://127.0.0.1:${upstream.address().port}/payment/query`
         } }
       } }
     }, path.join(directory, "gateway.log"), false);
@@ -167,6 +182,11 @@ async function main() {
         submit: { "gateway-access": {
           enabled: true,
           "submit-url": `${gatewayUrl}/api/gateway/payment-orders/submit`,
+          "supported-channels": "wx_h5", "access-key": accessKey
+        } },
+        "channel-query": { "gateway-access": {
+          enabled: true,
+          "query-url": `${gatewayUrl}/api/gateway/payment-orders/query`,
           "supported-channels": "wx_h5", "access-key": accessKey
         } }
       }
@@ -223,6 +243,28 @@ async function main() {
         && (repeated.data?.channelTransactionNo || repeated.data?.paymentStatus === "SUCCESS"))) {
       throw new Error("Unknown payment acceptance was blindly resubmitted or confirmed");
     }
+    const queryRequest = { paymentOrderId: mismatched.prepay.paymentOrderId };
+    const rejectedQuery = await request(`${paymentUrl}/api/payments/query`, queryRequest);
+    if (rejectedQuery.code === "0") {
+      throw new Error("Cross-payment query receipt was accepted");
+    }
+    expectData(await request(`${paymentUrl}/api/payments/` + mismatched.prepay.paymentOrderId),
+      (data) => data?.status === "WAIT_CALLBACK" && !data?.channelTransactionNo
+        && data?.latestAttemptStatus === "结果未知，待查单",
+      "Rejected query changed the original payment attempt");
+    expectData(await request(`${paymentUrl}/api/payments/query`, queryRequest),
+      (data) => data?.status === "SUCCESS" && data?.channelTransactionNo === "LOCAL-TX-2"
+        && data?.latestAttemptStatus === "成功" && data?.latestAttemptStatusType === "success",
+      "Original payment query did not recover the unknown submission");
+    expectData(await request(`${paymentUrl}/api/payments/query`, queryRequest),
+      (data) => data?.status === "SUCCESS" && data?.channelTransactionNo === "LOCAL-TX-2",
+      "Terminal payment query was not idempotent");
+    if (upstreamQueries.length !== 2 || upstreamCalls.length !== 2
+        || upstreamQueries.some((item) => item.paymentOrderId !== mismatched.prepay.paymentOrderId
+          || item.orderNo !== mismatched.orderNo || item.channelCode !== "wx_h5"
+          || item.channelTransactionNo)) {
+      throw new Error("Original payment query lost its identity or resubmitted upstream");
+    }
     const audits = expectData(await request(`${gatewayUrl}/api/gateway-access/audit-logs?pageSize=20`),
       (data) => Array.isArray(data?.records), "Gateway submit audits missing");
     const submitAudits = audits.records.filter((item) => item.operationType === "PAYMENT_SUBMIT"
@@ -231,7 +273,13 @@ async function main() {
         || submitAudits.filter((item) => item.resultStatus === "UNKNOWN").length !== 1) {
       throw new Error("Gateway did not separate accepted and mismatched submit receipts");
     }
-    console.log("[PASS] payment-core -> gateway-access -> local payment upstream: matched acceptance bound, mismatched idempotency receipt kept unknown");
+    const queryAudits = audits.records.filter((item) => item.operationType === "PAYMENT_QUERY"
+      && item.clientIp === "127.0.0.1");
+    if (queryAudits.filter((item) => item.resultStatus === "FAILED").length !== 1
+        || queryAudits.filter((item) => item.resultStatus === "SUCCESS").length !== 1) {
+      throw new Error("Gateway did not audit rejected and accepted payment queries");
+    }
+    console.log("[PASS] payment-core -> gateway-access -> local payment upstream: unknown submit recovered by original payment query without blind retry");
   } catch (error) {
     for (const { name, logPath } of launched) {
       const log = await readFile(logPath, "utf8").catch(() => "");
