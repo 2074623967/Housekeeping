@@ -36,6 +36,17 @@ class OrderControllerTest {
     }
 
     @Test
+    void shouldGetOrderDetailByQueryParameter() {
+        OrderDetailDTO detail = new OrderDetailDTO();
+        detail.setOrderNo("ORD-%_!\\\"");
+        when(orderService.detail("ORD-%_!\\\"")).thenReturn(detail);
+
+        Assertions.assertEquals(detail, new OrderController(orderService)
+                .detailByNo("ORD-%_!\\\"").getData());
+        verify(orderService).detail("ORD-%_!\\\"");
+    }
+
+    @Test
     void shouldListOrders() {
         OrderController controller = new OrderController(orderService);
 

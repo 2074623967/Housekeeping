@@ -43,6 +43,17 @@ class BillControllerTest {
     }
 
     @Test
+    void shouldGetBillDetailByQueryParameter() {
+        BillDetailDTO detail = new BillDetailDTO();
+        detail.setBillNo("BILL-%_!\\\"");
+        when(billService.detail("BILL-%_!\\\"")).thenReturn(detail);
+
+        assertEquals(detail, new BillController(billService)
+                .detailByNo("BILL-%_!\\\"").getData());
+        verify(billService).detail("BILL-%_!\\\"");
+    }
+
+    @Test
     void shouldExportBills() {
         BillController controller = new BillController(billService);
         when(billService.exportCsv(any(BillQueryDTO.class))).thenReturn("bill-csv");

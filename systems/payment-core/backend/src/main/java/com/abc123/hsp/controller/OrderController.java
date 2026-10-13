@@ -34,6 +34,11 @@ public class OrderController {
         return ApiResponse.success(orderService.detail(orderNo));
     }
 
+    @GetMapping("/by-no")
+    public ApiResponse<OrderDetailDTO> detailByNo(@RequestParam String orderNo) {
+        return ApiResponse.success(orderService.detail(orderNo));
+    }
+
     /**
      * 查询订单中心列表，为支付发起和履约排查提供基础数据。
      */

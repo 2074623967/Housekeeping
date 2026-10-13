@@ -38,6 +38,11 @@ public class BillController {
         return ApiResponse.success(billService.detail(billNo));
     }
 
+    @GetMapping("/by-no")
+    public ApiResponse<BillDetailDTO> detailByNo(@RequestParam String billNo) {
+        return ApiResponse.success(billService.detail(billNo));
+    }
+
     /**
      * 查询交易账单中心总览，供运营先看金额和逾期风险再下钻列表。
      */
