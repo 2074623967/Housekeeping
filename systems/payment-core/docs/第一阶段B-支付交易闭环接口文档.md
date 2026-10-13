@@ -5991,6 +5991,10 @@ payment-core 对渠道查单回执中的支付单号、订单号继续要求精�
 
 订单中心 `GET /api/orders/by-no?orderNo={urlEncoded}` 和交易账单 `GET /api/bills/by-no?billNo={urlEncoded}` 按完整编号精确查询详情，复用现有服务层校验、事实关联和脱敏；原 `GET /api/orders/{orderNo}`、`GET /api/bills/{billNo}` 保留供既有普通编号调用。含反斜杠的编号即使作为 `%5C` 放入路径段，Tomcat 也会在控制器前返回 HTTP 400，因此管理端详情统一改用查询参数入口；客户端必须编码整个查询参数值，不能退回路径段或删除特殊字符。隔离 H2/demo 标准订单与账单的列表、总览、详情及 CSV 经真实回环 HTTP 验证，不等于目标 MySQL 8、正式业务订单写入/支付或真实资金验收。
 
+### 14.605 支付异常中心与告警日志的字面量筛选
+
+支付异常中心的 `paymentOrderId`、`orderNo`、`channelCode` 在列表、计数及责任组汇总中，告警日志的 `alertNo`、`issueNo`、`paymentOrderId` 在列表及计数中均按字面量子串匹配。`%`、`_`、`!` 和反斜杠不应被查询者作为 SQL 模式语法使用；服务端保留原入参，构造参数化 LIKE 模式并显式指定 `ESCAPE '!'`。异常类型、严重等级、支付方式与告警状态等原精确筛选不变。隔离 H2/demo Mapper 回归覆盖六个字段及上述查询路径；目标 MySQL 8、真实告警派发和生产资金仍需独立验证。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

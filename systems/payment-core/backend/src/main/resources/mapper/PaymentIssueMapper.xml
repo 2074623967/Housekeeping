@@ -381,10 +381,10 @@
                     AND CAST(channel_delivery_summary.summaryIssueNo AS BINARY(256)) = CAST(payment_issue_union.issue_no AS BINARY(256))
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_issue_union.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                payment_issue_union.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND payment_issue_union.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND payment_issue_union.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
                 AND payment_issue_union.issue_type = #{query.issueType}
@@ -393,7 +393,7 @@
                 AND payment_issue_union.severity = #{query.severity}
             </if>
             <if test="query.channelCode != null and query.channelCode != ''">
-                AND payment_issue_union.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                AND payment_issue_union.channel_code LIKE CONCAT('%', #{query.channelCodeLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND payment_issue_union.payment_method = #{query.paymentMethod}
@@ -656,10 +656,10 @@
             ) payment_issue_union
             <where>
                 <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                    payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                    payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
                 </if>
                 <if test="query.orderNo != null and query.orderNo != ''">
-                    AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                    AND order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
                 </if>
                 <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
                     AND issue_type = #{query.issueType}
@@ -668,7 +668,7 @@
                     AND severity = #{query.severity}
                 </if>
                 <if test="query.channelCode != null and query.channelCode != ''">
-                    AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                    AND channel_code LIKE CONCAT('%', #{query.channelCodeLikePattern}, '%') ESCAPE '!'
                 </if>
                 <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                     AND payment_method = #{query.paymentMethod}
@@ -830,13 +830,13 @@
         FROM t_payment_issue_alert_log
         <where>
             <if test="query.alertNo != null and query.alertNo != ''">
-                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+                alert_no LIKE CONCAT('%', #{query.alertNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.issueNo != null and query.issueNo != ''">
-                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+                AND issue_no LIKE CONCAT('%', #{query.issueNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
                 AND alert_channel = #{query.alertChannel}
@@ -899,13 +899,13 @@
         FROM t_payment_issue_alert_log
         <where>
             <if test="query.alertNo != null and query.alertNo != ''">
-                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+                alert_no LIKE CONCAT('%', #{query.alertNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.issueNo != null and query.issueNo != ''">
-                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+                AND issue_no LIKE CONCAT('%', #{query.issueNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
                 AND alert_channel = #{query.alertChannel}
@@ -928,10 +928,10 @@
         ) payment_issue_union
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
                 AND issue_type = #{query.issueType}
@@ -940,7 +940,7 @@
                 AND severity = #{query.severity}
             </if>
             <if test="query.channelCode != null and query.channelCode != ''">
-                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                AND channel_code LIKE CONCAT('%', #{query.channelCodeLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND payment_method = #{query.paymentMethod}

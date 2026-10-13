@@ -46,4 +46,16 @@ public class PaymentIssueAlertLogQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getAlertNoLikePattern() {
+        return LikePattern.escape(alertNo);
+    }
+
+    public String getIssueNoLikePattern() {
+        return LikePattern.escape(issueNo);
+    }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
 }
