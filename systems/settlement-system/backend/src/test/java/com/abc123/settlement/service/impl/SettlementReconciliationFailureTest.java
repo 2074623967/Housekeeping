@@ -1,6 +1,7 @@
 package com.abc123.settlement.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.entity.SettlementEventEntity;
 import com.abc123.settlement.entity.SettlementOrderEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,8 +21,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
@@ -84,6 +89,26 @@ class SettlementReconciliationFailureTest {
         assertDoesNotThrow(() -> service().consumeClearingGenerated(request));
 
         verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), any(), eq(Map.class));
+    }
+
+    @Test
+    void shouldEscapeSettlementFactMetadata() throws Exception {
+        ClearingGeneratedEventRequestDTO request = request();
+        request.setPayScene("HOME\\CLEAN\"场景\n续行");
+        SettlementOrderEntity order = stubConsumedOrder(request);
+        order.setSettlementNo("SLT\"001");
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(Map.class)))
+                .thenReturn(response(order, request, "CHAIN-PAY-001", new BigDecimal("90.00")));
+
+        service().consumeClearingGenerated(request);
+
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), requestCaptor.capture(), eq(Map.class));
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode outerPayload = mapper.readTree((String) requestCaptor.getValue().getBody());
+        JsonNode factPayload = mapper.readTree(outerPayload.get("payload").asText());
+        assertEquals(order.getSettlementNo(), factPayload.get("settlementNo").asText());
+        assertEquals(request.getPayScene(), factPayload.get("payScene").asText());
     }
 
     @Test

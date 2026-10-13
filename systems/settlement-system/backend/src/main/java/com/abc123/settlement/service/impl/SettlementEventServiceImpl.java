@@ -144,8 +144,14 @@ public class SettlementEventServiceImpl implements SettlementEventService {
         payload.put("payScene", request.getPayScene());
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", order.getNetSettleAmount());
-        payload.put("payload", "{\"settlementNo\":\"" + order.getSettlementNo()
-                + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene()) + "\"}");
+        Map<String, String> factPayload = new LinkedHashMap<String, String>();
+        factPayload.put("settlementNo", order.getSettlementNo());
+        factPayload.put("payScene", request.getPayScene() == null ? "" : request.getPayScene());
+        try {
+            payload.put("payload", new ObjectMapper().writeValueAsString(factPayload));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("结算对账事实载荷序列化失败", exception);
+        }
         ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(),
                 signedReconciliationFact(payload), Map.class);
         Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
