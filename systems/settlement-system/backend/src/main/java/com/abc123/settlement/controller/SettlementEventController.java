@@ -48,8 +48,9 @@ public class SettlementEventController {
 
     @PostMapping("/clearing/generated")
     public ResponseEntity<ApiResponse<SettlementEventDTO>> consumeClearingGenerated(@RequestBody String body,
-            @RequestHeader(value = ClearingEventHttpSignature.HEADER_NAME, required = false) String signature) {
-        if (!ClearingEventHttpSignature.matches(body, signature, clearingEventSecret)) {
+            @RequestHeader(value = ClearingEventHttpSignature.HEADER_NAME, required = false) String signature,
+            @RequestHeader(value = ClearingEventHttpSignature.TIMESTAMP_HEADER_NAME, required = false) String timestamp) {
+        if (!ClearingEventHttpSignature.matches(body, timestamp, signature, clearingEventSecret)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.failure("CLEARING_EVENT_UNAUTHORIZED", "清分事件签名校验失败"));
         }

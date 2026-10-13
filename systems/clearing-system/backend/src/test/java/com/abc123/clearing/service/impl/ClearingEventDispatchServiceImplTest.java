@@ -17,6 +17,7 @@ import com.abc123.clearing.entity.ShareItemEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,7 +79,9 @@ class ClearingEventDispatchServiceImplTest {
             assertTrue(request.getValue() instanceof HttpEntity);
             HttpEntity<?> signed = (HttpEntity<?>) request.getValue();
             String body = (String) signed.getBody();
-            assertEquals(ClearingEventHttpSignature.sign(body, secret),
+            String timestamp = signed.getHeaders().getFirst(ClearingEventHttpSignature.TIMESTAMP_HEADER_NAME);
+            assertTrue(Math.abs(Instant.now().getEpochSecond() - Long.parseLong(timestamp)) <= 5);
+            assertEquals(ClearingEventHttpSignature.sign(body, timestamp, secret),
                     signed.getHeaders().getFirst(ClearingEventHttpSignature.HEADER_NAME));
             assertEquals("CHAIN-PAY-001", new ObjectMapper().readTree(body).get("businessChainId").asText());
         }

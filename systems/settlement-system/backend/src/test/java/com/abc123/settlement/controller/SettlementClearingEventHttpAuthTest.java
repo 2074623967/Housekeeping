@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.abc123.settlement.service.SettlementEventService;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -30,6 +31,7 @@ class SettlementClearingEventHttpAuthTest {
 
     private static final String SECRET = "local-settlement-clearing-test-secret";
     private static final String HEADER_NAME = "X-HSP-Clearing-Event-Signature";
+    private static final String TIMESTAMP_HEADER_NAME = "X-HSP-Clearing-Event-Timestamp";
     private static final String BODY = "{\"clearingNo\":\"CLO-001\",\"paymentOrderId\":\"PAY-001\","
             + "\"shouldSettleAmount\":20.00}";
 
@@ -50,9 +52,11 @@ class SettlementClearingEventHttpAuthTest {
 
     @Test
     void shouldRejectModifiedBodyWithOriginalSignature() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/settlements/events/clearing/generated")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(HEADER_NAME, sign(BODY))
+                .header(TIMESTAMP_HEADER_NAME, timestamp)
+                .header(HEADER_NAME, signTimed(BODY, timestamp))
                 .content(BODY.replace("20.00", "200.00")))
                 .andExpect(status().isForbidden());
 
@@ -61,18 +65,54 @@ class SettlementClearingEventHttpAuthTest {
 
     @Test
     void shouldAcceptSignedClearingEvent() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/settlements/events/clearing/generated")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(HEADER_NAME, sign(BODY)).content(BODY))
+                .header(TIMESTAMP_HEADER_NAME, timestamp)
+                .header(HEADER_NAME, signTimed(BODY, timestamp)).content(BODY))
                 .andExpect(status().isOk());
 
         verify(settlementEventService).consumeClearingGenerated(
                 org.mockito.ArgumentMatchers.argThat(request -> "CLO-001".equals(request.getClearingNo())));
     }
 
+    @Test
+    void shouldRejectLegacyExpiredFutureAndChangedTimestampsBeforeSettlement() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        String expired = Long.toString(Instant.now().getEpochSecond() - 3600);
+        String future = Long.toString(Instant.now().getEpochSecond() + 3600);
+        rejectClearingEvent(timestamp, sign(BODY));
+        rejectClearingEvent(expired, signTimed(BODY, expired));
+        rejectClearingEvent(future, signTimed(BODY, future));
+        rejectClearingEvent(Long.toString(Long.parseLong(timestamp) + 1), signTimed(BODY, timestamp));
+        rejectClearingEvent("0" + timestamp, signTimed(BODY, "0" + timestamp));
+        rejectClearingEvent("not-a-time", signTimed(BODY, "not-a-time"));
+        mockMvc.perform(post("/api/settlements/events/clearing/generated")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER_NAME, timestamp, "0")
+                .header(HEADER_NAME, signTimed(BODY, timestamp))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+
+        verify(settlementEventService, never()).consumeClearingGenerated(any());
+    }
+
+    private void rejectClearingEvent(String timestamp, String signature) throws Exception {
+        mockMvc.perform(post("/api/settlements/events/clearing/generated")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER_NAME, timestamp)
+                .header(HEADER_NAME, signature)
+                .content(BODY))
+                .andExpect(status().isForbidden());
+    }
+
     private String sign(String body) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         return Base64.getEncoder().encodeToString(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private String signTimed(String body, String timestamp) throws Exception {
+        return sign(timestamp + "\n" + body);
     }
 }

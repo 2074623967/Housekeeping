@@ -8,6 +8,7 @@ import com.abc123.clearing.service.ClearingEventDispatchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -256,8 +257,10 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
             String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            headers.set(ClearingEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp);
             headers.set(ClearingEventHttpSignature.HEADER_NAME,
-                    ClearingEventHttpSignature.sign(body, clearingGeneratedHttpSecret));
+                    ClearingEventHttpSignature.sign(body, timestamp, clearingGeneratedHttpSecret));
             return new HttpEntity<>(body, headers);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("清分结果签名序列化失败", exception);

@@ -60,7 +60,8 @@ class AccountingEventControllerTest {
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeClearingGenerated(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumeClearingGenerated(body, PaymentEventHttpSignature.signTimed(body, timestamp, TEST_SECRET), timestamp);
 
         verify(accountingEventService).consumeClearingGenerated(argThat(received -> received != null));
     }

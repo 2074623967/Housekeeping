@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.service.SettlementEventService;
 import com.abc123.settlement.common.ClearingEventHttpSignature;
+import java.time.Instant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +38,9 @@ class SettlementEventControllerTest {
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeClearingGenerated(body, ClearingEventHttpSignature.sign(body, "local-test-secret"));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumeClearingGenerated(body,
+                ClearingEventHttpSignature.sign(body, timestamp, "local-test-secret"), timestamp);
 
         verify(settlementEventService).consumeClearingGenerated(
                 org.mockito.ArgumentMatchers.argThat(received -> received != null));

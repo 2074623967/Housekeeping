@@ -32,6 +32,7 @@ public class AccountingEventController {
     private static final String REFUND_EVENT_SIGNATURE_HEADER = "X-HSP-Refund-Event-Signature";
     private static final String REFUND_EVENT_TIMESTAMP_HEADER = "X-HSP-Refund-Event-Timestamp";
     private static final String CLEARING_EVENT_SIGNATURE_HEADER = "X-HSP-Clearing-Event-Signature";
+    private static final String CLEARING_EVENT_TIMESTAMP_HEADER = "X-HSP-Clearing-Event-Timestamp";
     private static final String SETTLEMENT_COMPENSATION_SIGNATURE_HEADER = "X-HSP-Settlement-Compensation-Signature";
 
     private final AccountingEventService accountingEventService;
@@ -82,8 +83,9 @@ public class AccountingEventController {
 
     @PostMapping("/clearing/generated")
     public ResponseEntity<ApiResponse<AccountEventDTO>> consumeClearingGenerated(@RequestBody String body,
-            @RequestHeader(value = CLEARING_EVENT_SIGNATURE_HEADER, required = false) String signature) {
-        if (!PaymentEventHttpSignature.matches(body, signature, clearingEventSecret)) {
+            @RequestHeader(value = CLEARING_EVENT_SIGNATURE_HEADER, required = false) String signature,
+            @RequestHeader(value = CLEARING_EVENT_TIMESTAMP_HEADER, required = false) String timestamp) {
+        if (!PaymentEventHttpSignature.matchesTimed(body, timestamp, signature, clearingEventSecret)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.failure("CLEARING_EVENT_UNAUTHORIZED", "清分事件签名校验失败"));
         }
