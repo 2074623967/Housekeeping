@@ -300,7 +300,7 @@ start_backend() {
     && [[ "$name" == "refund-center" || "$name" == "accounting-system" ]]; then
     event_signature_env+=(HSP_REFUND_SUCCESS_HTTP_SECRET="$REFUND_EVENT_SECRET")
   fi
-  if [[ "$name" == "refund-center" ]]; then
+  if [[ "$name" == "refund-center" || "$name" == "payment-core" ]]; then
     event_signature_env+=(HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET")
   fi
   if [[ -n "$CLEARING_EVENT_SECRET" ]] \
@@ -349,6 +349,7 @@ start_backend() {
         ${payment_query_env[@]+"${payment_query_env[@]}"} \
         ${event_signature_env[@]+"${event_signature_env[@]}"} \
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
+        HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL="http://localhost:18140/api/refunds/internal/payment-success" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_ACCOUNTING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
@@ -362,6 +363,7 @@ start_backend() {
         "${backend_env[@]}" \
         ${event_signature_env[@]+"${event_signature_env[@]}"} \
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
+        HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL="http://localhost:18140/api/refunds/internal/payment-success" \
         HSP_CLEARING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_SETTLEMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_ACCOUNTING_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
@@ -657,6 +659,7 @@ guard_local_payment_chain_verify() {
       HSP_CLEARING_GENERATED_AMQP_SECRET|\
       HSP_SETTLEMENT_COMPENSATION_HTTP_SECRET|\
       HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET|\
+      HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL|\
       HSP_*_RECONCILIATION_FACT_SECRET|\
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|HSP_LOCAL_JAVA_OPTS|\
       JAVA_TOOL_OPTIONS|JDK_JAVA_OPTIONS|MAVEN_OPTS|\
@@ -806,12 +809,9 @@ run_verify() {
       HSP_LOCAL_RISK_REVIEW_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-risk-review.mjs" || result=$?
     elif [[ "$scope" == "payment-query-chain" ]]; then
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
-        HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET" \
         node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     else
-      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true \
-        HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET" \
-        node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
+      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     fi
   fi
   run_stop "$scope" || [[ "$result" -ne 0 ]] || result=$?

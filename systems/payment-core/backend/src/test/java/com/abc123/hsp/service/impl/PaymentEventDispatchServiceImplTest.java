@@ -876,14 +876,19 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
+                null,
+                null,
                 "ACT10003",
-                3,
+                restTemplate,
+                "amqp",
                 rabbitTemplate,
-                new ObjectMapper(),
-                "payment.trade",
-                "payment.success.v1"
+                new ObjectMapper()
         );
         setField(service, "paymentSuccessAmqpSecret", "local-payment-amqp-test-secret");
+        setField(service, "refundProjectionUrl", "http://refund/projection");
+        setField(service, "refundProjectionSecret", "local-payment-projection-secret");
+        when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
         service.publishPaymentSuccess("EVT-001", "PAY-001");
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -910,6 +915,7 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
         Assertions.assertEquals(PaymentEventAmqpSignature.sign(message.getBody(), "local-payment-amqp-test-secret"),
                 message.getMessageProperties().getHeaders().get(PaymentEventAmqpSignature.HEADER_NAME));
+        verify(restTemplate).postForEntity(eq("http://refund/projection"), any(), eq(Map.class));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
         verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
@@ -2335,6 +2341,72 @@ class PaymentEventDispatchServiceImplTest {
         verify(paymentEventMapper).markPaymentSuccessHttpCompleted("EVT-RECONCILIATION-ACK");
         verify(paymentEventMapper).markPublishSuccess("EVT-RECONCILIATION-ACK");
         verify(paymentEventMapper, never()).markPublishFailed("EVT-RECONCILIATION-ACK");
+    }
+
+    @Test
+    void shouldProjectPaymentSuccessToRefundCenterBeforeCompletingHttpStage() throws Exception {
+        PaymentEventDispatchServiceImpl service = reconciliationDispatch();
+        setField(service, "refundProjectionUrl", "http://refund/projection");
+        setField(service, "refundProjectionSecret", "local-payment-projection-secret");
+        when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(reconciliationResponse("PAY-001"));
+        when(paymentEventMapper.markPublishSuccess("EVT-PROJECTION")).thenReturn(1);
+
+        service.publishPaymentSuccess("EVT-PROJECTION", "PAY-001");
+
+        ArgumentCaptor<Object> projectionCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate).postForEntity(eq("http://refund/projection"), projectionCaptor.capture(), eq(Map.class));
+        Assertions.assertTrue(projectionCaptor.getValue() instanceof HttpEntity);
+        HttpEntity<?> request = (HttpEntity<?>) projectionCaptor.getValue();
+        String body = (String) request.getBody();
+        String timestamp = request.getHeaders().getFirst("X-HSP-Payment-Projection-Timestamp");
+        Assertions.assertEquals(PaymentEventHttpSignature.sign(body, timestamp, "local-payment-projection-secret"),
+                request.getHeaders().getFirst("X-HSP-Payment-Projection-Signature"));
+        com.fasterxml.jackson.databind.JsonNode payload = new ObjectMapper().readTree(body);
+        Assertions.assertEquals("PAY-001", payload.get("paymentOrderId").asText());
+        Assertions.assertEquals("ORD-001", payload.get("orderNo").asText());
+        Assertions.assertEquals("张女士", payload.get("customerName").asText());
+        Assertions.assertEquals(0, payload.get("paidAmount").decimalValue().compareTo(new BigDecimal("168.00")));
+        Assertions.assertEquals("wx_h5", payload.get("channelCode").asText());
+        Assertions.assertEquals("HOME_CLEAN", payload.get("payScene").asText());
+        verify(paymentEventMapper).markPaymentSuccessHttpCompleted("EVT-PROJECTION");
+        verify(paymentEventMapper).markPublishSuccess("EVT-PROJECTION");
+    }
+
+    @Test
+    void shouldKeepPaymentEventRetryableWhenRefundProjectionRejects() {
+        PaymentEventDispatchServiceImpl service = reconciliationDispatch();
+        setField(service, "refundProjectionUrl", "http://refund/projection");
+        setField(service, "refundProjectionSecret", "local-payment-projection-secret");
+        when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "FORBIDDEN")));
+
+        service.publishPaymentSuccess("EVT-PROJECTION-FAIL", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-PROJECTION-FAIL");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-PROJECTION-FAIL");
+        verify(restTemplate, never()).postForEntity(eq("http://reconciliation/facts"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
+    void shouldNotSendUnsignedRefundProjectionWhenSecretIsMissing() {
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate);
+        setField(service, "refundProjectionUrl", "http://refund/projection");
+
+        service.publishPaymentSuccess("EVT-PROJECTION-UNSIGNED", "PAY-001");
+
+        org.mockito.Mockito.verifyNoInteractions(restTemplate);
+        verify(paymentMapper, never()).findDetail(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-PROJECTION-UNSIGNED");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-PROJECTION-UNSIGNED");
     }
 
     @Test

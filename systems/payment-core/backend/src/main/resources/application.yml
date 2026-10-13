@@ -113,6 +113,8 @@ payment:
       payment-success-account-no: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_ACCOUNT_NO:ACT10003}
     reconciliation:
       fact-url: ${HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL:}
+    refund:
+      projection-url: ${HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL:}
   event-dispatch:
     # http keeps existing environments stable; test/pre switch to amqp after the broker is ready.
     mode: ${HSP_PAYMENT_EVENT_DISPATCH_MODE:http}

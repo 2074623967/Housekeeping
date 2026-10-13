@@ -106,6 +106,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     @Value("${payment.downstream.reconciliation.fact-url:}")
     private String reconciliationFactUrl;
 
+    @Value("${payment.downstream.refund.projection-url:}")
+    private String refundProjectionUrl;
+
+    @Value("${HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET:}")
+    private String refundProjectionSecret;
+
     @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}")
     private String paymentSuccessHttpSecret;
 
@@ -683,6 +689,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             boolean amqp = usesAmqp();
             String httpStage = amqp ? null : requirePaymentSuccessHttpStage(event);
             if (!HTTP_STAGE_COMPLETED.equals(httpStage)) {
+                if (StringUtils.hasText(refundProjectionUrl) && !StringUtils.hasText(refundProjectionSecret)) {
+                    throw new IllegalStateException("退款中心支付成功投影签名密钥未配置");
+                }
                 PaymentDetailDTO detail = paymentMapper.findDetail(paymentOrderId);
                 if (detail == null) {
                     throw new IllegalArgumentException("支付成功事件对应支付详情不存在");
@@ -695,6 +704,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 if (amqp) {
                     publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName,
                             workerName, detail.getPayScene(), amount);
+                    postRefundProjection(detail, orderNo, customerName, amount);
                     postReconciliationFact(buildReconciliationFactPayload(
                             detail.getPaymentOrderId(), orderNo, detail.getPayScene(), amount));
                 } else {
@@ -740,6 +750,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         postPaymentEventForSuccess(accountingUrl, buildAccountingPayload(
                 event.getEventNo(), detail.getPaymentOrderId(), orderNo, customerName,
                 detail.getPayScene(), amount), detail.getPaymentOrderId());
+        postRefundProjection(detail, orderNo, customerName, amount);
         postReconciliationFact(buildReconciliationFactPayload(
                 detail.getPaymentOrderId(), orderNo, detail.getPayScene(), amount));
         if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
@@ -1016,6 +1027,41 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             throw new IllegalStateException("下游系统未明确返回业务成功");
         }
         return response.getBody();
+    }
+
+    private void postRefundProjection(PaymentDetailDTO detail, String orderNo,
+                                      String customerName, BigDecimal amount) {
+        if (!StringUtils.hasText(refundProjectionUrl)) {
+            return;
+        }
+        if (!StringUtils.hasText(refundProjectionSecret)) {
+            throw new IllegalStateException("退款中心支付成功投影签名密钥未配置");
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("paymentOrderId", detail.getPaymentOrderId());
+        payload.put("orderNo", orderNo);
+        payload.put("customerName", customerName);
+        payload.put("paidAmount", amount);
+        payload.put("channelCode", detail.getChannel());
+        payload.put("payScene", detail.getPayScene());
+        try {
+            String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Payment-Projection-Timestamp", timestamp);
+            headers.set("X-HSP-Payment-Projection-Signature",
+                    PaymentEventHttpSignature.sign(body, timestamp, refundProjectionSecret));
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    refundProjectionUrl.trim(), new HttpEntity<>(body, headers), Map.class);
+            if (response == null || !response.getStatusCode().is2xxSuccessful()
+                    || response.getBody() == null
+                    || !"0".equals(String.valueOf(response.getBody().get("code")))) {
+                throw new IllegalStateException("退款中心支付成功投影未明确确认");
+            }
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("支付成功投影序列化失败", exception);
+        }
     }
 
     private HttpEntity<String> signedReconciliationFact(Map<String, Object> payload) {
