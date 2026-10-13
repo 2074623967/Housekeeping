@@ -14,7 +14,7 @@ test("locks issue actions if either list or responsibility summary is stale", ()
 test("rechecks an ambiguous batch request and clears the old selection", () => {
   const handler = source.match(/async function submitBatchAction\(\) \{([\s\S]*?)\n\}\n\nonMounted/)?.[1];
   assert.ok(handler);
-  assert.match(handler, /catch \(error\) \{\s*selectedIssueNos\.value = \[\];\s*const refreshed = await loadIssues\(true, query\);/);
+  assert.match(handler, /catch \(error\) \{[\s\S]*?selectedIssueNos\.value = \[\];\s*const refreshed = await loadIssues\(true, query\);/);
   assert.match(handler, /actionErrorMessage\.value = refreshed[\s\S]*?旧快照不可操作/);
   assert.match(source, /批量处理后的异常列表刷新失败，当前状态未经确认/);
 });
@@ -24,7 +24,7 @@ test("reuses the same idempotency key for a matching ambiguous batch attempt", (
   assert.match(source, /pendingActionAttempt = await resolvePaymentIssueActionAttempt\(actionPayload, pendingActionAttempt\)/);
   assert.match(source, /paymentIssueApi\.batchAction\(\{ \.\.\.actionPayload, idempotencyKey: pendingActionAttempt\.idempotencyKey \}\)/);
   assert.match(source, /clearPaymentIssueActionAttempt\(pendingActionAttempt\)/);
-  assert.match(source, /pendingActionAttempt = null;\s*selectedIssueNos\.value = \[\];/);
+  assert.match(source, /pendingActionAttempt = null;[\s\S]*?selectedIssueNos\.value = \[\];/);
   assert.match(source, /UnverifiablePaymentIssueActionAttemptError[\s\S]*?批量处理未发送：/);
 });
 
@@ -32,4 +32,13 @@ test("does not call a confirmed batch cleanup failure an unsent action", () => {
   assert.match(source, /let cleanupFailed = false;[\s\S]*?await paymentIssueApi\.batchAction[\s\S]*?try \{\s*clearPaymentIssueActionAttempt\(pendingActionAttempt\);/);
   assert.match(source, /cleanupFailed = true;\s*pendingActionAttempt = \{ \.\.\.pendingActionAttempt, confirmed: true \};/);
   assert.match(source, /const failureLabel = cleanupFailed\s*\? "批量处理响应已成功，但本机未决键清理失败："/);
+});
+
+test("keeps an in-flight batch action off changed routes and unmounted views", () => {
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*viewActive = false;\s*latestLoadRequestId \+= 1;/);
+  assert.match(source, /issueRouteVersion \+= 1;[\s\S]*?loadIssues\(\);\s*\},\s*\{ flush: "sync" \}/);
+  assert.match(source, /pendingActionAttempt = await resolvePaymentIssueActionAttempt[\s\S]*?if \(!isCurrentIssueRoute\(routeVersion\)\) \{\s*return;\s*\}\s*actionSubmitted = true;\s*await paymentIssueApi\.batchAction/);
+  assert.match(source, /pendingActionAttempt = null;\s*if \(!isCurrentIssueRoute\(routeVersion\)\) \{\s*await refreshCurrentIssueRoute\(\);\s*return;/);
+  assert.match(source, /if \(actionSubmitted\) \{\s*await refreshCurrentIssueRoute\(\);/);
+  assert.match(source, /const refreshed = await loadIssues\(true, query\);\s*if \(!isCurrentIssueRoute\(routeVersion\)\) \{\s*return;/);
 });

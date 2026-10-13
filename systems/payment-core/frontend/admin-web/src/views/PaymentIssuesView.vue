@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute, paymentIssueDetailRoute } from "../router/detailRoutes";
@@ -39,6 +39,8 @@ const actionForm = ref({
 const filters = ref(paymentIssueListFiltersFromQuery(route.query));
 let latestLoadRequestId = 0;
 let pendingActionAttempt = null;
+let issueRouteVersion = 0;
+let viewActive = true;
 
 const issueOverview = computed(() => ({
   groupCount: responsibilitySummaries.value.length,
@@ -205,6 +207,16 @@ function toggleIssueSelection(issueNo, checked) {
   }
 }
 
+function isCurrentIssueRoute(routeVersion) {
+  return viewActive && routeVersion === issueRouteVersion;
+}
+
+async function refreshCurrentIssueRoute() {
+  if (viewActive) {
+    await loadIssues(true, buildQuery());
+  }
+}
+
 async function submitBatchAction() {
   const hasInvalidSelection = selectedIssueNos.value.some((issueNo) =>
     !items.value.some((item) => item.issueNo === issueNo)
@@ -227,6 +239,7 @@ async function submitBatchAction() {
   }
   const issueNos = [...selectedIssueNos.value];
   const query = { ...loadedQuery.value };
+  const routeVersion = issueRouteVersion;
   const actionPayload = {
     issueNos,
     actionType: actionForm.value.actionType,
@@ -238,8 +251,13 @@ async function submitBatchAction() {
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   let cleanupFailed = false;
+  let actionSubmitted = false;
   try {
     pendingActionAttempt = await resolvePaymentIssueActionAttempt(actionPayload, pendingActionAttempt);
+    if (!isCurrentIssueRoute(routeVersion)) {
+      return;
+    }
+    actionSubmitted = true;
     await paymentIssueApi.batchAction({ ...actionPayload, idempotencyKey: pendingActionAttempt.idempotencyKey });
     try {
       clearPaymentIssueActionAttempt(pendingActionAttempt);
@@ -249,13 +267,29 @@ async function submitBatchAction() {
       throw error;
     }
     pendingActionAttempt = null;
+    if (!isCurrentIssueRoute(routeVersion)) {
+      await refreshCurrentIssueRoute();
+      return;
+    }
     selectedIssueNos.value = [];
     actionResultMessage.value = `已记录 ${issueNos.length} 条异常的批量处理动作。`;
     actionRefreshErrorMessage.value = "";
     await loadIssues(true, query);
   } catch (error) {
+    if (!isCurrentIssueRoute(routeVersion)) {
+      if (actionSubmitted) {
+        await refreshCurrentIssueRoute();
+      }
+      if (cleanupFailed && viewActive) {
+        actionErrorMessage.value = "批量处理响应已成功，但本机未决键清理失败；请核对处理记录，勿重复提交。";
+      }
+      return;
+    }
     selectedIssueNos.value = [];
     const refreshed = await loadIssues(true, query);
+    if (!isCurrentIssueRoute(routeVersion)) {
+      return;
+    }
     const failureLabel = cleanupFailed
       ? "批量处理响应已成功，但本机未决键清理失败："
       : error instanceof UnverifiablePaymentIssueActionAttemptError
@@ -270,6 +304,11 @@ async function submitBatchAction() {
 
 onMounted(loadIssues);
 
+onBeforeUnmount(() => {
+  viewActive = false;
+  latestLoadRequestId += 1;
+});
+
 watch(
   () => [
     route.query.paymentOrderId,
@@ -280,11 +319,15 @@ watch(
     route.query.paymentMethod
   ],
   () => {
+    issueRouteVersion += 1;
+    actionErrorMessage.value = "";
+    actionResultMessage.value = "";
     filters.value = paymentIssueListFiltersFromQuery(route.query);
     pageNo.value = 1;
     selectedIssueNos.value = [];
     loadIssues();
-  }
+  },
+  { flush: "sync" }
 );
 </script>
 

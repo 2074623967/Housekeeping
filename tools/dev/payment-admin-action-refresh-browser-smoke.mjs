@@ -181,6 +181,8 @@ async function main() {
   let failDeadLetterReadbackOnce = false;
   let issueHandled = false;
   let isolateIssueActions = false;
+  let holdIssueAction = false;
+  let releaseIssueAction;
   let failIssueListReadbackOnce = false;
   let failIssueSummaryReadbackOnce = false;
   const issueActionRequests = [];
@@ -390,6 +392,9 @@ async function main() {
         issueActionRequests.push(body);
         assert.ok(issueActionRequests.length <= 2, "不得重复提交已确认的异常动作");
         issueHandled = true;
+        if (holdIssueAction) {
+          await new Promise((resolve) => { releaseIssueAction = resolve; });
+        }
         if (issueActionRequests.length === 1) {
           response.statusCode = 400;
           response.end(JSON.stringify({ code: "PAYMENT-400", message: "批量响应丢失" }));
@@ -421,7 +426,9 @@ async function main() {
             assignee: "支付运营", latestActionSummary: "已分派支付运营",
             latestActionAt: "2026-10-09 10:01:00"
           } : initialIssue;
-          response.end(JSON.stringify({ code: "0", data: { items: [item], total: 1 } }));
+          const severity = new URL(request.url, "http://localhost").searchParams.get("severity");
+          const filteredItems = severity === "P2" ? [] : [item];
+          response.end(JSON.stringify({ code: "0", data: { items: filteredItems, total: filteredItems.length } }));
         }
       } else {
         response.statusCode = 404;
@@ -975,6 +982,58 @@ async function main() {
         status: row.querySelector('td:nth-child(15)')?.textContent.trim(),
         selected: checkbox?.checked, disabled: checkbox?.disabled, actionDisabled: button?.disabled
       }; })()`;
+    issueHandled = false;
+    issueActionRequests.length = 0;
+    const issueRouteStart = requests.length;
+    await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
+    await waitFor(async () => (await evaluate(issueState))?.status === "待分派", "筛选切换前异常列表");
+    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    holdIssueAction = true;
+    await evaluate(`${issueActionButton}.click()`);
+    await waitFor(() => Boolean(releaseIssueAction), "待返回的异常批量动作");
+    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-issues?severity=P2')");
+    await waitFor(() => evaluate("location.search === '?severity=P2' && document.body.innerText.includes('当前暂无符合条件的支付交易异常')"),
+      "异常列表切换后的空筛选");
+    releaseIssueAction();
+    holdIssueAction = false;
+    releaseIssueAction = null;
+    await waitFor(() => requests.slice(issueRouteStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "P2").length >= 2,
+    "异常批量动作完成后当前筛选再次读回");
+    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付交易异常')"), true);
+    assert.equal(requests.slice(issueRouteStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "全部").length, 1,
+    "旧异常筛选不得回流");
+    await evaluate(`Object.keys(sessionStorage).filter((key) => key.startsWith('payment-issue-action-attempt:v1'))
+      .forEach((key) => sessionStorage.removeItem(key))`);
+    console.log("[PASS] 管理端浏览器：异常批量动作期间切换筛选，旧列表不回流");
+    issueHandled = false;
+    issueActionRequests.length = 0;
+    await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
+    await waitFor(async () => (await evaluate(issueState))?.status === "待分派", "未发送动作前异常列表");
+    await evaluate(`(() => {
+      const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
+      crypto.subtle.digest = (...args) => new Promise((resolve, reject) => {
+        window.__releaseIssueDigest = () => originalDigest(...args).then(resolve, reject);
+      });
+    })()`);
+    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    await evaluate(`${issueActionButton}.click()`);
+    await waitFor(() => evaluate("typeof window.__releaseIssueDigest === 'function'"), "待完成的批量动作指纹");
+    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-issues?severity=P2')");
+    await waitFor(() => evaluate("location.search === '?severity=P2' && document.body.innerText.includes('当前暂无符合条件的支付交易异常')"),
+      "未发送动作时切换异常筛选");
+    await evaluate("window.__releaseIssueDigest()");
+    await waitFor(() => evaluate("document.querySelector('.topbar button')?.disabled === false"),
+      "失效的异常动作指纹结束");
+    assert.equal(issueActionRequests.length, 0, "路由已变更时不得发出刚完成指纹的批量 POST");
+    await evaluate(`Object.keys(sessionStorage).filter((key) => key.startsWith('payment-issue-action-attempt:v1'))
+      .forEach((key) => sessionStorage.removeItem(key))`);
+    console.log("[PASS] 管理端浏览器：指纹准备期间切换筛选，不发送过期批量动作");
     for (const failure of ["none", "summary", "list"]) {
       issueHandled = false;
       issueActionRequests.length = 0;
@@ -1145,6 +1204,7 @@ async function main() {
   } finally {
     releaseRefundApproval?.();
     releasePaymentAction?.();
+    releaseIssueAction?.();
     socket?.close();
     chrome.kill("SIGTERM");
     await Promise.race([new Promise((resolve) => chrome.once("exit", resolve)), delay(3000)]);
