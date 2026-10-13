@@ -83,6 +83,53 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
     }
 
     @Test
+    void shouldSearchEventIdentifiersAndDestinationsByLiteralSubstring() throws Exception {
+        String suffix = "%_!\\\"";
+        String paymentOrderId = "PAY-EVENT-" + suffix;
+        String downstreamSystem = "downstream-" + suffix;
+        String eventTopic = "topic-" + suffix;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement();
+             PreparedStatement insert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, "
+                             + "downstream_system, event_topic, publish_status, publish_status_type, "
+                             + "retry_count, event_payload, created_at) VALUES "
+                             + "('EVT-LITERAL', 'PAYMENT_SUCCESS', ?, 'ORD-LITERAL', ?, ?, "
+                             + "'FAILED', 'danger', 1, '{}', NOW())")) {
+            insert.setString(1, paymentOrderId);
+            insert.setString(2, downstreamSystem);
+            insert.setString(3, eventTopic);
+            assertEquals(1, insert.executeUpdate());
+            statement.executeUpdate("INSERT INTO t_payment_event (event_no, event_type, "
+                    + "payment_order_id, biz_no, downstream_system, event_topic, publish_status, "
+                    + "publish_status_type, retry_count, event_payload, created_at) VALUES "
+                    + "('EVT-PLAIN', 'PAYMENT_SUCCESS', 'PAY-EVENT-PLAIN', 'ORD-PLAIN', "
+                    + "'downstream-plain', 'topic-plain', 'FAILED', 'danger', 1, '{}', NOW())");
+
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", suffix)) {
+                PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+                query.setPaymentOrderId(fragment);
+                assertLiteralEventResults(mapper, query);
+                query.setPaymentOrderId(null);
+                query.setDownstreamSystem(fragment);
+                assertLiteralEventResults(mapper, query);
+                query.setDownstreamSystem("全部");
+                query.setEventTopic(fragment);
+                assertLiteralEventResults(mapper, query);
+            }
+        }
+    }
+
+    private void assertLiteralEventResults(PaymentEventMapper mapper, PaymentEventQueryDTO query) {
+        assertEquals(1L, mapper.count(query), query.toString());
+        assertEquals(Arrays.asList("EVT-LITERAL"), eventNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList("EVT-LITERAL"), eventNos(mapper.findAllForExport(query)));
+        assertEquals(1L, mapper.findOverview(query).getTotalEventCount());
+        assertEquals(1L, mapper.findOverview(query).getFailedOrDeadLetterCount());
+    }
+
+    @Test
     void shouldKeepSuccessfulEventTerminalWhenLateFailureUpdatesArrive() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);

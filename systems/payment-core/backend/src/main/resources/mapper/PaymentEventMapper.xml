@@ -7,7 +7,7 @@
     <sql id="paymentEventWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
                 AND event_type = #{query.eventType}
@@ -27,10 +27,10 @@
                 </choose>
             </if>
             <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
-                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
+                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystemLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.eventTopic != null and query.eventTopic != ''">
-                AND event_topic LIKE CONCAT('%', #{query.eventTopic}, '%')
+                AND event_topic LIKE CONCAT('%', #{query.eventTopicLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
     </sql>

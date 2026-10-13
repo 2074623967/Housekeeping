@@ -38,4 +38,16 @@ public class PaymentEventQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+
+    public String getDownstreamSystemLikePattern() {
+        return LikePattern.escape(downstreamSystem);
+    }
+
+    public String getEventTopicLikePattern() {
+        return LikePattern.escape(eventTopic);
+    }
 }
