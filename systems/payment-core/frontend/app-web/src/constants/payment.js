@@ -148,16 +148,19 @@ export function isCashierExpired(status) {
 }
 
 export function resolveRemainingSeconds(expiresAt, now = Date.now()) {
-  if (typeof expiresAt !== "string"
-      || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(expiresAt)) {
+  if (typeof expiresAt !== "string") {
     return 0;
   }
-  const expiresTimestamp = Date.parse(`${expiresAt.replace(" ", "T")}+08:00`);
+  const normalizedExpiry = expiresAt.trim();
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(normalizedExpiry)) {
+    return 0;
+  }
+  const expiresTimestamp = Date.parse(`${normalizedExpiry.replace(" ", "T")}+08:00`);
   if (!Number.isFinite(expiresTimestamp) || !Number.isFinite(now)) {
     return 0;
   }
   if (new Date(expiresTimestamp + 8 * 60 * 60 * 1000)
-    .toISOString().slice(0, 19).replace("T", " ") !== expiresAt) {
+    .toISOString().slice(0, 19).replace("T", " ") !== normalizedExpiry) {
     return 0;
   }
   return Math.max(0, Math.floor((expiresTimestamp - now) / 1000));

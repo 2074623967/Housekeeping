@@ -127,13 +127,16 @@ test("submits only an unexpired untouched prepay with an allowed channel", () =>
   assert.equal(canSubmitPayment({ ...cashier, latestAttemptStatus: "处理中" }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, channelTransactionNo: "WX-001" }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, channels: ["支付宝"] }, now), false);
+  assert.equal(canSubmitPayment({ ...cashier, expiresAt: " 2026-09-14 10:05:00 " }, now), true);
   assert.equal(canSubmitPayment({ ...cashier, expiresAt: "2026-09-14 09:59:59" }, now), false);
 });
 
 test("interprets mini program expiry in the business timezone regardless of device timezone", () => {
+  assert.equal(resolveRemainingSeconds(" 2026-09-14 10:05:00 ", Date.parse("2026-09-14T02:00:00Z")), 300);
+  assert.equal(resolveRemainingSeconds(" 2026-02-30 10:05:00 ", Date.parse("2026-09-14T02:00:00Z")), 0);
   const modulePath = require.resolve("../utils/payment");
   const script = `const { resolveRemainingSeconds } = require(${JSON.stringify(modulePath)});
-    console.log(resolveRemainingSeconds("2026-09-14 10:05:00", Date.parse("2026-09-14T02:00:00Z")));`;
+    console.log(resolveRemainingSeconds(" 2026-09-14 10:05:00 ", Date.parse("2026-09-14T02:00:00Z")));`;
   for (const timezone of ["UTC", "America/Los_Angeles"]) {
     assert.equal(execFileSync(process.execPath, ["-e", script], {
       encoding: "utf8",

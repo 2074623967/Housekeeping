@@ -20,10 +20,12 @@ import {
 test("interprets cashier expiry in the business timezone regardless of the browser timezone", () => {
   const currentTimestamp = Date.parse("2026-09-14T02:00:00Z");
   assert.equal(resolveRemainingSeconds("2026-09-14 10:05:00", currentTimestamp), 300);
+  assert.equal(resolveRemainingSeconds(" 2026-09-14 10:05:00 ", currentTimestamp), 300);
   assert.equal(resolveRemainingSeconds("2026-02-30 10:05:00", currentTimestamp), 0);
+  assert.equal(resolveRemainingSeconds(" 2026-02-30 10:05:00 ", currentTimestamp), 0);
   const moduleUrl = new URL("./payment.js", import.meta.url).href;
   const script = `import { resolveRemainingSeconds } from ${JSON.stringify(moduleUrl)};
-    console.log(resolveRemainingSeconds("2026-09-14 10:05:00", Date.parse("2026-09-14T02:00:00Z")));`;
+    console.log(resolveRemainingSeconds(" 2026-09-14 10:05:00 ", Date.parse("2026-09-14T02:00:00Z")));`;
   for (const timezone of ["UTC", "America/Los_Angeles"]) {
     assert.equal(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
       encoding: "utf8",
