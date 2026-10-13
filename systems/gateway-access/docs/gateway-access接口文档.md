@@ -85,7 +85,7 @@
 }
 ```
 
-成功响应必须同时包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode`。当终端为 `MINI_PROGRAM` 且上游已经完成微信签名时，可额外返回完整的 `nativePaymentParams`：`timeStamp / nonceStr / package / signType / paySign`；网关只透传这五个白名单字段，不落库，缺字段、额外字段或控制字符均拒绝。金额必须为正数，最多 `16` 位整数和 `2` 位小数；文本字段执行必填、长度和 ISO 控制字符校验，显式传入的可选 `customerName / requestedChannelCode` 也先校验原文再将纯空白规范为空值。空响应、业务失败或必要字段缺失均不视为已明确受理。
+成功响应必须同时包含原样回显的 `paymentOrderId / prepayOrderNo / orderNo / idempotencyKey`，分别与本轮请求精确一致，网关不得从请求补写；另须包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode`。身份缺失或跨提交轮次，即使业务码为 `0`，也返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE` 并审计 `UNKNOWN`，须先查单而非据此盲重提。当终端为 `MINI_PROGRAM` 且上游已经完成微信签名时，可额外返回完整的 `nativePaymentParams`：`timeStamp / nonceStr / package / signType / paySign`；网关只透传这五个白名单字段，不落库，缺字段、额外字段或控制字符均拒绝。金额必须为正数，最多 `16` 位整数和 `2` 位小数；文本字段执行必填、长度和 ISO 控制字符校验，显式传入的可选 `customerName / requestedChannelCode` 也先校验原文再将纯空白规范为空值。空响应、业务失败或必要字段缺失均不视为已明确受理；旧版只回渠道号/状态的上游需受控协议映射和混版治理。
 
 提交与查单复用相同的应用、凭证、权限、网关、有效证书和当前环境发布路由门禁。上游异常只记录请求号和异常类型，并返回 `GATEWAY_UPSTREAM_UNAVAILABLE`；调用方必须先查单再决定后续动作，禁止因超时或未知结果自动重提。
 

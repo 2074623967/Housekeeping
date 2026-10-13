@@ -163,6 +163,12 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
 
     private void normalizeAndValidate(
             PaymentChannelSubmitResultDTO result, PaymentChannelSubmitRequestDTO request) {
+        if (!request.getPaymentOrderId().equals(result.getPaymentOrderId())
+                || !request.getPrepayOrderNo().equals(result.getPrepayOrderNo())
+                || !request.getOrderNo().equals(result.getOrderNo())
+                || !request.getIdempotencyKey().equals(result.getIdempotencyKey())) {
+            throw submitFailed("gateway-access returned a mismatched payment identity");
+        }
         result.setChannelTransactionNo(required(
                 result.getChannelTransactionNo(), "channel transaction number", 128));
         result.setGatewayCode(required(result.getGatewayCode(), "gateway code", 64));

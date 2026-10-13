@@ -1,5 +1,9 @@
 # payment-core 自测与联调记录
 
+## 2026-10-13 支付提交跨轮回执拒绝
+
+正式网关支付提交受理结果增加 `paymentOrderId / prepayOrderNo / orderNo / idempotencyKey` 双端原样回显校验；payment-core 对缺身份或跨轮成功形态回执返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，不绑定渠道号或原生终端支付参数，按既有结果待确认路径先查单。gateway-access 上游错配审计 `UNKNOWN`。网关 H2 全量 `88/88`，payment-core H2/demo 全量 `2082/2082`，零失败/错误/跳过；新增网关真 HTTP 回环用例验证错幂等键拒绝。`git diff --check` 通过。尚未执行本轮两服务支付提交 HTTP 联调；旧版上游协议、真实资金、目标 MySQL 8、多实例及生产发布未验收。
+
 ## 2026-10-13 支付查单跨订单回执失败闭合
 
 正式网关查单结果必须原样回显并匹配 `paymentOrderId / orderNo`，请求已知渠道流水号时规范化后仍须一致；缺失、串单或错号按 `PAYMENT_CHANNEL_QUERY_FAILED` 失败闭合，不更改付款状态或派发成功事件。payment-core H2/demo 全量 `2080/2080`、网关 H2 全量 `85/85` 均零失败/错误/跳过。双服务本机回环脚本的正常回调赢家及冲突晚到查单两模式均通过，支付成功事件只到受控本地清分/账务桩；脚本补上临时 HTTP 签名密钥并校准网关错号拒绝后的审计预期。`node --check`、`git diff --check` 通过。旧版只回状态/渠道号的上游或网关须完成协议映射与混版治理；真实资金、签名渠道回执、RabbitMQ、MySQL 8 多实例和发布仍待验收。

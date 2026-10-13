@@ -68,6 +68,10 @@ class PaymentOrderSubmitServiceImplTest {
     void shouldReturnOnlyDefinitiveAcceptanceAndAudit() {
         configureEnabledGovernance();
         PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-1001");
         data.setChannelTransactionNo(" WX-1001 ");
         data.setAttemptStatus(" 处理中 ");
         data.setAttemptStatusType(" INFO ");
@@ -109,6 +113,10 @@ class PaymentOrderSubmitServiceImplTest {
     void shouldRejectAcceptanceWithoutChannelTransactionNumber() {
         configureEnabledGovernance();
         PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-1001");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
         data.setChannelReturnCode("USERPAYING");
@@ -129,9 +137,63 @@ class PaymentOrderSubmitServiceImplTest {
     }
 
     @Test
+    void shouldRejectAcceptanceFromAnotherSubmitAttempt() {
+        configureEnabledGovernance();
+        PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-other");
+        data.setChannelTransactionNo("WX-OTHER");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getResultStatus());
+    }
+
+    @Test
+    void shouldRejectAcceptanceWithoutPaymentIdentity() {
+        configureEnabledGovernance();
+        PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        UpstreamPaymentSubmitResponseDTO response = new UpstreamPaymentSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamPaymentSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getResultStatus());
+    }
+
+    @Test
     void shouldRejectNativePaymentParamsForNonMiniProgramTerminal() {
         configureEnabledGovernance();
         PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-1001");
         data.setChannelTransactionNo("WX-1001");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
@@ -153,6 +215,10 @@ class PaymentOrderSubmitServiceImplTest {
     void shouldRejectPartialNativePaymentParamsFromUpstream() {
         configureEnabledGovernance();
         PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-1001");
         data.setChannelTransactionNo("WX-1001");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");
@@ -236,6 +302,10 @@ class PaymentOrderSubmitServiceImplTest {
     void shouldRejectControlCharacterBeforeTrimmingUpstreamFields() {
         configureEnabledGovernance();
         PaymentOrderSubmitResultDTO data = new PaymentOrderSubmitResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setPrepayOrderNo("PRE-1001");
+        data.setOrderNo("ORD-1001");
+        data.setIdempotencyKey("idem-1001");
         data.setChannelTransactionNo("WX-1001\n");
         data.setAttemptStatus("处理中");
         data.setAttemptStatusType("info");

@@ -128,6 +128,17 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
                     "payment submit upstream returned no definitive acceptance result");
         }
         PaymentOrderSubmitResultDTO result = response.getData();
+        requiredResponse(result.getPaymentOrderId(), "paymentOrderId", 64);
+        requiredResponse(result.getPrepayOrderNo(), "prepayOrderNo", 64);
+        requiredResponse(result.getOrderNo(), "orderNo", 64);
+        requiredResponse(result.getIdempotencyKey(), "idempotencyKey", 128);
+        if (!request.getPaymentOrderId().equals(result.getPaymentOrderId())
+                || !request.getPrepayOrderNo().equals(result.getPrepayOrderNo())
+                || !request.getOrderNo().equals(result.getOrderNo())
+                || !request.getIdempotencyKey().equals(result.getIdempotencyKey())) {
+            throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
+                    "payment submit upstream returned a mismatched payment identity");
+        }
         result.setChannelTransactionNo(requiredResponse(
                 result.getChannelTransactionNo(), "channelTransactionNo", 128));
         result.setAttemptStatus(requiredResponse(result.getAttemptStatus(), "attemptStatus", 32));

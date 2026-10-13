@@ -9,6 +9,10 @@ import lombok.Data;
 @Data
 public class PaymentOrderSubmitResultDTO {
 
+    private String paymentOrderId;
+    private String prepayOrderNo;
+    private String orderNo;
+    private String idempotencyKey;
     /**
      * 原生终端支付参数，仅在小程序渠道已完成签名且允许直接交给客户端时返回；不落库。
      */
