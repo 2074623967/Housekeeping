@@ -2589,7 +2589,29 @@ async function main() {
   };
   const callbackRefundOrderId = normalizeIdentifier(refund.refundOrderId);
   const callbackBody = JSON.stringify(refundCallbackPayload);
-  const refunded = assertRefundPaidAmount(assertRefundAmount(assertRefundIdentity(await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(normalizeIdentifier(refund.refundOrderId))}/callback`, {
+  const callbackUrl = `${refundBaseUrl}/api/refunds/${encodeURIComponent(callbackRefundOrderId)}/callback`;
+  for (const options of [
+    { method: "POST", body: callbackBody },
+    {
+      method: "POST",
+      body: JSON.stringify({ ...refundCallbackPayload, result: "FAIL" }),
+      headers: refundCallbackHeaders(callbackRefundOrderId, callbackBody)
+    }
+  ]) {
+    let rejected;
+    try {
+      await api(callbackUrl, options);
+    } catch (error) {
+      rejected = error;
+    }
+    assert(rejected?.message?.includes("returned HTTP 403"),
+      "untrusted refund callback was not rejected before terminal state");
+  }
+  const afterRejectedCallback = await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(callbackRefundOrderId)}`);
+  assertRefundStatus(afterRejectedCallback, "PROCESSING", "untrusted callback");
+  assert(!afterRejectedCallback.terminalAt && !afterRejectedCallback.channelRefundId,
+    "untrusted refund callback changed terminal facts");
+  const refunded = assertRefundPaidAmount(assertRefundAmount(assertRefundIdentity(await api(callbackUrl, {
     method: "POST",
     body: callbackBody,
     headers: refundCallbackHeaders(callbackRefundOrderId, callbackBody)
@@ -2600,7 +2622,7 @@ async function main() {
   assertRefundReason(refunded, refundApplyPayload.refundReason);
   assertRefundLifecycleTime(refunded, "callback");
   assert(refunded.status === "SUCCESS", `unexpected refund status: ${refunded.status}`);
-  const repeatedRefundCallback = assertRefundPaidAmount(await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(normalizeIdentifier(refund.refundOrderId))}/callback`, {
+  const repeatedRefundCallback = assertRefundPaidAmount(await api(callbackUrl, {
       method: "POST",
       body: callbackBody,
       headers: refundCallbackHeaders(callbackRefundOrderId, callbackBody)

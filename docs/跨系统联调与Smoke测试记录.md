@@ -602,3 +602,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 75. 2026-10-13 退款成功 HTTP 发送端缺密钥门禁后双路径复验
 
 退款中心发送端不再向账务下游发送无签名 `REFUND_SUCCESS` HTTP 事件。隔离运行 `verify payment-chain` 与 `verify payment-query-chain`，支付单 `PAY1791862126999c90231bd` 经 `CALLBACK`、`PAY1791862304559810f4620` 经本机 `GATEWAY_QUERY` 收口；两轮九服务 HTTP 冒烟与 happy-path `[PASS]`，退款成功、账务冲回和七项对账事实读回，对账均为 `COMPLETED/4/4`、`financialCloseable=true`。脚本以 `0` 退出并停服，九后端 `DOWN`、查询桩 18190 无监听。本机 H2/demo 验证不能替代真实 MQ、目标 MySQL 8 多实例、正式渠道资金、身份审批或生产验收。
+
+## 76. 2026-10-13 退款回调拒收与合法重试的九服务验证
+
+`cross-system-happy-path` 在退款单进入 `PROCESSING` 后先直发无签名成功回调，再以成功正文签名但改写实际正文为失败结果；两次均要求退款中心返回 HTTP 403，并读回单据仍在处理中且无终态时间或渠道退款流水。随后按真实本机 HTTP 发送签名成功回调与同事实重试，继续核对退款成功出站、账务冲回和对账。Node 断言 `65/65`，隔离 H2/demo 两轮 `verify` 退出码均为 `0`：`PAY1791868479655baf47bab` 经支付回调、`PAY17918686348755bf16289` 经受控网关查单收口；九服务冒烟与 happy-path `[PASS]`，七项对账事实、`COMPLETED/4/4` 和本地 `financialCloseable=true` 均读回。脚本退出九服务及查询桩均停服。这是本机回调接入与拒收证据，不证明真实渠道原生验签、可信后台审批、RabbitMQ、目标 MySQL 8 多实例、资金或生产验收。
