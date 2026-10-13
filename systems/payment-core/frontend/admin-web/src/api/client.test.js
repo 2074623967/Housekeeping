@@ -155,7 +155,8 @@ test("validates admin timelines independently of the device daylight saving time
     status: "SUCCESS", statusType: "success", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
     appliedAt: "2026-03-08 02:59:00", channelSubmittedAt: "2026-03-08 03:00:00",
     successAt: "2026-03-08 03:01:00", terminalAt: "2026-03-08 03:02:00",
-    attempts: [{ refundAttemptNo: "ATT-001", attemptStatus: "SUCCESS", attemptStatusType: "success",
+    attempts: [{ refundAttemptNo: "ATT-001", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+      attemptStatus: "SUCCESS", attemptStatusType: "success",
       createdAt: "2026-03-08 02:59:00", submittedAt: "2026-03-08 03:00:00",
       completedAt: "2026-03-08 03:01:00" }],
     operationLogs: [{ logNo: "LOG-001", actionName: "申请退款", createdAt: "2026-03-08 03:00:00" }]
@@ -10202,4 +10203,41 @@ test("maps aborted admin requests to a stable timeout error", async (context) =>
     dashboardApi.getSummary(),
     (error) => error.code === "PAYMENT-CLIENT-TIMEOUT"
   );
+});
+
+test("keeps an admin terminal refund bound to its latest channel attempt", () => {
+  const attempt = {
+    refundAttemptNo: "ATT-001", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    attemptStatus: "SUCCESS", attemptStatusType: "success",
+    createdAt: "2026-09-27 12:00:01", submittedAt: "2026-09-27 12:00:30",
+    completedAt: "2026-09-27 12:01:00"
+  };
+  const detail = {
+    refundOrderId: "REF-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", paidAmount: "68.00", refundAmount: "18.00",
+    status: "SUCCESS", statusType: "success", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    appliedAt: "2026-09-27 12:00:00", channelSubmittedAt: "2026-09-27 12:00:30",
+    successAt: "2026-09-27 12:01:00", terminalAt: "2026-09-27 12:01:01",
+    attempts: [attempt], operationLogs: []
+  };
+  assert.deepEqual(normalizeRefundDetailResult(detail, "REF-001"), detail);
+  for (const invalidDetail of [
+    { ...detail, attempts: [{ ...attempt, attemptStatus: "PENDING", attemptStatusType: "warn", completedAt: "-" }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: undefined }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: 123 }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: "ALIPAY_H5" }] },
+    { ...detail, attempts: [{ ...attempt, channelRefundNo: 123 }] },
+    { ...detail, attempts: [{ ...attempt, channelRefundNo: "CH-REF-OTHER" }] },
+    { ...detail, attempts: [{ ...attempt, completedAt: "2026-09-27 12:01:01" }] }
+  ]) {
+    assert.throws(() => normalizeRefundDetailResult(invalidDetail, "REF-001"),
+      (error) => error.code === "PAYMENT-CLIENT-INVALID-REFUND-DETAIL");
+  }
+  const failed = {
+    ...detail, status: "FAIL", statusType: "danger", successAt: "-",
+    attempts: [{ ...attempt, attemptStatus: "FAIL", attemptStatusType: "danger" }]
+  };
+  assert.deepEqual(normalizeRefundDetailResult(failed, "REF-001"), failed);
+  assert.throws(() => normalizeRefundDetailResult({ ...failed, attempts: [attempt] }, "REF-001"),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-REFUND-DETAIL");
 });
