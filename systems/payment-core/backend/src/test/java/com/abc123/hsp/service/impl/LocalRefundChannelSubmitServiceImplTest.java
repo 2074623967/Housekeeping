@@ -50,4 +50,21 @@ class LocalRefundChannelSubmitServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> service.submit(request));
         assertThrows(IllegalArgumentException.class, () -> service.submit(null));
     }
+
+    @Test
+    void shouldPreserveSpecialCharactersInLocalRefundResponse() throws Exception {
+        RefundChannelSubmitRequestDTO request = new RefundChannelSubmitRequestDTO();
+        request.setRefundOrderId("REF\"001");
+        request.setRefundAttemptNo("RFA\\001\"尝试");
+        request.setPaymentOrderId("PAY\n001");
+        request.setChannelCode("wx_h5");
+
+        RefundChannelSubmitResultDTO result = new LocalRefundChannelSubmitServiceImpl().submit(request);
+        com.fasterxml.jackson.databind.JsonNode payload = new ObjectMapper().readTree(result.getResponsePayload());
+
+        assertEquals(request.getRefundOrderId(), payload.path("refundOrderId").asText());
+        assertEquals(request.getRefundAttemptNo(), payload.path("refundAttemptNo").asText());
+        assertEquals(request.getPaymentOrderId(), payload.path("paymentOrderId").asText());
+        assertEquals(result.getChannelRefundNo(), payload.path("channelRefundNo").asText());
+    }
 }

@@ -128,6 +128,17 @@ class PaymentChannelSubmitServiceImplTest {
     }
 
     @Test
+    void shouldPreserveSpecialCharactersInLocalChannelResponse() throws Exception {
+        PaymentChannelSubmitRequestDTO request = new PaymentChannelSubmitRequestDTO();
+        request.setResolvedChannelCode("channel\"\\demo\nnext");
+
+        PaymentChannelSubmitResultDTO result = new LocalPaymentChannelSubmitAdapter().submit(request);
+
+        assertEquals(request.getResolvedChannelCode(), new ObjectMapper()
+                .readTree(result.getResponsePayload()).path("channelCode").asText());
+    }
+
+    @Test
     void shouldGenerateCollisionResistantTransactionNumbersForSimulatedAdapters() {
         assertUniqueTransactionNumbers(new WechatH5PaymentChannelSubmitAdapter(), "wx_h5", "WX-");
         assertUniqueTransactionNumbers(new AlipayH5PaymentChannelSubmitAdapter(), "alipay_h5", "ALI-");

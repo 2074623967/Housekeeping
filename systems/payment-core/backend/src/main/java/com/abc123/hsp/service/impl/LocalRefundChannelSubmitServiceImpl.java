@@ -3,6 +3,10 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.service.RefundChannelSubmitService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.context.annotation.Profile;
 import org.springframework.util.StringUtils;
@@ -28,19 +32,18 @@ public class LocalRefundChannelSubmitServiceImpl implements RefundChannelSubmitS
     }
 
     private String buildResponsePayload(RefundChannelSubmitRequestDTO request, String channelRefundNo) {
-        String refundOrderId = safe(request.getRefundOrderId());
-        String paymentOrderId = safe(request.getPaymentOrderId());
-        String channelCode = safe(request.getChannelCode());
-        return "{\"code\":\"SUCCESS\",\"refundOrderId\":\""
-                + refundOrderId
-                + "\",\"refundAttemptNo\":\"" + request.getRefundAttemptNo().trim()
-                + "\",\"paymentOrderId\":\""
-                + paymentOrderId
-                + "\",\"channelCode\":\""
-                + channelCode
-                + "\",\"channelRefundNo\":\""
-                + channelRefundNo
-                + "\"}";
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("code", "SUCCESS");
+        payload.put("refundOrderId", safe(request.getRefundOrderId()));
+        payload.put("refundAttemptNo", request.getRefundAttemptNo().trim());
+        payload.put("paymentOrderId", safe(request.getPaymentOrderId()));
+        payload.put("channelCode", safe(request.getChannelCode()));
+        payload.put("channelRefundNo", channelRefundNo);
+        try {
+            return new ObjectMapper().writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("模拟退款渠道响应序列化失败", exception);
+        }
     }
 
     private String safe(String value) {

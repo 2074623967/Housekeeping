@@ -1,6 +1,9 @@
 package com.abc123.hsp.service.impl;
 
-import java.util.StringJoiner;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -24,12 +27,16 @@ final class ChannelPayloadSupport {
                                       String channelTransactionNo,
                                       String gatewayCode,
                                       String message) {
-        return new StringJoiner(",", "{", "}")
-                .add("\"code\":\"SUCCESS\"")
-                .add("\"channelCode\":\"" + channelCode + "\"")
-                .add("\"gatewayCode\":\"" + gatewayCode + "\"")
-                .add("\"channelTransactionNo\":\"" + channelTransactionNo + "\"")
-                .add("\"message\":\"" + message + "\"")
-                .toString();
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("code", "SUCCESS");
+        payload.put("channelCode", channelCode);
+        payload.put("gatewayCode", gatewayCode);
+        payload.put("channelTransactionNo", channelTransactionNo);
+        payload.put("message", message);
+        try {
+            return new ObjectMapper().writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("模拟支付渠道响应序列化失败", exception);
+        }
     }
 }
