@@ -135,6 +135,9 @@ tools/dev/local-stack.sh verify payment-chain
 # 相同九服务链路改由本机网关主动查单收口支付，受控上游和 H2 证书 fixture 随会话清理
 tools/dev/local-stack.sh verify payment-query-chain
 
+# 在隔离 H2 中预置一笔未付标准订单，验证支付至九服务对账并自动停服
+tools/dev/local-stack.sh verify payment-standard-chain
+
 # 仅启动 H2/demo 支付核心与风控后端，验证人工复核并自动停止
 tools/dev/local-stack.sh verify risk-review
 ```
@@ -165,7 +168,7 @@ tools/dev/local-stack.sh up payment-core
 
 `verify risk-review` 只启动支付核心和风控中心后端，不启动前端；它在隔离 H2/demo 中创建虚拟支付单，验证待审、批准后变更方式/渠道/商户均返回 `PAYMENT-1024` 且无支付尝试，原请求批准后继续到 `WAIT_CALLBACK`。命令拒绝数据库、端口、关键网关等环境覆盖，拒绝现存两服务 PID 文件和相关端口已有服务；运行前先确认本机端口未被代理到共享环境。脚本在首笔写入前校验本机 HTTP 地址、payment-core H2/demo 身份和仅在 `local-risk-review` profile + H2 驱动下可用的风控身份端点；异常退出也清理本次启动的服务。`node --test tools/dev/cross-system-risk-review.test.mjs` 可单独运行断言测试；身份标记不是认证，不代表生产审核身份、目标 MySQL 8 迁移或真实资金验收。
 
-跨系统 happy-path 只能经隔离的 `verify payment-chain` / `verify all` 运行；`local-stack.sh happy-path` 是前者的别名，不能在 `up all` 或 `start backends` 保持运行时复用已有服务，须先停服。入口要求本机有 `lsof` 与 `nc`，在启动前拒绝数据库和下游覆盖、现存后端 PID 文件与目标端口监听，启动后要求每个目标后端由本轮进程提供；首笔写请求前还要求九个目标为固定本机端口，并逐一读取各自的 H2 演示身份，任何缺失、错配或重定向均失败闭合。支付核心身份仅在 `demo` + H2、其他八服务仅在受控 `local-payment-chain` profile + H2 驱动下可用；本地标记不是跨系统认证，也不代替外部部署和实际资金核验。
+跨系统 happy-path 只能经隔离的 `verify payment-chain` / `verify payment-query-chain` / `verify payment-standard-chain` / `verify all` 运行；`local-stack.sh happy-path` 是虚拟订单回调链的别名，不能在 `up all` 或 `start backends` 保持运行时复用已有服务，须先停服。入口要求本机有 `lsof` 与 `nc`，在启动前拒绝数据库和下游覆盖、现存后端 PID 文件与目标端口监听，启动后要求每个目标后端由本轮进程提供；首笔写请求前还要求九个目标为固定本机端口，并逐一读取各自的 H2 演示身份，任何缺失、错配或重定向均失败闭合。`payment-standard-chain` 仅在本轮 H2/demo payment-core 初始化时加载测试 SQL，预置标准订单而不暴露业务创建接口。支付核心身份仅在 `demo` + H2、其他八服务仅在受控 `local-payment-chain` profile + H2 驱动下可用；本地标记不是跨系统认证，也不代替外部部署和实际资金核验。
 
 确认本地 `payment-core` 使用 `local-stack.sh` 的 demo profile 且系统 Chrome 可用时，可执行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo`：它仅在 `localhost:18081` 的后端返回 demo profile + H2 专属身份标记后，才创建一笔虚构预付单，随后在 App/H5/PC 的收银台和结果页检查各自端口的只读详情响应与订单金额渲染，不提交支付。缺少显式 `--demo` 或身份标记时脚本不写入预付单；标记仅防止误连非演示后端，不是认证凭据。脚本单测为 `node --test tools/dev/payment-terminal-browser-smoke.test.mjs`；如 Chrome 不在默认 macOS 路径，可设置 `HSP_CHROME_BIN`。在会回收后台进程的运行器内，应将 `local-stack.sh start payment-core`、浏览器脚本和 `local-stack.sh stop payment-core` 放在同一受控会话，并确保异常退出也执行停服。
 

@@ -180,6 +180,7 @@ scope:
   <system>   指定系统，例如 payment-core、refund-center
   payment-chain  启动支付 happy-path 所需的后端依赖
   payment-query-chain  隔离运行网关主动查单到九服务对账的变体
+  payment-standard-chain  隔离运行标准订单支付到九服务对账的变体
   risk-review    仅启动支付核心与风控中心，验证本地人工复核回环
 EOF
 }
@@ -199,7 +200,8 @@ is_selected() {
   local scope="$1"
   local component="$2"
   local system_name="$3"
-  if [[ "$scope" == "payment-chain" || "$scope" == "payment-query-chain" ]]; then
+  if [[ "$scope" == "payment-chain" || "$scope" == "payment-query-chain" \
+    || "$scope" == "payment-standard-chain" ]]; then
     [[ "$component" == "backends" ]] && is_payment_chain_system "$system_name"
     return $?
   fi
@@ -267,13 +269,14 @@ start_backend() {
   local health_url="http://localhost:$port$health_path"
   local pid=""
   local -a backend_env=(JAVA_HOME="$JAVA_HOME_PATH" MAVEN_OPTS="$LOCAL_JAVA_OPTS")
-  local -a payment_query_env=()
+  local -a payment_bootstrap_env=()
   local -a event_signature_env=()
   local payment_profile="demo"
 
   if [[ "$name" == "risk-control-system" && "$scope" == "risk-review" ]]; then
     backend_env+=(SPRING_PROFILES_ACTIVE=local-risk-review)
-  elif [[ "$verification_mode" == "payment-chain" || "$verification_mode" == "payment-query-chain" ]] \
+  elif [[ "$verification_mode" == "payment-chain" || "$verification_mode" == "payment-query-chain" \
+    || "$verification_mode" == "payment-standard-chain" ]] \
     && is_payment_chain_system "$name"; then
     if [[ "$name" == "payment-core" ]]; then
       payment_profile="demo,local-payment-chain"
@@ -287,11 +290,14 @@ start_backend() {
         HSP_GATEWAY_WX_PAYMENT_QUERY_URL="http://127.0.0.1:18190/query"
         SPRING_SQL_INIT_DATA_LOCATIONS="classpath:data.sql,file:$ROOT_DIR/tools/dev/payment-query-chain-gateway.sql")
     elif [[ "$name" == "payment-core" ]]; then
-      payment_query_env+=(HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true
+      payment_bootstrap_env+=(HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true
         HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS=wx_h5
         HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ACCESS_KEY="$QUERY_ACCESS_KEY"
         HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL="http://127.0.0.1:8090/api/gateway/payment-orders/query")
     fi
+  fi
+  if [[ "$verification_mode" == "payment-standard-chain" && "$name" == "payment-core" ]]; then
+    payment_bootstrap_env+=(SPRING_SQL_INIT_DATA_LOCATIONS="classpath:data.sql,file:$ROOT_DIR/tools/dev/payment-standard-chain-order.sql")
   fi
   if [[ -n "$PAYMENT_EVENT_SECRET" ]] \
     && [[ "$name" == "payment-core" || "$name" == "clearing-system" || "$name" == "accounting-system" ]]; then
@@ -350,7 +356,7 @@ start_backend() {
       nohup env \
         JAVA_HOME="$JAVA_HOME_PATH" \
         MAVEN_OPTS="$LOCAL_JAVA_OPTS" \
-        ${payment_query_env[@]+"${payment_query_env[@]}"} \
+        ${payment_bootstrap_env[@]+"${payment_bootstrap_env[@]}"} \
         ${event_signature_env[@]+"${event_signature_env[@]}"} \
         HSP_PAYMENT_DOWNSTREAM_RECONCILIATION_FACT_URL="http://localhost:18150/api/reconciliation/cross-system/facts" \
         HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL="http://localhost:18140/api/refunds/internal/payment-success" \
@@ -666,7 +672,8 @@ guard_local_payment_chain_verify() {
       HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET|\
       HSP_PAYMENT_DOWNSTREAM_REFUND_PROJECTION_URL|\
       HSP_*_RECONCILIATION_FACT_SECRET|\
-      HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|HSP_LOCAL_JAVA_OPTS|\
+      HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|\
+      HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED|HSP_LOCAL_JAVA_OPTS|\
       JAVA_TOOL_OPTIONS|JDK_JAVA_OPTIONS|MAVEN_OPTS|\
       OPS_CONFIG_*|RISK_CONTROL_*|REFUND_CENTER_*|RECONCILIATION_*)
         if [[ -n "${!variable_name:-}" ]]; then
@@ -749,8 +756,9 @@ run_verify() {
   local verification_mode=""
 
   if [[ "$scope" != "all" && "$scope" != "payment-chain" \
-    && "$scope" != "payment-query-chain" && "$scope" != "risk-review" ]]; then
-    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain 或 risk-review" >&2
+    && "$scope" != "payment-query-chain" && "$scope" != "payment-standard-chain" \
+    && "$scope" != "risk-review" ]]; then
+    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain、payment-standard-chain 或 risk-review" >&2
     return 2
   fi
   if [[ "$scope" != "risk-review" ]]; then
@@ -769,6 +777,8 @@ run_verify() {
     if [[ "$scope" == "payment-query-chain" ]]; then
       verification_mode="payment-query-chain"
       QUERY_ACCESS_KEY="local-query-$RANDOM-$RANDOM-$RANDOM"
+    elif [[ "$scope" == "payment-standard-chain" ]]; then
+      verification_mode="payment-standard-chain"
     fi
   fi
   if [[ "$scope" == "risk-review" ]]; then
@@ -816,6 +826,10 @@ run_verify() {
     elif [[ "$scope" == "payment-query-chain" ]]; then
       HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
         HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
+        node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
+    elif [[ "$scope" == "payment-standard-chain" ]]; then
+      HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
+        HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED=true \
         node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     else
       HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \

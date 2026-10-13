@@ -658,3 +658,9 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 89. 2026-10-14 多系统查询修复后的本机支付双路径回归
 
 在 `699f69ea` 基线下、九服务停服且写前隔离门禁通过后，分别执行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 的本机 H2/demo `verify payment-chain` 与 `verify payment-query-chain`。虚构业务订单号均带末尾引号和反斜杠；支付单 `PAY1791928699557336942f3` 经 `CALLBACK`，`PAY1791928892100738bffb3` 经受控本机上游 `GATEWAY_QUERY` 收口。两轮九服务 HTTP 冒烟与 happy-path 均 `[PASS]`、退出码 `0`；支付事件、清分、结算、三类账务事件、退款与七项对账事实齐备，对账 `COMPLETED/4/4`、`reconciliationFinancialCloseable=true`。两轮退出后九服务均 `DOWN`，查单桩 18190 无监听。只证明当前九服务 H2/demo HTTP 模拟链未回退；独立钱包、保证金不在这两条链中，近期各运营列表特殊值筛选仅有各自定向测试，本次不证明真实 RabbitMQ、目标 MySQL 8、多实例、正式渠道、身份审批或真实资金。
+
+## 90. 2026-10-14 隔离标准订单支付至九服务对账
+
+`verify payment-standard-chain` 仅在本轮 H2/demo payment-core 初始化时叠加 `payment-standard-chain-order.sql`，预置一笔未付 `LOCAL-HAPPY-STANDARD`；支付前断言订单中心有原始标准订单、无账单，支付后断言订单待履约、已付 `88.00`、欠款 `0.00`，账单通过原样标准订单来源关联。本机九服务 HTTP 冒烟和 happy-path 均 `[PASS]`：支付单 `PAY1791932697901db08ff43` 由 `CALLBACK` 收口，清分、结算、三类账务、退款及七项对账事实读回，对账 `COMPLETED/4/4`、本地 `financialCloseable=true`。原虚拟订单链路另以 `PAY1791932886023a4c7eabe` 回归通过，两轮退出码 `0`、九服务停服；两种外部环境覆盖均在启动前以退出码 `2` 拒绝。夹具不是业务订单创建能力，且不代表目标 MySQL 8 多实例、真实 RabbitMQ、正式渠道、用户身份或实际资金验收。
+
+共享脚本的原主动查单变体另以 `verify payment-query-chain` 复跑，支付单 `PAY179193317949834f0f0ad` 经本机 `GATEWAY_QUERY` 收口，九服务冒烟、happy-path、七条对账事实与 `COMPLETED/4/4` 均通过，退出码 `0`，九服务及查单桩停服；此项仍是虚拟订单模拟查单，不扩充标准订单的查单证据。

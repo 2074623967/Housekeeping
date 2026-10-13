@@ -93,7 +93,10 @@ const CASHIER_CHANNELS = new Set(["微信支付", "支付宝", "银行卡"]);
 const TERMINAL_PAYMENT_ATTEMPT_STATUSES = new Set(["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]);
 
 const suffix = `${Date.now()}-${process.pid}`;
-const orderNo = buildLocalOrderNo(suffix, process.env.HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO === "true");
+const standardOrderMode = process.env.HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED === "true";
+const orderNo = standardOrderMode
+  ? "LOCAL-HAPPY-STANDARD"
+  : buildLocalOrderNo(suffix, process.env.HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO === "true");
 
 function assert(condition, message) {
   if (!condition) {
@@ -2009,6 +2012,15 @@ async function main() {
   }
   const queryMode = process.env.HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED === "true";
   const expectedPayScene = "HOME_CLEAN";
+  if (standardOrderMode) {
+    const initialOrder = await api(`${paymentBaseUrl}/api/orders/${encodeURIComponent(orderNo)}`);
+    assert(matchesIdentifier(initialOrder.orderNo, orderNo) && initialOrder.orderStatus === "待支付",
+      "standard order fixture is not a pending business order");
+    assertPaymentAmount({ amount: initialOrder.orderAmount }, "88.00");
+    assertPaymentAmount({ amount: initialOrder.paidAmount }, "0.00");
+    const initialBills = await api(`${paymentBaseUrl}/api/bills?${new URLSearchParams({ orderNo })}`);
+    assert(initialBills?.total === 0, "standard order fixture unexpectedly has an existing bill");
+  }
   const prepay = assertPrepayOrder(await api(`${paymentBaseUrl}/api/payments/prepay`, {
     method: "POST",
     body: JSON.stringify({
@@ -2234,8 +2246,24 @@ async function main() {
   const billFilter = new URLSearchParams({ billNo, orderNo });
   const billList = await api(`${paymentBaseUrl}/api/bills?${billFilter}`);
   const billOverview = await api(`${paymentBaseUrl}/api/bills/overview?${billFilter}`);
-  assert(orderList?.total === 0 && orderList.items?.length === 0,
-  "virtual prepay must not invent a standard business order");
+  if (standardOrderMode) {
+    assert(orderList?.total === 1 && orderList.items?.length === 1
+      && matchesIdentifier(orderList.items[0].orderNo, orderNo),
+    "paid standard order disappeared from the order center");
+    const settledOrder = await api(`${paymentBaseUrl}/api/orders/${encodeURIComponent(orderNo)}`);
+    const settledBill = await api(`${paymentBaseUrl}/api/bills/${encodeURIComponent(billNo)}`);
+    assert(matchesIdentifier(settledOrder.latestPaymentOrderId, prepay.paymentOrderId)
+      && matchesIdentifier(settledOrder.billNo, billNo)
+      && settledOrder.orderStatus === "待履约" && settledOrder.latestPaymentStatus === "SUCCESS",
+    "standard order was not settled by the payment result");
+    assertPaymentAmount({ amount: settledOrder.paidAmount }, "88.00");
+    assertPaymentAmount({ amount: settledOrder.outstandingAmount }, "0.00");
+    assert(matchesIdentifier(settledBill.standardOrderNo, orderNo),
+      "bill did not preserve the standard order source");
+  } else {
+    assert(orderList?.total === 0 && orderList.items?.length === 0,
+    "virtual prepay must not invent a standard business order");
+  }
   assert(billList?.total === 1 && billList.items?.length === 1
     && billOverview?.totalBillCount === 1
     && matchesIdentifier(billList.items[0].billNo, billNo)
