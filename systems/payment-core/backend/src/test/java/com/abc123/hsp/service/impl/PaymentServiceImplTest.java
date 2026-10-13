@@ -1358,6 +1358,33 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackTransactionOwnedByAnotherPaymentBeforeStateMutation() {
+        PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-FOREIGN-TXN", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-FOREIGN-TXN")).thenReturn(detail);
+        when(paymentMapper.existsOtherPaymentByChannelTransactionNo(
+                "PAY-CALLBACK-FOREIGN-TXN", "wx_h5", "WX-FOREIGN-CALLBACK")).thenReturn(true);
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper, paymentCallbackSignatureService, paymentChannelRoutingService,
+                paymentChannelQueryService, paymentChannelSubmitService, paymentEventDispatchService);
+
+        for (String tradeStatus : Arrays.asList("SUCCESS", "PROCESSING", "WAIT_CALLBACK", "PAYING")) {
+            PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+            callback.setPaymentOrderId("PAY-CALLBACK-FOREIGN-TXN");
+            callback.setTradeStatus(tradeStatus);
+            callback.setChannelTransactionNo("WX-FOREIGN-CALLBACK");
+
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> service.callback("wx_h5", callback));
+            assertEquals(ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        }
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentPendingFromCallback(anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+    }
+
+    @Test
     void shouldRejectCallbackWithoutChannelSubmissionFact() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPrepayAmountBindingValid(true);

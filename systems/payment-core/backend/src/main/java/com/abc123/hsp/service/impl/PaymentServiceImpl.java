@@ -1767,6 +1767,12 @@ public class PaymentServiceImpl implements PaymentService {
                     ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
                     "callback transaction does not match payment transaction");
         }
+        if (paymentMapper.existsOtherPaymentByChannelTransactionNo(
+                detail.getPaymentOrderId(), detail.getChannel(), channelTransactionNo)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback transaction belongs to another payment");
+        }
     }
 
     private void validatePaymentSubmitResultBinding(

@@ -60,6 +60,75 @@ class PaymentSubmitReplayIntegrationTest {
 
     private static final String LONG_CHANNEL_CODE = "LONG-" + String.join("", java.util.Collections.nCopies(59, "C"));
 
+    @Test
+    void shouldRejectForeignChannelTransactionCallbackWithoutChangingEitherPayment() {
+        SpringApplication application = new SpringApplication(HomeServicePaymentApplication.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        String databaseUrl = "jdbc:h2:mem:payment_callback_foreign_transaction_" + System.nanoTime()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE";
+        try (ConfigurableApplicationContext context = application.run(
+                "--spring.profiles.active=demo",
+                "--spring.datasource.url=" + databaseUrl,
+                "--payment.ops-config.enabled=false",
+                "--payment.scheduling.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false",
+                "--spring.rabbitmq.listener.direct.auto-startup=false")) {
+            PaymentService paymentService = context.getBean(PaymentService.class);
+            JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+            PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+            prepayRequest.setOrderNo("DEMO-CALLBACK-FOREIGN-TXN");
+            prepayRequest.setPayScene("HOME_CLEAN");
+            prepayRequest.setCustomerName("callback collision");
+            prepayRequest.setAmount(new BigDecimal("88.00"));
+            PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+            PaymentSubmitRequestDTO submit = new PaymentSubmitRequestDTO();
+            submit.setPrepayOrderNo(prepay.getPrepayOrderNo());
+            submit.setPaymentMethod("微信支付");
+            submit.setChannelCode("wx_h5");
+            submit.setSourceAppId("housekeeping-h5-web");
+            submit.setMerchantNo("MCH_WX_10001");
+            submit.setAccessToken("token-housekeeping-h5-web");
+            submit.setTerminal("H5");
+            submit.setClientIp("127.0.0.1");
+            submit.setIdempotencyKey("CALLBACK-FOREIGN-TXN-001");
+            paymentService.submit(submit);
+            String paymentOrderId = prepay.getPaymentOrderId();
+            String channelTransactionNo = jdbcTemplate.queryForObject(
+                    "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, paymentOrderId);
+            assertEquals(1, jdbcTemplate.update(
+                    "UPDATE t_payment_order SET channel_transaction_no = NULL WHERE payment_order_id = ?",
+                    paymentOrderId));
+            jdbcTemplate.update("INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, "
+                            + "amount, payment_method, channel_code, channel_transaction_no, status, "
+                            + "status_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                    "PAY-CALLBACK-FOREIGN-OWNER", "ORD-CALLBACK-FOREIGN-OWNER", "original owner",
+                    new BigDecimal("88.00"), "微信支付", "wx_h5", channelTransactionNo,
+                    "WAIT_CALLBACK", "warn");
+            for (String tradeStatus : Arrays.asList("SUCCESS", "PROCESSING")) {
+                PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+                callback.setPaymentOrderId(paymentOrderId);
+                callback.setTradeStatus(tradeStatus);
+                callback.setChannelTransactionNo(channelTransactionNo);
+                BusinessException exception = assertThrows(BusinessException.class,
+                        () -> paymentService.callback("wx_h5", callback));
+                assertEquals(ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+            }
+            assertEquals("WAIT_CALLBACK", jdbcTemplate.queryForObject(
+                    "SELECT status FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, paymentOrderId));
+            assertNull(jdbcTemplate.queryForObject(
+                    "SELECT channel_transaction_no FROM t_payment_order WHERE payment_order_id = ?",
+                    String.class, paymentOrderId));
+            assertEquals("PAY-CALLBACK-FOREIGN-OWNER", jdbcTemplate.queryForObject(
+                    "SELECT payment_order_id FROM t_payment_order WHERE channel_transaction_no = ?",
+                    String.class, channelTransactionNo));
+            assertEquals(0, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? AND event_type = 'PAYMENT_SUCCESS'",
+                    Integer.class, paymentOrderId));
+        }
+    }
+
     @Order(5)
     private static class CollidingChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
 
