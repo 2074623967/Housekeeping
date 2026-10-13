@@ -14,6 +14,8 @@ const appDirectory = path.join(root, "systems/payment-core/frontend/app-web");
 const chromeBinary = process.env.HSP_CHROME_BIN
   || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const refundPath = "/api/refunds/REF-UNMOUNT-SMOKE";
+const cashierPath = "/api/payments/cashier/PRE-UNMOUNT-SMOKE";
+const resultPath = "/api/payments/PAY-UNMOUNT-SMOKE";
 const refundDetail = {
   refundOrderId: "REF-UNMOUNT-SMOKE", paymentOrderId: "PAY-UNMOUNT-SMOKE",
   businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
@@ -21,6 +23,21 @@ const refundDetail = {
   refundReason: "local browser lifecycle smoke", status: "PROCESSING", statusType: "warn",
   payScene: "BALANCE_PAY_APP", appliedAt: "2026-09-27 12:00:00",
   attempts: [], operationLogs: []
+};
+const cashierDetail = {
+  prepayOrderNo: "PRE-UNMOUNT-SMOKE", paymentOrderId: "PAY-UNMOUNT-SMOKE",
+  businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
+  amount: "68.00", payScene: "BALANCE_PAY_APP", status: "待支付",
+  statusType: "warn", paymentStatus: "PREPAY_CREATED", channels: ["微信支付"],
+  expiresAt: "2030-01-01 00:00:00"
+};
+const paymentDetail = {
+  prepayOrderNo: "PRE-UNMOUNT-SMOKE", paymentOrderId: "PAY-UNMOUNT-SMOKE",
+  businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
+  amount: "68.00", payScene: "BALANCE_PAY_APP", status: "WAIT_CALLBACK",
+  statusType: "warn", channel: "wx_h5", channelTransactionNo: "LOCAL-UNMOUNT-TX",
+  createdAt: "2026-09-27 12:00:00", latestAttemptStatus: "处理中",
+  latestAttemptStatusType: "info"
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -57,21 +74,31 @@ async function main() {
   const profile = await mkdtemp(path.join(os.tmpdir(), "hsp-terminal-unmount-"));
   let calls = 0;
   let releaseDelayedResponse;
+  const initialReadCalls = new Map();
+  const initialReadReleases = new Map();
   let vite;
   let chrome;
   let socket;
   const api = createServer((incoming, outgoing) => {
-    if (incoming.method !== "GET" || incoming.url !== refundPath) {
+    const pathname = new URL(incoming.url, "http://127.0.0.1").pathname;
+    if (incoming.method !== "GET"
+        || ![refundPath, cashierPath, resultPath].includes(pathname)) {
       outgoing.writeHead(404).end();
       return;
     }
-    calls += 1;
+    if (pathname === refundPath) calls += 1;
+    else initialReadCalls.set(pathname, (initialReadCalls.get(pathname) || 0) + 1);
     const respond = () => {
       outgoing.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-      outgoing.end(JSON.stringify({ code: "0", data: refundDetail }));
+      outgoing.end(JSON.stringify({ code: "0", data: pathname === refundPath
+        ? refundDetail : pathname === cashierPath ? cashierDetail : paymentDetail }));
     };
-    if (calls === 2) releaseDelayedResponse = respond;
-    else respond();
+    if (pathname === refundPath) {
+      if (calls === 2) releaseDelayedResponse = respond;
+      else respond();
+    } else if (initialReadCalls.get(pathname) === 1) {
+      initialReadReleases.set(pathname, respond);
+    } else respond();
   });
   try {
     await new Promise((resolve, reject) => api.once("error", reject).listen(0, "127.0.0.1", resolve));
@@ -112,11 +139,13 @@ async function main() {
     });
     let commandId = 0;
     const pendingCommands = new Map();
-    let detailResponses = 0;
+    const responseCounts = new Map();
     socket.addEventListener("message", ({ data }) => {
       const message = JSON.parse(data);
-      if (message.method === "Network.responseReceived"
-          && new URL(message.params.response.url).pathname === refundPath) detailResponses += 1;
+      if (message.method === "Network.responseReceived") {
+        const pathname = new URL(message.params.response.url).pathname;
+        responseCounts.set(pathname, (responseCounts.get(pathname) || 0) + 1);
+      }
       const command = pendingCommands.get(message.id);
       if (!command) return;
       pendingCommands.delete(message.id);
@@ -152,12 +181,47 @@ async function main() {
     await waitFor(() => evaluate("location.pathname === '/balance-pay'"), "SPA navigation away from refund progress");
     releaseDelayedResponse();
     releaseDelayedResponse = null;
-    await waitFor(() => detailResponses === 2, "delayed response delivered to Chrome");
+    await waitFor(() => responseCounts.get(refundPath) === 2, "delayed response delivered to Chrome");
     await delay(8500);
     if (calls !== 2) throw new Error(`Refund polling resumed after unmount: ${calls} requests`);
-    console.log("[PASS] App refund progress: delayed response after SPA unmount did not restart polling");
+
+    for (const scenario of [
+      { pagePath: "/cashier/PRE-UNMOUNT-SMOKE", apiPath: cashierPath, timerName: "setInterval", delayMs: 1000 },
+      { pagePath: "/payment-result/PAY-UNMOUNT-SMOKE", apiPath: resultPath,
+        timerName: "setTimeout", delayMs: 5000 }
+    ]) {
+      await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}${scenario.pagePath}?payScene=BALANCE_PAY_APP` });
+      await waitFor(() => initialReadCalls.get(scenario.apiPath) === 1
+        && initialReadReleases.has(scenario.apiPath), `${scenario.pagePath} delayed first detail GET`);
+      const unmounted = await evaluate(`(() => {
+        const app = document.querySelector("#app")?.__vue_app__;
+        if (!app) return false;
+        window.__lateTimers = [];
+        const originalTimer = window[${JSON.stringify(scenario.timerName)}];
+        window[${JSON.stringify(scenario.timerName)}] = (callback, milliseconds, ...args) => {
+          if (milliseconds === ${scenario.delayMs}) window.__lateTimers.push(milliseconds);
+          return originalTimer.call(window, callback, milliseconds, ...args);
+        };
+        app.unmount();
+        return true;
+      })()`);
+      if (!unmounted) throw new Error(`Could not unmount ${scenario.pagePath} while GET was pending`);
+      initialReadReleases.get(scenario.apiPath)();
+      initialReadReleases.delete(scenario.apiPath);
+      await waitFor(() => responseCounts.get(scenario.apiPath) === 1,
+        `${scenario.pagePath} delayed response delivered to Chrome`);
+      await delay(1200);
+      if (await evaluate("window.__lateTimers.length") !== 0) {
+        throw new Error(`${scenario.pagePath} scheduled a timer after unmount`);
+      }
+      if (initialReadCalls.get(scenario.apiPath) !== 1) {
+        throw new Error(`${scenario.pagePath} requested detail after unmount`);
+      }
+    }
+    console.log("[PASS] App cashier/result/refund: delayed reads after unmount did not create timers or poll again");
   } finally {
     releaseDelayedResponse?.();
+    for (const release of initialReadReleases.values()) release();
     socket?.close();
     await stopChild(chrome);
     await stopChild(vite);
