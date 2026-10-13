@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const test = require("node:test");
 const {
   canClosePayment,
@@ -98,7 +99,7 @@ test("keeps query and close operations on proven channel facts", () => {
 });
 
 test("submits only an unexpired untouched prepay with an allowed channel", () => {
-  const now = new Date("2026-09-14T10:00:00").getTime();
+  const now = Date.parse("2026-09-14T02:00:00Z");
   const cashier = {
     channels: ["微信支付"],
     status: "待支付",
@@ -127,6 +128,18 @@ test("submits only an unexpired untouched prepay with an allowed channel", () =>
   assert.equal(canSubmitPayment({ ...cashier, channelTransactionNo: "WX-001" }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, channels: ["支付宝"] }, now), false);
   assert.equal(canSubmitPayment({ ...cashier, expiresAt: "2026-09-14 09:59:59" }, now), false);
+});
+
+test("interprets mini program expiry in the business timezone regardless of device timezone", () => {
+  const modulePath = require.resolve("../utils/payment");
+  const script = `const { resolveRemainingSeconds } = require(${JSON.stringify(modulePath)});
+    console.log(resolveRemainingSeconds("2026-09-14 10:05:00", Date.parse("2026-09-14T02:00:00Z")));`;
+  for (const timezone of ["UTC", "America/Los_Angeles"]) {
+    assert.equal(execFileSync(process.execPath, ["-e", script], {
+      encoding: "utf8",
+      env: { ...process.env, TZ: timezone }
+    }).trim(), "300");
+  }
 });
 
 test("preserves danger styling for server-side cashier failures", () => {

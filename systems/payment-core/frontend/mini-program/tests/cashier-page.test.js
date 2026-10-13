@@ -6,6 +6,7 @@ const { normalizePaymentSubmitResult, paymentApi } = require("../utils/request")
 test("renders the cashier bill number", () => {
   const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../pages/cashier/index.wxml"), "utf8");
   assert.match(source, /账单号.*cashier\.billNo/);
+  assert.match(source, /失效时间（北京时间）/);
 });
 
 test("shows the original method and transaction for an already submitted cashier", () => {

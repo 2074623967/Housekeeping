@@ -30,7 +30,7 @@
         <view class="detail-row"><text class="detail-label">客户名称</text><text class="detail-value">{{cashier.customerName || '-'}}</text></view>
         <view wx:if="{{cashier.channelTransactionNo}}" class="detail-row"><text class="detail-label">原渠道流水号</text><text class="detail-value">{{cashier.channelTransactionNo}}</text></view>
         <view class="detail-row"><text class="detail-label">最近尝试完成时间</text><text class="detail-value">{{cashier.latestAttemptCompletedAt || '-'}}</text></view>
-        <view class="detail-row"><text class="detail-label">失效时间</text><text class="detail-value">{{cashier.expiresAt || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">失效时间（北京时间）</text><text class="detail-value">{{cashier.expiresAt || '-'}}</text></view>
         <view class="detail-row"><text class="detail-label">剩余时间</text><text class="detail-value">{{countdownLabel}}</text></view>
       </view>
     </view>

@@ -10,6 +10,7 @@ import {
   isChannelTransactionConflict,
   isCashierExpired,
   isPaymentSubmissionPending,
+  resolveRemainingSeconds,
   resolvePaymentChannelCode,
   resolvePaymentMerchantNo
 } from "../constants/payment";
@@ -197,11 +198,9 @@ function startCountdown(expiresAt) {
     countdownSeconds.value = 0;
     return;
   }
-  const expireTimestamp = new Date(expiresAt.replace(" ", "T")).getTime();
   const updateCountdown = () => {
-    const remainSeconds = Math.max(Math.floor((expireTimestamp - Date.now()) / 1000), 0);
-    countdownSeconds.value = Number.isFinite(remainSeconds) ? remainSeconds : 0;
-    if (remainSeconds <= 0) {
+    countdownSeconds.value = resolveRemainingSeconds(expiresAt);
+    if (countdownSeconds.value <= 0) {
       stopCountdown();
     }
   };
@@ -1076,7 +1075,7 @@ watch([currentPrepayOrderNo, expectedRoutePayScene], ([prepayOrderNo]) => {
             <strong>{{ cashier?.status || "-" }}</strong>
           </div>
           <div class="summary-item">
-            <span>到期时间</span>
+            <span>到期时间（北京时间）</span>
             <strong>{{ cashier?.expiresAt || "-" }}</strong>
           </div>
         </div>

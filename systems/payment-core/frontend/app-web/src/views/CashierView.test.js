@@ -8,6 +8,7 @@ const viewPath = join(dirname(fileURLToPath(import.meta.url)), "CashierView.vue"
 
 test("does not recommend channel queries before the cashier permits them", () => {
   const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /到期时间（北京时间）/);
   assert.match(source, /const queryUnavailableGuidance = computed\([\s\S]*cashier\.value\?\.paymentStatus === "PAYING"[\s\S]*PAYING_SUBMIT_HINT/);
   assert.match(source, /submissionPending\.value\) \{\s*return canQueryPayment\.value\s*\? "当前支付结果尚未确认，请先主动查单。"\s*: queryUnavailableGuidance\.value;/);
   assert.match(source, /submissionPending\.value\s*\? canQueryPayment\.value\s*\? "支付结果尚未确认，当前请求已锁定，请先主动查单。"\s*: queryUnavailableGuidance\.value/);

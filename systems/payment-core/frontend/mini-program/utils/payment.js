@@ -132,7 +132,7 @@ function resolveRemainingSeconds(expiresAt, now) {
   if (!isValidPaymentDateTime(expiresAt)) {
     return 0;
   }
-  const expiresTimestamp = Date.parse(expiresAt.replace(" ", "T"));
+  const expiresTimestamp = Date.parse(`${expiresAt.replace(" ", "T")}+08:00`);
   const currentTimestamp = now == null ? Date.now() : now;
   if (!Number.isFinite(expiresTimestamp) || !Number.isFinite(currentTimestamp)) {
     return 0;
