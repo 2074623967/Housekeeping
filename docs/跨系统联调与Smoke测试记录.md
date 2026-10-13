@@ -642,3 +642,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 85. 2026-10-14 收银台会话特殊订单号双路径复验
 
 为九服务脚本加入按预付单会话号、支付单号和虚构订单号联合筛选收银台会话列表与总览，分别隔离运行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 的 `verify payment-chain` 与 `verify payment-query-chain`。支付单 `PAY1791918204752fb2c2c00` 经 `CALLBACK`、`PAY179191837803753682eb2` 经本机受控 `GATEWAY_QUERY` 收口；两轮会话查询均唯一匹配原支付链，九服务 HTTP 冒烟和 happy-path `[PASS]`、退出码 `0`，七项对账事实 `COMPLETED/4/4`、本地 `financialCloseable=true`。停服后九服务均 `DOWN`，查单桩停止。仅证明 H2/demo 的本机特殊值 HTTP 链路，不代表真实渠道、RabbitMQ、目标 MySQL 8、多实例、生产身份或资金验收。
+
+## 86. 2026-10-14 特殊订单号账单与虚拟来源边界双路径验证
+
+隔离运行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 下的九服务回调及受控主动查单链。首轮新增“订单中心必须有一行”检查失败；核对预付单来源后确认本链是虚拟预付单，仅生成账单，不应合成标准业务订单。保留订单中心零行边界断言，新增账单号加业务订单号联合筛选账单列表及总览。复跑支付单 `PAY1791919271705b899bacf` 经 `CALLBACK`、`PAY179191944706193d37ed3` 经 `GATEWAY_QUERY` 收口，两轮九服务冒烟和 happy-path 均 `[PASS]`、退出码 `0`，七项对账事实 `COMPLETED/4/4`、本地 `financialCloseable=true`；退出后九服务均 `DOWN`、查单桩停服。订单中心特殊值仅有 H2 Mapper 定向测试，尚无标准业务订单 HTTP 跨链验证；这些证据也不能替代目标 MySQL 8、RabbitMQ、正式渠道、身份审批或资金验收。

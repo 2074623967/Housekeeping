@@ -2230,6 +2230,17 @@ async function main() {
     billNo, orderNo, prepay.prepayOrderNo, prepay.paymentOrderId, expectedPayScene,
     "88.00", "88.00", "0.00", "已结清", "success", "SUCCESS"
   );
+  const orderList = await api(`${paymentBaseUrl}/api/orders?${new URLSearchParams({ orderNo })}`);
+  const billFilter = new URLSearchParams({ billNo, orderNo });
+  const billList = await api(`${paymentBaseUrl}/api/bills?${billFilter}`);
+  const billOverview = await api(`${paymentBaseUrl}/api/bills/overview?${billFilter}`);
+  assert(orderList?.total === 0 && orderList.items?.length === 0,
+  "virtual prepay must not invent a standard business order");
+  assert(billList?.total === 1 && billList.items?.length === 1
+    && billOverview?.totalBillCount === 1
+    && matchesIdentifier(billList.items[0].billNo, billNo)
+    && matchesIdentifier(billList.items[0].orderNo, orderNo),
+  "bill list and overview did not preserve the paid order and bill");
   normalizePaymentDetailResult(paidDetail, prepay.paymentOrderId, expectedPayScene);
   miniProgramPayment.normalizePaymentDetailResult(paidDetail, prepay.paymentOrderId, expectedPayScene);
   validateCommandResponse("detail", { "payment-order-id": prepay.paymentOrderId }, { data: paidDetail });
