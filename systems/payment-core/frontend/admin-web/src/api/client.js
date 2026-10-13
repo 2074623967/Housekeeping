@@ -61,6 +61,10 @@ function matchesPreservedBusinessIdentifier(snapshotValue, resultValue) {
     || normalizeBusinessIdentifier(snapshotValue) === normalizeBusinessIdentifier(resultValue);
 }
 
+function wallClockTimestamp(value) {
+  return Date.parse(`${value.trim().replace(" ", "T")}Z`);
+}
+
 function isValidDateTime(value) {
   if (typeof value !== "string") {
     return false;
@@ -561,12 +565,12 @@ function isConsistentRefundTerminalTime(status, terminalAt) {
 }
 
 function isConsistentRefundLifecycleTimeOrder(appliedAt, successAt, terminalAt) {
-  const appliedTimestamp = Date.parse(appliedAt.trim().replace(" ", "T"));
+  const appliedTimestamp = wallClockTimestamp(appliedAt);
   const successTimestamp = isValidDateTime(successAt)
-    ? Date.parse(successAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(successAt)
     : null;
   const terminalTimestamp = isValidDateTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : null;
   return (successTimestamp == null || appliedTimestamp <= successTimestamp)
     && (terminalTimestamp == null || appliedTimestamp <= terminalTimestamp)
@@ -583,13 +587,13 @@ function isConsistentRefundChannelSubmittedAt(detail) {
   if (!isValidDateTime(submittedAt)) {
     return false;
   }
-  const appliedTimestamp = Date.parse(detail.appliedAt.trim().replace(" ", "T"));
-  const submittedTimestamp = Date.parse(submittedAt.trim().replace(" ", "T"));
+  const appliedTimestamp = wallClockTimestamp(detail.appliedAt);
+  const submittedTimestamp = wallClockTimestamp(submittedAt);
   if (submittedTimestamp < appliedTimestamp) {
     return false;
   }
   if (isValidDateTime(detail.terminalAt)) {
-    return submittedTimestamp <= Date.parse(detail.terminalAt.trim().replace(" ", "T"));
+    return submittedTimestamp <= wallClockTimestamp(detail.terminalAt);
   }
   return true;
 }
@@ -839,8 +843,8 @@ function isConsistentPaymentLifecycleTimeOrder(createdAt, successAt) {
   if (!isValidDateTime(createdAt) || !isValidDateTime(successAt)) {
     return true;
   }
-  return Date.parse(createdAt.trim().replace(" ", "T"))
-    <= Date.parse(successAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(createdAt)
+    <= wallClockTimestamp(successAt);
 }
 
 function isConsistentPaymentAttemptCompletedAt(status, completedAt, createdAt) {
@@ -853,8 +857,8 @@ function isConsistentPaymentAttemptCompletedAt(status, completedAt, createdAt) {
   if (status.trim() === "成功") {
     return isValidDateTime(completedAt)
       && (!isValidDateTime(createdAt)
-        || Date.parse(createdAt.trim().replace(" ", "T"))
-          <= Date.parse(completedAt.trim().replace(" ", "T")));
+        || wallClockTimestamp(createdAt)
+          <= wallClockTimestamp(completedAt));
   }
   return completedAt == null;
 }
@@ -866,8 +870,8 @@ function isConsistentPaymentAttemptSuccessTime(attemptStatus, completedAt, succe
   if (!isValidDateTime(completedAt) || !isValidDateTime(successAt)) {
     return true;
   }
-  return Date.parse(completedAt.trim().replace(" ", "T"))
-    <= Date.parse(successAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(completedAt)
+    <= wallClockTimestamp(successAt);
 }
 
 function isValidPaymentSuccessFactIssue(value) {
@@ -1095,8 +1099,8 @@ function isConsistentPaymentRecordAttemptCompletedAt(status, completedAt, create
   }
   return isValidDateTime(completedAt)
     && isValidDateTime(createdAt)
-    && Date.parse(createdAt.trim().replace(" ", "T"))
-      <= Date.parse(completedAt.trim().replace(" ", "T"));
+    && wallClockTimestamp(createdAt)
+      <= wallClockTimestamp(completedAt);
 }
 
 function isConsistentPaymentRecordAttemptStatus(status, statusType) {
@@ -1128,8 +1132,8 @@ function isConsistentPaymentRecordSuccessfulAttempt(
     && attemptStatusType.trim().toLowerCase() === "success"
     && isValidDateTime(attemptCompletedAt)
     && isValidDateTime(updatedAt)
-    && Date.parse(attemptCompletedAt.trim().replace(" ", "T"))
-      <= Date.parse(updatedAt.trim().replace(" ", "T"));
+    && wallClockTimestamp(attemptCompletedAt)
+      <= wallClockTimestamp(updatedAt);
 }
 
 function isConsistentPaymentRecordPaidAt(status, paidAt, createdAt, updatedAt) {
@@ -1142,10 +1146,10 @@ function isConsistentPaymentRecordPaidAt(status, paidAt, createdAt, updatedAt) {
   return isValidDateTime(paidAt)
     && isValidDateTime(createdAt)
     && isValidDateTime(updatedAt)
-    && Date.parse(createdAt.trim().replace(" ", "T"))
-      <= Date.parse(paidAt.trim().replace(" ", "T"))
-    && Date.parse(paidAt.trim().replace(" ", "T"))
-      <= Date.parse(updatedAt.trim().replace(" ", "T"));
+    && wallClockTimestamp(createdAt)
+      <= wallClockTimestamp(paidAt)
+    && wallClockTimestamp(paidAt)
+      <= wallClockTimestamp(updatedAt);
 }
 
 function isValidPaymentRecordFactSnapshot(record) {
@@ -1179,9 +1183,9 @@ function isConsistentPaymentRecordTimes(expireTime, createdAt, updatedAt, missin
       || !isValidDateTime(updatedAt)) {
     return false;
   }
-  const createdTimestamp = Date.parse(createdAt.trim().replace(" ", "T"));
-  return (missingExpiry || Date.parse(expireTime.trim().replace(" ", "T")) >= createdTimestamp)
-    && Date.parse(updatedAt.trim().replace(" ", "T")) >= createdTimestamp;
+  const createdTimestamp = wallClockTimestamp(createdAt);
+  return (missingExpiry || wallClockTimestamp(expireTime) >= createdTimestamp)
+    && wallClockTimestamp(updatedAt) >= createdTimestamp;
 }
 
 function isNullableRecordedText(value) {
@@ -1370,8 +1374,8 @@ function isConsistentPaymentEventPublishTimes(
       && (nextRetryAt == null
         || (isValidDateTime(nextRetryAt)
           && (createdAt == null || (isValidDateTime(createdAt)
-            && Date.parse(createdAt.trim().replace(" ", "T"))
-              <= Date.parse(nextRetryAt.trim().replace(" ", "T"))))));
+            && wallClockTimestamp(createdAt)
+              <= wallClockTimestamp(nextRetryAt)))));
   }
   if (!isValidDateTime(lastPublishedAt)) {
     return false;
@@ -1379,22 +1383,22 @@ function isConsistentPaymentEventPublishTimes(
   if (hasRepublishedAt
       && ((createdAt != null
         && (!isValidDateTime(createdAt)
-          || Date.parse(createdAt.trim().replace(" ", "T"))
-            > Date.parse(lastRepublishedAt.trim().replace(" ", "T"))))
-        || Date.parse(lastRepublishedAt.trim().replace(" ", "T"))
-          > Date.parse(lastPublishedAt.trim().replace(" ", "T")))) {
+          || wallClockTimestamp(createdAt)
+            > wallClockTimestamp(lastRepublishedAt)))
+        || wallClockTimestamp(lastRepublishedAt)
+          > wallClockTimestamp(lastPublishedAt))) {
     return false;
   }
   if (createdAt != null
       && (!isValidDateTime(createdAt)
-        || Date.parse(createdAt.trim().replace(" ", "T"))
-          > Date.parse(lastPublishedAt.trim().replace(" ", "T")))) {
+        || wallClockTimestamp(createdAt)
+          > wallClockTimestamp(lastPublishedAt))) {
     return false;
   }
   if (normalizedStatus === "FAILED") {
     return isValidDateTime(nextRetryAt)
-      && Date.parse(lastPublishedAt.trim().replace(" ", "T"))
-        <= Date.parse(nextRetryAt.trim().replace(" ", "T"));
+      && wallClockTimestamp(lastPublishedAt)
+        <= wallClockTimestamp(nextRetryAt);
   }
   return nextRetryAt == null;
 }
@@ -1541,8 +1545,8 @@ function isConsistentPaymentRequestCompletedAt(status, completedAt, createdAt) {
   if (status.trim() === "成功") {
     return isValidDateTime(completedAt)
       && isValidDateTime(createdAt)
-      && Date.parse(createdAt.trim().replace(" ", "T"))
-        <= Date.parse(completedAt.trim().replace(" ", "T"));
+      && wallClockTimestamp(createdAt)
+        <= wallClockTimestamp(completedAt);
   }
   return completedAt == null;
 }
@@ -1708,8 +1712,8 @@ function isConsistentPaymentFlowCompletedAt(flowSource, businessStatus, complete
   if (businessStatus.trim() === "成功") {
     return isValidDateTime(completedAt)
       && isValidDateTime(createdAt)
-      && Date.parse(createdAt.trim().replace(" ", "T"))
-        <= Date.parse(completedAt.trim().replace(" ", "T"));
+      && wallClockTimestamp(createdAt)
+        <= wallClockTimestamp(completedAt);
   }
   return completedAt == null;
 }
@@ -1928,8 +1932,8 @@ function isConsistentCashierSessionTimes(createdAt, expiresAt) {
   if (!isValidDateTime(createdAt) || !isValidDateTime(expiresAt)) {
     return false;
   }
-  return Date.parse(expiresAt.trim().replace(" ", "T"))
-    >= Date.parse(createdAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(expiresAt)
+    >= wallClockTimestamp(createdAt);
 }
 
 export function normalizeCashierSessionListPage(data) {
@@ -2216,8 +2220,8 @@ function isConsistentBillTimes(createdAt, dueAt) {
   if (!isValidDateTime(createdAt) || !isValidDateTime(dueAt)) {
     return false;
   }
-  return Date.parse(dueAt.trim().replace(" ", "T"))
-    >= Date.parse(createdAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(dueAt)
+    >= wallClockTimestamp(createdAt);
 }
 
 export function normalizeBillListPage(data) {
@@ -2463,8 +2467,8 @@ function isConsistentPaymentIssueTimes(createdAt, latestActionAt) {
     return true;
   }
   return isValidDateTime(latestActionAt)
-    && Date.parse(createdAt.trim().replace(" ", "T"))
-      <= Date.parse(latestActionAt.trim().replace(" ", "T"));
+    && wallClockTimestamp(createdAt)
+      <= wallClockTimestamp(latestActionAt);
 }
 
 export function matchesPaymentIssueDetailSnapshot(snapshot, result) {
@@ -2610,7 +2614,7 @@ function isConsistentPaymentIssueAlertQueryTimes(createdAt, lastReceiptQueryAt, 
   if (!isValidDateTime(createdAt)) {
     return false;
   }
-  const createdTimestamp = Date.parse(createdAt.trim().replace(" ", "T"));
+  const createdTimestamp = wallClockTimestamp(createdAt);
   const hasLastQuery = lastReceiptQueryAt != null;
   const hasNextQuery = nextReceiptQueryAt != null;
   if ((hasLastQuery && !isValidDateTime(lastReceiptQueryAt))
@@ -2618,10 +2622,10 @@ function isConsistentPaymentIssueAlertQueryTimes(createdAt, lastReceiptQueryAt, 
     return false;
   }
   const lastQueryTimestamp = hasLastQuery
-    ? Date.parse(lastReceiptQueryAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(lastReceiptQueryAt)
     : createdTimestamp;
   const nextQueryTimestamp = hasNextQuery
-    ? Date.parse(nextReceiptQueryAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(nextReceiptQueryAt)
     : null;
   return lastQueryTimestamp >= createdTimestamp
     && (nextQueryTimestamp == null || nextQueryTimestamp >= lastQueryTimestamp);
@@ -2641,8 +2645,8 @@ function isConsistentPaymentIssueAlertAcknowledgement(ackStatus, ackOperator, ac
     && isValidDateTime(createdAt)
     && typeof ackAt === "string"
     && isValidDateTime(ackAt)
-    && Date.parse(ackAt.trim().replace(" ", "T"))
-      >= Date.parse(createdAt.trim().replace(" ", "T"));
+    && wallClockTimestamp(ackAt)
+      >= wallClockTimestamp(createdAt);
 }
 
 function isConsistentPaymentIssueAlertSource(alertChannel, sourceAlertNo) {
@@ -2896,8 +2900,8 @@ function isConsistentPaymentTaskRunTimes(startedAt, completedAt) {
   if (!isValidDateTime(startedAt) || !isValidDateTime(completedAt)) {
     return false;
   }
-  return Date.parse(completedAt.trim().replace(" ", "T"))
-    >= Date.parse(startedAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(completedAt)
+    >= wallClockTimestamp(startedAt);
 }
 
 export function normalizePaymentTaskRunsPage(data) {
@@ -3024,12 +3028,12 @@ function isConsistentPaymentDeadLetterTaskTimes(
   if (!isValidDateTime(createdAt) || !isValidDateTime(updatedAt)) {
     return false;
   }
-  const createdTimestamp = Date.parse(createdAt.trim().replace(" ", "T"));
-  const updatedTimestamp = Date.parse(updatedAt.trim().replace(" ", "T"));
+  const createdTimestamp = wallClockTimestamp(createdAt);
+  const updatedTimestamp = wallClockTimestamp(updatedAt);
   const isOptionalTimeInRange = (value) => value == null
     || (isValidDateTime(value)
-      && createdTimestamp <= Date.parse(value.trim().replace(" ", "T"))
-      && Date.parse(value.trim().replace(" ", "T")) <= updatedTimestamp);
+      && createdTimestamp <= wallClockTimestamp(value)
+      && wallClockTimestamp(value) <= updatedTimestamp);
   const normalizedStatus = status.trim().toUpperCase();
   const hasLastReplayAt = lastReplayAt != null;
   const hasResolvedAt = resolvedAt != null;
@@ -3238,8 +3242,8 @@ function isConsistentPaymentConfigReviewTimes(status, createdAt, reviewedAt) {
   if (reviewedAt == null) {
     return true;
   }
-  return Date.parse(createdAt.trim().replace(" ", "T"))
-    <= Date.parse(reviewedAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(createdAt)
+    <= wallClockTimestamp(reviewedAt);
 }
 
 function isConsistentOptionalPaymentCertificateStatus(item) {
@@ -3609,8 +3613,8 @@ export function normalizePaymentPrepayResult(
       || !isConsistentPaymentLifecycleTimeOrder(data.createdAt, data.successAt)
       || !isValidDateTime(data.createdAt)
       || !isValidDateTime(data.expiresAt)
-      || Date.parse(data.createdAt.trim().replace(" ", "T"))
-        > Date.parse(data.expiresAt.trim().replace(" ", "T"))
+      || wallClockTimestamp(data.createdAt)
+        > wallClockTimestamp(data.expiresAt)
       || (expectedOrderNo
         && !matchesExpectedBusinessIdentifier(data.orderNo, normalizeBusinessIdentifier(expectedOrderNo)))
       || (expectedCustomerName
@@ -4256,8 +4260,8 @@ function isConsistentPaymentDayEndBatchTimes(createdAt, completedAt) {
   if (!isValidDateTime(createdAt) || !isValidDateTime(completedAt)) {
     return false;
   }
-  return Date.parse(completedAt.trim().replace(" ", "T"))
-    >= Date.parse(createdAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(completedAt)
+    >= wallClockTimestamp(createdAt);
 }
 
 export function normalizePaymentMetricsResult(data) {
@@ -5658,22 +5662,22 @@ function isConsistentRefundOperationLog(log, appliedAt) {
       || typeof log.actionCode === "string" && log.actionCode.trim())
     && isValidDateTime(log.createdAt)
     && isValidDateTime(appliedAt)
-    && Date.parse(appliedAt.trim().replace(" ", "T"))
-      <= Date.parse(log.createdAt.trim().replace(" ", "T")));
+    && wallClockTimestamp(appliedAt)
+      <= wallClockTimestamp(log.createdAt));
 }
 
 function isConsistentRefundOperationLogs(operationLogs, appliedAt, successAt, terminalAt) {
   let previousTimestamp = null;
   const terminalTimestamp = isValidDateTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : (isValidDateTime(successAt)
-      ? Date.parse(successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(successAt)
       : null);
   for (const log of operationLogs) {
     if (!isConsistentRefundOperationLog(log, appliedAt)) {
       return false;
     }
-    const createdTimestamp = Date.parse(log.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(log.createdAt);
     if ((previousTimestamp != null && createdTimestamp > previousTimestamp)
         || (terminalTimestamp != null && createdTimestamp > terminalTimestamp)) {
       return false;
@@ -5703,21 +5707,21 @@ function isConsistentRefundAttemptTimeline(attempt, appliedAt, successAt, termin
       || (hasCompletedAt && !isValidDateTime(completedAt))) {
     return false;
   }
-  const createdTimestamp = Date.parse(attempt.createdAt.trim().replace(" ", "T"));
+  const createdTimestamp = wallClockTimestamp(attempt.createdAt);
   const appliedTimestamp = isValidDateTime(appliedAt)
-    ? Date.parse(appliedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(appliedAt)
     : null;
   const submittedTimestamp = hasSubmittedAt
-    ? Date.parse(submittedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(submittedAt)
     : createdTimestamp;
   const terminalStatus = ["SUCCESS", "FAIL"].includes(attempt.attemptStatus.trim().toUpperCase());
   const terminalTimestamp = isValidDateTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : (isValidDateTime(successAt)
-      ? Date.parse(successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(successAt)
       : null);
   const completedTimestamp = hasCompletedAt
-    ? Date.parse(completedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(completedAt)
     : null;
   return (appliedTimestamp == null || appliedTimestamp <= createdTimestamp)
     && (!hasSubmittedAt || submittedTimestamp >= createdTimestamp)
@@ -5736,7 +5740,7 @@ function isConsistentRefundAttempts(attempts, appliedAt, successAt, terminalAt) 
     if (!isConsistentRefundAttemptTimeline(attempt, appliedAt, successAt, terminalAt)) {
       return false;
     }
-    const createdTimestamp = Date.parse(attempt.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(attempt.createdAt);
     if (previousCreatedTimestamp != null && createdTimestamp > previousCreatedTimestamp) {
       return false;
     }

@@ -131,6 +131,61 @@ import {
   settlementApi
 } from "./client.js";
 
+test("validates admin timelines independently of the device daylight saving time", (context) => {
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  context.after(() => {
+    if (previousTimezone == null) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  });
+
+  const prepay = {
+    prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", amount: "68.00", paymentStatus: "PREPAY_CREATED",
+    createdAt: "2026-03-08 02:59:00", expiresAt: "2026-03-08 03:00:00",
+    cashierStatus: "待支付", cashierStatusType: "warn"
+  };
+  assert.doesNotThrow(() => normalizePaymentPrepayResult(prepay));
+  assert.throws(() => normalizePaymentPrepayResult({ ...prepay, expiresAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-PREPAY");
+
+  const refund = {
+    refundOrderId: "REF-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", paidAmount: "68.00", refundAmount: "18.00",
+    status: "SUCCESS", statusType: "success", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    appliedAt: "2026-03-08 02:59:00", channelSubmittedAt: "2026-03-08 03:00:00",
+    successAt: "2026-03-08 03:01:00", terminalAt: "2026-03-08 03:02:00",
+    attempts: [{ refundAttemptNo: "ATT-001", attemptStatus: "SUCCESS", attemptStatusType: "success",
+      createdAt: "2026-03-08 02:59:00", submittedAt: "2026-03-08 03:00:00",
+      completedAt: "2026-03-08 03:01:00" }],
+    operationLogs: [{ logNo: "LOG-001", actionName: "申请退款", createdAt: "2026-03-08 03:00:00" }]
+  };
+  assert.doesNotThrow(() => normalizeRefundDetailResult(refund));
+  assert.throws(() => normalizeRefundDetailResult({ ...refund, successAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-REFUND-DETAIL");
+
+  const event = {
+    eventNo: "EVENT-001", eventType: "PAYMENT_SUCCESS", paymentOrderId: "PAY-001",
+    businessChainId: "CHAIN-PAY-001", successFactIssue: null, bizNo: "ORDER-001",
+    standardOrderNo: "ORDER-001", eventTopic: "payment.trade.succeeded.v1",
+    downstreamSystem: "ACCOUNTING", publishStatus: "PENDING", publishStatusType: "warn",
+    paymentSuccessHttpStage: "PENDING", retryCount: 0, eventPayload: "{}",
+    createdAt: "2026-03-08 02:59:00", nextRetryAt: "2026-03-08 03:00:00"
+  };
+  assert.doesNotThrow(() => normalizePaymentEventDetailResult(event));
+  assert.throws(() => normalizePaymentEventDetailResult({ ...event, nextRetryAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-EVENT-DETAIL");
+
+  const task = {
+    taskLogNo: "TASK-001", taskStatus: "SUCCESS", taskStatusType: "success",
+    processedCount: 1, successCount: 1, warningCount: 0, failCount: 0,
+    startedAt: "2026-03-08 02:59:00", completedAt: "2026-03-08 03:00:00"
+  };
+  assert.doesNotThrow(() => normalizePaymentTaskRunDetailResult(task));
+  assert.throws(() => normalizePaymentTaskRunDetailResult({ ...task, completedAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-CLIENT-INVALID-TASK-RUN-DETAIL");
+});
+
 test("rejects unverified blocked expired payment pages and accepts bounded facts", () => {
   const item = {
     paymentOrderId: "PAY-001", prepayOrderNo: "PRE-001", orderNo: "ORD-001",
