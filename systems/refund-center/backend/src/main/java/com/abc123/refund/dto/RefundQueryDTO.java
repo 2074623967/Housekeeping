@@ -20,5 +20,12 @@ public class RefundQueryDTO {
     private int pageNo = 1;
     /** 页大小。 */
     private int pageSize = 20;
-}
 
+    public String getRefundOrderIdLikePattern() {
+        return LikePattern.escape(refundOrderId);
+    }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+}

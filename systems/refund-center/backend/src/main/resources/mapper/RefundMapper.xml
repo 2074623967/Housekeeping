@@ -14,10 +14,10 @@
             AND CAST(ps.payment_order_id AS BINARY(256)) = CAST(t_refund_order.payment_order_id AS BINARY(256))
         <where>
             <if test="refundOrderId != null and refundOrderId != ''">
-                AND t_refund_order.refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
+                AND t_refund_order.refund_order_id LIKE CONCAT('%', #{refundOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="paymentOrderId != null and paymentOrderId != ''">
-                AND t_refund_order.payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
+                AND t_refund_order.payment_order_id LIKE CONCAT('%', #{paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="status != null and status != ''">
                 AND t_refund_order.status = #{status}
@@ -35,10 +35,10 @@
         FROM t_refund_order
         <where>
             <if test="refundOrderId != null and refundOrderId != ''">
-                AND refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
+                AND refund_order_id LIKE CONCAT('%', #{refundOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="paymentOrderId != null and paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
+                AND payment_order_id LIKE CONCAT('%', #{paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="status != null and status != ''">
                 AND status = #{status}
