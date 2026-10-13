@@ -23,4 +23,8 @@ public class PaymentDeadLetterTaskQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getMessageIdLikePattern() {
+        return LikePattern.escape(messageId);
+    }
 }

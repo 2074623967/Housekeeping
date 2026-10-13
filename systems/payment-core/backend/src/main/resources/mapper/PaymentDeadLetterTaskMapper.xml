@@ -45,7 +45,7 @@
                 AND target_system = #{query.targetSystem}
             </if>
             <if test="query.messageId != null and query.messageId != ''">
-                AND message_id LIKE CONCAT('%', #{query.messageId}, '%')
+                AND message_id LIKE CONCAT('%', #{query.messageIdLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
         ORDER BY created_at DESC, id DESC
@@ -63,7 +63,7 @@
                 AND target_system = #{query.targetSystem}
             </if>
             <if test="query.messageId != null and query.messageId != ''">
-                AND message_id LIKE CONCAT('%', #{query.messageId}, '%')
+                AND message_id LIKE CONCAT('%', #{query.messageIdLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
     </select>
