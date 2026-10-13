@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -26,6 +26,8 @@ const loadedPageNo = ref(1);
 const loadedQuery = ref(null);
 const pageSize = 20;
 let latestLoadRequestId = 0;
+let paymentRouteVersion = 0;
+let viewActive = true;
 
 function queryString(value, fallback) {
   return typeof value === "string" && value ? value : fallback;
@@ -235,6 +237,16 @@ function updatePaymentSnapshot(paymentDetail) {
   selectedItem.value = updatedItem;
 }
 
+function isCurrentPaymentRoute(routeVersion) {
+  return viewActive && routeVersion === paymentRouteVersion;
+}
+
+async function refreshCurrentPaymentRoute() {
+  if (viewActive) {
+    await refreshList(selectedItem.value?.paymentOrderId, true, buildQuery());
+  }
+}
+
 async function handleQuery(paymentOrderId) {
   const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
   if (!canUseSnapshot.value || !loadedQuery.value || !paymentItem || !canRunQuery(paymentItem)) {
@@ -249,6 +261,7 @@ async function handleQuery(paymentOrderId) {
     return;
   }
   const query = { ...loadedQuery.value };
+  const routeVersion = paymentRouteVersion;
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
   actionErrorMessage.value = "";
@@ -260,11 +273,19 @@ async function handleQuery(paymentOrderId) {
       amount: paymentItem.amount,
       prepayOrderNo: paymentItem.prepayOrderNo
     });
+    if (!isCurrentPaymentRoute(routeVersion)) {
+      await refreshCurrentPaymentRoute();
+      return;
+    }
     updatePaymentSnapshot(paymentDetail);
     actionResultMessage.value = `支付单 ${paymentOrderId} 已完成主动查单，当前状态为 ${paymentDetail.status}。`;
     actionRefreshErrorMessage.value = "";
     await refreshList(paymentOrderId, true, query);
   } catch (error) {
+    if (!isCurrentPaymentRoute(routeVersion)) {
+      await refreshCurrentPaymentRoute();
+      return;
+    }
     actionErrorMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}；请以刷新后的支付事实为准。`;
     await refreshList(paymentOrderId, true, query);
   } finally {
@@ -287,6 +308,7 @@ async function handleClose(paymentOrderId) {
     return;
   }
   const query = { ...loadedQuery.value };
+  const routeVersion = paymentRouteVersion;
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "close";
   actionErrorMessage.value = "";
@@ -298,6 +320,10 @@ async function handleClose(paymentOrderId) {
       amount: paymentItem.amount,
       prepayOrderNo: paymentItem.prepayOrderNo
     });
+    if (!isCurrentPaymentRoute(routeVersion)) {
+      await refreshCurrentPaymentRoute();
+      return;
+    }
     updatePaymentSnapshot(paymentDetail);
     actionResultMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${paymentOrderId} 已关闭。`
@@ -305,6 +331,10 @@ async function handleClose(paymentOrderId) {
     actionRefreshErrorMessage.value = "";
     await refreshList(paymentOrderId, true, query);
   } catch (error) {
+    if (!isCurrentPaymentRoute(routeVersion)) {
+      await refreshCurrentPaymentRoute();
+      return;
+    }
     actionErrorMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}；请以刷新后的支付事实为准。`;
     await refreshList(paymentOrderId, true, query);
   } finally {
@@ -323,14 +353,23 @@ function exportPayments() {
 
 onMounted(refreshList);
 
+onBeforeUnmount(() => {
+  viewActive = false;
+  latestLoadRequestId += 1;
+});
+
 watch(
   () => [route.query.paymentOrderId, route.query.orderNo, route.query.channelCode,
     route.query.paymentMethod, route.query.status],
   () => {
+    paymentRouteVersion += 1;
+    actionErrorMessage.value = "";
+    actionResultMessage.value = "";
     filters.value = filtersFromRoute();
     pageNo.value = 1;
     refreshList();
-  }
+  },
+  { flush: "sync" }
 );
 </script>
 

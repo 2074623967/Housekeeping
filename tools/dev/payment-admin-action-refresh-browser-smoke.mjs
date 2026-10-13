@@ -169,6 +169,8 @@ async function main() {
   let releaseRefundApproval;
   let paymentStatus = "PREPAY_CREATED";
   let paymentScenario = "close";
+  let holdPaymentAction = false;
+  let releasePaymentAction;
   let querySubmissionUnaccepted = false;
   let recordSubmissionUnaccepted = true;
   let failPaymentReadbackOnce = false;
@@ -283,6 +285,9 @@ async function main() {
         assert.deepEqual(body, { paymentOrderId, operator: "local-operator" });
         assert.equal(paymentStatus, "PREPAY_CREATED", "不得按旧支付快照重复关闭");
         paymentStatus = "CLOSED";
+        if (holdPaymentAction) {
+          await new Promise((resolve) => { releasePaymentAction = resolve; });
+        }
         response.statusCode = 400;
         response.end(JSON.stringify({ code: "PAYMENT-400", message: "关闭响应丢失" }));
       } else if (request.method === "POST" && pathname === "/api/payments/admin/query") {
@@ -294,6 +299,9 @@ async function main() {
         assert.deepEqual(body, { paymentOrderId: queryPaymentOrderId, operator: "local-operator" });
         assert.equal(paymentStatus, "WAIT_CALLBACK", "不得按旧支付快照重复查单");
         paymentStatus = "FAIL";
+        if (holdPaymentAction) {
+          await new Promise((resolve) => { releasePaymentAction = resolve; });
+        }
         response.statusCode = 400;
         response.end(JSON.stringify({ code: "PAYMENT-400", message: "查单响应丢失" }));
       } else if (request.method === "GET" && (pathname === "/api/payments"
@@ -313,8 +321,10 @@ async function main() {
             latestAttemptStatusType: paymentStatus === "FAIL" ? "danger" : "info"
           } : { ...initialPayment, status: paymentStatus,
             statusType: paymentStatus === "CLOSED" ? "danger" : "info" };
+          const filterStatus = new URL(request.url, "http://localhost").searchParams.get("status");
+          const filteredItems = filterStatus === "SUCCESS" ? [] : [item];
           response.end(JSON.stringify({ code: "0", data: pathname === "/api/payments"
-            ? { items: [item], total: 1 } : item }));
+            ? { items: filteredItems, total: filteredItems.length } : item }));
         }
       } else if (request.method === "GET" && (pathname === "/api/payment-records"
         || pathname === `/api/payment-records/${recordPaymentOrderId}`)) {
@@ -711,6 +721,37 @@ async function main() {
       )?.querySelector('.badge')?.textContent.trim(),
       disabled: button.disabled
     }; })()`;
+    for (const scenario of ["close", "query"]) {
+      paymentScenario = scenario;
+      paymentStatus = scenario === "query" ? "WAIT_CALLBACK" : "PREPAY_CREATED";
+      querySubmissionUnaccepted = false;
+      const paymentRouteStart = requests.length;
+      await send("Page.navigate", { url: `${baseUrl}/payments` });
+      await waitFor(async () => (await evaluate(paymentListState))?.status === paymentStatus,
+        "路由切换前支付列表");
+      await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+        document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+      holdPaymentAction = true;
+      const button = scenario === "query"
+        ? "document.querySelector('tbody tr .list-actions button:nth-child(3)')" : paymentListButton;
+      await evaluate(`${button}.click()`);
+      await waitFor(() => Boolean(releasePaymentAction), "待返回的支付动作");
+      await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payments?status=SUCCESS')");
+      await waitFor(() => evaluate("location.search === '?status=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的支付单数据')"),
+        "路由切换后的成功支付空列表");
+      releasePaymentAction();
+      holdPaymentAction = false;
+      releasePaymentAction = null;
+      await waitFor(() => requests.slice(paymentRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payments" && new URLSearchParams(item.search).get("status") === "SUCCESS").length >= 2,
+      "支付动作完成后当前筛选再次读回");
+      assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付单数据')"), true,
+        "旧支付动作不得覆盖新路由快照");
+      assert.equal(requests.slice(paymentRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payments" && new URLSearchParams(item.search).get("status") === "全部").length, 1,
+      "旧支付动作不得在新路由上重新查询原筛选");
+    }
+    console.log("[PASS] 管理端浏览器：支付查单/关闭期间切换路由，旧筛选不回流且新筛选重新读回");
     for (const detail of [false, true]) {
       for (const failReadback of [false, true]) {
         paymentScenario = "close";
@@ -1103,6 +1144,7 @@ async function main() {
     console.log("[PASS] 管理端浏览器：错误读回、双动作重放、已受理清键失败门禁及畸形记录拒绝提交");
   } finally {
     releaseRefundApproval?.();
+    releasePaymentAction?.();
     socket?.close();
     chrome.kill("SIGTERM");
     await Promise.race([new Promise((resolve) => chrome.once("exit", resolve)), delay(3000)]);

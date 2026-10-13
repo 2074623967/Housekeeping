@@ -53,3 +53,15 @@ test("refreshes the payment list after failed query and close requests", () => {
   }
   assert.match(source, /支付动作后列表刷新失败，当前状态未经确认/);
 });
+
+test("does not replay payment actions into another route or an unmounted list", () => {
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*viewActive = false;\s*latestLoadRequestId \+= 1;/);
+  assert.match(source, /paymentRouteVersion \+= 1;[\s\S]*?refreshList\(\);\s*\},\s*\{ flush: "sync" \}/);
+  assert.match(source, /async function refreshCurrentPaymentRoute\(\) \{\s*if \(viewActive\) \{\s*await refreshList\(selectedItem\.value\?\.paymentOrderId, true, buildQuery\(\)\);/);
+  for (const action of ["handleQuery", "handleClose"]) {
+    const handler = source.match(new RegExp(`async function ${action}\\(paymentOrderId\\) \\{([\\s\\S]*?)\\n\\}\\n`))?.[1];
+    assert.ok(handler);
+    assert.match(handler, /const routeVersion = paymentRouteVersion;/);
+    assert.equal(handler.match(/if \(!isCurrentPaymentRoute\(routeVersion\)\) \{\s*await refreshCurrentPaymentRoute\(\);\s*return;\s*\}/g)?.length, 2);
+  }
+});
