@@ -32,4 +32,12 @@ public class WorkerSettlementQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getSettlementOrderIdLikePattern() {
+        return LikePattern.escape(settlementOrderId);
+    }
+
+    public String getWorkerKeywordLikePattern() {
+        return LikePattern.escape(workerKeyword);
+    }
 }

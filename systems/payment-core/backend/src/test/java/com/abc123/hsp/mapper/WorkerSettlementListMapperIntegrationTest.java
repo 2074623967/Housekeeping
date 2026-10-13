@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import java.io.InputStream;
 import java.sql.Date;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -101,6 +102,49 @@ public class WorkerSettlementListMapperIntegrationTest {
             assertEquals("¥0.00", overview.getTotalDeductAmount());
             assertEquals("¥0.00", overview.getTotalDepositImpactAmount());
             assertEquals(0, overview.getNegativeNetSettleCount());
+        }
+    }
+
+    @Test
+    void shouldSearchSettlementNumberAndWorkerNameLiterallyAcrossListOverviewAndExport() throws Exception {
+        String settlementOrderId = "SETTLE-%_!\\\"-SPECIAL";
+        String workerName = "服务者%_!\\\"特例";
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement insert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_worker_settlement_order "
+                             + "(settlement_order_id, worker_name, period_start, period_end, amount_should_settle, "
+                             + "deduct_amount, amount_net_settle, deposit_impact_amount, status, status_type, "
+                             + "payout_status, payout_status_type, created_at) VALUES "
+                             + "(?, ?, '2026-09-01', '2026-09-07', 101.00, 1.00, 100.00, 0.00, "
+                             + "'待审核', 'warning', '待出款', 'warning', '2026-09-12 15:00:00')")) {
+            insert.setString(1, settlementOrderId);
+            insert.setString(2, workerName);
+            insert.executeUpdate();
+            SettlementMapper mapper = session.getMapper(SettlementMapper.class);
+
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", "\"", settlementOrderId)) {
+                WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+                query.setSettlementOrderId(fragment);
+                assertEquals(Arrays.asList(settlementOrderId),
+                        settlementOrderIds(mapper.findWorkerSettlements(query)), fragment);
+                assertEquals(1L, mapper.count(query), fragment);
+                assertEquals(1L, mapper.findWorkerOverview(query).getTotalSettlementCount(), fragment);
+                assertEquals(Arrays.asList(settlementOrderId),
+                        settlementOrderIds(mapper.findWorkerSettlementsForExport(query)), fragment);
+                assertEquals(fragment, query.getSettlementOrderId());
+            }
+
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", "\"", workerName)) {
+                WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+                query.setWorkerKeyword(fragment);
+                assertEquals(Arrays.asList(settlementOrderId),
+                        settlementOrderIds(mapper.findWorkerSettlements(query)), fragment);
+                assertEquals(1L, mapper.count(query), fragment);
+                assertEquals(1L, mapper.findWorkerOverview(query).getTotalSettlementCount(), fragment);
+                assertEquals(Arrays.asList(settlementOrderId),
+                        settlementOrderIds(mapper.findWorkerSettlementsForExport(query)), fragment);
+                assertEquals(fragment, query.getWorkerKeyword());
+            }
         }
     }
 

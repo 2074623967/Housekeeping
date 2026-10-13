@@ -7,10 +7,10 @@
     <sql id="workerSettlementWhere">
         <where>
             <if test="query.settlementOrderId != null and query.settlementOrderId != ''">
-                settlement_order_id LIKE CONCAT('%', #{query.settlementOrderId}, '%')
+                settlement_order_id LIKE CONCAT('%', #{query.settlementOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.workerKeyword != null and query.workerKeyword != ''">
-                AND worker_name LIKE CONCAT('%', #{query.workerKeyword}, '%')
+                AND worker_name LIKE CONCAT('%', #{query.workerKeywordLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.settlementStatus != null and query.settlementStatus != '' and query.settlementStatus != '全部'">
                 AND status = #{query.settlementStatus}
