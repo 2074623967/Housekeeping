@@ -136,7 +136,10 @@ async function main() {
       outgoing.writeHead(200, { "Content-Type": "application/json" });
       outgoing.end(JSON.stringify({
         code: "0",
-        data: { channelRefundNo, refundStatus: "SUCCESS",
+        data: { refundOrderId: requestBody.refundOrderId,
+          refundAttemptNo: submitIndex === 1 && upstreamQueries.length === 3
+            ? upstreamCalls[0].refundAttemptNo : requestBody.refundAttemptNo,
+          channelRefundNo, refundStatus: "SUCCESS",
           querySource: "LOCAL_UPSTREAM_STUB" }
       }));
     }
@@ -310,20 +313,31 @@ async function main() {
     if (republish.code !== "PAYMENT-1050" || upstreamCalls.length !== 2) {
       throw new Error("Unknown refund submit was blindly retried");
     }
-    assertResponse(await request(`${paymentUrl}/api/refunds/query`, {
-      refundOrderId: unknownApplication.refundOrderId, operator: "local-smoke"
-    }), (data) => data?.status === "SUCCESS", "Unknown refund query did not recover acceptance");
-    assertResponse(await request(`${paymentUrl}/api/refunds/query`, {
-      refundOrderId: unknownApplication.refundOrderId, operator: "local-smoke"
-    }), (data) => data?.status === "SUCCESS", "Recovered terminal query was not idempotent");
+    const unknownQueryRequest = { refundOrderId: unknownApplication.refundOrderId, operator: "local-smoke" };
+    const wrongAttemptQuery = await request(`${paymentUrl}/api/refunds/query`, unknownQueryRequest);
+    if (wrongAttemptQuery.code !== "PAYMENT-1046") {
+      throw new Error("Another refund attempt's result was accepted without a channel refund number");
+    }
+    const stillUnknown = assertResponse(await request(`${paymentUrl}/api/refunds/`
+      + unknownApplication.refundOrderId),
+    (data) => data?.status === "PROCESSING" && data?.attempts?.length === 1
+      && data.attempts[0].attemptStatus === "UNKNOWN" && !data.channelRefundNo,
+    "Cross-attempt query changed an unknown refund state");
+    if (!stillUnknown.operationLogs?.some((item) => item.actionCode === "CHANNEL_QUERY_FAILED")) {
+      throw new Error("Cross-attempt rejection was not visible to the operator");
+    }
+    assertResponse(await request(`${paymentUrl}/api/refunds/query`, unknownQueryRequest),
+      (data) => data?.status === "SUCCESS", "Unknown refund query did not recover acceptance");
+    assertResponse(await request(`${paymentUrl}/api/refunds/query`, unknownQueryRequest),
+      (data) => data?.status === "SUCCESS", "Recovered terminal query was not idempotent");
     const recovered = assertResponse(await request(`${paymentUrl}/api/refunds/`
       + unknownApplication.refundOrderId),
     (data) => data?.status === "SUCCESS" && data?.attempts?.length === 1
       && data.attempts[0].attemptStatus === "SUCCESS", "Unknown refund recovery was not atomic");
     if (!recovered.operationLogs?.some((item) => item.actionCode === "CHANNEL_ACCEPTANCE_RECOVERED")
-        || upstreamCalls.length !== 2 || upstreamQueries.length !== 3
-        || upstreamQueries[2].refundAttemptNo !== unknownAttemptNo
-        || upstreamQueries[2].channelRefundNo) {
+        || upstreamCalls.length !== 2 || upstreamQueries.length !== 4
+        || upstreamQueries.slice(2).some((item) => item.refundAttemptNo !== unknownAttemptNo
+          || item.channelRefundNo)) {
       throw new Error("Unknown refund acceptance recovery lost its attempt identity");
     }
     const recoveredEvent = assertResponse(await request(`${paymentUrl}/api/payment-events/`
@@ -383,9 +397,9 @@ async function main() {
     "Synchronous refund outbox was not recovered");
     if (synchronousRecoveredEvent.bizNo !== synchronousAttemptNo
         || !synchronousSettled.operationLogs?.some((item) => item.actionCode === "CHANNEL_ACCEPTANCE_RECOVERED")
-        || upstreamCalls.length !== 3 || upstreamQueries.length !== 4
-        || upstreamQueries[3].refundAttemptNo !== synchronousAttemptNo
-        || upstreamQueries[3].channelRefundNo) {
+        || upstreamCalls.length !== 3 || upstreamQueries.length !== 5
+        || upstreamQueries[4].refundAttemptNo !== synchronousAttemptNo
+        || upstreamQueries[4].channelRefundNo) {
       throw new Error("Synchronous refund recovery lost its attempt identity");
     }
     console.log("[PASS] payment-core -> gateway-access -> local upstream: reject mismatch, recover unknown and synchronous success without blind retry");

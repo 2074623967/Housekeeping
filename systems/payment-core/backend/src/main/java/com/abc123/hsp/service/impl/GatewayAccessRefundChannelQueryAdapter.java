@@ -93,6 +93,12 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
                 throw queryFailed("gateway-access rejected refund query");
             }
             RefundChannelQueryResultDTO result = response.getData();
+            if (!request.getRefundOrderId().equals(result.getRefundOrderId())
+                    || !request.getRefundAttemptNo().equals(result.getRefundAttemptNo())
+                    || (StringUtils.hasText(request.getChannelRefundNo())
+                        && !request.getChannelRefundNo().equals(result.getChannelRefundNo()))) {
+                throw queryFailed("gateway-access returned a mismatched refund identity");
+            }
             if (result.getQuerySource() == null || result.getQuerySource().isEmpty()) {
                 result.setQuerySource("GATEWAY_ACCESS_HTTP");
             }

@@ -59,7 +59,7 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
             request.setChannelCode(context.getChannelCode());
             UpstreamRefundQueryResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamRefundQueryResponseDTO.class);
-            RefundOrderQueryResultDTO result = validateUpstreamResponse(response, request.getChannelRefundNo());
+            RefundOrderQueryResultDTO result = validateUpstreamResponse(response, request);
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.REFUND_QUERY,
                     "SUCCESS", "success", "退款查单已由配置的真实上游返回确定状态");
@@ -92,19 +92,25 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
     }
 
     private RefundOrderQueryResultDTO validateUpstreamResponse(UpstreamRefundQueryResponseDTO response,
-                                                                String expectedChannelRefundNo) {
+                                                                RefundOrderQueryRequestDTO request) {
         if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
             throw invalidResponse("refund query upstream returned no definitive result");
         }
         RefundOrderQueryResultDTO result = response.getData();
+        requiredResponse(result.getRefundOrderId(), "refundOrderId", 64);
+        requiredResponse(result.getRefundAttemptNo(), "refundAttemptNo", 64);
+        if (!request.getRefundOrderId().equals(result.getRefundOrderId())
+                || !request.getRefundAttemptNo().equals(result.getRefundAttemptNo())) {
+            throw invalidResponse("refund query upstream returned a mismatched refund identity");
+        }
         result.setRefundStatus(requiredResponse(result.getRefundStatus(), "refundStatus", 32)
                 .toUpperCase(Locale.ROOT));
         result.setChannelRefundNo(requiredResponse(result.getChannelRefundNo(), "channelRefundNo", 128));
         if (!REFUND_STATUSES.contains(result.getRefundStatus())) {
             throw invalidResponse("refund query upstream returned an unsupported refundStatus");
         }
-        if (StringUtils.hasText(expectedChannelRefundNo)
-                && !expectedChannelRefundNo.equals(result.getChannelRefundNo())) {
+        if (StringUtils.hasText(request.getChannelRefundNo())
+                && !request.getChannelRefundNo().equals(result.getChannelRefundNo())) {
             throw invalidResponse("refund query upstream returned a mismatched channelRefundNo");
         }
         if (result.getQuerySource() == null) {

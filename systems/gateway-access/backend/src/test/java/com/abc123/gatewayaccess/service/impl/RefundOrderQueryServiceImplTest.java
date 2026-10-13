@@ -62,6 +62,8 @@ class RefundOrderQueryServiceImplTest {
     void shouldReturnDefinitiveMatchingRefundFactAndAudit() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus(" success ");
         data.setChannelRefundNo(" CHANNEL-REF-001 ");
         UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
@@ -88,6 +90,8 @@ class RefundOrderQueryServiceImplTest {
     void shouldQueryByPlatformRefundOrderWhenChannelRefundNumberIsUnknown() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-RECOVERED");
         UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
@@ -112,9 +116,51 @@ class RefundOrderQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectAnotherAttemptWhenChannelRefundNumberIsUnknown() {
+        configureEnabledGovernance();
+        RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-OTHER");
+        data.setRefundStatus("SUCCESS");
+        data.setChannelRefundNo("CHANNEL-REF-OTHER");
+        UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundQueryResponseDTO.class)))
+                .thenReturn(response);
+        RefundOrderQueryRequestDTO request = request();
+        request.setChannelRefundNo(null);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectUpstreamResponseWithoutRefundIdentity() {
+        configureEnabledGovernance();
+        RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundStatus("SUCCESS");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundQueryResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
+    @Test
     void shouldRejectMismatchedChannelRefundNumber() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-OTHER");
         UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
@@ -133,6 +179,8 @@ class RefundOrderQueryServiceImplTest {
     void shouldRejectExplicitControlCharactersInUpstreamQuerySource() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-001");
         data.setQuerySource("\n");
@@ -156,6 +204,8 @@ class RefundOrderQueryServiceImplTest {
     void shouldDefaultWhitespaceOnlyUpstreamQuerySource() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-001");
         data.setQuerySource("   ");

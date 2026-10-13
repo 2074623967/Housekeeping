@@ -30,6 +30,8 @@ class GatewayAccessRefundChannelQueryAdapterTest {
     void shouldRejectNonOkTransportDespiteSuccessfulRefundQueryEnvelope() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("SUCCESS");
         data.setChannelRefundNo("CHANNEL-REF-001");
         GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
@@ -70,8 +72,10 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
                 new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
         RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus(" success ");
-        data.setChannelRefundNo(" CHANNEL-REF-001 ");
+        data.setChannelRefundNo("CHANNEL-REF-001");
         response.setCode("0");
         response.setData(data);
         when(restTemplate.exchange(
@@ -102,6 +106,8 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
                 new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
         RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-RECOVERED");
         response.setCode("0");
@@ -126,6 +132,50 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         assertEquals("RFA-001", forwarded.getRefundAttemptNo());
         assertEquals(null, forwarded.getChannelRefundNo());
         assertEquals("CHANNEL-REF-RECOVERED", result.getChannelRefundNo());
+    }
+
+    @Test
+    void shouldRejectGatewayResponseFromAnotherRefundAttempt() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
+                new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
+        RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-OTHER");
+        data.setRefundStatus("SUCCESS");
+        data.setChannelRefundNo("CHANNEL-REF-OTHER");
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/refunds/query"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+        RefundCallbackSourceDTO refund = refund();
+        refund.setChannelRefundNo(null);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> adapter(restTemplate).query(refund));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectGatewayQueryResponseWithoutRefundIdentity() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
+                new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
+        RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundStatus("SUCCESS");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/refunds/query"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> adapter(restTemplate).query(refund()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
     }
 
     @Test
@@ -166,6 +216,8 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
                 new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
         RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-001");
         response.setCode("0");
@@ -235,6 +287,8 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
                 new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
         RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundOrderId("REF-001");
+        data.setRefundAttemptNo("RFA-001");
         data.setRefundStatus("PROCESSING");
         data.setChannelRefundNo("CHANNEL-REF-001");
         data.setQuerySource("GATEWAY_ACCESS_HTTP\n");

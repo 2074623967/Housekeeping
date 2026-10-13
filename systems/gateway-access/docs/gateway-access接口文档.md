@@ -171,6 +171,8 @@
 
 成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo`，`querySource` 可由代理在上游省略或纯空白时补为 `GATEWAY_ACCESS_PROXY`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`；请求已携带 `channelRefundNo` 时，响应必须与其完全一致；请求未携带时，响应仍必须返回非空渠道退款号，供支付核心首次绑定可信受理事实。上游显式提供的 `querySource` 即使只有空白也先执行原文长度和 ISO 控制字符校验；缺失必填事实、超长、含 ISO 控制字符、状态非法或已有关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
 
+受控上游响应还必须原样回显 `data.refundOrderId` 与 `data.refundAttemptNo`，分别与本次请求的平台退款单号、单轮商户退款请求号精确相同；网关代理不得自行根据请求补写缺失的身份字段。任何一项缺失、串单或跨轮次，即使 `channelRefundNo` 尚未知且业务码为 `0`，也返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不得把别的退款受理事实绑定至本单。旧版只回状态/渠道号的上游不兼容，正式切换需先完成渠道协议映射、混版治理和受控验证。
+
 退款查单复用支付交易代理的应用、访问凭证、权限、网关、有效证书和当前环境发布路由门禁，并写入 `REFUND_QUERY` 最小审计。访问密钥、请求报文、上游原始响应和异常原文不进入审计日志。
 
 退款查单上游由以下环境变量显式配置，默认均为空：
