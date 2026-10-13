@@ -829,10 +829,10 @@ function normalizeRefundDetail(detail) {
   const operationLogs = normalizeList(detail.operationLogs);
   if (!isConsistentRefundAttempts(
     attempts, detail.appliedAt, detail.successAt, detail.terminalAt
-  )) {
+  ) || !isConsistentRefundTerminalAttempt(detail, attempts)) {
     throw createBusinessError(
       { code: "PAYMENT-CLIENT-INVALID-REFUND-DETAIL" },
-      "退款详情响应包含无法确认的退款尝试时间事实"
+      "退款详情响应包含无法确认的退款尝试或渠道归属事实"
     );
   }
   if (!isConsistentRefundOperationLogs(
@@ -943,6 +943,21 @@ function isConsistentRefundAttempts(attempts, appliedAt, successAt, terminalAt) 
     previousCreatedTimestamp = createdTimestamp;
   }
   return true;
+}
+
+function isConsistentRefundTerminalAttempt(detail, attempts) {
+  const status = detail.status?.trim().toUpperCase();
+  if (!["SUCCESS", "FAIL"].includes(status) || attempts.length === 0) {
+    return true;
+  }
+  const latestAttempt = attempts[0];
+  return latestAttempt.attemptStatus.trim().toUpperCase() === status
+    && typeof latestAttempt.channelCode === "string"
+    && latestAttempt.channelCode.trim() === detail.channelCode.trim()
+    && typeof latestAttempt.channelRefundNo === "string"
+    && latestAttempt.channelRefundNo.trim() === detail.channelRefundNo.trim()
+    && (status !== "SUCCESS"
+      || wallClockTimestamp(latestAttempt.completedAt) <= wallClockTimestamp(detail.successAt));
 }
 
 export function normalizeRefundDetailResult(detail, expectedRefundOrderId, expectedPayScene = null) {
