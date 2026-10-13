@@ -71,7 +71,8 @@ class AccountingEventControllerTest {
         RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeRefundSuccess(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumeRefundSuccess(body, PaymentEventHttpSignature.signTimed(body, timestamp, TEST_SECRET), timestamp);
 
         verify(accountingEventService).consumeRefundSuccess(argThat(received -> received != null));
     }

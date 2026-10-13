@@ -28,6 +28,7 @@ import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
@@ -600,7 +601,9 @@ class RefundServiceImplTest {
         assertTrue(request.getValue() instanceof HttpEntity);
         HttpEntity<?> signed = (HttpEntity<?>) request.getValue();
         String body = (String) signed.getBody();
-        assertEquals(RefundEventHttpSignature.sign(body, secret),
+        String timestamp = signed.getHeaders().getFirst(RefundEventHttpSignature.TIMESTAMP_HEADER_NAME);
+        assertTrue(Math.abs(Instant.now().getEpochSecond() - Long.parseLong(timestamp)) <= 5);
+        assertEquals(RefundEventHttpSignature.sign(body, timestamp, secret),
                 signed.getHeaders().getFirst(RefundEventHttpSignature.HEADER_NAME));
         assertEquals("REF-SIGNED", new ObjectMapper().readTree(body).get("refundOrderId").asText());
     }

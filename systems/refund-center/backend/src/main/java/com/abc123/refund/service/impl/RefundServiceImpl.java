@@ -24,6 +24,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -487,8 +488,10 @@ public class RefundServiceImpl implements RefundService {
             String body = JSON_MAPPER.writeValueAsString(payload);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            headers.set(RefundEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp);
             headers.set(RefundEventHttpSignature.HEADER_NAME,
-                    RefundEventHttpSignature.sign(body, refundSuccessHttpSecret));
+                    RefundEventHttpSignature.sign(body, timestamp, refundSuccessHttpSecret));
             return new HttpEntity<>(body, headers);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("退款成功事件签名序列化失败", exception);

@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountingEventController {
 
     private static final String REFUND_EVENT_SIGNATURE_HEADER = "X-HSP-Refund-Event-Signature";
+    private static final String REFUND_EVENT_TIMESTAMP_HEADER = "X-HSP-Refund-Event-Timestamp";
     private static final String CLEARING_EVENT_SIGNATURE_HEADER = "X-HSP-Clearing-Event-Signature";
     private static final String SETTLEMENT_COMPENSATION_SIGNATURE_HEADER = "X-HSP-Settlement-Compensation-Signature";
 
@@ -97,8 +98,9 @@ public class AccountingEventController {
 
     @PostMapping("/refunds/success")
     public ResponseEntity<ApiResponse<AccountEventDTO>> consumeRefundSuccess(@RequestBody String body,
-            @RequestHeader(value = REFUND_EVENT_SIGNATURE_HEADER, required = false) String signature) {
-        if (!PaymentEventHttpSignature.matches(body, signature, refundEventSecret)) {
+            @RequestHeader(value = REFUND_EVENT_SIGNATURE_HEADER, required = false) String signature,
+            @RequestHeader(value = REFUND_EVENT_TIMESTAMP_HEADER, required = false) String timestamp) {
+        if (!PaymentEventHttpSignature.matchesTimed(body, timestamp, signature, refundEventSecret)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.failure("REFUND_EVENT_UNAUTHORIZED", "退款事件签名校验失败"));
         }
