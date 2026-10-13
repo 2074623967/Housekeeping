@@ -480,9 +480,9 @@ public class RefundServiceImpl implements RefundService {
                         + "，支付场景=" + trim(refund.getPayScene())));
     }
 
-    private Object signedAccountingPayload(Object payload) {
+    private HttpEntity<String> signedAccountingPayload(Object payload) {
         if (!StringUtils.hasText(refundSuccessHttpSecret)) {
-            return payload;
+            throw new IllegalStateException("HTTP 退款成功事件签名密钥未配置");
         }
         try {
             String body = JSON_MAPPER.writeValueAsString(payload);

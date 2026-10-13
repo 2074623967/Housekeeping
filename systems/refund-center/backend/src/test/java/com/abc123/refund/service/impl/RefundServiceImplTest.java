@@ -536,7 +536,7 @@ class RefundServiceImplTest {
     void shouldDispatchRefundSuccessToAccountingAndReconciliation() {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
-                "http://reconciliation/facts", restTemplate);
+                "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-3", "REF-3");
         RefundListItemDTO refund = successfulRefund("REF-3", " PAY-3 ", "10.00");
         refund.setPayScene("HOME_CLEAN");
@@ -561,9 +561,9 @@ class RefundServiceImplTest {
         verify(restTemplate).postForEntity(
                 eq("http://accounting/refunds/success"), accountingPayload.capture(), eq(java.util.Map.class));
         assertEquals("CHAIN-PAY-3",
-                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("businessChainId").asText());
+                signedBody(accountingPayload.getValue()).get("businessChainId").asText());
         assertEquals("HOME_CLEAN",
-                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("payScene").asText());
+                signedBody(accountingPayload.getValue()).get("payScene").asText());
         org.mockito.ArgumentCaptor<Object> reconciliationPayload = org.mockito.ArgumentCaptor.forClass(Object.class);
         verify(restTemplate).postForEntity(
                 eq("http://reconciliation/facts"), reconciliationPayload.capture(), eq(java.util.Map.class));
@@ -609,10 +609,51 @@ class RefundServiceImplTest {
     }
 
     @Test
-    void shouldKeepOutboxFailedWhenARealDownstreamCallFails() {
+    void shouldNotSendUnsignedRefundSuccessWhenHttpSecretIsMissing() {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
                 "http://reconciliation/facts", restTemplate);
+        RefundOutboxEventEntity event = outboxEvent("REVT-UNSIGNED", "REF-UNSIGNED");
+        when(refundDao.findByRefundOrderId("REF-UNSIGNED"))
+                .thenReturn(successfulRefund("REF-UNSIGNED", "PAY-UNSIGNED", "10.00"));
+        when(refundDao.markOutboxDispatching("REVT-UNSIGNED")).thenReturn(1);
+        when(refundDao.markOutboxFailed(eq("REVT-UNSIGNED"), any())).thenReturn(1);
+        RefundOutboxEventEntity failed = outboxEvent("REVT-UNSIGNED", "REF-UNSIGNED");
+        failed.setStatus("FAIL");
+        when(refundDao.findOutboxByEventId("REVT-UNSIGNED")).thenReturn(event, failed);
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-UNSIGNED", new RefundOutboxDispatchRequestDTO()).getStatus());
+
+        verifyNoInteractions(restTemplate);
+        verify(refundDao).markOutboxFailed("REVT-UNSIGNED", "下游派发失败:IllegalStateException");
+        verify(refundDao, never()).markOutboxSent("REVT-UNSIGNED");
+    }
+
+    @Test
+    void shouldNotSendUnsignedRefundSuccessWhenHttpSecretIsBlank() {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate, "  ");
+        RefundOutboxEventEntity event = outboxEvent("REVT-BLANK", "REF-BLANK");
+        when(refundDao.findByRefundOrderId("REF-BLANK"))
+                .thenReturn(successfulRefund("REF-BLANK", "PAY-BLANK", "10.00"));
+        when(refundDao.markOutboxDispatching("REVT-BLANK")).thenReturn(1);
+        when(refundDao.markOutboxFailed("REVT-BLANK", "下游派发失败:IllegalStateException")).thenReturn(1);
+        RefundOutboxEventEntity failed = outboxEvent("REVT-BLANK", "REF-BLANK");
+        failed.setStatus("FAIL");
+        when(refundDao.findOutboxByEventId("REVT-BLANK")).thenReturn(event, failed);
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-BLANK", new RefundOutboxDispatchRequestDTO()).getStatus());
+
+        verifyNoInteractions(restTemplate);
+        verify(refundDao, never()).markOutboxSent("REVT-BLANK");
+    }
+
+    @Test
+    void shouldKeepOutboxFailedWhenARealDownstreamCallFails() {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-4", "REF-4");
         when(refundDao.findOutboxByEventId("REVT-4")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-4"))
@@ -638,7 +679,7 @@ class RefundServiceImplTest {
     void shouldRejectHttpSuccessWithFailedBusinessCode() {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
-                "http://reconciliation/facts", restTemplate);
+                "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-5", "REF-5");
         when(refundDao.findOutboxByEventId("REVT-5")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-5"))
@@ -665,6 +706,15 @@ class RefundServiceImplTest {
         event.setAggregateId(aggregateId);
         event.setStatus("PENDING");
         return event;
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode signedBody(Object request) {
+        assertTrue(request instanceof HttpEntity);
+        try {
+            return new ObjectMapper().readTree((String) ((HttpEntity<?>) request).getBody());
+        } catch (Exception exception) {
+            throw new AssertionError("退款成功事件请求体不是 JSON", exception);
+        }
     }
 
     private RefundListItemDTO successfulRefund(String refundOrderId, String paymentOrderId, String amount) {
