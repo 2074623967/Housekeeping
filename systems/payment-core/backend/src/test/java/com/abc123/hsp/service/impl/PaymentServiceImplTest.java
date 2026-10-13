@@ -86,6 +86,12 @@ class PaymentServiceImplTest {
     @BeforeEach
     void defaultPrepayStatusUpdate() {
         org.mockito.Mockito.lenient()
+                .when(paymentMapper.countMatchingStandardBill(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
                 .when(paymentMapper.lockPrepayCreation(anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.lenient()
@@ -1910,6 +1916,7 @@ class PaymentServiceImplTest {
     void shouldReuseActivePrepayWhenOrderIsStillOpen() {
         PrepayOrderDTO activePrepay = boundPrepay();
         activePrepay.setSourceKind("STANDARD_ORDER");
+        activePrepay.setBillNo("BILL-001");
         activePrepay.setPrepayOrderNo("PRE-001");
         activePrepay.setPaymentOrderId("PAY-001");
         activePrepay.setPaymentStatus("WAIT_CALLBACK");
@@ -1948,6 +1955,8 @@ class PaymentServiceImplTest {
         prepayOrder.verify(paymentMapper).findPaidAmount("ORD-001");
         prepayOrder.verify(paymentMapper).findCustomerNameByOrderNo("ORD-001");
         prepayOrder.verify(paymentMapper).findLatestActivePrepayByOrderNo("ORD-001");
+        prepayOrder.verify(paymentMapper).countMatchingStandardBill("BILL-001", "ORD-001",
+                "张女士", new BigDecimal("168.00"), BigDecimal.ZERO);
         prepayOrder.verify(paymentMapper).findSubmissionFact("PAY-001");
         verify(paymentMapper, times(1)).findLatestActivePrepayByOrderNo("ORD-001");
         verify(paymentMapper, never()).insertPaymentOrder(
@@ -1974,6 +1983,7 @@ class PaymentServiceImplTest {
     void shouldRejectWaitingPrepayReuseWithoutChannelSubmissionFact() {
         PrepayOrderDTO activePrepay = boundPrepay();
         activePrepay.setSourceKind("STANDARD_ORDER");
+        activePrepay.setBillNo("BILL-MISSING-FACT");
         activePrepay.setPrepayOrderNo("PRE-MISSING-FACT");
         activePrepay.setPaymentOrderId("PAY-MISSING-FACT");
         activePrepay.setPaymentStatus("WAIT_CALLBACK");
@@ -2005,6 +2015,7 @@ class PaymentServiceImplTest {
     void shouldRejectWaitingPrepayReuseWhenLatestAttemptContradictsPayment() {
         PrepayOrderDTO activePrepay = boundPrepay();
         activePrepay.setSourceKind("STANDARD_ORDER");
+        activePrepay.setBillNo("BILL-CONFLICTING-FACT");
         activePrepay.setPrepayOrderNo("PRE-CONFLICTING-FACT");
         activePrepay.setPaymentOrderId("PAY-CONFLICTING-FACT");
         activePrepay.setPaymentStatus("WAIT_CALLBACK");
@@ -2043,6 +2054,7 @@ class PaymentServiceImplTest {
     void shouldDefaultPaymentStatusWhenReusingLegacyActivePrepay() {
         PrepayOrderDTO activePrepay = boundPrepay();
         activePrepay.setSourceKind("STANDARD_ORDER");
+        activePrepay.setBillNo("BILL-LEGACY");
         activePrepay.setPrepayOrderNo("PRE-LEGACY");
         activePrepay.setPaymentOrderId("PAY-LEGACY");
         activePrepay.setPayScene("HOME_CLEAN");

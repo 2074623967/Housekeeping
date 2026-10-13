@@ -104,6 +104,12 @@ public interface PaymentMapper {
      */
     String findBillNoByOrderNo(@Param("orderNo") String orderNo);
 
+    int countMatchingStandardBill(@Param("billNo") String billNo,
+            @Param("orderNo") String orderNo,
+            @Param("customerName") String customerName,
+            @Param("orderAmount") BigDecimal orderAmount,
+            @Param("paidAmount") BigDecimal paidAmount);
+
     /**
      * 新增账单。
      */

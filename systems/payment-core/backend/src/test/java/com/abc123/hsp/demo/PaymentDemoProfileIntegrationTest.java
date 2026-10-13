@@ -91,6 +91,24 @@ class PaymentDemoProfileIntegrationTest {
         OrderService orderService = context.getBean(OrderService.class);
         BillService billService = context.getBean(BillService.class);
         String orderNo = "DEMO-INTEGRATION-STANDARD-001";
+        String staleOrderNo = "DEMO-INTEGRATION-STANDARD-STALE";
+        assertEquals(1, jdbcTemplate.update("INSERT INTO t_order (order_no, customer_name, service_type, "
+                + "worker_name, order_amount, paid_amount, order_status, order_status_type, "
+                + "fulfillment_status, fulfillment_status_type, created_at) "
+                + "VALUES (?, 'demo standard customer', '深度保洁', 'demo worker', 88.00, 0.00, "
+                + "'待支付', 'warn', '待确认', 'warn', CURRENT_TIMESTAMP)", staleOrderNo));
+        assertEquals(1, jdbcTemplate.update("INSERT INTO t_bill (bill_no, order_no, customer_name, "
+                + "bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at) "
+                + "VALUES ('BILL-INTEGRATION-STANDARD-STALE', ?, 'demo standard customer', "
+                + "88.00, 1.00, '部分支付', 'warn', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", staleOrderNo));
+        PrepayRequestDTO staleRequest = new PrepayRequestDTO();
+        staleRequest.setOrderNo(staleOrderNo);
+        staleRequest.setPayScene("HOME_CLEAN");
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(staleRequest)).getCode());
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_order WHERE order_no = ?", Integer.class, staleOrderNo));
+
         assertEquals(1, jdbcTemplate.update("INSERT INTO t_order (order_no, customer_name, service_type, "
                 + "worker_name, order_amount, paid_amount, order_status, order_status_type, "
                 + "fulfillment_status, fulfillment_status_type, created_at) "
@@ -106,6 +124,12 @@ class PaymentDemoProfileIntegrationTest {
         PrepayOrderDTO prepay = paymentService.prepay(request);
         assertEquals("STANDARD_ORDER", prepay.getSourceKind());
         assertEquals(prepay.getPrepayOrderNo(), paymentService.prepay(request).getPrepayOrderNo());
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET paid_amount = 1.00 WHERE bill_no = ?",
+                prepay.getBillNo()));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET paid_amount = 0.00 WHERE bill_no = ?",
+                prepay.getBillNo()));
         assertEquals("¥0.00", orderService.detail(orderNo).getPaidAmount());
         assertEquals(orderNo, billService.detail(prepay.getBillNo()).getStandardOrderNo());
 
@@ -121,6 +145,15 @@ class PaymentDemoProfileIntegrationTest {
         submitRequest.setClientDeviceId("demo-standard-integration");
         submitRequest.setPayerPhone("13800000000");
         submitRequest.setIdempotencyKey(orderNo);
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_amount = 89.00 WHERE bill_no = ?",
+                prepay.getBillNo()));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.submit(submitRequest)).getCode());
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                Integer.class, prepay.getPaymentOrderId()));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_amount = 88.00 WHERE bill_no = ?",
+                prepay.getBillNo()));
         PrepayOrderDTO submitted = paymentService.submit(submitRequest);
         assertEquals("WAIT_CALLBACK", paymentService.detail(submitted.getPaymentOrderId()).getStatus());
 

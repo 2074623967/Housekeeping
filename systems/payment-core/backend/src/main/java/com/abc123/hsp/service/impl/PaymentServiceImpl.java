@@ -422,6 +422,8 @@ public class PaymentServiceImpl implements PaymentService {
             validateActivePrepayRequest(activePrepay, request);
             if (!virtualSource) {
                 validateActivePrepayOrderFacts(activePrepay, customerName, remainAmount);
+                requireStandardBillFacts(activePrepay.getBillNo(), request.getOrderNo(),
+                        customerName, orderAmount, paidAmount);
             }
             boolean channelTransactionConflict = false;
             if ("WAIT_CALLBACK".equalsIgnoreCase(activePrepay.getPaymentStatus())) {
@@ -468,6 +470,8 @@ public class PaymentServiceImpl implements PaymentService {
                     billStatus, billStatusType) != 1) {
                 throw new IllegalStateException("payment bill was not created atomically");
             }
+        } else {
+            requireStandardBillFacts(billNo, request.getOrderNo(), customerName, orderAmount, paidAmount);
         }
         // 每次拉起收银台都生成独立支付单，避免多个预付单复用同一支付单造成状态串单。
         String paymentOrderId = buildBusinessNo("PAY");
@@ -605,6 +609,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED, "订单已结清或已超额支付");
         }
         validateActivePrepayOrderFacts(currentPrepay, customerName, remainAmount);
+        requireStandardBillFacts(currentPrepay.getBillNo(), orderNo, customerName, orderAmount, paidAmount);
     }
 
     private void lockPrepayOrderAndValidateSubmit(PrepayOrderDTO currentPrepay) {
@@ -2568,6 +2573,14 @@ public class PaymentServiceImpl implements PaymentService {
                     && request.getAmount().compareTo(remainAmount) != 0);
         if (conflict) {
             throw prepayRequestConflict("预付请求与订单当前客户或剩余应付不一致");
+        }
+    }
+
+    private void requireStandardBillFacts(String billNo, String orderNo, String customerName,
+            BigDecimal orderAmount, BigDecimal paidAmount) {
+        if (!StringUtils.hasText(billNo) || paymentMapper.countMatchingStandardBill(
+                billNo, orderNo, customerName, orderAmount, paidAmount) != 1) {
+            throw prepayRequestConflict("账单与订单当前金额或客户不一致");
         }
     }
 

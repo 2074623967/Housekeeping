@@ -606,6 +606,21 @@
           AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
+    <select id="countMatchingStandardBill" resultType="int">
+        SELECT COUNT(*) FROM t_bill
+        WHERE bill_no = #{billNo}
+          AND CHAR_LENGTH(bill_no) = CHAR_LENGTH(#{billNo})
+          AND CAST(bill_no AS BINARY(256)) = CAST(#{billNo} AS BINARY(256))
+          AND order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
+          AND customer_name = #{customerName}
+          AND CHAR_LENGTH(customer_name) = CHAR_LENGTH(#{customerName})
+          AND CAST(customer_name AS BINARY(256)) = CAST(#{customerName} AS BINARY(256))
+          AND bill_amount = #{orderAmount}
+          AND paid_amount = #{paidAmount}
+    </select>
+
     <insert id="insertBill">
         INSERT INTO t_bill(bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at)
         VALUES (#{billNo}, #{orderNo}, #{customerName}, #{orderAmount}, #{paidAmount}, #{billStatus}, #{billStatusType}, TIMESTAMPADD(DAY, 1, NOW()), NOW())
