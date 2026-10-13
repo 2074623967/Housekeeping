@@ -23,6 +23,14 @@ public class PaymentListQueryDTO {
     /** 每页条数，最大 100。 */
     private int pageSize = 20;
 
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+
+    public String getOrderNoLikePattern() {
+        return LikePattern.escape(orderNo);
+    }
+
     public int getPageNo() {
         return PageQueryBounds.normalizePageNo(pageNo);
     }

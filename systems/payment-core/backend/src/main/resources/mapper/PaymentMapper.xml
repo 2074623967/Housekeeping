@@ -150,10 +150,10 @@
                 )
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
                 AND p.channel_code = #{query.channelCode}
@@ -185,10 +185,10 @@
         FROM t_payment_order p
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
                 AND p.channel_code = #{query.channelCode}
@@ -255,10 +255,10 @@
                 )
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
                 AND p.channel_code = #{query.channelCode}

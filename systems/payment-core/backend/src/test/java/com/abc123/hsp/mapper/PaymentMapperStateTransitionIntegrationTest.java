@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -2029,6 +2030,45 @@ class PaymentMapperStateTransitionIntegrationTest {
             assertEquals(1, mapper.findAllForExport(query).size());
             assertEquals("PREPAY_BINDING_MISSING", mapper.findAllForExport(query).get(0).getPrepayBindingIssue());
         }
+    }
+
+    @Test
+    void shouldFilterPaymentListCountAndExportByLiteralSubstrings() throws Exception {
+        String literal = "%_!\\";
+        String paymentOrderId = "PAY-LITERAL-" + literal;
+        String orderNo = "ORDER-LITERAL-" + literal;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement insert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_order (payment_order_id, order_no, status, status_type, created_at) "
+                             + "VALUES (?, ?, 'WAIT_CALLBACK', 'warn', CURRENT_TIMESTAMP)")) {
+            insert.setString(1, paymentOrderId);
+            insert.setString(2, orderNo);
+            insert.executeUpdate();
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            for (String fragment : new String[] {"%", "_", "!", "\\", literal}) {
+                PaymentListQueryDTO query = new PaymentListQueryDTO();
+                query.setPaymentOrderId(fragment);
+                assertOnlyLiteralPayment(mapper, query, paymentOrderId);
+                assertEquals(fragment, query.getPaymentOrderId());
+
+                query = new PaymentListQueryDTO();
+                query.setOrderNo(fragment);
+                assertOnlyLiteralPayment(mapper, query, paymentOrderId);
+                assertEquals(fragment, query.getOrderNo());
+            }
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setPaymentOrderId(paymentOrderId);
+            query.setOrderNo(orderNo);
+            assertOnlyLiteralPayment(mapper, query, paymentOrderId);
+        }
+    }
+
+    private void assertOnlyLiteralPayment(PaymentMapper mapper, PaymentListQueryDTO query, String paymentOrderId) {
+        assertEquals(1L, mapper.count(query));
+        assertEquals(paymentOrderId, mapper.findAll(query).get(0).getPaymentOrderId());
+        assertEquals(1, mapper.findAll(query).size());
+        assertEquals(paymentOrderId, mapper.findAllForExport(query).get(0).getPaymentOrderId());
+        assertEquals(1, mapper.findAllForExport(query).size());
     }
 
     @Test
