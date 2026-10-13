@@ -189,10 +189,10 @@
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
             <if test="query.userId != null and query.userId != ''">
-                AND p.customer_name LIKE CONCAT('%', #{query.userId}, '%')
+                AND p.customer_name LIKE CONCAT('%', #{query.userIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.businessOrderNo != null and query.businessOrderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentType != null and query.paymentType != ''">
                 AND <include refid="paymentTypeCase"/> = #{query.paymentType}
@@ -209,7 +209,7 @@
                 ) = #{query.paymentStatus}
             </if>
             <if test="query.paymentChannel != null and query.paymentChannel != ''">
-                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
+                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannelLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
         <include refid="paymentRecordOrder"/>
@@ -275,10 +275,10 @@
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
             <if test="query.userId != null and query.userId != ''">
-                AND p.customer_name LIKE CONCAT('%', #{query.userId}, '%')
+                AND p.customer_name LIKE CONCAT('%', #{query.userIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.businessOrderNo != null and query.businessOrderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentType != null and query.paymentType != ''">
                 AND <include refid="paymentTypeCase"/> = #{query.paymentType}
@@ -295,7 +295,7 @@
                 ) = #{query.paymentStatus}
             </if>
             <if test="query.paymentChannel != null and query.paymentChannel != ''">
-                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
+                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannelLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
         <include refid="paymentRecordOrder"/>
@@ -315,10 +315,10 @@
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
             <if test="query.userId != null and query.userId != ''">
-                AND p.customer_name LIKE CONCAT('%', #{query.userId}, '%')
+                AND p.customer_name LIKE CONCAT('%', #{query.userIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.businessOrderNo != null and query.businessOrderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNo}, '%')
+                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentType != null and query.paymentType != ''">
                 AND <include refid="paymentTypeCase"/> = #{query.paymentType}
@@ -335,7 +335,7 @@
                 ) = #{query.paymentStatus}
             </if>
             <if test="query.paymentChannel != null and query.paymentChannel != ''">
-                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
+                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannelLikePattern}, '%') ESCAPE '!'
             </if>
         </where>
     </select>

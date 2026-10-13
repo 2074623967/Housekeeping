@@ -29,6 +29,22 @@ public class PaymentRecordQueryDTO {
     /** 每页条数，最大 100。 */
     private int pageSize = 20;
 
+    public String getUserIdLikePattern() {
+        return escapeLikePattern(userId);
+    }
+
+    public String getBusinessOrderNoLikePattern() {
+        return escapeLikePattern(businessOrderNo);
+    }
+
+    public String getPaymentChannelLikePattern() {
+        return escapeLikePattern(paymentChannel);
+    }
+
+    private String escapeLikePattern(String value) {
+        return value == null ? null : value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
     public int getPageNo() {
         return PageQueryBounds.normalizePageNo(pageNo);
     }

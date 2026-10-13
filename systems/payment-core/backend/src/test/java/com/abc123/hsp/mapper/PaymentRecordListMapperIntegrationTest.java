@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -97,6 +98,53 @@ class PaymentRecordListMapperIntegrationTest {
                     paymentOrderIds(mapper.findAll(query)));
             assertEquals("2026-09-12 16:00:30", mapper.findAll(query).get(0).getUpdatedAt());
         }
+    }
+
+    @Test
+    void shouldTreatRecordSearchFiltersAsLiteralSubstrings() throws Exception {
+        String orderNo = "ORDER-LITERAL-%_!\\";
+        String customerName = "客户%_!\\";
+        String channelCode = "wx_%_!\\";
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement insert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, "
+                             + "payment_method, channel_code, status, created_at, updated_at) "
+                             + "VALUES (?, ?, ?, 100.00, '微信', ?, 'SUCCESS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")) {
+            insert.setString(1, "PAY-RECORD-LITERAL");
+            insert.setString(2, orderNo);
+            insert.setString(3, customerName);
+            insert.setString(4, channelCode);
+            insert.executeUpdate();
+            PaymentRecordMapper mapper = session.getMapper(PaymentRecordMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", "%_!\\")) {
+                PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+                query.setBusinessOrderNo(fragment);
+                assertOnlyLiteralRecord(mapper, query);
+                assertEquals(fragment, query.getBusinessOrderNo());
+
+                query = new PaymentRecordQueryDTO();
+                query.setUserId(fragment);
+                assertOnlyLiteralRecord(mapper, query);
+                assertEquals(fragment, query.getUserId());
+            }
+            for (String fragment : Arrays.asList("%", "%_", "!", "\\", "%_!\\")) {
+                PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+                query.setPaymentChannel(fragment);
+                assertOnlyLiteralRecord(mapper, query);
+                assertEquals(fragment, query.getPaymentChannel());
+            }
+            PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+            query.setBusinessOrderNo(orderNo);
+            query.setUserId(customerName);
+            query.setPaymentChannel(channelCode);
+            assertOnlyLiteralRecord(mapper, query);
+        }
+    }
+
+    private void assertOnlyLiteralRecord(PaymentRecordMapper mapper, PaymentRecordQueryDTO query) {
+        assertEquals(1L, mapper.count(query));
+        assertEquals(Arrays.asList("PAY-RECORD-LITERAL"), paymentOrderIds(mapper.findAll(query)));
+        assertEquals(Arrays.asList("PAY-RECORD-LITERAL"), paymentOrderIds(mapper.findAllForExport(query)));
     }
 
     @Test
