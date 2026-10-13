@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.abc123.accounting.common.PaymentEventHttpSignature;
 import com.abc123.accounting.service.BalanceService;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -25,6 +26,7 @@ class AccountingSettlementCompensationHttpIntegrationTest {
 
     private static final String SECRET = "local-compensation-integration-secret";
     private static final String HEADER_NAME = "X-HSP-Settlement-Compensation-Signature";
+    private static final String TIMESTAMP_HEADER = "X-HSP-Settlement-Compensation-Timestamp";
     private static final String BODY = "{\"accountNo\":\"ACT10002\",\"settlementOrderNo\":\"SLT-HTTP-001\","
             + "\"bizNo\":\"CLO-HTTP-001\",\"amount\":15.00,\"compensationDirection\":\"贷方\"}";
 
@@ -37,16 +39,26 @@ class AccountingSettlementCompensationHttpIntegrationTest {
     @Test
     void shouldOnlyCreditSignedCompensationAndKeepReplayIdempotent() throws Exception {
         assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
 
         mockMvc.perform(post("/api/accounting/events/settlements/compensations")
                 .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isForbidden());
         assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
 
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        assertEquals("¥120.00", balanceService.detail("ACT10002").getAvailableAmount());
+
         for (int attempt = 0; attempt < 2; attempt++) {
             mockMvc.perform(post("/api/accounting/events/settlements/compensations")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET)).content(BODY))
+                    .header(TIMESTAMP_HEADER, timestamp)
+                    .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET)).content(BODY))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value("0"));
             assertEquals("¥135.00", balanceService.detail("ACT10002").getAvailableAmount());
@@ -54,7 +66,8 @@ class AccountingSettlementCompensationHttpIntegrationTest {
 
         mockMvc.perform(post("/api/accounting/events/settlements/compensations")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .header(TIMESTAMP_HEADER, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
                 .content(BODY.replace("15.00", "150.00")))
                 .andExpect(status().isForbidden());
         assertEquals("¥135.00", balanceService.detail("ACT10002").getAvailableAmount());

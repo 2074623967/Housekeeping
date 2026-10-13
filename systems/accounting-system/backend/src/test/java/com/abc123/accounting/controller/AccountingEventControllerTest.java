@@ -84,7 +84,9 @@ class AccountingEventControllerTest {
         SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumeSettlementCompensation(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumeSettlementCompensation(body,
+                PaymentEventHttpSignature.signTimed(body, timestamp, TEST_SECRET), timestamp);
 
         verify(accountingEventService).consumeSettlementCompensation(argThat(received -> received != null));
     }
@@ -94,8 +96,9 @@ class AccountingEventControllerTest {
         AccountingEventController controller = new AccountingEventController(accountingEventService,
                 new ObjectMapper(), TEST_SECRET, TEST_SECRET, TEST_SECRET, "");
 
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         assertEquals(HttpStatus.FORBIDDEN, controller.consumeSettlementCompensation(
-                "{}", PaymentEventHttpSignature.sign("{}", TEST_SECRET)).getStatusCode());
+                "{}", PaymentEventHttpSignature.signTimed("{}", timestamp, TEST_SECRET), timestamp).getStatusCode());
 
         verify(accountingEventService, never()).consumeSettlementCompensation(any());
     }

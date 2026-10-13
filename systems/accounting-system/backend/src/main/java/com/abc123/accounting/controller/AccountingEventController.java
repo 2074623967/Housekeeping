@@ -34,6 +34,7 @@ public class AccountingEventController {
     private static final String CLEARING_EVENT_SIGNATURE_HEADER = "X-HSP-Clearing-Event-Signature";
     private static final String CLEARING_EVENT_TIMESTAMP_HEADER = "X-HSP-Clearing-Event-Timestamp";
     private static final String SETTLEMENT_COMPENSATION_SIGNATURE_HEADER = "X-HSP-Settlement-Compensation-Signature";
+    private static final String SETTLEMENT_COMPENSATION_TIMESTAMP_HEADER = "X-HSP-Settlement-Compensation-Timestamp";
 
     private final AccountingEventService accountingEventService;
     private final ObjectMapper objectMapper;
@@ -117,8 +118,9 @@ public class AccountingEventController {
 
     @PostMapping("/settlements/compensations")
     public ResponseEntity<ApiResponse<AccountEventDTO>> consumeSettlementCompensation(@RequestBody String body,
-            @RequestHeader(value = SETTLEMENT_COMPENSATION_SIGNATURE_HEADER, required = false) String signature) {
-        if (!PaymentEventHttpSignature.matches(body, signature, settlementCompensationSecret)) {
+            @RequestHeader(value = SETTLEMENT_COMPENSATION_SIGNATURE_HEADER, required = false) String signature,
+            @RequestHeader(value = SETTLEMENT_COMPENSATION_TIMESTAMP_HEADER, required = false) String timestamp) {
+        if (!PaymentEventHttpSignature.matchesTimed(body, timestamp, signature, settlementCompensationSecret)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.failure("SETTLEMENT_COMPENSATION_UNAUTHORIZED", "结算补偿签名校验失败"));
         }

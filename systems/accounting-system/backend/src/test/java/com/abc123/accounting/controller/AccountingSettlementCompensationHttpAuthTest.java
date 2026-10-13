@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.abc123.accounting.common.PaymentEventHttpSignature;
 import com.abc123.accounting.service.AccountingEventService;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,6 +28,7 @@ class AccountingSettlementCompensationHttpAuthTest {
 
     private static final String SECRET = "local-compensation-http-test-secret";
     private static final String HEADER_NAME = "X-HSP-Settlement-Compensation-Signature";
+    private static final String TIMESTAMP_HEADER = "X-HSP-Settlement-Compensation-Timestamp";
     private static final String BODY = "{\"accountNo\":\"ACT10002\",\"settlementOrderNo\":\"SLT-001\","
             + "\"bizNo\":\"CLO-001\",\"amount\":20.00,\"compensationDirection\":\"借方\"}";
 
@@ -47,9 +49,11 @@ class AccountingSettlementCompensationHttpAuthTest {
 
     @Test
     void shouldRejectModifiedCompensationWithOriginalSignature() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/accounting/events/settlements/compensations")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .header(TIMESTAMP_HEADER, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
                 .content(BODY.replace("20.00", "200.00")))
                 .andExpect(status().isForbidden());
 
@@ -58,12 +62,71 @@ class AccountingSettlementCompensationHttpAuthTest {
 
     @Test
     void shouldAcceptSignedCompensation() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/accounting/events/settlements/compensations")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET)).content(BODY))
+                .header(TIMESTAMP_HEADER, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET)).content(BODY))
                 .andExpect(status().isOk());
 
         verify(accountingEventService).consumeSettlementCompensation(
                 org.mockito.ArgumentMatchers.argThat(request -> "SLT-001".equals(request.getSettlementOrderNo())));
+    }
+
+    @Test
+    void shouldRejectExpiredBodyOnlySignatureBeforeBalanceChange() throws Exception {
+        String expired = Long.toString(Instant.now().minusSeconds(3600).getEpochSecond());
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER, expired)
+                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        verify(accountingEventService, never()).consumeSettlementCompensation(any());
+    }
+
+    @Test
+    void shouldRejectOldOrExpiredTimedSignatureBeforeBalanceChange() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        String expired = Long.toString(Instant.now().minusSeconds(3600).getEpochSecond());
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER, expired)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, expired, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        verify(accountingEventService, never()).consumeSettlementCompensation(any());
+    }
+
+    @Test
+    void shouldRejectMissingNonCanonicalFutureAndDuplicateTimestamp() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        for (String invalid : new String[]{"0" + timestamp, "not-a-time",
+                Long.toString(Instant.now().plusSeconds(3600).getEpochSecond())}) {
+            mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(TIMESTAMP_HEADER, invalid)
+                    .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, invalid, SECRET))
+                    .content(BODY))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/accounting/events/settlements/compensations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(TIMESTAMP_HEADER, timestamp, timestamp)
+                .header(HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+        verify(accountingEventService, never()).consumeSettlementCompensation(any());
     }
 }
