@@ -195,10 +195,10 @@
         FROM t_refund_outbox_event
         <where>
             <if test="eventId != null and eventId != ''">
-                AND event_id LIKE CONCAT('%', #{eventId}, '%')
+                AND event_id LIKE CONCAT('%', #{eventIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="aggregateId != null and aggregateId != ''">
-                AND aggregate_id LIKE CONCAT('%', #{aggregateId}, '%')
+                AND aggregate_id LIKE CONCAT('%', #{aggregateIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="status != null and status != ''">
                 AND status = #{status}
@@ -213,10 +213,10 @@
         FROM t_refund_outbox_event
         <where>
             <if test="eventId != null and eventId != ''">
-                AND event_id LIKE CONCAT('%', #{eventId}, '%')
+                AND event_id LIKE CONCAT('%', #{eventIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="aggregateId != null and aggregateId != ''">
-                AND aggregate_id LIKE CONCAT('%', #{aggregateId}, '%')
+                AND aggregate_id LIKE CONCAT('%', #{aggregateIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="status != null and status != ''">
                 AND status = #{status}

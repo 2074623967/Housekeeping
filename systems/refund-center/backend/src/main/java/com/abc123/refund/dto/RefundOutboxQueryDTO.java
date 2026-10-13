@@ -18,4 +18,12 @@ public class RefundOutboxQueryDTO {
     private int pageNo = 1;
     /** 每页数量。 */
     private int pageSize = 20;
+
+    public String getEventIdLikePattern() {
+        return LikePattern.escape(eventId);
+    }
+
+    public String getAggregateIdLikePattern() {
+        return LikePattern.escape(aggregateId);
+    }
 }
