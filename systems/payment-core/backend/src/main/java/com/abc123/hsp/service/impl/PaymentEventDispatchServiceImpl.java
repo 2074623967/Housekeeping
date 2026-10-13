@@ -42,6 +42,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -1019,7 +1020,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private DownstreamApiResponse postForSuccess(String url, Object payload) {
         ResponseEntity<DownstreamApiResponse> response = restTemplate.postForEntity(
                 url.trim(), payload, DownstreamApiResponse.class);
-        if (response == null || !response.getStatusCode().is2xxSuccessful()
+        if (response == null || response.getStatusCode() != HttpStatus.OK
                 || response.getBody() == null || response.getBody().getData() == null
                 || !isSuccessfulResponseCode(response.getBody().getCode())) {
             LOGGER.warn("支付成功事件下游响应拒绝 target={}, reason=HTTP_CODE_OR_DATA",
@@ -1054,7 +1055,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                     PaymentEventHttpSignature.sign(body, timestamp, refundProjectionSecret));
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     refundProjectionUrl.trim(), new HttpEntity<>(body, headers), Map.class);
-            if (response == null || !response.getStatusCode().is2xxSuccessful()
+            if (response == null || response.getStatusCode() != HttpStatus.OK
                     || response.getBody() == null
                     || !"0".equals(String.valueOf(response.getBody().get("code")))) {
                 throw new IllegalStateException("退款中心支付成功投影未明确确认");

@@ -610,3 +610,7 @@ App/H5/PC 共用客户端与小程序客户端对 `code=0 / PAYING` 的支付提
 ## 77. 2026-10-13 网关四路响应状态门禁后的支付链复核
 
 payment-core 对 gateway-access 支付/退款提交与查单的成功回包增加 HTTP 200 与业务码双重确认后，隔离 H2/demo 九服务支付回调 `PAY1791869659925f141b43f` 和本机网关主动查单 `PAY179186981631702530d32` 双路径 `verify` 均以 0 退出，HTTP 冒烟与 happy-path `[PASS]`；退款与三类账务事件、七项对账事实均读回，对账 `COMPLETED/4/4` 且本地 `financialCloseable=true`。脚本退出九后端与查单桩停服。HTTP 202/502 携带 `code=0` 的拒收由 payment-core 四组定向 mock 回归覆盖，不能把正向九服务链路当作故障网关或真实渠道验收；RabbitMQ、目标 MySQL 8 多实例、资金和生产身份权限仍待核验。
+
+## 78. 2026-10-13 支付成功四下游同步回执门禁复核
+
+payment-core 不再将下游清分、账务、对账和退款中心投影的 HTTP 202 视为完成。隔离 H2/demo 九服务 `verify payment-chain` 与 `verify payment-query-chain` 均以 0 退出，支付单 `PAY179187051400484429cd4` 经 `CALLBACK`、`PAY179187067158325cf24d9` 经本机 `GATEWAY_QUERY` 收口；HTTP 冒烟和 happy-path `[PASS]`，支付事件、退款、三类账务与七项对账事实均读回，对账 `COMPLETED/4/4`、本地 `financialCloseable=true`。退出后九服务与查询桩停服。故障回执分支由派发器定向 mock 测试覆盖，不把正常 HTTP 双路径当作真实 202 故障、RabbitMQ、目标 MySQL 8、多实例和资金验收。

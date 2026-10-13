@@ -2344,6 +2344,80 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldNotAdvanceClearingStageOnAcceptedHttpResponse() {
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("0", HttpStatus.ACCEPTED));
+
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-CLEARING-202", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-CLEARING-202");
+        verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted("EVT-CLEARING-202");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
+    void shouldNotCompleteHttpStageOnAcceptedAccountingResponse() {
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("0", HttpStatus.ACCEPTED));
+
+        signedHttpDispatch(new PaymentEventDispatchServiceImpl(paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate)).publishPaymentSuccess("EVT-ACCOUNTING-202", "PAY-001");
+
+        verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-ACCOUNTING-202");
+        verify(paymentEventMapper).markPublishFailed("EVT-ACCOUNTING-202");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-ACCOUNTING-202");
+    }
+
+    @Test
+    void shouldNotCompleteHttpStageOnAcceptedReconciliationResponse() {
+        PaymentEventDispatchServiceImpl service = reconciliationDispatch();
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(new ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse>(
+                        reconciliationResponse("PAY-001").getBody(), HttpStatus.ACCEPTED));
+
+        service.publishPaymentSuccess("EVT-RECONCILIATION-202", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-RECONCILIATION-202");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-RECONCILIATION-202");
+    }
+
+    @Test
+    void shouldNotCompleteHttpStageOnAcceptedRefundProjection() {
+        PaymentEventDispatchServiceImpl service = reconciliationDispatch();
+        setField(service, "refundProjectionUrl", "http://refund/projection");
+        setField(service, "refundProjectionSecret", "local-payment-projection-secret");
+        when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
+                .thenReturn(new ResponseEntity<Map>(Collections.singletonMap("code", "0"), HttpStatus.ACCEPTED));
+
+        service.publishPaymentSuccess("EVT-PROJECTION-202", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-PROJECTION-202");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-PROJECTION-202");
+        verify(restTemplate, never()).postForEntity(eq("http://reconciliation/facts"), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
     void shouldProjectPaymentSuccessToRefundCenterBeforeCompletingHttpStage() throws Exception {
         PaymentEventDispatchServiceImpl service = reconciliationDispatch();
         setField(service, "refundProjectionUrl", "http://refund/projection");
