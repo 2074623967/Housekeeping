@@ -66,7 +66,7 @@ public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
             request.setChannelCode(context.getChannelCode());
             UpstreamPaymentQueryResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamPaymentQueryResponseDTO.class);
-            PaymentOrderQueryResultDTO result = validateUpstreamResponse(response);
+            PaymentOrderQueryResultDTO result = validateUpstreamResponse(response, request);
             if (!StringUtils.hasText(result.getQuerySource())) {
                 result.setQuerySource("GATEWAY_ACCESS_PROXY");
             } else {
@@ -139,18 +139,29 @@ public class PaymentOrderQueryServiceImpl implements PaymentOrderQueryService {
         return new GatewayAccessException("GATEWAY_INVALID_ARGUMENT", message);
     }
 
-    private PaymentOrderQueryResultDTO validateUpstreamResponse(UpstreamPaymentQueryResponseDTO response) {
+    private PaymentOrderQueryResultDTO validateUpstreamResponse(UpstreamPaymentQueryResponseDTO response,
+                                                                PaymentOrderQueryRequestDTO request) {
         if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
             throw new GatewayAccessException("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                     "payment query upstream returned no definitive trade status");
         }
         PaymentOrderQueryResultDTO result = response.getData();
+        responseText(result.getPaymentOrderId(), 64);
+        responseText(result.getOrderNo(), 64);
+        if (!request.getPaymentOrderId().equals(result.getPaymentOrderId())
+                || !request.getOrderNo().equals(result.getOrderNo())) {
+            throw invalidResponse();
+        }
         String tradeStatus = responseText(result.getTradeStatus(), 32);
         if (tradeStatus == null || !TRADE_STATUSES.contains(tradeStatus.toUpperCase(Locale.ROOT))) {
             throw invalidResponse();
         }
         result.setTradeStatus(tradeStatus.toUpperCase(Locale.ROOT));
         result.setChannelTransactionNo(responseText(result.getChannelTransactionNo(), 128));
+        if (StringUtils.hasText(request.getChannelTransactionNo())
+                && !request.getChannelTransactionNo().equals(result.getChannelTransactionNo())) {
+            throw invalidResponse();
+        }
         String querySource = responseText(result.getQuerySource(), 64);
         result.setQuerySource(querySource == null ? "GATEWAY_ACCESS_PROXY" : querySource);
         result.setChannelReturnCode(responseText(result.getChannelReturnCode(), 64));

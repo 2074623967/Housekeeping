@@ -109,10 +109,21 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
                         ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                         "gateway-access returned no definitive trade status");
             }
+            if (!request.getPaymentOrderId().equals(result.getPaymentOrderId())
+                    || !request.getOrderNo().equals(result.getOrderNo())) {
+                throw BusinessException.sanitized(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "gateway-access returned a mismatched payment identity");
+            }
             if (result.getQuerySource() == null || result.getQuerySource().isEmpty()) {
                 result.setQuerySource("GATEWAY_ACCESS_HTTP");
             }
-            return PaymentChannelQueryResultValidator.validateAndNormalize(result);
+            PaymentChannelQueryResultDTO normalized = PaymentChannelQueryResultValidator.validateAndNormalize(result);
+            if (StringUtils.hasText(request.getChannelTransactionNo())
+                    && !request.getChannelTransactionNo().equals(normalized.getChannelTransactionNo())) {
+                throw BusinessException.sanitized(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "gateway-access returned a mismatched channel transaction");
+            }
+            return normalized;
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {

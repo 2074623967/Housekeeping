@@ -69,6 +69,8 @@ class PaymentOrderQueryServiceImplTest {
     void shouldReturnOnlyDefinitiveUpstreamTradeFactAndAudit() {
         configureEnabledGovernance(true);
         PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setOrderNo("ORD-1001");
         data.setTradeStatus(" success ");
         data.setChannelTransactionNo(" WX-1001 ");
         UpstreamPaymentQueryResponseDTO response = new UpstreamPaymentQueryResponseDTO();
@@ -107,6 +109,48 @@ class PaymentOrderQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectAnotherPaymentOrderWithoutKnownChannelTransaction() {
+        configureEnabledGovernance(true);
+        PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setPaymentOrderId("PAY-OTHER");
+        data.setOrderNo("ORD-1001");
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo("WX-OTHER");
+        stubUpstream(data);
+
+        assertInvalidUpstreamResponse();
+    }
+
+    @Test
+    void shouldRejectUpstreamPaymentQueryWithoutIdentity() {
+        configureEnabledGovernance(true);
+        PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo("WX-1001");
+        stubUpstream(data);
+
+        assertInvalidUpstreamResponse();
+    }
+
+    @Test
+    void shouldRejectDifferentChannelTransactionWhenAlreadyKnown() {
+        configureEnabledGovernance(true);
+        PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setOrderNo("ORD-1001");
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo("WX-OTHER");
+        stubUpstream(data);
+        PaymentOrderQueryRequestDTO request = request();
+        request.setChannelTransactionNo("WX-1001");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
+    @Test
     void shouldRejectUnknownStatusWithoutSuccessfulAudit() {
         configureEnabledGovernance(true);
         PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
@@ -120,6 +164,8 @@ class PaymentOrderQueryServiceImplTest {
     void shouldRejectOversizedOrControlledUpstreamFieldsBeforeSuccessfulAudit() {
         configureEnabledGovernance(true);
         PaymentOrderQueryResultDTO data = new PaymentOrderQueryResultDTO();
+        data.setPaymentOrderId("PAY-1001");
+        data.setOrderNo("ORD-1001");
         data.setTradeStatus("SUCCESS");
         data.setChannelTransactionNo(repeat("W", 129));
         stubUpstream(data);

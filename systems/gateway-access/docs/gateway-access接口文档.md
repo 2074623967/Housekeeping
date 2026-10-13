@@ -121,7 +121,7 @@
 }
 ```
 
-成功响应中的 `data` 只透传配置上游返回的确定性渠道事实，包含 `tradeStatus`、`channelTransactionNo`、`querySource` 以及可选返回码标准化字段。接口不会从 gateway-access 本地台账推导支付状态，也不会生成模拟成功结果。
+成功响应中的 `data` 只透传配置上游返回的确定性渠道事实，包含原样回显的 `paymentOrderId / orderNo`、`tradeStatus`、`channelTransactionNo`、`querySource` 以及可选返回码标准化字段。两项订单身份必须与本次请求精确一致，不得由代理从请求补造；请求已携带渠道交易号时，规范化后的回执渠道号也必须一致。接口不会从 gateway-access 本地台账推导支付状态，也不会生成模拟成功结果。缺失、串单或错渠道号均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE` 并审计失败；旧版只回交易状态/渠道号的受控上游需先完成协议映射与混版治理。
 代理仅接受 payment-core 支持的交易状态（`PREPAY_CREATED`、`RISK_REVIEW`、`RISK_BLOCKED`、`RISK_REJECTED`、`WAIT_CALLBACK`、`SUCCESS`、`CLOSED`、`FAIL`），并在成功审计前校验响应字段原文长度与控制字符；未知状态或越界字段返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE` 并记失败审计。请求中可选的 `channelTransactionNo` 即使只有空白，也先执行原文长度及 ISO 控制字符校验，再将合法纯空白规范为空值以按支付单号查单。
 
 代理前依次校验：

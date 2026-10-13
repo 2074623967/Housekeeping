@@ -124,6 +124,7 @@ async function main() {
       const channelTransactionNo = upstreamQueries.length === 2
         || (conflictingLateQuery && upstreamQueries.length === 3) ? "ALI-WRONG" : "ALI77665544";
       outgoing.end(JSON.stringify({ code: "0", data: {
+        paymentOrderId: body.paymentOrderId, orderNo: body.orderNo,
         tradeStatus, channelTransactionNo, querySource: "LOCAL_UPSTREAM_STUB"
       } }));
       return;
@@ -167,6 +168,7 @@ async function main() {
     await waitForIdentity(gatewayUrl, gateway, "gateway-access", "gateway-access-h2-local-payment-chain");
 
     const payment = startBackend("payment-core", "systems/payment-core/backend", {
+      HSP_PAYMENT_SUCCESS_HTTP_SECRET: accessKey,
       server: { address: "127.0.0.1", port: paymentPort },
       spring: {
         profiles: { active: "demo" },
@@ -270,8 +272,8 @@ async function main() {
       (data) => Array.isArray(data?.records), "Gateway query audit listing failed");
     const queryAudits = audits.records.filter((item) => item.operationType === "PAYMENT_QUERY"
       && item.clientIp === "127.0.0.1");
-    if (queryAudits.filter((item) => item.resultStatus === "FAILED").length !== 1
-        || queryAudits.filter((item) => item.resultStatus === "SUCCESS").length !== 2) {
+    if (queryAudits.filter((item) => item.resultStatus === "FAILED").length !== (conflictingLateQuery ? 3 : 2)
+        || queryAudits.filter((item) => item.resultStatus === "SUCCESS").length !== (conflictingLateQuery ? 0 : 1)) {
       throw new Error("Gateway did not audit rejected and accepted upstream facts distinctly");
     }
     const eventPage = expectData(await request(`${paymentUrl}/api/payment-events?`

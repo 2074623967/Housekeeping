@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class PaymentOrderQueryResultDTO {
 
+    private String paymentOrderId;
+    private String orderNo;
     private String tradeStatus;
     private String channelTransactionNo;
     private String querySource;

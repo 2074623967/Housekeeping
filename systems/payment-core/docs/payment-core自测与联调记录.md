@@ -1,5 +1,9 @@
 # payment-core 自测与联调记录
 
+## 2026-10-13 支付查单跨订单回执失败闭合
+
+正式网关查单结果必须原样回显并匹配 `paymentOrderId / orderNo`，请求已知渠道流水号时规范化后仍须一致；缺失、串单或错号按 `PAYMENT_CHANNEL_QUERY_FAILED` 失败闭合，不更改付款状态或派发成功事件。payment-core H2/demo 全量 `2080/2080`、网关 H2 全量 `85/85` 均零失败/错误/跳过。双服务本机回环脚本的正常回调赢家及冲突晚到查单两模式均通过，支付成功事件只到受控本地清分/账务桩；脚本补上临时 HTTP 签名密钥并校准网关错号拒绝后的审计预期。`node --check`、`git diff --check` 通过。旧版只回状态/渠道号的上游或网关须完成协议映射与混版治理；真实资金、签名渠道回执、RabbitMQ、MySQL 8 多实例和发布仍待验收。
+
 ## 2026-10-13 退款提交跨尝试受理失败闭合
 
 正式 gateway-access 提交回执必须原样回显且精确匹配本轮 `refundOrderId / refundAttemptNo`；缺失或串单不绑定渠道号、不确认为出站成功，按 `resultUnknown=true` 保留原尝试待核查，不能盲重发。网关上游同样先做归属校验并记录 `UNKNOWN`。两端定向单测、gateway-access 全量 H2 `82/82` 与 payment-core 全量 H2/demo `2077/2077` 均通过，零失败/错误/跳过。双服务临时 H2/本机假上游 HTTP 冒烟通过：跨尝试提交回执使订单 `PROCESSING`、尝试/出站事件 `UNKNOWN` 且无渠道号，再由原尝试号可信查单恢复至 `SUCCESS`，旧查询错号与错尝试场景仍通过。`node --check`、`git diff --check` 通过。真实渠道原生回显或协议映射、混版切换、目标 MySQL 8、多实例和资金结果仍未验收。

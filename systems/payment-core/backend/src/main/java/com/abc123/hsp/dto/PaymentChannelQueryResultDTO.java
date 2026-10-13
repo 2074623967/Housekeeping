@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class PaymentChannelQueryResultDTO {
 
+    private String paymentOrderId;
+    private String orderNo;
     /** 渠道状态，例如 SUCCESS、WAIT_CALLBACK、FAIL。 */
     private String tradeStatus;
     /** 渠道交易流水号。 */

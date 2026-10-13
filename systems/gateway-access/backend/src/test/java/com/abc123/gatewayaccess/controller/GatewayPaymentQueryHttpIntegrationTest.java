@@ -28,7 +28,8 @@ class GatewayPaymentQueryHttpIntegrationTest {
         AtomicInteger upstreamCalls = new AtomicInteger();
         AtomicReference<JsonNode> upstreamRequest = new AtomicReference<>();
         AtomicReference<String> upstreamResponse = new AtomicReference<>(
-                "{\"code\":\"0\",\"data\":{\"tradeStatus\":\" success \","
+                "{\"code\":\"0\",\"data\":{\"paymentOrderId\":\"PAY-HTTP-001\","
+                        + "\"orderNo\":\"ORD-HTTP-001\",\"tradeStatus\":\" success \","
                         + "\"channelTransactionNo\":\" WX-HTTP-001 \","
                         + "\"querySource\":\"LOCAL_LOOPBACK_UPSTREAM\"}}");
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -79,14 +80,22 @@ class GatewayPaymentQueryHttpIntegrationTest {
                 assertEquals("wx_h5", upstreamRequest.get().path("channelCode").asText());
                 assertEquals("WX-HTTP-001", upstreamRequest.get().path("channelTransactionNo").asText());
 
+                upstreamResponse.set("{\"code\":\"0\",\"data\":{\"paymentOrderId\":\"PAY-OTHER\","
+                        + "\"orderNo\":\"ORD-HTTP-001\",\"tradeStatus\":\"SUCCESS\","
+                        + "\"channelTransactionNo\":\"WX-OTHER\"}}");
+                String requestWithoutChannel = request.replace(",\"channelTransactionNo\":\"WX-HTTP-001\"", "");
+                assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE",
+                        post(objectMapper, port, requestWithoutChannel, "local-test-key").path("code").asText());
+                assertEquals(2, upstreamCalls.get());
+
                 upstreamResponse.set("{\"code\":\"0\",\"data\":{\"tradeStatus\":\"PAID\"}}");
                 assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE",
                         post(objectMapper, port, request, "local-test-key").path("code").asText());
-                assertEquals(2, upstreamCalls.get());
+                assertEquals(3, upstreamCalls.get());
                 assertEquals(Integer.valueOf(1), jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM t_gateway_audit_log WHERE operation_type = 'PAYMENT_QUERY' "
                                 + "AND result_status = 'SUCCESS' AND client_ip = '127.0.0.1'", Integer.class));
-                assertEquals(Integer.valueOf(3), jdbcTemplate.queryForObject(
+                assertEquals(Integer.valueOf(4), jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM t_gateway_audit_log WHERE operation_type = 'PAYMENT_QUERY' "
                                 + "AND result_status = 'FAILED' AND client_ip = '127.0.0.1'", Integer.class));
             }
