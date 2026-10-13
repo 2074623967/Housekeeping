@@ -209,7 +209,7 @@
 
 退款金额必须为正数且最多两位小数；`refundOrderId / refundAttemptNo / paymentOrderId / orderNo / refundMethod / channelCode` 必填，文本执行长度和 ISO 控制字符校验。显式传入的可选 `customerName / refundReason` 也先按原文校验，再将纯空白规范为空值。`refundAttemptNo` 作为每轮渠道侧商户退款请求号原样转发，同一轮调用前失败重试必须复用，新的退款业务重试必须使用新值。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
 
-成功响应必须同时包含 `channelRefundNo / status / statusType`，且仅接受 `PROCESSING / warn` 或 `SUCCESS / success` 配对。空响应、上游业务码非 `0`、字段缺失、状态与样式矛盾或其他非法响应均不视为明确受理，返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`、审计 `UNKNOWN / warn`；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。
+成功响应必须同时包含 `refundOrderId / refundAttemptNo / channelRefundNo / status / statusType`；前两项须由受控上游原样回显并与本轮请求精确一致，代理不得从请求自行补写。仅接受 `PROCESSING / warn` 或 `SUCCESS / success` 配对。空响应、上游业务码非 `0`、身份缺失/串单/跨尝试、状态与样式矛盾或其他非法响应均不视为明确受理，返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`、审计 `UNKNOWN / warn`；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。旧版只回状态和渠道号的上游需先完成协议映射及混版治理。
 
 退款提交上游由以下环境变量显式配置，默认均为空：
 

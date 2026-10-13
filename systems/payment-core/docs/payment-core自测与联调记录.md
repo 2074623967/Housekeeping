@@ -1,5 +1,9 @@
 # payment-core 自测与联调记录
 
+## 2026-10-13 退款提交跨尝试受理失败闭合
+
+正式 gateway-access 提交回执必须原样回显且精确匹配本轮 `refundOrderId / refundAttemptNo`；缺失或串单不绑定渠道号、不确认为出站成功，按 `resultUnknown=true` 保留原尝试待核查，不能盲重发。网关上游同样先做归属校验并记录 `UNKNOWN`。两端定向单测、gateway-access 全量 H2 `82/82` 与 payment-core 全量 H2/demo `2077/2077` 均通过，零失败/错误/跳过。双服务临时 H2/本机假上游 HTTP 冒烟通过：跨尝试提交回执使订单 `PROCESSING`、尝试/出站事件 `UNKNOWN` 且无渠道号，再由原尝试号可信查单恢复至 `SUCCESS`，旧查询错号与错尝试场景仍通过。`node --check`、`git diff --check` 通过。真实渠道原生回显或协议映射、混版切换、目标 MySQL 8、多实例和资金结果仍未验收。
+
 ## 2026-10-13 退款查单跨尝试回执失败闭合
 
 首次查单没有已绑定的渠道退款号时，正式网关响应现在必须回显与请求完全一致的平台退款单号和当前退款尝试号，不能以 `SUCCESS` 和新渠道号替代身份校验；已知渠道号继续精确匹配。缺失或错配返回 `REFUND_CHANNEL_QUERY_FAILED`，退款保持未决。定向单测覆盖跨尝试和缺身份；payment-core 后端全量 H2/demo 测试 `2075/2075` 通过，零失败/错误/跳过。本机双服务 HTTP 冒烟测试通过：未知受理号收到别的尝试号成功回执后仍为 `PROCESSING/UNKNOWN`、无渠道号绑定且有可见查单失败记录，再用正确尝试号查单才原子收口；旧有错渠道号及同步成功待核查路径也通过。`node --check` 和 `git diff --check` 通过。

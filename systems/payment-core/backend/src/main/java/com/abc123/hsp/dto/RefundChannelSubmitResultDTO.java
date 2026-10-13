@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class RefundChannelSubmitResultDTO {
 
+    private String refundOrderId;
+    private String refundAttemptNo;
     /** 渠道退款单号。 */
     private String channelRefundNo;
     /** 渠道处理状态。 */

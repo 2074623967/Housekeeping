@@ -73,6 +73,7 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
             submittedBody.set(objectMapper.readTree(exchange.getRequestBody()));
             String response = accepted.get()
                     ? "{\"code\":\"0\",\"message\":\"success\",\"data\":{"
+                            + "\"refundOrderId\":\"REF-1001\",\"refundAttemptNo\":\"RFA-1001\","
                             + "\"channelRefundNo\":\"GW-REF-001\",\"status\":\"PROCESSING\","
                             + "\"statusType\":\"warn\"},\"requestId\":\"LOCAL-TEST\"}"
                     : "{\"code\":\"GATEWAY_UPSTREAM_NOT_CONFIGURED\","
@@ -136,6 +137,8 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
     void shouldReturnGatewayAcceptanceWithMinimalPayload() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setRefundOrderId("REF-1001");
+        data.setRefundAttemptNo("RFA-1001");
         data.setChannelRefundNo("WX-R-1001");
         data.setStatus("processing");
         data.setStatusType("WARN");
@@ -155,6 +158,52 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
         assertEquals("warn", result.getStatusType());
         assertTrue(result.getResponsePayload().contains("\"source\":\"gateway-access\""));
         assertFalse(result.getResponsePayload().contains("secret"));
+    }
+
+    @Test
+    void shouldKeepRefundSubmitUnknownWhenGatewayReturnsAnotherAttempt() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setRefundOrderId("REF-1001");
+        data.setRefundAttemptNo("RFA-OTHER");
+        data.setChannelRefundNo("WX-R-OTHER");
+        data.setStatus("PROCESSING");
+        data.setStatusType("warn");
+        GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse response =
+                new GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        RefundChannelSubmitException exception = assertThrows(RefundChannelSubmitException.class,
+                () -> adapter(restTemplate).submit(request()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertTrue(exception.isResultUnknown());
+    }
+
+    @Test
+    void shouldKeepRefundSubmitUnknownWhenGatewayOmitsRefundIdentity() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setChannelRefundNo("WX-R-1001");
+        data.setStatus("PROCESSING");
+        data.setStatusType("warn");
+        GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse response =
+                new GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        RefundChannelSubmitException exception = assertThrows(RefundChannelSubmitException.class,
+                () -> adapter(restTemplate).submit(request()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertTrue(exception.isResultUnknown());
     }
 
     @Test
@@ -355,6 +404,8 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
             RestTemplate restTemplate,
             AtomicReference<GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitRequest> sentRequest) {
         RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setRefundOrderId("REF-1001");
+        data.setRefundAttemptNo("RFA-1001");
         data.setChannelRefundNo("WX-R-1001");
         data.setStatus("PROCESSING");
         data.setStatusType("warn");

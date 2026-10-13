@@ -32,6 +32,7 @@ class GatewayRefundHttpIntegrationTest {
             upstreamCalls.incrementAndGet();
             upstreamRequest.set(objectMapper.readTree(exchange.getRequestBody()));
             byte[] response = ("{\"code\":\"0\",\"data\":{"
+                    + "\"refundOrderId\":\"REF-HTTP-001\",\"refundAttemptNo\":\"RFA-HTTP-001\","
                     + "\"channelRefundNo\":\"LOCAL-UPSTREAM-REF-001\","
                     + "\"status\":\"PROCESSING\",\"statusType\":\"warn\"}}")
                     .getBytes(StandardCharsets.UTF_8);

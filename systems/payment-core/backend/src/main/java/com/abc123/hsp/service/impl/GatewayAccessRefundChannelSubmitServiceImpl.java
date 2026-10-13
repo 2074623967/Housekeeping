@@ -101,6 +101,10 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
                 throw submitFailed("gateway-access rejected refund submit", resultUnknown);
             }
             RefundChannelSubmitResultDTO result = response.getData();
+            if (!normalizedRequest.getRefundOrderId().equals(result.getRefundOrderId())
+                    || !normalizedRequest.getRefundAttemptNo().equals(result.getRefundAttemptNo())) {
+                throw submitFailed("gateway-access returned a mismatched refund identity", true);
+            }
             normalizeAndValidate(result);
             result.setResponsePayload(buildResponsePayload(normalizedRequest.getChannelCode(), result));
             return result;

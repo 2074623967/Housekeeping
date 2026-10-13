@@ -62,7 +62,7 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
             upstreamInvoked = true;
             UpstreamRefundSubmitResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamRefundSubmitResponseDTO.class);
-            RefundOrderSubmitResultDTO result = validateUpstreamResponse(response);
+            RefundOrderSubmitResultDTO result = validateUpstreamResponse(response, request);
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.REFUND_SUBMIT,
                     "SUCCESS", "success", "退款请求已由配置的真实上游明确受理");
@@ -108,11 +108,18 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
         }
     }
 
-    private RefundOrderSubmitResultDTO validateUpstreamResponse(UpstreamRefundSubmitResponseDTO response) {
+    private RefundOrderSubmitResultDTO validateUpstreamResponse(UpstreamRefundSubmitResponseDTO response,
+                                                                RefundOrderSubmitRequestDTO request) {
         if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
             throw invalidResponse("refund submit upstream returned no definitive acceptance");
         }
         RefundOrderSubmitResultDTO result = response.getData();
+        requiredResponse(result.getRefundOrderId(), "refundOrderId", 64);
+        requiredResponse(result.getRefundAttemptNo(), "refundAttemptNo", 64);
+        if (!request.getRefundOrderId().equals(result.getRefundOrderId())
+                || !request.getRefundAttemptNo().equals(result.getRefundAttemptNo())) {
+            throw invalidResponse("refund submit upstream returned a mismatched refund identity");
+        }
         result.setChannelRefundNo(requiredResponse(result.getChannelRefundNo(), "channelRefundNo", 128));
         result.setStatus(requiredResponse(result.getStatus(), "status", 32).toUpperCase(Locale.ROOT));
         result.setStatusType(requiredResponse(result.getStatusType(), "statusType", 32)

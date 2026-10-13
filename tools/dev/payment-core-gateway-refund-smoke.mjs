@@ -124,15 +124,22 @@ async function main() {
       outgoing.end(JSON.stringify({
         code: "0",
         data: upstreamCalls.length === 3
-          ? { channelRefundNo: "LOCAL-UPSTREAM-REF-003", status: "SUCCESS", statusType: "success" }
-          : { channelRefundNo: "LOCAL-UPSTREAM-REF-001", status: "PROCESSING", statusType: "warn" }
+          ? { refundOrderId: requestBody.refundOrderId, refundAttemptNo: requestBody.refundAttemptNo,
+            channelRefundNo: "LOCAL-UPSTREAM-REF-003", status: "SUCCESS", statusType: "success" }
+          : upstreamCalls.length === 4
+            ? { refundOrderId: requestBody.refundOrderId,
+              refundAttemptNo: upstreamCalls[0].refundAttemptNo,
+              channelRefundNo: "LOCAL-UPSTREAM-REF-004", status: "PROCESSING", statusType: "warn" }
+          : { refundOrderId: requestBody.refundOrderId, refundAttemptNo: requestBody.refundAttemptNo,
+            channelRefundNo: "LOCAL-UPSTREAM-REF-001", status: "PROCESSING", statusType: "warn" }
       }));
     } else {
       upstreamQueries.push(requestBody);
       const submitIndex = upstreamCalls.findIndex((item) => item.refundOrderId === requestBody.refundOrderId);
       const channelRefundNo = submitIndex === 0
         ? upstreamQueries.length === 1 ? "LOCAL-UPSTREAM-WRONG-REF" : "LOCAL-UPSTREAM-REF-001"
-        : submitIndex === 1 ? "LOCAL-UPSTREAM-REF-002" : "LOCAL-UPSTREAM-REF-003";
+        : submitIndex === 1 ? "LOCAL-UPSTREAM-REF-002"
+          : submitIndex === 2 ? "LOCAL-UPSTREAM-REF-003" : "LOCAL-UPSTREAM-REF-004";
       outgoing.writeHead(200, { "Content-Type": "application/json" });
       outgoing.end(JSON.stringify({
         code: "0",
@@ -402,7 +409,47 @@ async function main() {
         || upstreamQueries[4].channelRefundNo) {
       throw new Error("Synchronous refund recovery lost its attempt identity");
     }
-    console.log("[PASS] payment-core -> gateway-access -> local upstream: reject mismatch, recover unknown and synchronous success without blind retry");
+    const mismatchedApplication = assertResponse(await request(`${paymentUrl}/api/refunds/apply`, {
+      paymentOrderId: "PAY202607190001",
+      idempotencyKey: `gateway-mismatched-submit-${randomUUID()}`,
+      refundAmount: 20,
+      refundMethod: "原路退款",
+      refundReason: "isolated cross-attempt submit smoke",
+      operator: "local-smoke"
+    }), (data) => data?.status === "REVIEWING" && data?.refundOrderId,
+    "Mismatched submit refund application failed");
+    assertResponse(await request(`${paymentUrl}/api/refunds/approve`, {
+      refundOrderId: mismatchedApplication.refundOrderId, operator: "local-smoke"
+    }), (data) => data?.status === "PROCESSING", "Mismatched submit approval failed");
+    const mismatchedDetail = assertResponse(await request(`${paymentUrl}/api/refunds/`
+      + mismatchedApplication.refundOrderId),
+    (data) => data?.status === "PROCESSING" && data?.attempts?.length === 1
+      && data.attempts[0].attemptStatus === "UNKNOWN" && !data.channelRefundNo,
+    "Another attempt's submit acceptance was bound to this refund");
+    const mismatchedAttemptNo = mismatchedDetail.attempts[0].refundAttemptNo;
+    const mismatchedEvents = assertResponse(await request(`${paymentUrl}/api/payment-events?`
+      + "paymentOrderId=PAY202607190001&eventType=REFUND_SUBMIT"),
+    (data) => data?.total === 4 && data?.items?.length === 4,
+    "Mismatched submit event missing");
+    const mismatchedEvent = mismatchedEvents.items.find((item) => item.bizNo === mismatchedAttemptNo);
+    if (mismatchedEvent?.publishStatus !== "UNKNOWN" || upstreamCalls.length !== 4
+        || upstreamCalls[3].refundAttemptNo !== mismatchedAttemptNo) {
+      throw new Error("Cross-attempt upstream acceptance was not quarantined");
+    }
+    assertResponse(await request(`${paymentUrl}/api/refunds/query`, {
+      refundOrderId: mismatchedApplication.refundOrderId, operator: "local-smoke"
+    }), (data) => data?.status === "SUCCESS", "Original attempt query did not recover the refund");
+    const mismatchedRecovered = assertResponse(await request(`${paymentUrl}/api/refunds/`
+      + mismatchedApplication.refundOrderId),
+    (data) => data?.status === "SUCCESS" && data?.attempts?.length === 1
+      && data.attempts[0].attemptStatus === "SUCCESS" && data.channelRefundNo === "LOCAL-UPSTREAM-REF-004",
+    "Cross-attempt submit recovery did not preserve the original attempt");
+    if (!mismatchedRecovered.operationLogs?.some((item) => item.actionCode === "CHANNEL_ACCEPTANCE_RECOVERED")
+        || upstreamQueries.length !== 6 || upstreamQueries[5].refundAttemptNo !== mismatchedAttemptNo
+        || upstreamQueries[5].channelRefundNo || upstreamCalls.length !== 4) {
+      throw new Error("Cross-attempt submit recovery lost its unknown-result boundary");
+    }
+    console.log("[PASS] payment-core -> gateway-access -> local upstream: reject mismatched submit/query receipts and recover original attempts without blind retry");
   } catch (error) {
     for (const { name, logPath } of launched) {
       const log = await readFile(logPath, "utf8").catch(() => "");
