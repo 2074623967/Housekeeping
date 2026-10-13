@@ -16,6 +16,7 @@ import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.BillDetailDTO;
+import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
@@ -77,6 +78,7 @@ class PaymentDemoProfileIntegrationTest {
                 verifyMiniProgramWechatSubmit(context.getBean(PaymentService.class), context.getBean(JdbcTemplate.class));
                 verifyApiAlipaySubmit(context.getBean(PaymentService.class), context.getBean(JdbcTemplate.class));
                 verifyNewStandardOrderPayment(context);
+                verifyPartialStandardOrderBill(context);
                 verifyStandardOrderSettlement(context, dispatchService, queryService);
             }
         } finally {
@@ -177,6 +179,33 @@ class PaymentDemoProfileIntegrationTest {
                 "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
                         + "AND event_type = 'PAYMENT_SUCCESS'",
                 Integer.class, submitted.getPaymentOrderId()));
+    }
+
+    private void verifyPartialStandardOrderBill(ConfigurableApplicationContext context) {
+        JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+        String orderNo = "DEMO-INTEGRATION-STANDARD-PARTIAL";
+        assertEquals(1, jdbcTemplate.update("INSERT INTO t_order (order_no, customer_name, service_type, "
+                + "worker_name, order_amount, paid_amount, order_status, order_status_type, "
+                + "fulfillment_status, fulfillment_status_type, created_at) "
+                + "VALUES (?, 'demo partial customer', '深度保洁', 'demo worker', 88.00, 20.00, "
+                + "'待支付', 'warn', '待确认', 'warn', CURRENT_TIMESTAMP)", orderNo));
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo(orderNo);
+        request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("demo partial customer");
+        request.setAmount(new BigDecimal("68.00"));
+        PrepayOrderDTO prepay = context.getBean(PaymentService.class).prepay(request);
+        BillDetailDTO bill = context.getBean(BillService.class).detail(prepay.getBillNo());
+        assertEquals(orderNo, bill.getStandardOrderNo());
+        assertEquals("¥88.00", bill.getBillAmount());
+        assertEquals("¥20.00", bill.getPaidAmount());
+        assertEquals("¥68.00", bill.getUnpaidAmount());
+        assertEquals("部分支付", bill.getBillStatus());
+        assertEquals("warn", bill.getBillStatusType());
+        BillQueryDTO billQuery = new BillQueryDTO();
+        billQuery.setOrderNo(orderNo);
+        assertEquals(Long.valueOf(1), context.getBean(BillService.class).overview(billQuery).getPartialPaidBillCount());
+        assertEquals(Long.valueOf(0), context.getBean(BillService.class).overview(billQuery).getUnpaidBillCount());
     }
 
     private void verifyStandardOrderSettlement(

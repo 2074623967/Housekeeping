@@ -463,8 +463,8 @@ public class PaymentServiceImpl implements PaymentService {
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
         if (billNo == null) {
             billNo = buildBusinessNo("BILL");
-            String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
-            String billStatusType = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "success" : "warn";
+            String billStatus = paidAmount.compareTo(BigDecimal.ZERO) > 0 ? "部分支付" : "待支付";
+            String billStatusType = "warn";
             if (paymentMapper.insertBill(
                     billNo, request.getOrderNo(), customerName, orderAmount, paidAmount,
                     billStatus, billStatusType) != 1) {
