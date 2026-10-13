@@ -12,6 +12,7 @@ STACK_SCOPE=""
 QUERY_ACCESS_KEY=""
 PAYMENT_EVENT_SECRET=""
 REFUND_EVENT_SECRET=""
+REFUND_CALLBACK_SECRET=""
 CLEARING_EVENT_SECRET=""
 PAYMENT_FACT_SECRET=""
 CLEARING_FACT_SECRET=""
@@ -302,6 +303,9 @@ start_backend() {
   fi
   if [[ "$name" == "refund-center" || "$name" == "payment-core" ]]; then
     event_signature_env+=(HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET")
+  fi
+  if [[ "$name" == "refund-center" ]]; then
+    event_signature_env+=(HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET")
   fi
   if [[ -n "$CLEARING_EVENT_SECRET" ]] \
     && [[ "$name" == "clearing-system" || "$name" == "settlement-system" || "$name" == "accounting-system" ]]; then
@@ -655,6 +659,7 @@ guard_local_payment_chain_verify() {
       HSP_PAYMENT_SUCCESS_HTTP_SECRET|\
       HSP_PAYMENT_SUCCESS_AMQP_SECRET|\
       HSP_REFUND_SUCCESS_HTTP_SECRET|\
+      HSP_REFUND_CALLBACK_HTTP_SECRET|\
       HSP_CLEARING_GENERATED_HTTP_SECRET|\
       HSP_CLEARING_GENERATED_AMQP_SECRET|\
       HSP_SETTLEMENT_COMPENSATION_HTTP_SECRET|\
@@ -753,6 +758,7 @@ run_verify() {
     verification_mode="payment-chain"
     PAYMENT_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     REFUND_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    REFUND_CALLBACK_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     CLEARING_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     PAYMENT_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     CLEARING_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
@@ -808,10 +814,12 @@ run_verify() {
     if [[ "$scope" == "risk-review" ]]; then
       HSP_LOCAL_RISK_REVIEW_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-risk-review.mjs" || result=$?
     elif [[ "$scope" == "payment-query-chain" ]]; then
-      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
+      HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
+        HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
         node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     else
-      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
+      HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
+        HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     fi
   fi
   run_stop "$scope" || [[ "$result" -ne 0 ]] || result=$?

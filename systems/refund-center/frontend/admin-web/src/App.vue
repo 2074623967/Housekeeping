@@ -179,34 +179,16 @@ async function exportDetail(refundOrderId) {
   }
 }
 
-async function runAction(action, callbackResult = "SUCCESS") {
+async function runAction(action) {
   if (!selectedRefund.value || activeOperation.value) return;
   if (action === "retry" && retryBlockedReason.value) {
     errorMessage.value = retryBlockedReason.value;
     return;
   }
-  const operationKey = action === "callback"
-    ? `refund:callback:${callbackResult}`
-    : `refund:${action}`;
-  activeOperation.value = operationKey;
+  activeOperation.value = `refund:${action}`;
   errorMessage.value = "";
   try {
-    const payload = action === "callback" && callbackResult === "FAIL"
-      ? {
-          result: "FAIL",
-          failureCode: "LOCAL_CHANNEL_TIMEOUT",
-          rawMessage: "本地渠道模拟超时失败回调"
-        }
-      : action === "callback"
-        ? {
-            result: "SUCCESS",
-            channelRefundId: `LOCAL-${selectedRefund.value.refundOrderId}`,
-            rawMessage: "本地渠道成功回调"
-          }
-        : { remark: "退款中心后台操作" };
-    await postRefundAction(selectedRefund.value.refundOrderId, action, {
-      ...payload
-    });
+    await postRefundAction(selectedRefund.value.refundOrderId, action, { remark: "退款中心后台操作" });
     await loadOverview();
     await loadList();
     selectedRefund.value = await getRefundDetail(selectedRefund.value.refundOrderId);
@@ -442,8 +424,7 @@ async function refreshCurrentView() {
             <button v-if="selectedRefund.status === 'REVIEWING'" class="primary-button" :disabled="!!activeOperation" @click="runAction('approve')">{{ activeOperation === "refund:approve" ? "审核中..." : "审核通过" }}</button>
             <button v-if="selectedRefund.status === 'APPROVED'" class="primary-button" :disabled="!!activeOperation" @click="runAction('submit')">{{ activeOperation === "refund:submit" ? "提交中..." : "提交渠道" }}</button>
             <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" :disabled="!!activeOperation || !!retryBlockedReason" @click="runAction('retry')">{{ activeOperation === "refund:retry" ? "重试中..." : "失败重试" }}</button>
-            <button v-if="selectedRefund.status === 'PROCESSING'" class="secondary-button" :disabled="!!activeOperation" @click="runAction('callback', 'SUCCESS')">{{ activeOperation === "refund:callback:SUCCESS" ? "回调中..." : "模拟成功回调" }}</button>
-            <button v-if="selectedRefund.status === 'PROCESSING'" class="link-button danger-link" :disabled="!!activeOperation" @click="runAction('callback', 'FAIL')">{{ activeOperation === "refund:callback:FAIL" ? "回调中..." : "模拟失败回调" }}</button>
+            <span v-if="selectedRefund.status === 'PROCESSING'">等待可信渠道结果回调</span>
             <button class="secondary-button" :disabled="!!activeOperation" @click="showList">返回列表</button>
           </div>
           <p v-if="retryBlockedReason" class="form-hint" role="status">{{ retryBlockedReason }}；请核对原始渠道回执，勿直接重复提交。</p>

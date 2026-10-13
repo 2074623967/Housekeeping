@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHmac } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   normalizePaymentRecordDetailResult,
@@ -36,6 +37,20 @@ export function assertLocalDemoBaseUrl(value, service) {
 
 export function normalizeIdentifier(value) {
   return typeof value === "string" ? value.trim() : value;
+}
+
+export function refundCallbackHeaders(refundOrderId, body, secret = process.env.HSP_REFUND_CALLBACK_HTTP_SECRET) {
+  if (!secret || !secret.trim()) {
+    throw new Error("HSP_REFUND_CALLBACK_HTTP_SECRET is required for the local refund callback");
+  }
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac("sha256", secret)
+    .update(`${timestamp}\n${refundOrderId}\n${body}`, "utf8")
+    .digest("base64");
+  return {
+    "X-HSP-Refund-Callback-Timestamp": timestamp,
+    "X-HSP-Refund-Callback-Signature": signature
+  };
 }
 
 const paymentBaseUrl = normalizeBaseUrl(process.env.HSP_PAYMENT_CORE_BASE_URL, "http://localhost:18081");
@@ -1985,6 +2000,9 @@ async function main() {
     paymentBaseUrl, opsConfigBaseUrl, riskBaseUrl, gatewayBaseUrl,
     clearingBaseUrl, settlementBaseUrl, accountingBaseUrl, refundBaseUrl, reconciliationBaseUrl
   });
+  if (!process.env.HSP_REFUND_CALLBACK_HTTP_SECRET?.trim()) {
+    throw new Error("HSP_REFUND_CALLBACK_HTTP_SECRET is required for the local refund callback");
+  }
   const queryMode = process.env.HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED === "true";
   const expectedPayScene = "HOME_CLEAN";
   const prepay = assertPrepayOrder(await api(`${paymentBaseUrl}/api/payments/prepay`, {
@@ -2569,9 +2587,12 @@ async function main() {
     channelRefundId: `LOCAL-CHANNEL-REFUND-${suffix}`,
     rawMessage: "local happy path success"
   };
+  const callbackRefundOrderId = normalizeIdentifier(refund.refundOrderId);
+  const callbackBody = JSON.stringify(refundCallbackPayload);
   const refunded = assertRefundPaidAmount(assertRefundAmount(assertRefundIdentity(await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(normalizeIdentifier(refund.refundOrderId))}/callback`, {
     method: "POST",
-    body: JSON.stringify(refundCallbackPayload)
+    body: callbackBody,
+    headers: refundCallbackHeaders(callbackRefundOrderId, callbackBody)
   }), refund.refundOrderId, prepay.paymentOrderId, orderNo, paymentBusinessChainId), "18.00"), paid.amount);
   assertRefundCustomerName(refunded, "local happy path", "callback");
   assertRefundPayScene(refunded, expectedPayScene, "callback");
@@ -2581,7 +2602,8 @@ async function main() {
   assert(refunded.status === "SUCCESS", `unexpected refund status: ${refunded.status}`);
   const repeatedRefundCallback = assertRefundPaidAmount(await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(normalizeIdentifier(refund.refundOrderId))}/callback`, {
       method: "POST",
-      body: JSON.stringify(refundCallbackPayload)
+      body: callbackBody,
+      headers: refundCallbackHeaders(callbackRefundOrderId, callbackBody)
     }), paid.amount);
   assertRefundCustomerName(repeatedRefundCallback, "local happy path", "repeated callback");
   assertRefundPayScene(repeatedRefundCallback, expectedPayScene, "repeated callback");

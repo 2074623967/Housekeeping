@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+
 import {
   api,
   assertLocalDemoBaseUrl,
@@ -24,6 +26,7 @@ import {
   assertPaymentRequestDiagnostics,
   assertIdempotentRefundApplication,
   assertIdempotentRefundCallback,
+  refundCallbackHeaders,
   assertRefundSuccessDetail,
   assertPaymentAmount,
   assertBillPaymentFacts,
@@ -74,6 +77,17 @@ import {
   normalizeIdentifier,
   verifyLocalDemoTargets
 } from "./cross-system-happy-path.mjs";
+
+test("signs local refund callbacks with the exact order id and body", () => {
+  const body = '{"result":"SUCCESS"}';
+  const headers = refundCallbackHeaders("REF-1", body, "local-secret");
+  const expected = createHmac("sha256", "local-secret")
+    .update(`${headers["X-HSP-Refund-Callback-Timestamp"]}\nREF-1\n${body}`, "utf8")
+    .digest("base64");
+  assert.equal(headers["X-HSP-Refund-Callback-Signature"], expected);
+  assert.notEqual(refundCallbackHeaders("REF-2", body, "local-secret")["X-HSP-Refund-Callback-Signature"], expected);
+  assert.throws(() => refundCallbackHeaders("REF-1", body, " "), /HSP_REFUND_CALLBACK_HTTP_SECRET/);
+});
 
 test("binds the happy-path scene before using it across the live flow", () => {
   const source = readFileSync(new URL("./cross-system-happy-path.mjs", import.meta.url), "utf8");

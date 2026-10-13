@@ -2,6 +2,7 @@ package com.abc123.refund.controller;
 
 import com.abc123.refund.common.ApiResponse;
 import com.abc123.refund.common.PaymentProjectionHttpSignature;
+import com.abc123.refund.common.RefundCallbackHttpSignature;
 import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.dto.PaymentSuccessProjectionDTO;
 import com.abc123.refund.dto.RefundActionRequestDTO;
@@ -42,12 +43,15 @@ public class RefundController {
     private final RefundService refundService;
     private final ObjectMapper objectMapper;
     private final String paymentProjectionSecret;
+    private final String refundCallbackSecret;
 
     public RefundController(RefundService refundService, ObjectMapper objectMapper,
-            @Value("${HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET:}") String paymentProjectionSecret) {
+            @Value("${HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET:}") String paymentProjectionSecret,
+            @Value("${HSP_REFUND_CALLBACK_HTTP_SECRET:}") String refundCallbackSecret) {
         this.refundService = refundService;
         this.objectMapper = objectMapper;
         this.paymentProjectionSecret = paymentProjectionSecret;
+        this.refundCallbackSecret = refundCallbackSecret;
     }
 
     @GetMapping
@@ -127,9 +131,21 @@ public class RefundController {
 
     @PostMapping("/{refundOrderId}/callback")
     public ApiResponse<RefundListItemDTO> callback(@PathVariable String refundOrderId,
-                                                    @RequestBody RefundCallbackRequestDTO request) {
-        request.setRefundOrderId(refundOrderId);
-        return ApiResponse.success(refundService.callback(request));
+            @RequestBody String body,
+            @RequestHeader(value = RefundCallbackHttpSignature.TIMESTAMP_HEADER, required = false) String timestamp,
+            @RequestHeader(value = RefundCallbackHttpSignature.SIGNATURE_HEADER, required = false) String signature) {
+        if (!RefundCallbackHttpSignature.matches(refundOrderId, body, timestamp, signature, refundCallbackSecret)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "退款回调签名校验失败");
+        }
+        try {
+            RefundCallbackRequestDTO request = objectMapper.readValue(body, RefundCallbackRequestDTO.class);
+            if (request != null) {
+                request.setRefundOrderId(refundOrderId);
+            }
+            return ApiResponse.success(refundService.callback(request));
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "退款回调载荷无效", exception);
+        }
     }
 
     @PostMapping("/{refundOrderId}/retry")
