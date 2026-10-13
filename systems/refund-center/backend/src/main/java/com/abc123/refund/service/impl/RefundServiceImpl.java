@@ -74,6 +74,9 @@ public class RefundServiceImpl implements RefundService {
     private final RestTemplate restTemplate;
     private final String refundSuccessHttpSecret;
 
+    @Value("${HSP_REFUND_RECONCILIATION_FACT_SECRET:}")
+    private String reconciliationFactSecret;
+
     @Autowired
     public RefundServiceImpl(RefundDao refundDao,
                              @Value("${refund-center.operator:refund-center-admin}") String operator,
@@ -467,7 +470,7 @@ public class RefundServiceImpl implements RefundService {
                 refund.getPayScene(),
                 refund.getRefundAmount(),
                 "退款成功后冲回原支付入账")));
-        postForSuccess(reconciliationFactUrl, new ReconciliationFactPayload(
+        postForSuccess(reconciliationFactUrl, signedReconciliationFact(new ReconciliationFactPayload(
                 businessChainId,
                 "refund-center",
                 "REFUND_SUCCESS",
@@ -477,7 +480,27 @@ public class RefundServiceImpl implements RefundService {
                 refund.getRefundAmount(),
                 refund.getPayScene(),
                 "退款成功事实，原支付单号=" + trim(refund.getPaymentOrderId())
-                        + "，支付场景=" + trim(refund.getPayScene())));
+                        + "，支付场景=" + trim(refund.getPayScene()))));
+    }
+
+    private HttpEntity<String> signedReconciliationFact(Object payload) {
+        if (!StringUtils.hasText(reconciliationFactSecret)) {
+            throw new IllegalStateException("退款对账事实签名密钥未配置");
+        }
+        try {
+            String body = JSON_MAPPER.writeValueAsString(payload);
+            String source = "refund-center";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Reconciliation-Fact-Source", source);
+            headers.set("X-HSP-Reconciliation-Fact-Timestamp", timestamp);
+            headers.set("X-HSP-Reconciliation-Fact-Signature",
+                    RefundEventHttpSignature.sign(source + "\n" + body, timestamp, reconciliationFactSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("退款对账事实序列化失败", exception);
+        }
     }
 
     private HttpEntity<String> signedAccountingPayload(Object payload) {

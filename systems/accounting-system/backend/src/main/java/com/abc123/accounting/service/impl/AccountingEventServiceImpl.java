@@ -1,5 +1,6 @@
 package com.abc123.accounting.service.impl;
 
+import com.abc123.accounting.common.PaymentEventHttpSignature;
 import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +44,9 @@ public class AccountingEventServiceImpl implements AccountingEventService {
     private final String reconciliationFactUrl;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+
+    @Value("${HSP_ACCOUNTING_RECONCILIATION_FACT_SECRET:}")
+    private String reconciliationFactSecret;
 
     @Autowired
     public AccountingEventServiceImpl(
@@ -359,6 +367,26 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         }
     }
 
+    private HttpEntity<String> signedReconciliationFact(Map<String, Object> payload) {
+        if (!StringUtils.hasText(reconciliationFactSecret)) {
+            throw new IllegalStateException("账务对账事实签名密钥未配置");
+        }
+        try {
+            String body = objectMapper.writeValueAsString(payload);
+            String source = "accounting-system";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Reconciliation-Fact-Source", source);
+            headers.set("X-HSP-Reconciliation-Fact-Timestamp", timestamp);
+            headers.set("X-HSP-Reconciliation-Fact-Signature",
+                    PaymentEventHttpSignature.signTimed(source + "\n" + body, timestamp, reconciliationFactSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("账务对账事实序列化失败", exception);
+        }
+    }
+
     private void postReconciliationFact(String businessChainId, String eventNo, String businessNo,
             BigDecimal amount, String summary, String payScene) {
         if (!StringUtils.hasText(reconciliationFactUrl)) {
@@ -375,7 +403,8 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         payload.put("amount", amount);
         payload.put("payload", "{\"eventNo\":\"" + eventNo + "\",\"summary\":\""
                 + (summary == null ? "" : summary) + "\"}");
-        ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(), payload, Map.class);
+        ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(),
+                signedReconciliationFact(payload), Map.class);
         Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
         if (response == null || !response.getStatusCode().is2xxSuccessful()
                 || !"0".equals(String.valueOf(code))

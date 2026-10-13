@@ -537,6 +537,8 @@ class RefundServiceImplTest {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
                 "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "reconciliationFactSecret", "local-refund-fact-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-3", "REF-3");
         RefundListItemDTO refund = successfulRefund("REF-3", " PAY-3 ", "10.00");
         refund.setPayScene("HOME_CLEAN");
@@ -568,9 +570,9 @@ class RefundServiceImplTest {
         verify(restTemplate).postForEntity(
                 eq("http://reconciliation/facts"), reconciliationPayload.capture(), eq(java.util.Map.class));
         assertEquals("CHAIN-PAY-3",
-                new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("businessChainId").asText());
+                signedBody(reconciliationPayload.getValue()).get("businessChainId").asText());
         assertEquals("退款成功事实，原支付单号=PAY-3，支付场景=HOME_CLEAN",
-                new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("payload").asText());
+                signedBody(reconciliationPayload.getValue()).get("payload").asText());
     }
 
     @Test
@@ -579,6 +581,8 @@ class RefundServiceImplTest {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
                 "http://reconciliation/facts", restTemplate, secret);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "reconciliationFactSecret", "local-refund-fact-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-SIGNED", "REF-SIGNED");
         when(refundDao.findOutboxByEventId("REVT-SIGNED")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-SIGNED"))
@@ -654,6 +658,8 @@ class RefundServiceImplTest {
         service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
                 "http://accounting/refunds/success", "ACT10003",
                 "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "reconciliationFactSecret", "local-refund-fact-secret");
         RefundOutboxEventEntity event = outboxEvent("REVT-4", "REF-4");
         when(refundDao.findOutboxByEventId("REVT-4")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-4"))

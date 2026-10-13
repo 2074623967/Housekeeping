@@ -59,6 +59,7 @@ class SettlementReconciliationFailureTest {
         SettlementEventServiceImpl service = new SettlementEventServiceImpl(
                 settlementMemoryStore, settlementMapper, restTemplate);
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(service, "reconciliationFactSecret", "local-settlement-fact-secret");
 
         assertThrows(IllegalStateException.class, () -> service.consumeClearingGenerated(request));
     }
@@ -133,6 +134,7 @@ class SettlementReconciliationFailureTest {
         SettlementEventServiceImpl service = new SettlementEventServiceImpl(
                 settlementMemoryStore, settlementMapper, restTemplate);
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(service, "reconciliationFactSecret", "local-settlement-fact-secret");
         return service;
     }
 

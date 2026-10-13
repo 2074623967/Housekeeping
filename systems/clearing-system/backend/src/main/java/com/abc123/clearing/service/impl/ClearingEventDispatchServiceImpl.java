@@ -56,6 +56,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
     @Value("${HSP_CLEARING_GENERATED_HTTP_SECRET:}")
     private String clearingGeneratedHttpSecret;
 
+    @Value("${HSP_CLEARING_RECONCILIATION_FACT_SECRET:}")
+    private String reconciliationFactSecret;
+
     @Value("${HSP_CLEARING_GENERATED_AMQP_SECRET:}")
     private String clearingGeneratedAmqpSecret;
 
@@ -267,6 +270,26 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         }
     }
 
+    private HttpEntity<String> signedReconciliationFact(Map<String, Object> payload) {
+        if (!StringUtils.hasText(reconciliationFactSecret)) {
+            throw new IllegalStateException("清分对账事实签名密钥未配置");
+        }
+        try {
+            String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+            String source = "clearing-system";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Reconciliation-Fact-Source", source);
+            headers.set("X-HSP-Reconciliation-Fact-Timestamp", timestamp);
+            headers.set("X-HSP-Reconciliation-Fact-Signature",
+                    ClearingEventHttpSignature.sign(source + "\n" + body, timestamp, reconciliationFactSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("清分对账事实序列化失败", exception);
+        }
+    }
+
     private void postReconciliationFact(ClearingOrderEntity clearingOrder) {
         if (!StringUtils.hasText(reconciliationFactUrl)) {
             return;
@@ -282,7 +305,7 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         payload.put("amount", clearingOrder.getOrderAmount());
         payload.put("payload", "{\"clearingNo\":\"" + clearingOrder.getClearingNo()
                 + "\",\"payScene\":\"" + (clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene()) + "\"}");
-        Map<?, ?> snapshot = postForSuccess(reconciliationFactUrl, payload);
+        Map<?, ?> snapshot = postForSuccess(reconciliationFactUrl, signedReconciliationFact(payload));
         if (!Objects.equals(payload.get("businessChainId"), snapshot.get("businessChainId"))
                 || !(snapshot.get("facts") instanceof List)) {
             LOGGER.warn("清分对账事实回执拒绝 clearingNo={}, reason=CHAIN_OR_FACTS", clearingOrder.getClearingNo());

@@ -181,6 +181,7 @@ class ClearingEventDispatchServiceImplTest {
                 restTemplate);
         setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
         setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(dispatchService, "reconciliationFactSecret", "local-clearing-fact-secret");
 
         assertTrue(dispatchService.publishClearingGenerated("PAY-001"));
 
@@ -188,7 +189,7 @@ class ClearingEventDispatchServiceImplTest {
         verify(restTemplate).postForEntity(
                 eq("http://reconciliation/facts"), reconciliationPayload.capture(), eq(java.util.Map.class));
         assertEquals("CHAIN-CANONICAL",
-                new ObjectMapper().valueToTree(reconciliationPayload.getValue()).get("businessChainId").asText());
+                signedBody(reconciliationPayload.getValue()).get("businessChainId").asText());
     }
 
     @Test
@@ -214,6 +215,7 @@ class ClearingEventDispatchServiceImplTest {
                 restTemplate);
         setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
         setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(dispatchService, "reconciliationFactSecret", "local-clearing-fact-secret");
 
         assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
         verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
@@ -535,6 +537,7 @@ class ClearingEventDispatchServiceImplTest {
         ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
         setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
+        setField(dispatchService, "reconciliationFactSecret", "local-clearing-fact-secret");
         return dispatchService;
     }
 

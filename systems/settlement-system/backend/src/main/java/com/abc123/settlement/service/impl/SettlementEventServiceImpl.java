@@ -1,11 +1,15 @@
 package com.abc123.settlement.service.impl;
 
+import com.abc123.settlement.common.ClearingEventHttpSignature;
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.SettlementEventDTO;
 import com.abc123.settlement.entity.SettlementOrderEntity;
 import com.abc123.settlement.service.SettlementEventService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
@@ -13,6 +17,9 @@ import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -33,6 +40,9 @@ public class SettlementEventServiceImpl implements SettlementEventService {
 
     @Value("${settlement.downstream.reconciliation.fact-url:}")
     private String reconciliationFactUrl;
+
+    @Value("${HSP_SETTLEMENT_RECONCILIATION_FACT_SECRET:}")
+    private String reconciliationFactSecret;
 
     @Autowired
     public SettlementEventServiceImpl(SettlementMemoryStore settlementMemoryStore, SettlementMapper settlementMapper) {
@@ -96,6 +106,26 @@ public class SettlementEventServiceImpl implements SettlementEventService {
         }
     }
 
+    private HttpEntity<String> signedReconciliationFact(Map<String, Object> payload) {
+        if (!StringUtils.hasText(reconciliationFactSecret)) {
+            throw new IllegalStateException("结算对账事实签名密钥未配置");
+        }
+        try {
+            String body = new ObjectMapper().writeValueAsString(payload);
+            String source = "settlement-system";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Reconciliation-Fact-Source", source);
+            headers.set("X-HSP-Reconciliation-Fact-Timestamp", timestamp);
+            headers.set("X-HSP-Reconciliation-Fact-Signature",
+                    ClearingEventHttpSignature.sign(source + "\n" + body, timestamp, reconciliationFactSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("结算对账事实序列化失败", exception);
+        }
+    }
+
     private void reportReconciliationFact(ClearingGeneratedEventRequestDTO request) {
         if (!StringUtils.hasText(reconciliationFactUrl)) {
             return;
@@ -116,7 +146,8 @@ public class SettlementEventServiceImpl implements SettlementEventService {
         payload.put("amount", order.getNetSettleAmount());
         payload.put("payload", "{\"settlementNo\":\"" + order.getSettlementNo()
                 + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene()) + "\"}");
-        ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(), payload, Map.class);
+        ResponseEntity<Map> response = restTemplate.postForEntity(reconciliationFactUrl.trim(),
+                signedReconciliationFact(payload), Map.class);
         Object code = response == null || response.getBody() == null ? null : response.getBody().get("code");
         if (response == null || !response.getStatusCode().is2xxSuccessful()
                 || !"0".equals(String.valueOf(code))

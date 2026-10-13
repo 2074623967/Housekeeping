@@ -13,6 +13,11 @@ QUERY_ACCESS_KEY=""
 PAYMENT_EVENT_SECRET=""
 REFUND_EVENT_SECRET=""
 CLEARING_EVENT_SECRET=""
+PAYMENT_FACT_SECRET=""
+CLEARING_FACT_SECRET=""
+SETTLEMENT_FACT_SECRET=""
+ACCOUNTING_FACT_SECRET=""
+REFUND_FACT_SECRET=""
 
 resolve_maven_bin() {
   if [[ -n "${HSP_MAVEN_BIN:-}" ]]; then
@@ -298,6 +303,19 @@ start_backend() {
     && [[ "$name" == "clearing-system" || "$name" == "settlement-system" || "$name" == "accounting-system" ]]; then
     event_signature_env+=(HSP_CLEARING_GENERATED_HTTP_SECRET="$CLEARING_EVENT_SECRET")
   fi
+  case "$name" in
+    payment-core) event_signature_env+=(HSP_PAYMENT_RECONCILIATION_FACT_SECRET="$PAYMENT_FACT_SECRET") ;;
+    clearing-system) event_signature_env+=(HSP_CLEARING_RECONCILIATION_FACT_SECRET="$CLEARING_FACT_SECRET") ;;
+    settlement-system) event_signature_env+=(HSP_SETTLEMENT_RECONCILIATION_FACT_SECRET="$SETTLEMENT_FACT_SECRET") ;;
+    accounting-system) event_signature_env+=(HSP_ACCOUNTING_RECONCILIATION_FACT_SECRET="$ACCOUNTING_FACT_SECRET") ;;
+    refund-center) event_signature_env+=(HSP_REFUND_RECONCILIATION_FACT_SECRET="$REFUND_FACT_SECRET") ;;
+    reconciliation-system)
+      event_signature_env+=(HSP_PAYMENT_RECONCILIATION_FACT_SECRET="$PAYMENT_FACT_SECRET"
+        HSP_CLEARING_RECONCILIATION_FACT_SECRET="$CLEARING_FACT_SECRET"
+        HSP_SETTLEMENT_RECONCILIATION_FACT_SECRET="$SETTLEMENT_FACT_SECRET"
+        HSP_ACCOUNTING_RECONCILIATION_FACT_SECRET="$ACCOUNTING_FACT_SECRET"
+        HSP_REFUND_RECONCILIATION_FACT_SECRET="$REFUND_FACT_SECRET") ;;
+  esac
 
   if [[ -f "$pid_file" ]]; then
     pid="$(cat "$pid_file")"
@@ -634,6 +652,7 @@ guard_local_payment_chain_verify() {
       HSP_CLEARING_GENERATED_HTTP_SECRET|\
       HSP_CLEARING_GENERATED_AMQP_SECRET|\
       HSP_SETTLEMENT_COMPENSATION_HTTP_SECRET|\
+      HSP_*_RECONCILIATION_FACT_SECRET|\
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|HSP_LOCAL_JAVA_OPTS|\
       JAVA_TOOL_OPTIONS|JDK_JAVA_OPTIONS|MAVEN_OPTS|\
       OPS_CONFIG_*|RISK_CONTROL_*|REFUND_CENTER_*|RECONCILIATION_*)
@@ -727,6 +746,11 @@ run_verify() {
     PAYMENT_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     REFUND_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     CLEARING_EVENT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    PAYMENT_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    CLEARING_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    SETTLEMENT_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    ACCOUNTING_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    REFUND_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     if [[ "$scope" == "payment-query-chain" ]]; then
       verification_mode="payment-query-chain"
       QUERY_ACCESS_KEY="local-query-$RANDOM-$RANDOM-$RANDOM"

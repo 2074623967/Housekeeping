@@ -110,8 +110,11 @@ class AccountingReconciliationReceiptTest {
     }
 
     private AccountingEventServiceImpl service() {
-        return new AccountingEventServiceImpl(
+        AccountingEventServiceImpl service = new AccountingEventServiceImpl(
                 accountingMemoryStore, accountingMapper, "http://reconciliation/facts", restTemplate);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "reconciliationFactSecret", "local-accounting-fact-secret");
+        return service;
     }
 
     private PaymentSuccessEventRequestDTO paymentRequest() {

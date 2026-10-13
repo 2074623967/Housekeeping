@@ -2311,6 +2311,7 @@ class PaymentEventDispatchServiceImplTest {
                 "ACT10003",
                 restTemplate));
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(service, "reconciliationFactSecret", "local-payment-fact-secret");
 
         service.publishPaymentSuccess("EVT-RECONCILIATION-FAIL", "PAY-001");
         verify(paymentEventMapper).markPublishFailed("EVT-RECONCILIATION-FAIL");
@@ -2387,11 +2388,13 @@ class PaymentEventDispatchServiceImplTest {
                 "ACT10003", restTemplate);
         setField(service, "paymentSuccessHttpSecret", "local-payment-event-test-secret");
         setField(service, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(service, "reconciliationFactSecret", "local-payment-fact-secret");
         return service;
     }
 
     private PaymentEventDispatchServiceImpl signedHttpDispatch(PaymentEventDispatchServiceImpl service) {
         setField(service, "paymentSuccessHttpSecret", "local-payment-event-test-secret");
+        setField(service, "reconciliationFactSecret", "local-payment-fact-secret");
         return service;
     }
 

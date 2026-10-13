@@ -109,6 +109,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}")
     private String paymentSuccessHttpSecret;
 
+    @Value("${HSP_PAYMENT_RECONCILIATION_FACT_SECRET:}")
+    private String reconciliationFactSecret;
+
     @Value("${HSP_PAYMENT_SUCCESS_AMQP_SECRET:}")
     private String paymentSuccessAmqpSecret;
 
@@ -1015,11 +1018,31 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return response.getBody();
     }
 
+    private HttpEntity<String> signedReconciliationFact(Map<String, Object> payload) {
+        if (!StringUtils.hasText(reconciliationFactSecret)) {
+            throw new IllegalStateException("支付对账事实签名密钥未配置");
+        }
+        try {
+            String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
+            String source = "payment-core";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/json;charset=UTF-8"));
+            headers.set("X-HSP-Reconciliation-Fact-Source", source);
+            headers.set("X-HSP-Reconciliation-Fact-Timestamp", timestamp);
+            headers.set("X-HSP-Reconciliation-Fact-Signature",
+                    PaymentEventHttpSignature.sign(source + "\n" + body, timestamp, reconciliationFactSecret));
+            return new HttpEntity<>(body, headers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("支付对账事实序列化失败", exception);
+        }
+    }
+
     private void postReconciliationFact(Map<String, Object> payload) {
         if (!StringUtils.hasText(reconciliationFactUrl)) {
             return;
         }
-        Object data = postForSuccess(reconciliationFactUrl, payload).getData();
+        Object data = postForSuccess(reconciliationFactUrl, signedReconciliationFact(payload)).getData();
         if (!(data instanceof Map)) {
             LOGGER.warn("支付对账事实回执拒绝 paymentOrderId={}, reason=STRUCTURE", payload.get("factNo"));
             throw new IllegalStateException("对账事实回执缺少业务链快照");
