@@ -15,20 +15,22 @@ import org.apache.ibatis.annotations.Param;
 public interface WalletAccountMapper {
 
     long countAccounts(@Param("keyword") String keyword,
+            @Param("keywordLikePattern") String keywordLikePattern,
             @Param("ownerType") String ownerType,
             @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus,
-            @Param("extRefNo") String extRefNo,
+            @Param("extRefNoLikePattern") String extRefNoLikePattern,
             @Param("bizLineCode") String bizLineCode,
             @Param("tenantCode") String tenantCode,
             @Param("openedStartTime") LocalDateTime openedStartTime,
             @Param("openedEndTime") LocalDateTime openedEndTime);
 
     List<WalletAccountEntity> listAccounts(@Param("keyword") String keyword,
+            @Param("keywordLikePattern") String keywordLikePattern,
             @Param("ownerType") String ownerType,
             @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus,
-            @Param("extRefNo") String extRefNo,
+            @Param("extRefNoLikePattern") String extRefNoLikePattern,
             @Param("bizLineCode") String bizLineCode,
             @Param("tenantCode") String tenantCode,
             @Param("openedStartTime") LocalDateTime openedStartTime,

@@ -25,7 +25,8 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     public long countAccounts(String keyword, String ownerType, String accountType, String accountStatus,
             String extRefNo, String bizLineCode, String tenantCode, LocalDateTime openedStartTime,
             LocalDateTime openedEndTime) {
-        return walletAccountMapper.countAccounts(keyword, ownerType, accountType, accountStatus, extRefNo,
+        return walletAccountMapper.countAccounts(keyword, likePattern(keyword), ownerType, accountType,
+                accountStatus, likePattern(extRefNo),
                 bizLineCode, tenantCode, openedStartTime, openedEndTime);
     }
 
@@ -33,7 +34,8 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     public List<WalletAccountEntity> listAccounts(String keyword, String ownerType, String accountType,
             String accountStatus, String extRefNo, String bizLineCode, String tenantCode,
             LocalDateTime openedStartTime, LocalDateTime openedEndTime, int offset, int limit) {
-        return walletAccountMapper.listAccounts(keyword, ownerType, accountType, accountStatus, extRefNo,
+        return walletAccountMapper.listAccounts(keyword, likePattern(keyword), ownerType, accountType,
+                accountStatus, likePattern(extRefNo),
                 bizLineCode, tenantCode, openedStartTime, openedEndTime, offset, limit);
     }
 
@@ -148,5 +150,9 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     public int updateAccountStatus(String walletAccountNo, String currentStatus, String accountStatus,
             LocalDateTime closedAt) {
         return walletAccountMapper.updateAccountStatus(walletAccountNo, currentStatus, accountStatus, closedAt);
+    }
+
+    private String likePattern(String value) {
+        return value == null ? null : value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 }

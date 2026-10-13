@@ -100,7 +100,8 @@
         LEFT JOIN t_wallet_owner o ON a.wallet_owner_id = o.wallet_owner_id
         <where>
             <if test="keyword != null and keyword != ''">
-                AND (a.wallet_account_no = #{keyword} OR a.owner_name LIKE CONCAT('%', #{keyword}, '%'))
+                AND (a.wallet_account_no = #{keyword}
+                OR a.owner_name LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!')
             </if>
             <if test="ownerType != null and ownerType != ''">
                 AND a.owner_type = #{ownerType}
@@ -111,8 +112,8 @@
             <if test="accountStatus != null and accountStatus != ''">
                 AND a.account_status = #{accountStatus}
             </if>
-            <if test="extRefNo != null and extRefNo != ''">
-                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
+            <if test="extRefNoLikePattern != null and extRefNoLikePattern != ''">
+                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="bizLineCode != null and bizLineCode != ''">
                 AND o.biz_line_code = #{bizLineCode}
@@ -135,7 +136,8 @@
         LEFT JOIN t_wallet_owner o ON a.wallet_owner_id = o.wallet_owner_id
         <where>
             <if test="keyword != null and keyword != ''">
-                AND (a.wallet_account_no = #{keyword} OR a.owner_name LIKE CONCAT('%', #{keyword}, '%'))
+                AND (a.wallet_account_no = #{keyword}
+                OR a.owner_name LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!')
             </if>
             <if test="ownerType != null and ownerType != ''">
                 AND a.owner_type = #{ownerType}
@@ -146,8 +148,8 @@
             <if test="accountStatus != null and accountStatus != ''">
                 AND a.account_status = #{accountStatus}
             </if>
-            <if test="extRefNo != null and extRefNo != ''">
-                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
+            <if test="extRefNoLikePattern != null and extRefNoLikePattern != ''">
+                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="bizLineCode != null and bizLineCode != ''">
                 AND o.biz_line_code = #{bizLineCode}
