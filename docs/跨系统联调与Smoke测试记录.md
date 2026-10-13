@@ -618,3 +618,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 79. 2026-10-13 支付回调归属门禁后的九服务双路径复核
 
 在 `239383e5` 基线上，隔离 H2/demo 九服务 `verify payment-chain` 首轮 HTTP 冒烟及 happy-path `[PASS]`，支付单 `PAY1791904992720489ddf08` 经 `CALLBACK` 收口。`verify payment-query-chain` 首轮 HTTP 冒烟通过但第二次查单 `PAYMENT-1026`：本机假上游仍只返回交易状态与渠道流水，未回显现行网关所需支付单号/订单号，不能把该失败归因于资金服务。修正仅用于本机的假上游回显后重跑，支付单 `PAY1791905386643a97e04fc` 经 `GATEWAY_QUERY` 收口，九服务 HTTP 冒烟与 happy-path `[PASS]`。两条链路均读回支付、清分、结算、三类账务、退款和七项对账事实，对账 `COMPLETED/4/4`、本地 `financialCloseable=true`；退出码均为 `0`，九服务与查单桩停服。此证据仅证明本机模拟协议和当前业务链，不代表真实渠道签名/资金、目标 MySQL 8 多实例、RabbitMQ 或生产授权。
+
+## 80. 2026-10-14 当前回调与查单双路径复核
+
+以 `2f59b6a6` 基线隔离运行 `bash tools/dev/local-stack.sh verify payment-chain` 与 `verify payment-query-chain`；两轮九服务 HTTP 冒烟、跨系统 happy-path 均 `[PASS]`，退出码 `0`。支付单 `PAY179191228479435399fa1` 经 `CALLBACK`、`PAY179191246070669c051c5` 经本机受控 `GATEWAY_QUERY` 收口；均读回清分、结算、支付/清分/退款三类账务、退款成功及七条对账事实，链路 `COMPLETED/4/4`、本地 `financialCloseable=true`。状态复核九后端全部 `DOWN`、18190 查单桩无监听。只证明 H2/demo 当前 HTTP 主链，不能替代真实 RabbitMQ、目标 MySQL 8 多实例、正式渠道与真实资金、可信身份审批或生产验收。
