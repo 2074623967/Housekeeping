@@ -108,8 +108,9 @@ const deadLetterTaskNo = "DEAD-LOCAL-001";
 const initialDeadLetterTask = {
   taskNo: deadLetterTaskNo, messageId: "MESSAGE-LOCAL-001",
   correlationId: "CORRELATION-LOCAL-001", targetSystem: "clearing-system",
-  deadLetterRoutingKey: "payment.dead", replayExchange: "payment.events",
-  replayRoutingKey: "payment.retry", taskStatus: "READY_TO_REPLAY",
+  deadLetterRoutingKey: "payment.success.clearing.dlq.v1", replayExchange: "payment.trade.replay",
+  replayRoutingKey: "payment.success.clearing.replay.v1", sourceSignatureVerified: true,
+  taskStatus: "READY_TO_REPLAY",
   taskStatusType: "warn", replayCount: 0, operator: "reviewer",
   resolutionNote: "已核对原消息", payloadSnapshot: "{}", headerSnapshot: "{}",
   createdAt: "2026-10-09 10:00:00", updatedAt: "2026-10-09 10:01:00",
@@ -866,6 +867,7 @@ async function main() {
       const start = requests.length;
       await send("Page.navigate", { url: `${baseUrl}/payment-dead-letter-tasks` });
       await waitFor(async () => (await evaluate(deadLetterState))?.status === "待重放"
+        && (await evaluate(deadLetterState))?.action === "执行重放"
         && !(await evaluate(deadLetterState))?.disabled, "初始可重放死信");
       await evaluate(`document.querySelector('input[placeholder="请输入处置人"]').value = 'local-operator';
         document.querySelector('input[placeholder="请输入处置人"]').dispatchEvent(new Event('input', { bubbles: true }));
@@ -885,6 +887,8 @@ async function main() {
       await waitFor(async () => (await evaluate(deadLetterState))?.status === "已重放", "死信最新状态");
       assert.equal((await evaluate(deadLetterState)).action, "详情");
       assert.equal(requests.slice(start).filter((item) => item.method === "POST").length, 1);
+      assert.ok(requests.slice(start).some((item) => item.method === "POST"
+        && item.pathname === `/api/payment-dead-letter-tasks/${deadLetterTaskNo}/replay`));
       assert.ok(requests.slice(start).filter((item) => item.method === "GET"
         && item.pathname === "/api/payment-dead-letter-tasks").length >= (failReadback ? 3 : 2));
     }
