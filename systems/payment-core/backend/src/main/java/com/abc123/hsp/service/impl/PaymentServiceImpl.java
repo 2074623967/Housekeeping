@@ -39,6 +39,7 @@ import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
 import com.abc123.hsp.service.PaymentSubmitRateLimitService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -2248,13 +2249,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (value == null) {
             return "";
         }
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n")
-                .replace("\t", "\\t");
+        return new String(JsonStringEncoder.getInstance().quoteAsString(value));
     }
 
     private void settleOrderAndBill(PaymentDetailDTO detail) {

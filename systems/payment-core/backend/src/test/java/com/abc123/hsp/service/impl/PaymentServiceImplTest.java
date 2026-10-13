@@ -7736,7 +7736,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void shouldMarkPaymentAsRiskReviewBeforeChannelSubmit() {
+    void shouldMarkPaymentAsRiskReviewBeforeChannelSubmit() throws Exception {
         PrepayOrderDTO prepayOrder = boundPrepay();
         prepayOrder.setPrepayOrderNo("PRE-RISK-001");
         prepayOrder.setPaymentOrderId("PAY-RISK-001");
@@ -7762,7 +7762,7 @@ class PaymentServiceImplTest {
         riskDecision.setReviewNo("REVIEW-2001");
         riskDecision.setEventNo("RISK-EVT-2001");
         riskDecision.setRiskTag("疑似高风险手机号");
-        riskDecision.setMessage("支付需要人工风控复核");
+        riskDecision.setMessage("支付需要人工风控复核\u0001备注");
 
         when(paymentMapper.findPrepay("PRE-RISK-001")).thenReturn(prepayOrder);
         paymentDetail.setAmount(prepayOrder.getAmount());
@@ -7806,6 +7806,8 @@ class PaymentServiceImplTest {
                 eventPayloadCaptor.capture());
         org.junit.jupiter.api.Assertions.assertTrue(
                 eventPayloadCaptor.getValue().contains("支付需要人工风控复核"));
+        assertEquals(riskDecision.getMessage(), new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(eventPayloadCaptor.getValue()).path("message").asText());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-001", result.getPrepayOrderNo());
     }
 
