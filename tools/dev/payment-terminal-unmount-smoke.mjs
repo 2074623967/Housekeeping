@@ -10,7 +10,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const appDirectory = path.join(root, "systems/payment-core/frontend/app-web");
+const terminal = process.argv[2] || "app";
+const appDirectory = path.join(root, "systems/payment-core/frontend", `${terminal}-web`);
+const payScene = `BALANCE_PAY_${terminal.toUpperCase()}`;
 const chromeBinary = process.env.HSP_CHROME_BIN
   || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const refundPath = "/api/refunds/REF-UNMOUNT-SMOKE";
@@ -21,20 +23,20 @@ const refundDetail = {
   businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
   paidAmount: "68.00", refundAmount: "18.00", refundMethod: "原路退款",
   refundReason: "local browser lifecycle smoke", status: "PROCESSING", statusType: "warn",
-  payScene: "BALANCE_PAY_APP", appliedAt: "2026-09-27 12:00:00",
+  payScene, appliedAt: "2026-09-27 12:00:00",
   attempts: [], operationLogs: []
 };
 const cashierDetail = {
   prepayOrderNo: "PRE-UNMOUNT-SMOKE", paymentOrderId: "PAY-UNMOUNT-SMOKE",
   businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
-  amount: "68.00", payScene: "BALANCE_PAY_APP", status: "待支付",
+  amount: "68.00", payScene, status: "待支付",
   statusType: "warn", paymentStatus: "PREPAY_CREATED", channels: ["微信支付"],
   expiresAt: "2030-01-01 00:00:00"
 };
 const paymentDetail = {
   prepayOrderNo: "PRE-UNMOUNT-SMOKE", paymentOrderId: "PAY-UNMOUNT-SMOKE",
   businessChainId: "CHAIN-PAY-UNMOUNT-SMOKE", orderNo: "ORDER-UNMOUNT-SMOKE",
-  amount: "68.00", payScene: "BALANCE_PAY_APP", status: "WAIT_CALLBACK",
+  amount: "68.00", payScene, status: "WAIT_CALLBACK",
   statusType: "warn", channel: "wx_h5", channelTransactionNo: "LOCAL-UNMOUNT-TX",
   createdAt: "2026-09-27 12:00:00", latestAttemptStatus: "处理中",
   latestAttemptStatusType: "info"
@@ -70,6 +72,9 @@ async function stopChild(child) {
 }
 
 async function main() {
+  if (!["app", "h5", "pc"].includes(terminal)) {
+    throw new Error("Terminal must be app, h5, or pc");
+  }
   if (!existsSync(chromeBinary)) throw new Error(`Chrome not found: ${chromeBinary}`);
   const profile = await mkdtemp(path.join(os.tmpdir(), "hsp-terminal-unmount-"));
   let calls = 0;
@@ -164,7 +169,7 @@ async function main() {
     await send("Page.enable");
     await send("Runtime.enable");
     await send("Network.enable");
-    await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/refund-progress/REF-UNMOUNT-SMOKE?payScene=BALANCE_PAY_APP` });
+    await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/refund-progress/REF-UNMOUNT-SMOKE?payScene=${payScene}` });
     await waitFor(() => evaluate(`document.body?.innerText.includes("退款处理中")
       && Array.from(document.querySelectorAll("button"))
         .some(button => button.textContent?.trim() === "返回支付入口" && !button.disabled)`),
@@ -190,7 +195,7 @@ async function main() {
       { pagePath: "/payment-result/PAY-UNMOUNT-SMOKE", apiPath: resultPath,
         timerName: "setTimeout", delayMs: 5000 }
     ]) {
-      await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}${scenario.pagePath}?payScene=BALANCE_PAY_APP` });
+      await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}${scenario.pagePath}?payScene=${payScene}` });
       await waitFor(() => initialReadCalls.get(scenario.apiPath) === 1
         && initialReadReleases.has(scenario.apiPath), `${scenario.pagePath} delayed first detail GET`);
       const unmounted = await evaluate(`(() => {
@@ -218,7 +223,7 @@ async function main() {
         throw new Error(`${scenario.pagePath} requested detail after unmount`);
       }
     }
-    console.log("[PASS] App cashier/result/refund: delayed reads after unmount did not create timers or poll again");
+    console.log(`[PASS] ${terminal.toUpperCase()} cashier/result/refund: delayed reads after unmount did not create timers or poll again`);
   } finally {
     releaseDelayedResponse?.();
     for (const release of initialReadReleases.values()) release();
