@@ -334,13 +334,5 @@ export const eventApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/accounting/events?${params.toString()}`).then(normalizeAccountingEventPage);
-  },
-  consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload)
-    .then((data) => normalizeAccountingEventResult(data, "PAYMENT_SUCCESS", payload?.paymentOrderId)),
-  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload)
-    .then((data) => normalizeAccountingEventResult(data, "CLEARING_GENERATED", payload?.clearingOrderNo)),
-  consumeRefundSuccess: (payload) => postJson("/api/accounting/events/refunds/success", payload)
-    .then((data) => normalizeAccountingEventResult(data, "REFUND_SUCCESS", payload?.refundOrderId)),
-  consumeSettlementCompensation: (payload) => postJson("/api/accounting/events/settlements/compensations", payload)
-    .then((data) => normalizeAccountingEventResult(data, "SETTLEMENT_COMPENSATION", payload?.settlementOrderNo))
+  }
 };

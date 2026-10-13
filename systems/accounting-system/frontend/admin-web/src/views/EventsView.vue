@@ -10,19 +10,6 @@ const pageSize = 20;
 const loading = ref(false);
 const message = ref("");
 const filters = ref({ eventType: "", bizNo: "", paymentOrderId: "" });
-const form = ref({
-  accountNo: "",
-  paymentOrderId: "",
-  orderNo: "",
-  customerName: "张女士",
-  amount: "18.00",
-  clearingOrderNo: "",
-  settlementOrderNo: "",
-  bizNo: "",
-  summary: "",
-  compensationDirection: "贷方",
-  operatorName: "财务补偿专员"
-});
 
 const dashboardMetrics = computed(() => ({
   total: total.value,
@@ -61,40 +48,6 @@ async function loadRows(targetPage = pageNo.value) {
   }
 }
 
-async function consumePaymentSuccess() {
-  message.value = "";
-  try {
-    await eventApi.consumePaymentSuccess({ ...form.value, amount: Number(form.value.amount) });
-    await loadRows();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function consumeClearingGenerated() {
-  message.value = "";
-  try {
-    await eventApi.consumeClearingGenerated({ ...form.value, amount: Number(form.value.amount), summary: form.value.summary || "清分结果入账" });
-    await loadRows();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function consumeSettlementCompensation() {
-  message.value = "";
-  try {
-    await eventApi.consumeSettlementCompensation({
-      ...form.value,
-      amount: Number(form.value.amount),
-      summary: form.value.summary || "结算差异补偿入账"
-    });
-    await loadRows();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
 function pickRow(row) {
   selectedRow.value = row;
 }
@@ -125,7 +78,7 @@ onMounted(loadRows);
     <div class="topbar">
       <div>
         <h2>账户事件</h2>
-        <p>支付成功、清分结果与补偿事件消费工作台，支持链路核对与事件重放验证</p>
+        <p>支付成功、清分结果与补偿事件核对工作台；事件消费由受控服务端发起</p>
       </div>
     </div>
 
@@ -163,32 +116,7 @@ onMounted(loadRows);
         </div>
       </div>
 
-      <div class="toolbar">
-        <div class="field"><label>账户号</label><input v-model="form.accountNo" placeholder="支付入账账户" /></div>
-        <div class="field"><label>支付单号</label><input v-model="form.paymentOrderId" /></div>
-        <div class="field"><label>业务单号</label><input v-model="form.bizNo" placeholder="业务订单号 / 清分单号" /></div>
-        <div class="field"><label>金额</label><input v-model="form.amount" /></div>
-        <div class="toolbar-actions">
-          <button class="button warn" @click="consumePaymentSuccess">消费支付成功事件</button>
-          <button class="button secondary" @click="consumeClearingGenerated">消费清分结果事件</button>
-        </div>
-      </div>
-
-      <div class="toolbar">
-        <div class="field"><label>结算补偿单号</label><input v-model="form.settlementOrderNo" placeholder="结算差异补偿单号" /></div>
-        <div class="field">
-          <label>补偿方向</label>
-          <select v-model="form.compensationDirection">
-            <option value="贷方">贷方补差</option>
-            <option value="借方">借方冲回</option>
-          </select>
-        </div>
-        <div class="field"><label>操作人</label><input v-model="form.operatorName" placeholder="财务补偿专员" /></div>
-        <div class="field"><label>补偿摘要</label><input v-model="form.summary" placeholder="结算差异补偿说明" /></div>
-        <div class="toolbar-actions">
-          <button class="button danger" @click="consumeSettlementCompensation">消费结算补偿事件</button>
-        </div>
-      </div>
+      <p class="state-box">此页仅核对已消费事件。支付、清分和退款事件由持有服务间签名密钥的上游发送；结算补偿须先接入可信身份、审批及受控服务端签名，不在浏览器中操作。</p>
 
       <div v-if="message" class="state-box">{{ message }}</div>
       <div v-else-if="loading" class="state-box">事件加载中...</div>

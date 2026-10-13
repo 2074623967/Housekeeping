@@ -57,6 +57,10 @@ test("requires accounting event identity and consumption facts", () => {
   }
 });
 
+test("keeps service-to-service accounting event consumption out of the browser client", () => {
+  assert.deepEqual(Object.keys(eventApi), ["getList"]);
+});
+
 test("normalizes accounting event pages only when event facts are consistent", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
