@@ -33,6 +33,8 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -545,9 +548,9 @@ class RefundServiceImplTest {
         when(refundDao.findOutboxByEventId("REVT-3")).thenReturn(event);
         when(refundDao.findByRefundOrderId("REF-3")).thenReturn(refund);
         when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(accountingReceipt("REF-3", "PAY-3"));
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(reconciliationReceipt("REVT-3", "REF-3", "PAY-3", "HOME_CLEAN", "10.00"));
         when(refundDao.markOutboxSent("REVT-3")).thenReturn(1);
         when(refundDao.markOutboxDispatching("REVT-3")).thenReturn(1);
         RefundOutboxEventEntity sent = outboxEvent("REVT-3", "REF-3");
@@ -593,9 +596,9 @@ class RefundServiceImplTest {
         sent.setStatus("SENT");
         when(refundDao.findOutboxByEventId("REVT-SIGNED")).thenReturn(event, sent);
         when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(accountingReceipt("REF-SIGNED", "PAY-SIGNED"));
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(reconciliationReceipt("REVT-SIGNED", "REF-SIGNED", "PAY-SIGNED", null, "10.00"));
 
         assertEquals("SENT", service.dispatchOutbox("REVT-SIGNED", new RefundOutboxDispatchRequestDTO()).getStatus());
 
@@ -665,7 +668,7 @@ class RefundServiceImplTest {
         when(refundDao.findByRefundOrderId("REF-4"))
                 .thenReturn(successfulRefund("REF-4", "PAY-4", "10.00"));
         when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(accountingReceipt("REF-4", "PAY-4"));
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
                 .thenThrow(new IllegalStateException("downstream unavailable"));
         when(refundDao.markOutboxFailed("REVT-4", "下游派发失败:IllegalStateException")).thenReturn(1);
@@ -704,6 +707,118 @@ class RefundServiceImplTest {
         verify(refundDao, never()).markOutboxSent("REVT-5");
         verify(restTemplate, never()).postForEntity(
                 eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    @Test
+    void shouldNotTreatAcceptedAccountingResponseAsDispatchSuccess() {
+        prepareHttpOutbox("REVT-202", "REF-202", "PAY-202");
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(new ResponseEntity<Map>(accountingReceipt("REF-202", "PAY-202").getBody(),
+                        HttpStatus.ACCEPTED));
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-202", new RefundOutboxDispatchRequestDTO()).getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-202");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    @Test
+    void shouldRejectAccountingReceiptForAnotherRefund() {
+        prepareHttpOutbox("REVT-WRONG-ACCOUNT", "REF-ACCOUNT", "PAY-ACCOUNT");
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(accountingReceipt("REF-OTHER", "PAY-ACCOUNT"));
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-WRONG-ACCOUNT", new RefundOutboxDispatchRequestDTO()).getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-WRONG-ACCOUNT");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    @Test
+    void shouldRejectAccountingSuccessCodeWithoutReceipt() {
+        prepareHttpOutbox("REVT-EMPTY-ACCOUNT", "REF-EMPTY-ACCOUNT", "PAY-EMPTY-ACCOUNT");
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-EMPTY-ACCOUNT", new RefundOutboxDispatchRequestDTO()).getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-EMPTY-ACCOUNT");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    @Test
+    void shouldNotTreatAcceptedReconciliationResponseAsDispatchSuccess() {
+        prepareHttpOutbox("REVT-RECON-202", "REF-RECON-202", "PAY-RECON-202");
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(accountingReceipt("REF-RECON-202", "PAY-RECON-202"));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
+                .thenReturn(new ResponseEntity<Map>(reconciliationReceipt(
+                        "REVT-RECON-202", "REF-RECON-202", "PAY-RECON-202", null, "10.00").getBody(),
+                        HttpStatus.ACCEPTED));
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-RECON-202", new RefundOutboxDispatchRequestDTO()).getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-RECON-202");
+    }
+
+    @Test
+    void shouldRejectReconciliationReceiptWithWrongRefundAmount() {
+        prepareHttpOutbox("REVT-WRONG-RECON", "REF-RECON", "PAY-RECON");
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(accountingReceipt("REF-RECON", "PAY-RECON"));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
+                .thenReturn(reconciliationReceipt("REVT-WRONG-RECON", "REF-RECON", "PAY-RECON", null, "11.00"));
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-WRONG-RECON", new RefundOutboxDispatchRequestDTO()).getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-WRONG-RECON");
+    }
+
+    private void prepareHttpOutbox(String eventId, String refundOrderId, String paymentOrderId) {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate, "local-refund-event-test-secret");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                service, "reconciliationFactSecret", "local-refund-fact-secret");
+        RefundOutboxEventEntity event = outboxEvent(eventId, refundOrderId);
+        RefundOutboxEventEntity failed = outboxEvent(eventId, refundOrderId);
+        failed.setStatus("FAIL");
+        when(refundDao.findOutboxByEventId(eventId)).thenReturn(event, failed);
+        when(refundDao.findByRefundOrderId(refundOrderId))
+                .thenReturn(successfulRefund(refundOrderId, paymentOrderId, "10.00"));
+        when(refundDao.markOutboxDispatching(eventId)).thenReturn(1);
+        when(refundDao.markOutboxFailed(eventId, "下游派发失败:IllegalStateException")).thenReturn(1);
+    }
+
+    private ResponseEntity<Map> accountingReceipt(String refundOrderId, String paymentOrderId) {
+        Map<String, Object> event = new LinkedHashMap<String, Object>();
+        event.put("businessChainId", "CHAIN-" + paymentOrderId);
+        event.put("eventType", "REFUND_SUCCESS");
+        event.put("bizNo", refundOrderId);
+        event.put("eventStatus", "已消费");
+        return successReceipt(event);
+    }
+
+    private ResponseEntity<Map> reconciliationReceipt(String eventId, String refundOrderId,
+            String paymentOrderId, String payScene, String amount) {
+        Map<String, Object> fact = new LinkedHashMap<String, Object>();
+        fact.put("businessChainId", "CHAIN-" + paymentOrderId);
+        fact.put("systemCode", "refund-center");
+        fact.put("factType", "REFUND_SUCCESS");
+        fact.put("factNo", eventId);
+        fact.put("businessNo", refundOrderId);
+        fact.put("payScene", payScene);
+        fact.put("factStatus", "SUCCESS");
+        fact.put("amount", new BigDecimal(amount));
+        Map<String, Object> snapshot = new LinkedHashMap<String, Object>();
+        snapshot.put("businessChainId", "CHAIN-" + paymentOrderId);
+        snapshot.put("facts", Collections.singletonList(fact));
+        return successReceipt(snapshot);
+    }
+
+    private ResponseEntity<Map> successReceipt(Map<String, Object> data) {
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("code", "0");
+        response.put("data", data);
+        return ResponseEntity.ok(response);
     }
 
     private RefundOutboxEventEntity outboxEvent(String eventId, String aggregateId) {

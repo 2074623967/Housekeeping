@@ -40,6 +40,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -462,15 +463,23 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException("退款成功事实不存在或状态异常");
         }
         String businessChainId = refund.getBusinessChainId();
-        postForSuccess(accountingRefundSuccessUrl, signedAccountingPayload(new AccountingRefundSuccessPayload(
+        AccountingRefundSuccessPayload accountingPayload = new AccountingRefundSuccessPayload(
                 businessChainId,
                 accountingRefundSuccessAccountNo,
                 refund.getRefundOrderId(),
                 refund.getPaymentOrderId(),
                 refund.getPayScene(),
                 refund.getRefundAmount(),
-                "退款成功后冲回原支付入账")));
-        postForSuccess(reconciliationFactUrl, signedReconciliationFact(new ReconciliationFactPayload(
+                "退款成功后冲回原支付入账");
+        Map<?, ?> accountingReceipt = postForSuccess(accountingRefundSuccessUrl,
+                signedAccountingPayload(accountingPayload));
+        if (!Objects.equals(businessChainId, accountingReceipt.get("businessChainId"))
+                || !"REFUND_SUCCESS".equals(accountingReceipt.get("eventType"))
+                || !Objects.equals(refund.getRefundOrderId(), accountingReceipt.get("bizNo"))
+                || !"已消费".equals(accountingReceipt.get("eventStatus"))) {
+            throw new IllegalStateException("退款成功账务回执与退款单不匹配");
+        }
+        ReconciliationFactPayload reconciliationPayload = new ReconciliationFactPayload(
                 businessChainId,
                 "refund-center",
                 "REFUND_SUCCESS",
@@ -480,7 +489,32 @@ public class RefundServiceImpl implements RefundService {
                 refund.getRefundAmount(),
                 refund.getPayScene(),
                 "退款成功事实，原支付单号=" + trim(refund.getPaymentOrderId())
-                        + "，支付场景=" + trim(refund.getPayScene()))));
+                        + "，支付场景=" + trim(refund.getPayScene()));
+        Map<?, ?> reconciliationReceipt = postForSuccess(reconciliationFactUrl,
+                signedReconciliationFact(reconciliationPayload));
+        if (!Objects.equals(businessChainId, reconciliationReceipt.get("businessChainId"))
+                || !(reconciliationReceipt.get("facts") instanceof List)) {
+            throw new IllegalStateException("退款成功对账回执缺少业务链事实");
+        }
+        for (Object item : (List<?>) reconciliationReceipt.get("facts")) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> fact = (Map<?, ?>) item;
+            if (Objects.equals(businessChainId, fact.get("businessChainId"))
+                    && "refund-center".equals(fact.get("systemCode"))
+                    && "REFUND_SUCCESS".equals(fact.get("factType"))
+                    && Objects.equals(event.getEventId(), fact.get("factNo"))
+                    && Objects.equals(refund.getRefundOrderId(), fact.get("businessNo"))
+                    && Objects.equals(refund.getPayScene(), fact.get("payScene"))
+                    && SUCCESS.equals(fact.get("factStatus"))
+                    && fact.get("amount") instanceof Number
+                    && new BigDecimal(fact.get("amount").toString())
+                            .compareTo(refund.getRefundAmount()) == 0) {
+                return;
+            }
+        }
+        throw new IllegalStateException("退款成功对账回执缺少本次事实");
     }
 
     private HttpEntity<String> signedReconciliationFact(Object payload) {
@@ -521,15 +555,17 @@ public class RefundServiceImpl implements RefundService {
         }
     }
 
-    private void postForSuccess(String url, Object payload) {
+    private Map<?, ?> postForSuccess(String url, Object payload) {
         if (!StringUtils.hasText(url)) {
             throw new IllegalStateException("退款成功下游地址未配置");
         }
         ResponseEntity<Map> response = restTemplate.postForEntity(url.trim(), payload, Map.class);
-        Object responseCode = response.getBody() == null ? null : response.getBody().get("code");
-        if (!response.getStatusCode().is2xxSuccessful() || !"0".equals(String.valueOf(responseCode))) {
+        if (response == null || response.getStatusCode() != HttpStatus.OK
+                || response.getBody() == null || !"0".equals(response.getBody().get("code"))
+                || !(response.getBody().get("data") instanceof Map)) {
             throw new IllegalStateException("退款成功下游响应失败");
         }
+        return (Map<?, ?>) response.getBody().get("data");
     }
 
     @Override
