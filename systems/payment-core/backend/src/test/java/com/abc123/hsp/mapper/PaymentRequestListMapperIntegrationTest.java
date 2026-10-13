@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentRequestDetailDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -81,6 +82,58 @@ class PaymentRequestListMapperIntegrationTest {
             assertEquals(Arrays.asList("ATTEMPT-STABLE-003", "ATTEMPT-STABLE-002", "ATTEMPT-STABLE-001"),
                     requestNos(mapper.findAllForExport(query)));
         }
+    }
+
+    @Test
+    void shouldFilterRequestListCountExportAndOverviewByLiteralSubstrings() throws Exception {
+        String literal = "%_!\\";
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement orderUpdate = session.getConnection().prepareStatement(
+                     "UPDATE t_payment_order SET payment_order_id = ?, order_no = ? "
+                             + "WHERE payment_order_id = 'PAY-001'");
+             PreparedStatement attemptUpdate = session.getConnection().prepareStatement(
+                     "UPDATE t_payment_attempt SET attempt_no = ?, payment_order_id = ?, "
+                             + "channel_code = ?, client_ip = ? WHERE attempt_no = 'ATTEMPT-STABLE-001'")) {
+            orderUpdate.setString(1, "PAY-" + literal);
+            orderUpdate.setString(2, "ORD-" + literal);
+            orderUpdate.executeUpdate();
+            attemptUpdate.setString(1, "ATTEMPT-" + literal);
+            attemptUpdate.setString(2, "PAY-" + literal);
+            attemptUpdate.setString(3, "wx_" + literal);
+            attemptUpdate.setString(4, "10." + literal);
+            attemptUpdate.executeUpdate();
+            PaymentRequestMapper mapper = session.getMapper(PaymentRequestMapper.class);
+            for (String fragment : Arrays.asList("%", "!", "\\", literal)) {
+                PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+                query.setRequestNo(fragment);
+                assertOnlyLiteralRequest(mapper, query, "ATTEMPT-" + literal);
+                assertEquals(fragment, query.getRequestNo());
+
+                query = new PaymentRequestQueryDTO();
+                query.setPaymentOrderId(fragment);
+                assertOnlyLiteralRequest(mapper, query, "ATTEMPT-" + literal);
+
+                query = new PaymentRequestQueryDTO();
+                query.setOrderNo(fragment);
+                assertOnlyLiteralRequest(mapper, query, "ATTEMPT-" + literal);
+
+                query = new PaymentRequestQueryDTO();
+                query.setChannelCode(fragment);
+                assertOnlyLiteralRequest(mapper, query, "ATTEMPT-" + literal);
+
+                query = new PaymentRequestQueryDTO();
+                query.setClientIp(fragment);
+                assertOnlyLiteralRequest(mapper, query, "ATTEMPT-" + literal);
+            }
+        }
+    }
+
+    private void assertOnlyLiteralRequest(PaymentRequestMapper mapper, PaymentRequestQueryDTO query,
+                                          String requestNo) {
+        assertEquals(1L, mapper.count(query));
+        assertEquals(Arrays.asList(requestNo), requestNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList(requestNo), requestNos(mapper.findAllForExport(query)));
+        assertEquals(1L, mapper.findOverviewSummary(query).getTotalRequestCount());
     }
 
     @Test

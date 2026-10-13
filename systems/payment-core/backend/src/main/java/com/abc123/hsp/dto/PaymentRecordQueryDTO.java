@@ -30,19 +30,15 @@ public class PaymentRecordQueryDTO {
     private int pageSize = 20;
 
     public String getUserIdLikePattern() {
-        return escapeLikePattern(userId);
+        return LikePattern.escape(userId);
     }
 
     public String getBusinessOrderNoLikePattern() {
-        return escapeLikePattern(businessOrderNo);
+        return LikePattern.escape(businessOrderNo);
     }
 
     public String getPaymentChannelLikePattern() {
-        return escapeLikePattern(paymentChannel);
-    }
-
-    private String escapeLikePattern(String value) {
-        return value == null ? null : value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        return LikePattern.escape(paymentChannel);
     }
 
     public int getPageNo() {
