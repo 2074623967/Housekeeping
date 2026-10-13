@@ -754,6 +754,17 @@ function requireResponseRefundAttempts(data, command) {
       throw invalidCommandResponse(`${command} 响应包含无法确认的退款尝试时间事实`);
     }
   }
+  const status = data.status?.trim().toUpperCase();
+  if (["SUCCESS", "FAIL"].includes(status) && data.attempts.length > 0) {
+    const latestAttempt = data.attempts[0];
+    if (latestAttempt.attemptStatus.trim().toUpperCase() !== status
+        || typeof latestAttempt.channelCode !== "string"
+        || latestAttempt.channelCode.trim() !== data.channelCode.trim()
+        || typeof latestAttempt.channelRefundNo !== "string"
+        || latestAttempt.channelRefundNo.trim() !== data.channelRefundNo.trim()) {
+      throw invalidCommandResponse(`${command} 响应包含无法确认的退款尝试或渠道归属事实`);
+    }
+  }
 }
 
 function requireResponseRefundOperationLogs(data, command) {
