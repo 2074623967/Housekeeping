@@ -43,16 +43,16 @@
     <sql id="cashierSessionWhere">
         <where>
             <if test="query.sessionNo != null and query.sessionNo != ''">
-                pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
+                pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND pr.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.customerName != null and query.customerName != ''">
-                AND pr.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
+                AND pr.customer_name LIKE CONCAT('%', #{query.customerNameLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND COALESCE(latest_pa.terminal, pr.pay_scene) = #{query.terminal}

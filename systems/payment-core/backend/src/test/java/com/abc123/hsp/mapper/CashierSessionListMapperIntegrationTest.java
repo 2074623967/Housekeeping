@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -82,6 +83,53 @@ class CashierSessionListMapperIntegrationTest {
             assertEquals(Arrays.asList("PRE-STABLE-003", "PRE-STABLE-002", "PRE-STABLE-001"),
                     sessionNos(mapper.findAllForExport(query)));
         }
+    }
+
+    @Test
+    void shouldTreatCashierSessionSearchFieldsAsLiteralSubstrings() throws Exception {
+        String literal = "%_!\\";
+        String sessionNo = "PRE-LITERAL-" + literal;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement updatePayment = session.getConnection().prepareStatement(
+                     "UPDATE t_payment_order SET payment_order_id = ? WHERE payment_order_id = 'PAY-003'");
+             PreparedStatement updateSession = session.getConnection().prepareStatement(
+                     "UPDATE t_prepay_order SET prepay_order_no = ?, payment_order_id = ?, "
+                             + "order_no = ?, customer_name = ? WHERE prepay_order_no = 'PRE-STABLE-003'")) {
+            updatePayment.setString(1, "PAY-LITERAL-" + literal);
+            updatePayment.executeUpdate();
+            updateSession.setString(1, sessionNo);
+            updateSession.setString(2, "PAY-LITERAL-" + literal);
+            updateSession.setString(3, "ORD-LITERAL-" + literal);
+            updateSession.setString(4, "客户%_!\\");
+            updateSession.executeUpdate();
+            CashierSessionMapper mapper = session.getMapper(CashierSessionMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", literal)) {
+                CashierSessionQueryDTO query = new CashierSessionQueryDTO();
+                query.setSessionNo(fragment);
+                assertOnlyLiteralSession(mapper, query, sessionNo);
+                assertEquals(fragment, query.getSessionNo());
+
+                query = new CashierSessionQueryDTO();
+                query.setPaymentOrderId(fragment);
+                assertOnlyLiteralSession(mapper, query, sessionNo);
+
+                query = new CashierSessionQueryDTO();
+                query.setOrderNo(fragment);
+                assertOnlyLiteralSession(mapper, query, sessionNo);
+
+                query = new CashierSessionQueryDTO();
+                query.setCustomerName(fragment);
+                assertOnlyLiteralSession(mapper, query, sessionNo);
+            }
+        }
+    }
+
+    private void assertOnlyLiteralSession(CashierSessionMapper mapper, CashierSessionQueryDTO query,
+                                          String sessionNo) {
+        assertEquals(1L, mapper.count(query));
+        assertEquals(Arrays.asList(sessionNo), sessionNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList(sessionNo), sessionNos(mapper.findAllForExport(query)));
+        assertEquals(1L, mapper.findOverview(query).getTotalSessionCount());
     }
 
     @Test
