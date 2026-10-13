@@ -22,4 +22,8 @@ public class DepositAccountQueryDTO {
     public int getOffset() {
         return (pageNo - 1) * pageSize;
     }
+
+    public String getKeywordLikePattern() {
+        return LikePattern.escape(keyword);
+    }
 }

@@ -23,18 +23,18 @@ public interface DepositMapper {
 
     List<DepositAccountDTO> findAccounts(@Param("ownerType") String ownerType,
                                          @Param("status") String status,
-                                         @Param("keyword") String keyword);
+                                         @Param("keywordLikePattern") String keywordLikePattern);
 
     List<DepositAccountDTO> findAccountsPage(@Param("ownerType") String ownerType,
                                          @Param("status") String status,
-                                         @Param("keyword") String keyword,
+                                         @Param("keywordLikePattern") String keywordLikePattern,
                                          @Param("pageNo") int pageNo,
                                          @Param("pageSize") int pageSize,
                                          @Param("offset") int offset);
 
     long countAccounts(@Param("ownerType") String ownerType,
                        @Param("status") String status,
-                       @Param("keyword") String keyword);
+                       @Param("keywordLikePattern") String keywordLikePattern);
 
     DepositAccountDetailDTO findAccountDetail(@Param("accountNo") String accountNo);
 

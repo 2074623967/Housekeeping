@@ -29,9 +29,9 @@
             <if test="status != null and status != ''">
                 AND status = #{status}
             </if>
-            <if test="keyword != null and keyword != ''">
-                AND (account_no LIKE CONCAT('%', #{keyword}, '%')
-                OR owner_id LIKE CONCAT('%', #{keyword}, '%'))
+            <if test="keywordLikePattern != null and keywordLikePattern != ''">
+                AND (account_no LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!'
+                OR owner_id LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!')
             </if>
         </where>
         ORDER BY updated_at DESC, id DESC
@@ -43,8 +43,9 @@
         <where>
             <if test="ownerType != null and ownerType != ''">AND owner_type = #{ownerType}</if>
             <if test="status != null and status != ''">AND status = #{status}</if>
-            <if test="keyword != null and keyword != ''">
-                AND (account_no LIKE CONCAT('%', #{keyword}, '%') OR owner_id LIKE CONCAT('%', #{keyword}, '%'))
+            <if test="keywordLikePattern != null and keywordLikePattern != ''">
+                AND (account_no LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!'
+                OR owner_id LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!')
             </if>
         </where>
         ORDER BY updated_at DESC, id DESC
@@ -56,8 +57,9 @@
         <where>
             <if test="ownerType != null and ownerType != ''">AND owner_type = #{ownerType}</if>
             <if test="status != null and status != ''">AND status = #{status}</if>
-            <if test="keyword != null and keyword != ''">
-                AND (account_no LIKE CONCAT('%', #{keyword}, '%') OR owner_id LIKE CONCAT('%', #{keyword}, '%'))
+            <if test="keywordLikePattern != null and keywordLikePattern != ''">
+                AND (account_no LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!'
+                OR owner_id LIKE CONCAT('%', #{keywordLikePattern}, '%') ESCAPE '!')
             </if>
         </where>
     </select>

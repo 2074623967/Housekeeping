@@ -42,13 +42,13 @@ public class DepositDaoImpl implements DepositDao {
     public List<DepositAccountDTO> findAccounts(DepositAccountQueryDTO query) {
         return mapper.findAccounts(query == null ? null : query.getOwnerType(),
                 query == null ? null : query.getStatus(),
-                query == null ? null : query.getKeyword());
+                query == null ? null : query.getKeywordLikePattern());
     }
 
     @Override
     public List<DepositAccountDTO> findAccountsPage(DepositAccountQueryDTO query) {
         return mapper.findAccountsPage(query == null ? null : query.getOwnerType(),
-                query == null ? null : query.getStatus(), query == null ? null : query.getKeyword(),
+                query == null ? null : query.getStatus(), query == null ? null : query.getKeywordLikePattern(),
                 query == null ? 1 : query.getPageNo(), query == null ? 20 : query.getPageSize(),
                 query == null ? 0 : query.getOffset());
     }
@@ -56,7 +56,7 @@ public class DepositDaoImpl implements DepositDao {
     @Override
     public long countAccounts(DepositAccountQueryDTO query) {
         return mapper.countAccounts(query == null ? null : query.getOwnerType(),
-                query == null ? null : query.getStatus(), query == null ? null : query.getKeyword());
+                query == null ? null : query.getStatus(), query == null ? null : query.getKeywordLikePattern());
     }
 
     @Override
