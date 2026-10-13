@@ -654,3 +654,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 88. 2026-10-14 字面量筛选修复后特殊订单号双路径复验
 
 在 `92455b3e` 基线上，以 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 分别执行本机 H2/demo `verify payment-chain` 和 `verify payment-query-chain`。首轮支付单 `PAY1791925004320b6a88423` 经 `CALLBACK`，次轮 `PAY1791925210790e1ea968e` 经受控上游桩 `GATEWAY_QUERY` 收口；两轮虚构订单号均含末尾引号和反斜杠，九服务 HTTP 冒烟及 happy-path 均 `[PASS]`、退出码 `0`。支付、清分、结算、三类账务事件、退款及七项对账事实读回，对账均为 `COMPLETED/4/4`、`reconciliationFinancialCloseable=true`。首次沙箱查单桩因回环绑定 `EPERM` 失败，未发生业务验证；获准本机回环后复跑成功。两轮退出后九服务均 `DOWN`，查单桩 18190 无监听。此项仅证明本机模拟 HTTP 链路在当前查询修复后未回退，不证明正式渠道、真实 RabbitMQ、目标 MySQL 8、多实例、生产身份或真实资金。
+
+## 89. 2026-10-14 多系统查询修复后的本机支付双路径回归
+
+在 `699f69ea` 基线下、九服务停服且写前隔离门禁通过后，分别执行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 的本机 H2/demo `verify payment-chain` 与 `verify payment-query-chain`。虚构业务订单号均带末尾引号和反斜杠；支付单 `PAY1791928699557336942f3` 经 `CALLBACK`，`PAY1791928892100738bffb3` 经受控本机上游 `GATEWAY_QUERY` 收口。两轮九服务 HTTP 冒烟与 happy-path 均 `[PASS]`、退出码 `0`；支付事件、清分、结算、三类账务事件、退款与七项对账事实齐备，对账 `COMPLETED/4/4`、`reconciliationFinancialCloseable=true`。两轮退出后九服务均 `DOWN`，查单桩 18190 无监听。只证明当前九服务 H2/demo HTTP 模拟链未回退；独立钱包、保证金不在这两条链中，近期各运营列表特殊值筛选仅有各自定向测试，本次不证明真实 RabbitMQ、目标 MySQL 8、多实例、正式渠道、身份审批或真实资金。
