@@ -249,9 +249,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         }
     }
 
-    private Object signedClearingPayload(Object payload) {
+    private HttpEntity<String> signedClearingPayload(Object payload) {
         if (!StringUtils.hasText(clearingGeneratedHttpSecret)) {
-            return payload;
+            throw new IllegalStateException("HTTP 清分结果事件签名密钥未配置");
         }
         try {
             String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);

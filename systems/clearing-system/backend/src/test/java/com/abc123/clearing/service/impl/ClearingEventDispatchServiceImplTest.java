@@ -89,6 +89,30 @@ class ClearingEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldNotSendUnsignedClearingEventWhenHttpSecretIsMissing() {
+        stubClearingOutbox();
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+
+        org.mockito.Mockito.verifyNoInteractions(restTemplate);
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+    }
+
+    @Test
+    void shouldNotSendUnsignedClearingEventWhenHttpSecretIsBlank() {
+        stubClearingOutbox();
+        ClearingEventDispatchServiceImpl dispatchService = dispatchService();
+        setField(dispatchService, "clearingGeneratedHttpSecret", "  ");
+
+        assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
+
+        org.mockito.Mockito.verifyNoInteractions(restTemplate);
+        verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
+    }
+
+    @Test
     void shouldPublishClearingGeneratedToSettlementAndAccounting() {
         ClearingOrderEntity clearingOrder = clearingOrder();
         when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
@@ -113,6 +137,7 @@ class ClearingEventDispatchServiceImplTest {
                 "http://accounting",
                 "ACT10002",
                 restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
 
         boolean result = dispatchService.publishClearingGenerated("PAY-001");
 
@@ -122,13 +147,13 @@ class ClearingEventDispatchServiceImplTest {
         ArgumentCaptor<Object> accountingPayload = ArgumentCaptor.forClass(Object.class);
         verify(restTemplate).postForEntity(eq("http://accounting"), accountingPayload.capture(), eq(java.util.Map.class));
         assertEquals("CHAIN-PAY-001",
-                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("businessChainId").asText());
+                signedBody(accountingPayload.getValue()).get("businessChainId").asText());
         assertEquals("HOME_CLEAN",
-                new ObjectMapper().valueToTree(accountingPayload.getValue()).get("payScene").asText());
+                signedBody(accountingPayload.getValue()).get("payScene").asText());
         ArgumentCaptor<Object> settlementPayload = ArgumentCaptor.forClass(Object.class);
         verify(restTemplate).postForEntity(eq("http://settlement"), settlementPayload.capture(), eq(java.util.Map.class));
         assertEquals("HOME_CLEAN",
-                new ObjectMapper().valueToTree(settlementPayload.getValue()).get("payScene").asText());
+                signedBody(settlementPayload.getValue()).get("payScene").asText());
         verify(clearingMemoryStore).markOutboxPublishSuccess("EVT-001");
     }
 
@@ -154,6 +179,7 @@ class ClearingEventDispatchServiceImplTest {
                 "http://accounting",
                 "ACT10002",
                 restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
         setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
 
         assertTrue(dispatchService.publishClearingGenerated("PAY-001"));
@@ -186,6 +212,7 @@ class ClearingEventDispatchServiceImplTest {
                 "http://accounting",
                 "ACT10002",
                 restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
         setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
 
         assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
@@ -209,6 +236,7 @@ class ClearingEventDispatchServiceImplTest {
 
         ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
 
         assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
         verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
@@ -228,6 +256,7 @@ class ClearingEventDispatchServiceImplTest {
 
         ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore, "http://settlement", " ", "ACT10002", restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
 
         assertFalse(dispatchService.publishClearingGenerated("PAY-001"));
         verify(clearingMemoryStore).markOutboxPublishFailed("EVT-001");
@@ -503,8 +532,19 @@ class ClearingEventDispatchServiceImplTest {
     }
 
     private ClearingEventDispatchServiceImpl dispatchService() {
-        return new ClearingEventDispatchServiceImpl(
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
+        return dispatchService;
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode signedBody(Object request) {
+        assertTrue(request instanceof HttpEntity);
+        try {
+            return new ObjectMapper().readTree((String) ((HttpEntity<?>) request).getBody());
+        } catch (Exception exception) {
+            throw new AssertionError("清分事件请求体不是 JSON", exception);
+        }
     }
 
     private ClearingEventDispatchServiceImpl amqpDispatchService() {
