@@ -28771,3 +28771,7 @@ Chrome/CDP 本机 mock 红测复现退款审核 POST 待返回时切换列表路
 ### 10.1102 2026-10-13 支付回调外单渠道流水拒收
 
 支付回调原只对比当前支付单已有渠道流水，未绑定渠道流水的本单可接收已归属外单的回调并在成功写入时触发数据库重复键异常。先加单元红测，四种支持的回调状态中成功态返回 `IllegalStateException` 而非可辨业务拒收；现校验本单绑定后复用外单流水归属查询，四态均返回 `PAYMENT-1031`，不写支付状态、通知或成功事件。独立 H2/demo 通过本机预付/提交得到渠道流水，再清除本单绑定并将该流水归给外单，成功和处理中回调均拒收，读回原支付单仍 `WAIT_CALLBACK`、未绑定流水，外单归属未变、无成功事件。定向 `PaymentServiceImplTest` `228/228`、H2 持久化定向 `1/1`、本机回环全量 `2085/2085`，零失败/错误/跳过，`git diff --check` 通过。测试仅为本机未签名 demo，不覆盖正式验签渠道、跨实例检查后抢占、目标 MySQL 8 或实际资金。
+
+### 10.1103 2026-10-13 当前九服务双路径与本机查单桩回显
+
+在 `239383e5` 上运行 `local-stack.sh verify payment-chain`：隔离九服务 HTTP 冒烟及 happy-path `[PASS]`，支付单 `PAY1791904992720489ddf08` 经回调收口，对账 `COMPLETED/4/4`、`financialCloseable=true`。随后 `verify payment-query-chain` 首轮 HTTP 冒烟通过，但假上游回执缺少网关新要求的 `paymentOrderId / orderNo`，第二次查单被 `PAYMENT-1026` 拒绝；定位为本机夹具协议漂移，仅补假上游原单身份回显，保留首查非法状态和其他校验。脚本语法与补丁检查通过，再跑查单链 `[PASS]`，支付单 `PAY1791905386643a97e04fc` 经 `GATEWAY_QUERY` 收口，九服务对账 `COMPLETED/4/4`、`financialCloseable=true`；两次成功运行退出码 `0`，本轮服务和假上游停服。仅本机 H2/demo 与受控假渠道，未验正式渠道签名/到账、MySQL 8 多实例、真实 MQ 或生产授权。

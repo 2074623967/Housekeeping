@@ -45,6 +45,8 @@ const server = createServer(async (incoming, outgoing) => {
     }
     queries.push(body);
     send(200, { code: "0", data: {
+      paymentOrderId: armedPayment.paymentOrderId,
+      orderNo: armedPayment.orderNo,
       tradeStatus: queries.length === 1 ? "PAID" : "SUCCESS",
       channelTransactionNo: armedPayment.channelTransactionNo,
       querySource: "LOCAL_QUERY_CHAIN_STUB"
