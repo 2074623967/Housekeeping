@@ -28835,3 +28835,7 @@ App/H5/PC 共用收银台、支付结果和退款进度页原卸载时仅停止�
 ### 10.1118 2026-10-14 支付请求列表与总览字面量筛选
 
 支付请求 Mapper 定向红测对虚构尝试的请求号、支付单号、订单号、渠道码和 IP 注入 `%_!\`；原 `%` 查询把七笔请求全匹配。修复后五字段在列表、计数、导出、总览共享 `ESCAPE '!'` 参数化字面量模式；支付收款记录的已修规则抽为同包工具而行为不变。`PaymentRequestListMapperIntegrationTest`、`PaymentRecordListMapperIntegrationTest` 定向转绿；本机回环 JDK 8 离线 Maven 全量 `2090/2090`，失败、错误、跳过均为 `0`，脚本 `66/66`。跨系统脚本用业务订单号过滤支付请求的处理中和成功状态，两条特殊订单号九服务 H2/demo 链均退出码 `0`、冒烟及 happy-path `[PASS]`、七项事实 `COMPLETED/4/4`、`financialCloseable=true`；九服务停服。未连接正式渠道、目标 MySQL 8、多实例或真实资金；详见接口文档 14.600、跨系统记录第 83 节。
+
+### 10.1119 2026-10-14 支付单管理列表字面量筛选
+
+在 `PaymentMapperStateTransitionIntegrationTest` 用参数化支付单注入 `%_!\`，红测 `%` 筛选由预期一笔扩展为十二笔；支付单号及订单号在列表、总数、导出三处改为显式 `ESCAPE '!'` 的字面量子串绑定。定向测试转绿；获准本机回环的 JDK 8 离线 Maven 全量 `2091/2091`，失败、错误、跳过均 `0`，脚本单测 `66/66`。九服务 H2/demo 特殊订单号回调与受控查单链均通过支付单联合筛选、HTTP 冒烟、happy-path，七项对账事实 `COMPLETED/4/4` 且 `financialCloseable=true`，服务停服。只证明本机模拟与 H2 SQL，不代表目标 MySQL 8、正式渠道、RabbitMQ、生产身份或资金结果；详见接口文档 14.601、跨系统记录第 84 节。

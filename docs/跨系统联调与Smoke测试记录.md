@@ -634,3 +634,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 83. 2026-10-14 支付请求按特殊订单号筛选的双路径复验
 
 支付请求列表与总览增加业务订单号联合筛选后，以虚构订单号末尾引号和反斜杠分别隔离执行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true bash tools/dev/local-stack.sh verify payment-chain` 和 `verify payment-query-chain`。支付单 `PAY179191649398529f3476a` 经 `CALLBACK`、`PAY1791916667630b3adab65` 经本机受控 `GATEWAY_QUERY` 收口；支付请求处理中和成功筛选均读回唯一原尝试，九服务冒烟及 happy-path `[PASS]`、退出码 `0`。支付、清分、结算、账务、退款与七条对账事实读回，均 `COMPLETED/4/4`、本地 `financialCloseable=true`；停服后九服务 `DOWN`、查单桩停止。只覆盖本机 H2/demo HTTP 模拟链，不是正式渠道、生产 MySQL 8、RabbitMQ、生产授权或真实资金验收。
+
+## 84. 2026-10-14 支付单运营列表特殊订单号双路径复验
+
+在原九服务本机脚本加入按支付单号和虚构业务订单号联合筛选支付单管理列表，隔离运行 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true` 下的 `verify payment-chain` 与 `verify payment-query-chain`。前者支付单 `PAY179191735829620cda332` 经 `CALLBACK` 收口，后者 `PAY17919175320015b3c0763` 经本机受控 `GATEWAY_QUERY` 收口；两轮筛选都读回唯一成功支付单，HTTP 冒烟和 happy-path `[PASS]`、退出码 `0`，七项对账事实 `COMPLETED/4/4`、本地 `financialCloseable=true`。停服后九服务均 `DOWN`，查询桩停止。此证据只覆盖 H2/demo HTTP 及本机模拟值，不替代真实渠道、目标 MySQL 8、多实例、RabbitMQ、生产身份审批与真实资金验收。

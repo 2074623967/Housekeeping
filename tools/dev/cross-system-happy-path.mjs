@@ -2210,6 +2210,13 @@ async function main() {
     "88.00",
     expectedPayScene
   );
+  const paymentListFilter = new URLSearchParams({ paymentOrderId: prepay.paymentOrderId, orderNo });
+  const paymentList = await api(`${paymentBaseUrl}/api/payments?${paymentListFilter}`);
+  assert(paymentList?.total === 1 && paymentList.items?.length === 1
+    && matchesIdentifier(paymentList.items[0].paymentOrderId, prepay.paymentOrderId)
+    && matchesIdentifier(paymentList.items[0].orderNo, orderNo)
+    && paymentList.items[0].status === "SUCCESS",
+  "paid payment list did not preserve the business order and terminal status");
   const successfulRequest = await verifyPaymentRequestStatus(
     prepay.paymentOrderId, orderNo, "成功", "success", "successRequestCount"
   );
