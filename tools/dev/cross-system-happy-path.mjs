@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHmac } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   normalizePaymentRecordDetailResult,
@@ -36,6 +37,18 @@ export function assertLocalDemoBaseUrl(value, service) {
 
 export function normalizeIdentifier(value) {
   return typeof value === "string" ? value.trim() : value;
+}
+
+export function signedPaymentProjectionHeaders(body, secret, timestamp = String(Math.floor(Date.now() / 1000))) {
+  if (typeof body !== "string" || !body || typeof secret !== "string" || !secret.trim()
+      || !/^[1-9]\d*$/.test(timestamp)) {
+    throw new Error("payment projection signature input is missing or invalid");
+  }
+  return {
+    "X-HSP-Payment-Projection-Timestamp": timestamp,
+    "X-HSP-Payment-Projection-Signature": createHmac("sha256", secret)
+      .update(`${timestamp}\n${body}`, "utf8").digest("base64")
+  };
 }
 
 const paymentBaseUrl = normalizeBaseUrl(process.env.HSP_PAYMENT_CORE_BASE_URL, "http://localhost:18081");
@@ -2518,13 +2531,19 @@ async function main() {
     channelCode: "wx_h5",
     payScene: expectedPayScene
   };
+  const projectionBody = JSON.stringify(paymentSuccessProjectionPayload);
+  const projectionHeaders = signedPaymentProjectionHeaders(
+    projectionBody, process.env.HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET
+  );
   await api(`${refundBaseUrl}/api/refunds/internal/payment-success`, {
     method: "POST",
-    body: JSON.stringify(paymentSuccessProjectionPayload)
+    headers: projectionHeaders,
+    body: projectionBody
   });
   await api(`${refundBaseUrl}/api/refunds/internal/payment-success`, {
     method: "POST",
-    body: JSON.stringify(paymentSuccessProjectionPayload)
+    headers: projectionHeaders,
+    body: projectionBody
   });
   const refundApplyPayload = {
     paymentOrderId: normalizeIdentifier(prepay.paymentOrderId),

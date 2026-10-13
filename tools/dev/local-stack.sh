@@ -18,6 +18,7 @@ CLEARING_FACT_SECRET=""
 SETTLEMENT_FACT_SECRET=""
 ACCOUNTING_FACT_SECRET=""
 REFUND_FACT_SECRET=""
+PAYMENT_PROJECTION_SECRET=""
 
 resolve_maven_bin() {
   if [[ -n "${HSP_MAVEN_BIN:-}" ]]; then
@@ -298,6 +299,9 @@ start_backend() {
   if [[ -n "$REFUND_EVENT_SECRET" ]] \
     && [[ "$name" == "refund-center" || "$name" == "accounting-system" ]]; then
     event_signature_env+=(HSP_REFUND_SUCCESS_HTTP_SECRET="$REFUND_EVENT_SECRET")
+  fi
+  if [[ "$name" == "refund-center" ]]; then
+    event_signature_env+=(HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET")
   fi
   if [[ -n "$CLEARING_EVENT_SECRET" ]] \
     && [[ "$name" == "clearing-system" || "$name" == "settlement-system" || "$name" == "accounting-system" ]]; then
@@ -652,6 +656,7 @@ guard_local_payment_chain_verify() {
       HSP_CLEARING_GENERATED_HTTP_SECRET|\
       HSP_CLEARING_GENERATED_AMQP_SECRET|\
       HSP_SETTLEMENT_COMPENSATION_HTTP_SECRET|\
+      HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET|\
       HSP_*_RECONCILIATION_FACT_SECRET|\
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED|HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED|HSP_LOCAL_JAVA_OPTS|\
       JAVA_TOOL_OPTIONS|JDK_JAVA_OPTIONS|MAVEN_OPTS|\
@@ -751,6 +756,7 @@ run_verify() {
     SETTLEMENT_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     ACCOUNTING_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     REFUND_FACT_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+    PAYMENT_PROJECTION_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
     if [[ "$scope" == "payment-query-chain" ]]; then
       verification_mode="payment-query-chain"
       QUERY_ACCESS_KEY="local-query-$RANDOM-$RANDOM-$RANDOM"
@@ -800,9 +806,12 @@ run_verify() {
       HSP_LOCAL_RISK_REVIEW_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-risk-review.mjs" || result=$?
     elif [[ "$scope" == "payment-query-chain" ]]; then
       HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
+        HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET" \
         node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     else
-      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
+      HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true \
+        HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET="$PAYMENT_PROJECTION_SECRET" \
+        node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     fi
   fi
   run_stop "$scope" || [[ "$result" -ne 0 ]] || result=$?

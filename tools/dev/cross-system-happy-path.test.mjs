@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
@@ -72,8 +73,23 @@ import {
   formatRequestError,
   normalizeBaseUrl,
   normalizeIdentifier,
+  signedPaymentProjectionHeaders,
   verifyLocalDemoTargets
 } from "./cross-system-happy-path.mjs";
+
+test("signs the exact refund projection body with a dedicated secret", () => {
+  const body = '{"paymentOrderId":"PAY-1","customerName":"李阿姨"}';
+  const headers = signedPaymentProjectionHeaders(body, "projection-secret", "1791864000");
+  assert.deepEqual(headers, {
+    "X-HSP-Payment-Projection-Timestamp": "1791864000",
+    "X-HSP-Payment-Projection-Signature": createHmac("sha256", "projection-secret")
+      .update("1791864000\n" + body, "utf8").digest("base64")
+  });
+  const changedHeaders = signedPaymentProjectionHeaders(body + " ", "projection-secret", "1791864000");
+  assert.notEqual(headers["X-HSP-Payment-Projection-Signature"],
+    changedHeaders["X-HSP-Payment-Projection-Signature"]);
+  assert.throws(() => signedPaymentProjectionHeaders(body, ""), /missing or invalid/);
+});
 
 test("binds the happy-path scene before using it across the live flow", () => {
   const source = readFileSync(new URL("./cross-system-happy-path.mjs", import.meta.url), "utf8");

@@ -1,6 +1,7 @@
 package com.abc123.refund.controller;
 
 import com.abc123.refund.common.ApiResponse;
+import com.abc123.refund.common.PaymentProjectionHttpSignature;
 import com.abc123.refund.dto.PageResultDTO;
 import com.abc123.refund.dto.PaymentSuccessProjectionDTO;
 import com.abc123.refund.dto.RefundActionRequestDTO;
@@ -14,16 +15,22 @@ import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.service.RefundService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 退款中心后台与内部投影接口。
@@ -33,9 +40,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class RefundController {
 
     private final RefundService refundService;
+    private final ObjectMapper objectMapper;
+    private final String paymentProjectionSecret;
 
-    public RefundController(RefundService refundService) {
+    public RefundController(RefundService refundService, ObjectMapper objectMapper,
+            @Value("${HSP_PAYMENT_REFUND_PROJECTION_HTTP_SECRET:}") String paymentProjectionSecret) {
         this.refundService = refundService;
+        this.objectMapper = objectMapper;
+        this.paymentProjectionSecret = paymentProjectionSecret;
     }
 
     @GetMapping
@@ -140,8 +152,17 @@ public class RefundController {
      * payment-core 或消息消费者使用该接口投影支付成功事实。
      */
     @PostMapping("/internal/payment-success")
-    public ApiResponse<Void> projectPaymentSuccess(@RequestBody PaymentSuccessProjectionDTO request) {
-        refundService.projectPaymentSuccess(request);
-        return ApiResponse.success(null);
+    public ApiResponse<Void> projectPaymentSuccess(@RequestBody String body,
+            @RequestHeader(value = PaymentProjectionHttpSignature.TIMESTAMP_HEADER, required = false) String timestamp,
+            @RequestHeader(value = PaymentProjectionHttpSignature.SIGNATURE_HEADER, required = false) String signature) {
+        if (!PaymentProjectionHttpSignature.matches(body, timestamp, signature, paymentProjectionSecret)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "支付成功投影签名校验失败");
+        }
+        try {
+            refundService.projectPaymentSuccess(objectMapper.readValue(body, PaymentSuccessProjectionDTO.class));
+            return ApiResponse.success(null);
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "支付成功投影载荷无效", exception);
+        }
     }
 }
