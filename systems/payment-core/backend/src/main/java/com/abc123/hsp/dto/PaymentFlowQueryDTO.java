@@ -42,4 +42,20 @@ public class PaymentFlowQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
+
+    public String getOrderNoLikePattern() {
+        return LikePattern.escape(orderNo);
+    }
+
+    public String getChannelCodeLikePattern() {
+        return LikePattern.escape(channelCode);
+    }
+
+    public String getKeywordLikePattern() {
+        return LikePattern.escape(keyword);
+    }
 }

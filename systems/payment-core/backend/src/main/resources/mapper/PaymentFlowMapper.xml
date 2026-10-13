@@ -96,16 +96,16 @@
     <sql id="paymentFlowWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
                 AND flow_type = #{query.flowType}
             </if>
             <if test="query.channelCode != null and query.channelCode != ''">
-                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                AND channel_code LIKE CONCAT('%', #{query.channelCodeLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND terminal = #{query.terminal}
@@ -114,9 +114,9 @@
                 AND business_status = #{query.businessStatus}
             </if>
             <if test="query.keyword != null and query.keyword != ''">
-                AND (summary LIKE CONCAT('%', #{query.keyword}, '%')
-                     OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
-                     OR response_payload LIKE CONCAT('%', #{query.keyword}, '%'))
+                AND (summary LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                     OR request_payload LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                     OR response_payload LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!')
             </if>
         </where>
     </sql>

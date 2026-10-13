@@ -28855,3 +28855,7 @@ App/H5/PC 共用收银台、支付结果和退款进度页原卸载时仅停止�
 ### 10.1123 2026-10-14 支付异常和告警日志筛选字面量回归
 
 新增 `PaymentIssueLiteralSearchIntegrationTest`，在隔离 H2/demo 的真实 Mapper 中插入带 `%_!`、反斜杠和引号的虚构待回调支付单及告警，对支付异常 `paymentOrderId`、`orderNo`、`channelCode` 的列表/计数/责任组汇总和告警 `alertNo`、`issueNo`、`paymentOrderId` 的列表/计数逐字段验证。修复前 `%` 支付单筛选返回五条而非一条；修复后用独立支付方式和告警状态隔离 demo 自带数据，特殊字符逐项定向转绿。首次全量在沙箱内因禁止绑定回环端口产生 25 个 HTTP 测试错误；获准本机回环后 JDK 8 离线 Maven 全量 `2098/2098`、零失败/错误/跳过，`git diff --check` 通过。仅证明本地 H2 SQL 和隔离业务夹具，不覆盖目标 MySQL 8、多实例、正式告警派发或真实资金；详见接口文档 14.605。
+
+### 10.1124 2026-10-14 支付流水列表与导出字面量回归
+
+在 `PaymentFlowListMapperIntegrationTest` 独立 H2 MySQL 模式夹具中加入虚构特殊支付单和普通对照流水，逐字段核对 `paymentOrderId`、`orderNo`、`channelCode` 和 `keyword` 在列表、计数、导出的一致性；关键字分别命中摘要、请求报文与响应报文，覆盖 `%`、`_`、`!`、反斜杠及引号。红测 `%` 支付单筛选返回两条而非一条；修复后 Mapper 类 `13/13` 通过，获准本机回环 JDK 8 离线 Maven 全量 `2099/2099`、零失败/错误/跳过，`git diff --check` 通过。未运行九服务特殊流水 HTTP 冒烟，目标 MySQL 8、生产报文脱敏、正式渠道与真实资金仍需独立验收；详见接口文档 14.606。

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -99,6 +100,82 @@ class PaymentFlowListMapperIntegrationTest {
                             "FLOW-EVENT-STABLE-001"),
                     flowNos(mapper.findAllForExport(eventQuery)));
         }
+    }
+
+    @Test
+    void shouldSearchFlowIdentifiersAndPayloadByLiteralSubstring() throws Exception {
+        String suffix = "%_!\\\"";
+        String paymentOrderId = "PAY-FLOW-" + suffix;
+        String orderNo = "ORD-FLOW-" + suffix;
+        String channelCode = "channel-" + suffix;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement();
+             PreparedStatement paymentInsert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_order (payment_order_id, order_no, channel_code, payment_method) "
+                             + "VALUES (?, ?, ?, '本地方式')");
+             PreparedStatement attemptInsert = session.getConnection().prepareStatement(
+                     "INSERT INTO t_payment_attempt (attempt_no, payment_order_id, channel_code, terminal, "
+                             + "attempt_status, request_payload, response_payload, payment_method, created_at) "
+                             + "VALUES ('FLOW-LITERAL', ?, ?, 'LITERAL', '处理中', 'plain', 'plain', ?, NOW())");
+             PreparedStatement payloadUpdate = session.getConnection().prepareStatement(
+                     "UPDATE t_payment_attempt SET payment_method = ?, request_payload = ?, "
+                             + "response_payload = ? WHERE attempt_no = 'FLOW-LITERAL'")) {
+            paymentInsert.setString(1, paymentOrderId);
+            paymentInsert.setString(2, orderNo);
+            paymentInsert.setString(3, channelCode);
+            paymentInsert.executeUpdate();
+            attemptInsert.setString(1, paymentOrderId);
+            attemptInsert.setString(2, channelCode);
+            attemptInsert.setString(3, "method-" + suffix);
+            attemptInsert.executeUpdate();
+            statement.executeUpdate("INSERT INTO t_payment_order "
+                    + "(payment_order_id, order_no, channel_code, payment_method) "
+                    + "VALUES ('PAY-FLOW-PLAIN', 'ORD-FLOW-PLAIN', 'channel-plain', '本地方式')");
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(attempt_no, payment_order_id, channel_code, terminal, attempt_status, "
+                    + "request_payload, response_payload, payment_method, created_at) "
+                    + "VALUES ('FLOW-PLAIN', 'PAY-FLOW-PLAIN', 'channel-plain', 'LITERAL', "
+                    + "'处理中', 'plain', 'plain', 'plain', NOW())");
+
+            PaymentFlowMapper mapper = session.getMapper(PaymentFlowMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", suffix)) {
+                PaymentFlowQueryDTO query = new PaymentFlowQueryDTO();
+                query.setTerminal("LITERAL");
+                query.setPaymentOrderId(fragment);
+                assertLiteralFlowResults(mapper, query);
+                query.setPaymentOrderId(null);
+                query.setOrderNo(fragment);
+                assertLiteralFlowResults(mapper, query);
+                query.setOrderNo(null);
+                query.setChannelCode(fragment);
+                assertLiteralFlowResults(mapper, query);
+                query.setChannelCode(null);
+                query.setKeyword(fragment);
+                assertLiteralFlowResults(mapper, query);
+            }
+
+            PaymentFlowQueryDTO keywordQuery = new PaymentFlowQueryDTO();
+            keywordQuery.setTerminal("LITERAL");
+            keywordQuery.setKeyword(suffix);
+            payloadUpdate.setString(1, "plain");
+            payloadUpdate.setString(2, "request-" + suffix);
+            payloadUpdate.setString(3, "plain");
+            payloadUpdate.executeUpdate();
+            session.clearCache();
+            assertLiteralFlowResults(mapper, keywordQuery);
+            payloadUpdate.setString(1, "plain");
+            payloadUpdate.setString(2, "plain");
+            payloadUpdate.setString(3, "response-" + suffix);
+            payloadUpdate.executeUpdate();
+            session.clearCache();
+            assertLiteralFlowResults(mapper, keywordQuery);
+        }
+    }
+
+    private void assertLiteralFlowResults(PaymentFlowMapper mapper, PaymentFlowQueryDTO query) {
+        assertEquals(1L, mapper.count(query), query.toString());
+        assertEquals(Arrays.asList("FLOW-LITERAL"), flowNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList("FLOW-LITERAL"), flowNos(mapper.findAllForExport(query)));
     }
 
     @Test
