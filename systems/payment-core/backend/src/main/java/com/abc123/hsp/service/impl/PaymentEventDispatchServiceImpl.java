@@ -1138,8 +1138,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         payload.put("payScene", payScene);
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", amount);
-        payload.put("payload", "{\"paymentOrderId\":\"" + paymentOrderId
-                + "\",\"payScene\":\"" + (payScene == null ? "" : payScene) + "\"}");
+        Map<String, String> source = new LinkedHashMap<>();
+        source.put("paymentOrderId", paymentOrderId);
+        source.put("payScene", payScene == null ? "" : payScene);
+        try {
+            payload.put("payload", (objectMapper == null ? new ObjectMapper() : objectMapper)
+                    .writeValueAsString(source));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("支付对账事实载荷序列化失败", exception);
+        }
         return payload;
     }
 

@@ -2344,6 +2344,30 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldSerializeReconciliationFactPayloadWithEscapedIdentifiers() throws Exception {
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper, paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003", restTemplate);
+        Method method = PaymentEventDispatchServiceImpl.class.getDeclaredMethod(
+                "buildReconciliationFactPayload", String.class, String.class,
+                String.class, BigDecimal.class);
+        method.setAccessible(true);
+        String paymentOrderId = "PAY-\"001";
+        String payScene = "HOME\\CLEAN\"SPECIAL";
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fact = (Map<String, Object>) method.invoke(service,
+                paymentOrderId, "ORD-001", payScene, new BigDecimal("168.00"));
+        @SuppressWarnings("unchecked")
+        Map<String, String> embedded = new ObjectMapper().readValue((String) fact.get("payload"), Map.class);
+
+        Assertions.assertEquals(paymentOrderId, embedded.get("paymentOrderId"));
+        Assertions.assertEquals(payScene, embedded.get("payScene"));
+    }
+
+    @Test
     void shouldNotAdvanceClearingStageOnAcceptedHttpResponse() {
         when(paymentMapper.findDetail("PAY-001")).thenReturn(buildPaymentDetail());
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");

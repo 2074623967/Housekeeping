@@ -5955,6 +5955,10 @@ payment-core 对渠道查单回执中的支付单号、订单号继续要求精�
 
 回调验签和本单渠道/已绑定流水核对后，payment-core 还会查回调渠道流水是否已绑定另一支付单；若已归属外单，则对 `SUCCESS / PROCESSING / WAIT_CALLBACK / PAYING` 均以 `PAYMENT-1031` 拒绝，不修改本单支付状态、预付单或成功事件。回调错误保持现有非确认 HTTP 响应，渠道须按其协议重试或由运营核查；不得把另一支付单的资金事实归给本单。数据库唯一索引仍作为并发兜底，预检查不证明多实例竞态安全或真实渠道到账。
 
+### 14.596 支付对账事实内层载荷转义
+
+支付成功事件送往对账系统的事实仍包含 `businessChainId`、`systemCode`、`factType`、`factNo`、`businessNo`、`payScene`、`factStatus`、`amount` 和字符串 `payload`。其中 `payload` 内层 JSON 由序列化器按 `paymentOrderId/payScene` 生成，不再直接拼接字符串；引号和反斜杠等字符能正确转义，普通场景的业务字段与签名/回执确认规则不变。此项只保证代码生成的内层 JSON 可解析，不代表历史事实已经清洗，也不替代对账系统、目标 MySQL 8、正式渠道或资金验收。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
