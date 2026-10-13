@@ -35,7 +35,8 @@ test("compares payment and refund wall-clock timelines across daylight saving ti
     channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
     appliedAt: "2026-03-08 02:59:00", channelSubmittedAt: "2026-03-08 03:00:00",
     successAt: "2026-03-08 03:01:00", terminalAt: "2026-03-08 03:02:00",
-    attempts: [{ refundAttemptNo: "ATT-001", attemptStatus: "SUCCESS", attemptStatusType: "success",
+    attempts: [{ refundAttemptNo: "ATT-001", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+      attemptStatus: "SUCCESS", attemptStatusType: "success",
       createdAt: "2026-03-08 02:59:00", submittedAt: "2026-03-08 03:00:00",
       completedAt: "2026-03-08 03:01:00" }],
     operationLogs: [{ logNo: "LOG-001", actionName: "申请退款", createdAt: "2026-03-08 03:00:00" }]
@@ -1016,7 +1017,9 @@ test("rejects a mini program refund detail response without status presentation 
       channelRefundNo: "CH-REF-001",
       channelSubmittedAt: "2026-09-27 12:00:30",
       successAt: "2026-09-27 12:01:00",
-      terminalAt: "2026-09-27 12:01:01"
+      terminalAt: "2026-09-27 12:01:01",
+      attempts: [{ ...validAttempt, channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+        attemptStatus: "SUCCESS", attemptStatusType: "success", completedAt: "2026-09-27 12:01:00" }]
     }),
     {
       ...validResult,
@@ -1026,7 +1029,9 @@ test("rejects a mini program refund detail response without status presentation 
       channelRefundNo: "CH-REF-001",
       channelSubmittedAt: "2026-09-27 12:00:30",
       successAt: "2026-09-27 12:01:00",
-      terminalAt: "2026-09-27 12:01:01"
+      terminalAt: "2026-09-27 12:01:01",
+      attempts: [{ ...validAttempt, channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+        attemptStatus: "SUCCESS", attemptStatusType: "success", completedAt: "2026-09-27 12:01:00" }]
     }
   );
   assert.throws(
@@ -1290,4 +1295,42 @@ test("filters null rows from mini program detail responses", async () => {
     actionName: "申请退款",
     createdAt: "2026-09-27 12:00:00"
   }]);
+});
+
+test("keeps a mini program terminal refund bound to its latest channel attempt", () => {
+  const attempt = {
+    refundAttemptNo: "ATT-001", channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    attemptStatus: "SUCCESS", attemptStatusType: "success",
+    createdAt: "2026-09-27 12:00:01", submittedAt: "2026-09-27 12:00:30",
+    completedAt: "2026-09-27 12:01:00"
+  };
+  const detail = {
+    refundOrderId: "REF-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", paidAmount: "68.00", refundAmount: "18.00",
+    refundMethod: "原路退款", refundReason: "客户申请", status: "SUCCESS", statusType: "success",
+    channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    appliedAt: "2026-09-27 12:00:00", channelSubmittedAt: "2026-09-27 12:00:30",
+    successAt: "2026-09-27 12:01:00", terminalAt: "2026-09-27 12:01:01",
+    attempts: [attempt], operationLogs: []
+  };
+  assert.deepEqual(normalizeRefundDetailResult(detail), detail);
+  for (const invalidDetail of [
+    { ...detail, attempts: [{ ...attempt, attemptStatus: "PENDING", attemptStatusType: "warn", completedAt: "-" }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: undefined }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: 123 }] },
+    { ...detail, attempts: [{ ...attempt, channelCode: "ALIPAY_H5" }] },
+    { ...detail, attempts: [{ ...attempt, channelRefundNo: 123 }] },
+    { ...detail, attempts: [{ ...attempt, channelRefundNo: "CH-REF-OTHER" }] },
+    { ...detail, attempts: [{ ...attempt, completedAt: "2026-09-27 12:01:01" }] }
+  ]) {
+    assert.throws(() => normalizeRefundDetailResult(invalidDetail),
+      (error) => error.code === "PAYMENT-MINI-INVALID-REFUND-DETAIL");
+  }
+  const failed = {
+    ...detail, status: "FAIL", statusType: "danger", successAt: "-",
+    attempts: [{ ...attempt, attemptStatus: "FAIL", attemptStatusType: "danger" }]
+  };
+  assert.deepEqual(normalizeRefundDetailResult(failed), failed);
+  assert.throws(() => normalizeRefundDetailResult({ ...failed, attempts: [attempt] }),
+    (error) => error.code === "PAYMENT-MINI-INVALID-REFUND-DETAIL");
 });
