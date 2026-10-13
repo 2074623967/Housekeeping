@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.abc123.refund.common.PaymentProjectionHttpSignature;
@@ -50,7 +51,9 @@ class RefundPaymentProjectionHttpAuthTest {
                 .header(PaymentProjectionHttpSignature.TIMESTAMP_HEADER, timestamp)
                 .header(PaymentProjectionHttpSignature.SIGNATURE_HEADER,
                         PaymentProjectionHttpSignature.sign(BODY, timestamp, "local-projection-test-secret")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.paymentOrderId").value("PAY-1"));
         verify(refundService).projectPaymentSuccess(org.mockito.ArgumentMatchers.argThat(
                 projection -> "PAY-1".equals(projection.getPaymentOrderId())
                         && "ORD-1".equals(projection.getOrderNo())));

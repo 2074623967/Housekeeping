@@ -18,6 +18,8 @@ import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.service.RefundService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -168,15 +170,16 @@ public class RefundController {
      * payment-core 或消息消费者使用该接口投影支付成功事实。
      */
     @PostMapping("/internal/payment-success")
-    public ApiResponse<Void> projectPaymentSuccess(@RequestBody String body,
+    public ApiResponse<Map<String, String>> projectPaymentSuccess(@RequestBody String body,
             @RequestHeader(value = PaymentProjectionHttpSignature.TIMESTAMP_HEADER, required = false) String timestamp,
             @RequestHeader(value = PaymentProjectionHttpSignature.SIGNATURE_HEADER, required = false) String signature) {
         if (!PaymentProjectionHttpSignature.matches(body, timestamp, signature, paymentProjectionSecret)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "支付成功投影签名校验失败");
         }
         try {
-            refundService.projectPaymentSuccess(objectMapper.readValue(body, PaymentSuccessProjectionDTO.class));
-            return ApiResponse.success(null);
+            PaymentSuccessProjectionDTO projection = objectMapper.readValue(body, PaymentSuccessProjectionDTO.class);
+            refundService.projectPaymentSuccess(projection);
+            return ApiResponse.success(Collections.singletonMap("paymentOrderId", projection.getPaymentOrderId().trim()));
         } catch (JsonProcessingException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "支付成功投影载荷无效", exception);
         }

@@ -888,7 +888,7 @@ class PaymentEventDispatchServiceImplTest {
         setField(service, "refundProjectionUrl", "http://refund/projection");
         setField(service, "refundProjectionSecret", "local-payment-projection-secret");
         when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(projectionResponse("PAY-001"));
         service.publishPaymentSuccess("EVT-001", "PAY-001");
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -2423,7 +2423,7 @@ class PaymentEventDispatchServiceImplTest {
         setField(service, "refundProjectionUrl", "http://refund/projection");
         setField(service, "refundProjectionSecret", "local-payment-projection-secret");
         when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
-                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+                .thenReturn(projectionResponse("PAY-001"));
         when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(),
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(reconciliationResponse("PAY-001"));
@@ -2464,6 +2464,34 @@ class PaymentEventDispatchServiceImplTest {
         verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-PROJECTION-FAIL");
         verify(restTemplate, never()).postForEntity(eq("http://reconciliation/facts"), any(),
                 eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
+    void shouldRejectRefundProjectionWithoutMatchingPaymentReceipt() {
+        for (String paymentOrderId : new String[]{null, "PAY-OTHER"}) {
+            PaymentEventDispatchServiceImpl service = reconciliationDispatch();
+            setField(service, "refundProjectionUrl", "http://refund/projection");
+            setField(service, "refundProjectionSecret", "local-payment-projection-secret");
+            when(restTemplate.postForEntity(eq("http://refund/projection"), any(), eq(Map.class)))
+                    .thenReturn(paymentOrderId == null
+                            ? ResponseEntity.ok(Collections.singletonMap("code", "0"))
+                            : projectionResponse(paymentOrderId));
+            String eventNo = paymentOrderId == null ? "EVT-PROJECTION-EMPTY" : "EVT-PROJECTION-WRONG";
+
+            service.publishPaymentSuccess(eventNo, "PAY-001");
+
+            verify(paymentEventMapper).markPublishFailed(eventNo);
+            verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(eventNo);
+            verify(restTemplate, never()).postForEntity(eq("http://reconciliation/facts"), any(),
+                    eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        }
+    }
+
+    private ResponseEntity<Map> projectionResponse(String paymentOrderId) {
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("code", "0");
+        body.put("data", Collections.singletonMap("paymentOrderId", paymentOrderId));
+        return ResponseEntity.ok(body);
     }
 
     @Test

@@ -1057,7 +1057,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                     refundProjectionUrl.trim(), new HttpEntity<>(body, headers), Map.class);
             if (response == null || response.getStatusCode() != HttpStatus.OK
                     || response.getBody() == null
-                    || !"0".equals(String.valueOf(response.getBody().get("code")))) {
+                    || !"0".equals(String.valueOf(response.getBody().get("code")))
+                    || !(response.getBody().get("data") instanceof Map)
+                    || !detail.getPaymentOrderId().equals(
+                            ((Map<?, ?>) response.getBody().get("data")).get("paymentOrderId"))) {
                 throw new IllegalStateException("退款中心支付成功投影未明确确认");
             }
         } catch (JsonProcessingException exception) {
