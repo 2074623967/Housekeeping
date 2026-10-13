@@ -65,6 +65,7 @@ const feedbackMessage = ref("");
 const staleDetail = ref(false);
 let latestRequestId = 0;
 let pollTimer = null;
+let disposed = false;
 const pollAttempts = ref(0);
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
@@ -123,7 +124,7 @@ function stopPolling() {
 
 function schedulePolling() {
   stopPolling();
-  if (isTerminal.value || !refundDetail.value || pollingPaused.value) {
+  if (disposed || isTerminal.value || !refundDetail.value || pollingPaused.value) {
     return;
   }
   pollTimer = setTimeout(() => {
@@ -164,6 +165,9 @@ function hasMatchingSnapshot(detail) {
 }
 
 async function loadDetail(refundOrderId = currentRefundOrderId.value) {
+  if (disposed) {
+    return;
+  }
   const requestId = ++latestRequestId;
   stopPolling();
   pollAttempts.value = 0;
@@ -200,7 +204,8 @@ async function loadDetail(refundOrderId = currentRefundOrderId.value) {
 }
 
 async function refreshDetail(isAutomatic = false) {
-  if (!currentRefundOrderId.value || (!isAutomatic && (loading.value || refreshing.value))) {
+  if (disposed || !currentRefundOrderId.value
+      || (!isAutomatic && (loading.value || refreshing.value))) {
     return;
   }
   if (isAutomatic && refreshing.value) {
@@ -267,7 +272,11 @@ watch([currentRefundOrderId, expectedPayScene], ([refundOrderId]) => {
   loadDetail(refundOrderId);
 }, { immediate: true });
 
-onBeforeUnmount(stopPolling);
+onBeforeUnmount(() => {
+  disposed = true;
+  latestRequestId += 1;
+  stopPolling();
+});
 </script>
 
 <template>

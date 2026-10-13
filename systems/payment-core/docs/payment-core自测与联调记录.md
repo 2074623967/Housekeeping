@@ -28775,3 +28775,7 @@ Chrome/CDP 本机 mock 红测复现退款审核 POST 待返回时切换列表路
 ### 10.1103 2026-10-13 当前九服务双路径与本机查单桩回显
 
 在 `239383e5` 上运行 `local-stack.sh verify payment-chain`：隔离九服务 HTTP 冒烟及 happy-path `[PASS]`，支付单 `PAY1791904992720489ddf08` 经回调收口，对账 `COMPLETED/4/4`、`financialCloseable=true`。随后 `verify payment-query-chain` 首轮 HTTP 冒烟通过，但假上游回执缺少网关新要求的 `paymentOrderId / orderNo`，第二次查单被 `PAYMENT-1026` 拒绝；定位为本机夹具协议漂移，仅补假上游原单身份回显，保留首查非法状态和其他校验。脚本语法与补丁检查通过，再跑查单链 `[PASS]`，支付单 `PAY1791905386643a97e04fc` 经 `GATEWAY_QUERY` 收口，九服务对账 `COMPLETED/4/4`、`financialCloseable=true`；两次成功运行退出码 `0`，本轮服务和假上游停服。仅本机 H2/demo 与受控假渠道，未验正式渠道签名/到账、MySQL 8 多实例、真实 MQ 或生产授权。
+
+### 10.1104 2026-10-13 用户支付三页卸载后异步失效
+
+App/H5/PC 共用收银台、支付结果和退款进度页原卸载时仅停止现有定时器；在途 `getCashier/getDetail/getRefundDetail` 返回后仍可能写旧状态、重新创建倒计时或轮询，卸载期间提交动作的后续读回亦可能生效。现收银台/结果页卸载时递增实体版本与请求序号，原有快照/请求门禁拒收迟到响应；退款页增设卸载标记、失效请求并阻断轮询重启。新增三项与现有静态断言同风格的生命周期回归；App `148/148`、H5/PC 各 `4/4`、三端生产构建及 `git diff --check` 通过。未运行延迟 HTTP 响应的真浏览器卸载竞态测试，也不涉及真实渠道或资金。

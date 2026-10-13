@@ -6,6 +6,12 @@ import test from "node:test";
 
 const viewPath = join(dirname(fileURLToPath(import.meta.url)), "CashierView.vue");
 
+test("invalidates cashier requests and actions when leaving the page", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*currentEntityVersion \+= 1;\s*latestLoadRequestId \+= 1;\s*stopCountdown\(\);/);
+  assert.match(source, /function isCurrentPaymentSnapshot\(snapshot, entityVersion\) \{\s*return entityVersion === currentEntityVersion/);
+});
+
 test("does not recommend channel queries before the cashier permits them", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /到期时间（北京时间）/);

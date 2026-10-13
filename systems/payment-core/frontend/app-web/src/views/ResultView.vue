@@ -452,7 +452,11 @@ function migrateLegacyAccessToken() {
 }
 
 watch(() => route.query.accessToken, migrateLegacyAccessToken, { immediate: true });
-onBeforeUnmount(stopAutoRefresh);
+onBeforeUnmount(() => {
+  currentEntityVersion += 1;
+  latestLoadRequestId += 1;
+  stopAutoRefresh();
+});
 
 async function refreshPaymentDetail() {
   if (actionRunning.value || !hasValidPaymentSnapshot.value) {

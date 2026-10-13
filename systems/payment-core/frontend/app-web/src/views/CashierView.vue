@@ -286,7 +286,11 @@ async function loadCashier(prepayOrderNo = currentPrepayOrderNo.value) {
   }
 }
 
-onBeforeUnmount(stopCountdown);
+onBeforeUnmount(() => {
+  currentEntityVersion += 1;
+  latestLoadRequestId += 1;
+  stopCountdown();
+});
 
 const terminalMeta = computed(() => TERMINAL_META[props.terminalVariant] || TERMINAL_META.app);
 const currentPrepayOrderNo = computed(() => typeof route.params.prepayOrderNo === "string"

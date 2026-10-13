@@ -7,6 +7,12 @@ import { canQueryPaymentChannel, shouldAutoRefreshPaymentDetail } from "../const
 
 const viewPath = join(dirname(fileURLToPath(import.meta.url)), "ResultView.vue");
 
+test("invalidates result requests and actions when leaving the page", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*currentEntityVersion \+= 1;\s*latestLoadRequestId \+= 1;\s*stopAutoRefresh\(\);/);
+  assert.match(source, /function isCurrentPaymentSnapshot\(snapshot, entityVersion\) \{\s*return entityVersion === currentEntityVersion/);
+});
+
 test("checks completion time and channel transaction before offering a query", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /canQueryPaymentChannel\([\s\S]*paymentDetail\.value\?\.latestAttemptStatus,[\s\S]*paymentDetail\.value\?\.latestAttemptCompletedAt,[\s\S]*paymentDetail\.value\?\.channelTransactionNo/);

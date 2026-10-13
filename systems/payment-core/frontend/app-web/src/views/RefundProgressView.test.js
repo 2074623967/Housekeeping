@@ -6,6 +6,13 @@ import test from "node:test";
 
 const viewPath = join(dirname(fileURLToPath(import.meta.url)), "RefundProgressView.vue");
 
+test("does not resume refund polling after leaving the page", () => {
+  const source = readFileSync(viewPath, "utf8");
+  assert.match(source, /onBeforeUnmount\(\(\) => \{\s*disposed = true;\s*latestRequestId \+= 1;\s*stopPolling\(\);/);
+  assert.match(source, /function schedulePolling\(\) \{\s*stopPolling\(\);\s*if \(disposed \|\|/);
+  assert.match(source, /async function refreshDetail\(isAutomatic = false\) \{\s*if \(disposed \|\|/);
+});
+
 test("offers a route-bound retry when the first refund detail request fails", () => {
   const source = readFileSync(viewPath, "utf8");
   assert.match(source, /v-else-if="feedbackMessage && !refundDetail"[\s\S]*v-if="currentRefundOrderId"[^>]*@click="loadDetail\(\)"[^>]*>重试加载退款进度/);
