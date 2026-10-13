@@ -158,8 +158,8 @@ function isConsistentPaymentAttemptCompletedAt(status, completedAt, createdAt) {
     return isValidExpiryTime(completedAt)
       && completedAt.trim() !== "-"
       && isValidExpiryTime(createdAt)
-      && Date.parse(createdAt.trim().replace(" ", "T"))
-        <= Date.parse(completedAt.trim().replace(" ", "T"));
+      && wallClockTimestamp(createdAt)
+        <= wallClockTimestamp(completedAt);
   }
   return completedAt == null;
 }
@@ -259,8 +259,8 @@ function isConsistentPaymentLifecycleTimeOrder(createdAt, successAt) {
   if (!isValidExpiryTime(createdAt) || !isValidExpiryTime(successAt)) {
     return true;
   }
-  return Date.parse(createdAt.trim().replace(" ", "T"))
-    <= Date.parse(successAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(createdAt)
+    <= wallClockTimestamp(successAt);
 }
 
 function isConsistentPaymentAttemptSuccessTime(attemptStatus, completedAt, successAt) {
@@ -270,16 +270,16 @@ function isConsistentPaymentAttemptSuccessTime(attemptStatus, completedAt, succe
   if (!isValidExpiryTime(completedAt) || !isValidExpiryTime(successAt)) {
     return true;
   }
-  return Date.parse(completedAt.trim().replace(" ", "T"))
-    <= Date.parse(successAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(completedAt)
+    <= wallClockTimestamp(successAt);
 }
 
 function isConsistentPrepayExpiryTimeOrder(createdAt, expiresAt) {
   if (!isValidExpiryTime(createdAt) || !isValidExpiryTime(expiresAt)) {
     return true;
   }
-  return Date.parse(createdAt.trim().replace(" ", "T"))
-    <= Date.parse(expiresAt.trim().replace(" ", "T"));
+  return wallClockTimestamp(createdAt)
+    <= wallClockTimestamp(expiresAt);
 }
 
 function isConsistentRefundTerminalTime(status, terminalAt) {
@@ -294,12 +294,12 @@ function isConsistentRefundTerminalTime(status, terminalAt) {
 }
 
 function isConsistentRefundLifecycleTimeOrder(appliedAt, successAt, terminalAt) {
-  const appliedTimestamp = Date.parse(appliedAt.trim().replace(" ", "T"));
+  const appliedTimestamp = wallClockTimestamp(appliedAt);
   const successTimestamp = isValidExpiryTime(successAt)
-    ? Date.parse(successAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(successAt)
     : null;
   const terminalTimestamp = isValidExpiryTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : null;
   return (successTimestamp == null || appliedTimestamp <= successTimestamp)
     && (terminalTimestamp == null || appliedTimestamp <= terminalTimestamp)
@@ -316,15 +316,19 @@ function isConsistentRefundChannelSubmittedAt(detail) {
   if (!isValidExpiryTime(submittedAt)) {
     return false;
   }
-  const appliedTimestamp = Date.parse(detail.appliedAt.trim().replace(" ", "T"));
-  const submittedTimestamp = Date.parse(submittedAt.trim().replace(" ", "T"));
+  const appliedTimestamp = wallClockTimestamp(detail.appliedAt);
+  const submittedTimestamp = wallClockTimestamp(submittedAt);
   if (submittedTimestamp < appliedTimestamp) {
     return false;
   }
   if (isValidExpiryTime(detail.terminalAt)) {
-    return submittedTimestamp <= Date.parse(detail.terminalAt.trim().replace(" ", "T"));
+    return submittedTimestamp <= wallClockTimestamp(detail.terminalAt);
   }
   return true;
+}
+
+function wallClockTimestamp(value) {
+  return Date.parse(`${value.trim().replace(" ", "T")}Z`);
 }
 
 function isValidExpiryTime(value) {
@@ -854,22 +858,22 @@ function isConsistentRefundOperationLog(log, appliedAt) {
       || typeof log.actionCode === "string" && log.actionCode.trim())
     && isValidExpiryTime(log.createdAt)
     && isValidExpiryTime(appliedAt)
-    && Date.parse(appliedAt.trim().replace(" ", "T"))
-      <= Date.parse(log.createdAt.trim().replace(" ", "T")));
+    && wallClockTimestamp(appliedAt)
+      <= wallClockTimestamp(log.createdAt));
 }
 
 function isConsistentRefundOperationLogs(operationLogs, appliedAt, successAt, terminalAt) {
   let previousTimestamp = null;
   const terminalTimestamp = isValidExpiryTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : (isValidExpiryTime(successAt)
-      ? Date.parse(successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(successAt)
       : null);
   for (const log of operationLogs) {
     if (!isConsistentRefundOperationLog(log, appliedAt)) {
       return false;
     }
-    const createdTimestamp = Date.parse(log.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(log.createdAt);
     if ((previousTimestamp != null && createdTimestamp > previousTimestamp)
         || (terminalTimestamp != null && createdTimestamp > terminalTimestamp)) {
       return false;
@@ -899,21 +903,21 @@ function isConsistentRefundAttemptTimeline(attempt, appliedAt, successAt, termin
       || (hasCompletedAt && !isValidExpiryTime(completedAt))) {
     return false;
   }
-  const createdTimestamp = Date.parse(attempt.createdAt.trim().replace(" ", "T"));
+  const createdTimestamp = wallClockTimestamp(attempt.createdAt);
   const appliedTimestamp = isValidExpiryTime(appliedAt)
-    ? Date.parse(appliedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(appliedAt)
     : null;
   const submittedTimestamp = hasSubmittedAt
-    ? Date.parse(submittedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(submittedAt)
     : createdTimestamp;
   const terminalStatus = ["SUCCESS", "FAIL"].includes(attempt.attemptStatus.trim().toUpperCase());
   const terminalTimestamp = isValidExpiryTime(terminalAt)
-    ? Date.parse(terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(terminalAt)
     : (isValidExpiryTime(successAt)
-      ? Date.parse(successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(successAt)
       : null);
   const completedTimestamp = hasCompletedAt
-    ? Date.parse(completedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(completedAt)
     : null;
   return (appliedTimestamp == null || appliedTimestamp <= createdTimestamp)
     && (!hasSubmittedAt || submittedTimestamp >= createdTimestamp)
@@ -932,7 +936,7 @@ function isConsistentRefundAttempts(attempts, appliedAt, successAt, terminalAt) 
     if (!isConsistentRefundAttemptTimeline(attempt, appliedAt, successAt, terminalAt)) {
       return false;
     }
-    const createdTimestamp = Date.parse(attempt.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(attempt.createdAt);
     if (previousCreatedTimestamp != null && createdTimestamp > previousCreatedTimestamp) {
       return false;
     }

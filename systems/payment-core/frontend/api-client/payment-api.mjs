@@ -59,6 +59,10 @@ const PAYMENT_CASHIER_STATUSES = new Map([
   ["FAIL", new Set(["结果待确认"])]
 ]);
 
+function wallClockTimestamp(value) {
+  return Date.parse(`${value.trim().replace(" ", "T")}Z`);
+}
+
 function isValidDateTime(value) {
   if (typeof value !== "string") {
     return false;
@@ -360,8 +364,8 @@ function requireResponseExpiry(data, command) {
     throw invalidCommandResponse(`${command} 响应缺少可确认的失效时间事实`);
   }
   if (isValidDateTime(data.createdAt)
-      && Date.parse(data.createdAt.trim().replace(" ", "T"))
-        > Date.parse(data.expiresAt.trim().replace(" ", "T"))) {
+      && wallClockTimestamp(data.createdAt)
+        > wallClockTimestamp(data.expiresAt)) {
     throw invalidCommandResponse(`${command} 响应的失效时间早于创建时间`);
   }
 }
@@ -375,17 +379,17 @@ function requireResponseSubmissionTimes(data, command) {
     if (!isValidDateTime(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的支付成功时间事实`);
     }
-    if (Date.parse(data.createdAt.trim().replace(" ", "T"))
-        > Date.parse(data.successAt.trim().replace(" ", "T"))) {
+    if (wallClockTimestamp(data.createdAt)
+        > wallClockTimestamp(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应的支付成功时间早于创建时间`);
     }
     if (data.latestAttemptStatus !== "成功"
         || data.latestAttemptStatusType !== "success"
         || !isValidDateTime(data.latestAttemptCompletedAt)
-        || Date.parse(data.createdAt.trim().replace(" ", "T"))
-          > Date.parse(data.latestAttemptCompletedAt.trim().replace(" ", "T"))
-        || Date.parse(data.latestAttemptCompletedAt.trim().replace(" ", "T"))
-          > Date.parse(data.successAt.trim().replace(" ", "T"))) {
+        || wallClockTimestamp(data.createdAt)
+          > wallClockTimestamp(data.latestAttemptCompletedAt)
+        || wallClockTimestamp(data.latestAttemptCompletedAt)
+          > wallClockTimestamp(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的成功支付尝试事实`);
     }
   } else if (data.successAt != null && data.successAt !== "-") {
@@ -541,8 +545,8 @@ function requireResponsePaymentTimes(data, command) {
     if (!isValidDateTime(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的支付成功时间事实`);
     }
-    if (Date.parse(data.createdAt.trim().replace(" ", "T"))
-        > Date.parse(data.successAt.trim().replace(" ", "T"))) {
+    if (wallClockTimestamp(data.createdAt)
+        > wallClockTimestamp(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应的支付成功时间早于创建时间`);
     }
     if (data.latestAttemptStatus !== "成功"
@@ -564,13 +568,13 @@ function requireResponsePaymentTimes(data, command) {
     if (!isValidDateTime(data.latestAttemptCompletedAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的支付尝试完成时间事实`);
     }
-    if (Date.parse(data.createdAt.trim().replace(" ", "T"))
-        > Date.parse(data.latestAttemptCompletedAt.trim().replace(" ", "T"))) {
+    if (wallClockTimestamp(data.createdAt)
+        > wallClockTimestamp(data.latestAttemptCompletedAt)) {
       throw invalidCommandResponse(`${command} 响应的支付尝试完成时间早于支付创建时间`);
     }
     if (status === "SUCCESS"
-        && Date.parse(data.latestAttemptCompletedAt.trim().replace(" ", "T"))
-          > Date.parse(data.successAt.trim().replace(" ", "T"))) {
+        && wallClockTimestamp(data.latestAttemptCompletedAt)
+          > wallClockTimestamp(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应的支付尝试完成时间晚于支付成功时间`);
     }
   } else if (data.latestAttemptCompletedAt != null) {
@@ -655,13 +659,13 @@ function requireResponseRefundTimes(data, command) {
   }
   if (data.channelSubmittedAt != null && data.channelSubmittedAt !== "-") {
     if (!isValidDateTime(data.channelSubmittedAt)
-        || Date.parse(data.channelSubmittedAt.trim().replace(" ", "T"))
-          < Date.parse(data.appliedAt.trim().replace(" ", "T"))) {
+        || wallClockTimestamp(data.channelSubmittedAt)
+          < wallClockTimestamp(data.appliedAt)) {
       throw invalidCommandResponse(`${command} 响应包含无法确认的渠道受理时间事实`);
     }
     if (isValidDateTime(data.terminalAt)
-        && Date.parse(data.channelSubmittedAt.trim().replace(" ", "T"))
-          > Date.parse(data.terminalAt.trim().replace(" ", "T"))) {
+        && wallClockTimestamp(data.channelSubmittedAt)
+          > wallClockTimestamp(data.terminalAt)) {
       throw invalidCommandResponse(`${command} 响应的渠道受理时间晚于退款终态时间`);
     }
   }
@@ -670,8 +674,8 @@ function requireResponseRefundTimes(data, command) {
     if (!isValidDateTime(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的退款成功时间事实`);
     }
-    if (Date.parse(data.appliedAt.trim().replace(" ", "T"))
-        > Date.parse(data.successAt.trim().replace(" ", "T"))) {
+    if (wallClockTimestamp(data.appliedAt)
+        > wallClockTimestamp(data.successAt)) {
       throw invalidCommandResponse(`${command} 响应的退款成功时间早于申请时间`);
     }
   } else if (data.successAt != null && data.successAt !== "-") {
@@ -681,10 +685,10 @@ function requireResponseRefundTimes(data, command) {
     if (!isValidDateTime(data.terminalAt)) {
       throw invalidCommandResponse(`${command} 响应缺少可确认的退款终态时间事实`);
     }
-    const terminalTimestamp = Date.parse(data.terminalAt.trim().replace(" ", "T"));
+    const terminalTimestamp = wallClockTimestamp(data.terminalAt);
     const comparisonTimestamp = status === "SUCCESS"
-      ? Date.parse(data.successAt.trim().replace(" ", "T"))
-      : Date.parse(data.appliedAt.trim().replace(" ", "T"));
+      ? wallClockTimestamp(data.successAt)
+      : wallClockTimestamp(data.appliedAt);
     if (comparisonTimestamp > terminalTimestamp) {
       throw invalidCommandResponse(`${command} 响应的退款终态时间早于生命周期前置时间`);
     }
@@ -719,25 +723,25 @@ function requireResponseRefundAttempts(data, command) {
         || (hasCompletedAt && !isValidDateTime(attempt.completedAt))) {
       throw invalidCommandResponse(`${command} 响应包含无法确认的退款尝试时间事实`);
     }
-    const createdTimestamp = Date.parse(attempt.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(attempt.createdAt);
     if (previousCreatedTimestamp != null && createdTimestamp > previousCreatedTimestamp) {
       throw invalidCommandResponse(`${command} 响应包含无法确认的退款尝试顺序事实`);
     }
     previousCreatedTimestamp = createdTimestamp;
     const submittedTimestamp = hasSubmittedAt
-      ? Date.parse(attempt.submittedAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(attempt.submittedAt)
       : createdTimestamp;
     const attemptStatus = attempt.attemptStatus.trim().toUpperCase();
     const requiresSubmittedAt = !["PENDING", "FAILED"].includes(attemptStatus);
     const terminalStatus = ["SUCCESS", "FAIL"].includes(attemptStatus);
     const terminalTimestamp = isValidDateTime(data.terminalAt)
-      ? Date.parse(data.terminalAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(data.terminalAt)
       : null;
     const successTimestamp = isValidDateTime(data.successAt)
-      ? Date.parse(data.successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(data.successAt)
       : null;
     const completedTimestamp = hasCompletedAt
-      ? Date.parse(attempt.completedAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(attempt.completedAt)
       : null;
     if ((hasSubmittedAt !== requiresSubmittedAt)
         || (hasSubmittedAt && submittedTimestamp < createdTimestamp)
@@ -760,12 +764,12 @@ function requireResponseRefundOperationLogs(data, command) {
     throw invalidCommandResponse(`${command} 响应包含无法确认的退款操作日志事实`);
   }
   const appliedTimestamp = isValidDateTime(data.appliedAt)
-    ? Date.parse(data.appliedAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(data.appliedAt)
     : null;
   const terminalTimestamp = isValidDateTime(data.terminalAt)
-    ? Date.parse(data.terminalAt.trim().replace(" ", "T"))
+    ? wallClockTimestamp(data.terminalAt)
     : (isValidDateTime(data.successAt)
-      ? Date.parse(data.successAt.trim().replace(" ", "T"))
+      ? wallClockTimestamp(data.successAt)
       : null);
   let previousTimestamp = null;
   for (const log of data.operationLogs) {
@@ -777,7 +781,7 @@ function requireResponseRefundOperationLogs(data, command) {
         || !isValidDateTime(log.createdAt)) {
       throw invalidCommandResponse(`${command} 响应包含无法确认的退款操作日志事实`);
     }
-    const createdTimestamp = Date.parse(log.createdAt.trim().replace(" ", "T"));
+    const createdTimestamp = wallClockTimestamp(log.createdAt);
     if ((previousTimestamp != null && createdTimestamp > previousTimestamp)
         || (appliedTimestamp != null && createdTimestamp < appliedTimestamp)
         || (terminalTimestamp != null && createdTimestamp > terminalTimestamp)) {

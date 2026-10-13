@@ -11,6 +11,40 @@ const {
   paymentApi
 } = require("../utils/request");
 
+test("compares payment and refund wall-clock timelines across daylight saving time", (context) => {
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  context.after(() => {
+    if (previousTimezone == null) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  });
+  const prepay = {
+    prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", amount: "68.00", paymentStatus: "PREPAY_CREATED",
+    createdAt: "2026-03-08 02:59:00", expiresAt: "2026-03-08 03:00:00",
+    cashierStatus: "待支付", cashierStatusType: "warn"
+  };
+  assert.doesNotThrow(() => normalizePrepayResult(prepay));
+  assert.throws(() => normalizePrepayResult({ ...prepay, expiresAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-MINI-INVALID-PREPAY");
+
+  const refund = {
+    refundOrderId: "REF-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
+    orderNo: "ORDER-001", paidAmount: "68.00", refundAmount: "18.00",
+    refundMethod: "原路退款", refundReason: "测试", status: "SUCCESS", statusType: "success",
+    channelCode: "WX_H5", channelRefundNo: "CH-REF-001",
+    appliedAt: "2026-03-08 02:59:00", channelSubmittedAt: "2026-03-08 03:00:00",
+    successAt: "2026-03-08 03:01:00", terminalAt: "2026-03-08 03:02:00",
+    attempts: [{ refundAttemptNo: "ATT-001", attemptStatus: "SUCCESS", attemptStatusType: "success",
+      createdAt: "2026-03-08 02:59:00", submittedAt: "2026-03-08 03:00:00",
+      completedAt: "2026-03-08 03:01:00" }],
+    operationLogs: [{ logNo: "LOG-001", actionName: "申请退款", createdAt: "2026-03-08 03:00:00" }]
+  };
+  assert.doesNotThrow(() => normalizeRefundDetailResult(refund));
+  assert.throws(() => normalizeRefundDetailResult({ ...refund, successAt: "2026-03-08 02:58:00" }),
+    (error) => error.code === "PAYMENT-MINI-INVALID-REFUND-DETAIL");
+});
+
 test("rejects terminal attempts in pending mini program payment snapshots", () => {
   const prepay = {
     prepayOrderNo: "PRE-001", paymentOrderId: "PAY-001", businessChainId: "CHAIN-PAY-001",
