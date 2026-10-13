@@ -32,4 +32,12 @@ public class RefundQueryDTO {
     public int getLimit() {
         return PageQueryBounds.normalizePageSize(pageSize);
     }
+
+    public String getRefundOrderIdLikePattern() {
+        return LikePattern.escape(refundOrderId);
+    }
+
+    public String getPaymentOrderIdLikePattern() {
+        return LikePattern.escape(paymentOrderId);
+    }
 }

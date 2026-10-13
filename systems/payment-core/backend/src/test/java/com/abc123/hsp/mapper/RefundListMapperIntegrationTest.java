@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -70,6 +71,38 @@ class RefundListMapperIntegrationTest {
                     refundOrderIds(mapper.findAllForExport(query)));
             assertEquals("HOME_SERVICE", mapper.findAllForExport(query).get(0).getPayScene());
         }
+    }
+
+    @Test
+    void shouldSearchRefundAndPaymentIdentifiersByLiteralSubstring() throws Exception {
+        String suffix = "%_!\\\"";
+        String refundOrderId = "REF-LITERAL-" + suffix;
+        String paymentOrderId = "PAY-LITERAL-" + suffix;
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement update = session.getConnection().prepareStatement(
+                     "UPDATE t_refund_order SET refund_order_id = ?, payment_order_id = ? "
+                             + "WHERE refund_order_id = 'REF-003'")) {
+            update.setString(1, refundOrderId);
+            update.setString(2, paymentOrderId);
+            assertEquals(1, update.executeUpdate());
+            RefundMapper mapper = session.getMapper(RefundMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", suffix)) {
+                RefundQueryDTO query = new RefundQueryDTO();
+                query.setRefundOrderId(fragment);
+                assertLiteralRefundResults(mapper, query, refundOrderId);
+                query.setRefundOrderId(null);
+                query.setPaymentOrderId(fragment);
+                assertLiteralRefundResults(mapper, query, refundOrderId);
+                assertEquals(fragment, query.getPaymentOrderId());
+            }
+        }
+    }
+
+    private void assertLiteralRefundResults(RefundMapper mapper, RefundQueryDTO query,
+                                            String refundOrderId) {
+        assertEquals(1L, mapper.count(query), query.toString());
+        assertEquals(Arrays.asList(refundOrderId), refundOrderIds(mapper.findAll(query)));
+        assertEquals(Arrays.asList(refundOrderId), refundOrderIds(mapper.findAllForExport(query)));
     }
 
     @Test

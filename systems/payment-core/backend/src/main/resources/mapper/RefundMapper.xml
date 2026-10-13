@@ -195,10 +195,10 @@
         <include refid="latestPaymentPrepayJoin"/>
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
-                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
@@ -230,10 +230,10 @@
         FROM t_refund_order refund_order
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
-                refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+                refund_order_id LIKE CONCAT('%', #{query.refundOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
@@ -287,10 +287,10 @@
         <include refid="latestPaymentPrepayJoin"/>
         <where>
             <if test="query.refundOrderId != null and query.refundOrderId != ''">
-                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+                refund_order.refund_order_id LIKE CONCAT('%', #{query.refundOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                AND refund_order.payment_order_id LIKE CONCAT('%', #{query.paymentOrderIdLikePattern}, '%') ESCAPE '!'
             </if>
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
