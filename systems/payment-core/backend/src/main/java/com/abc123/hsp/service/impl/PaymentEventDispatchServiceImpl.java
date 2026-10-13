@@ -18,6 +18,7 @@ import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -974,8 +975,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 String body = (objectMapper == null ? new ObjectMapper() : objectMapper).writeValueAsString(payload);
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
+                String timestamp = Long.toString(Instant.now().getEpochSecond());
+                headers.set(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp);
                 headers.set(PaymentEventHttpSignature.HEADER_NAME,
-                        PaymentEventHttpSignature.sign(body, paymentSuccessHttpSecret));
+                        PaymentEventHttpSignature.sign(body, timestamp, paymentSuccessHttpSecret));
                 request = new HttpEntity<>(body, headers);
             } catch (JsonProcessingException exception) {
                 throw new IllegalStateException("支付成功事件签名序列化失败", exception);

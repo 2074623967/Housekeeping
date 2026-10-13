@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collections;
@@ -2035,7 +2036,10 @@ class PaymentEventDispatchServiceImplTest {
             Assertions.assertTrue(request instanceof HttpEntity);
             HttpEntity<?> signed = (HttpEntity<?>) request;
             String body = (String) signed.getBody();
-            Assertions.assertEquals(PaymentEventHttpSignature.sign(body, secret),
+            String timestamp = signed.getHeaders().getFirst(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME);
+            Assertions.assertNotNull(timestamp);
+            Assertions.assertTrue(Math.abs(Instant.now().getEpochSecond() - Long.parseLong(timestamp)) <= 5);
+            Assertions.assertEquals(PaymentEventHttpSignature.sign(body, timestamp, secret),
                     signed.getHeaders().getFirst(PaymentEventHttpSignature.HEADER_NAME));
             Assertions.assertTrue(body.contains("\"paymentOrderId\":\"PAY-001\""));
         }

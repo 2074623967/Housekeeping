@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.abc123.clearing.service.ClearingEventService;
 import com.abc123.clearing.common.PaymentEventHttpSignature;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -46,9 +47,11 @@ class ClearingPaymentEventHttpAuthTest {
 
     @Test
     void shouldRejectModifiedBodyWithOriginalSignature() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/clearing/events/payments/success")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(PaymentEventHttpSignature.HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .header(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp)
+                .header(PaymentEventHttpSignature.HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
                 .content(BODY.replace("20.00", "200.00")))
                 .andExpect(status().isForbidden());
 
@@ -57,13 +60,46 @@ class ClearingPaymentEventHttpAuthTest {
 
     @Test
     void shouldAcceptSignedPaymentSuccess() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
         mockMvc.perform(post("/api/clearing/events/payments/success")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(PaymentEventHttpSignature.HEADER_NAME, PaymentEventHttpSignature.sign(BODY, SECRET))
+                .header(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp)
+                .header(PaymentEventHttpSignature.HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
                 .content(BODY))
                 .andExpect(status().isOk());
 
         verify(clearingEventService).consumePaymentSuccess(
                 org.mockito.ArgumentMatchers.argThat(request -> "PAY-001".equals(request.getPaymentOrderId())));
+    }
+
+    @Test
+    void shouldRejectLegacyExpiredFutureAndChangedTimestampsBeforeClearing() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        String expired = Long.toString(Instant.now().getEpochSecond() - 3600);
+        String future = Long.toString(Instant.now().getEpochSecond() + 3600);
+        rejectPaymentEvent(timestamp, PaymentEventHttpSignature.sign(BODY, SECRET));
+        rejectPaymentEvent(expired, PaymentEventHttpSignature.signTimed(BODY, expired, SECRET));
+        rejectPaymentEvent(future, PaymentEventHttpSignature.signTimed(BODY, future, SECRET));
+        rejectPaymentEvent(Long.toString(Long.parseLong(timestamp) + 1),
+                PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET));
+        rejectPaymentEvent("0" + timestamp, PaymentEventHttpSignature.signTimed(BODY, "0" + timestamp, SECRET));
+        rejectPaymentEvent("not-a-time", PaymentEventHttpSignature.signTimed(BODY, "not-a-time", SECRET));
+        mockMvc.perform(post("/api/clearing/events/payments/success")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp, "0")
+                .header(PaymentEventHttpSignature.HEADER_NAME, PaymentEventHttpSignature.signTimed(BODY, timestamp, SECRET))
+                .content(BODY))
+                .andExpect(status().isForbidden());
+
+        verify(clearingEventService, never()).consumePaymentSuccess(any());
+    }
+
+    private void rejectPaymentEvent(String timestamp, String signature) throws Exception {
+        mockMvc.perform(post("/api/clearing/events/payments/success")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp)
+                .header(PaymentEventHttpSignature.HEADER_NAME, signature)
+                .content(BODY))
+                .andExpect(status().isForbidden());
     }
 }

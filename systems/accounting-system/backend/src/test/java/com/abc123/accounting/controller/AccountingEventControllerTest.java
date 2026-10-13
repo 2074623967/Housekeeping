@@ -13,6 +13,7 @@ import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -46,7 +47,8 @@ class AccountingEventControllerTest {
         request.setPaymentOrderId("PAY-001");
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumePaymentSuccess(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumePaymentSuccess(body, PaymentEventHttpSignature.signTimed(body, timestamp, TEST_SECRET), timestamp);
 
         verify(accountingEventService).consumePaymentSuccess(argThat(
                 received -> "PAY-001".equals(received.getPaymentOrderId())));

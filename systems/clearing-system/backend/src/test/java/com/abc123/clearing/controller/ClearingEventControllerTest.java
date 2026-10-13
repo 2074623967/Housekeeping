@@ -7,6 +7,7 @@ import com.abc123.clearing.common.PaymentEventHttpSignature;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.clearing.service.ClearingEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -39,7 +40,8 @@ class ClearingEventControllerTest {
         request.setPaymentOrderId("PAY-001");
         String body = new ObjectMapper().writeValueAsString(request);
 
-        controller.consumePaymentSuccess(body, PaymentEventHttpSignature.sign(body, TEST_SECRET));
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        controller.consumePaymentSuccess(body, PaymentEventHttpSignature.signTimed(body, timestamp, TEST_SECRET), timestamp);
 
         verify(clearingEventService).consumePaymentSuccess(argThat(
                 received -> "PAY-001".equals(received.getPaymentOrderId())));

@@ -49,8 +49,9 @@ public class ClearingEventController {
 
     @PostMapping("/payments/success")
     public ResponseEntity<ApiResponse<ClearingEventDTO>> consumePaymentSuccess(@RequestBody String body,
-            @RequestHeader(value = PaymentEventHttpSignature.HEADER_NAME, required = false) String signature) {
-        if (!PaymentEventHttpSignature.matches(body, signature, paymentEventSecret)) {
+            @RequestHeader(value = PaymentEventHttpSignature.HEADER_NAME, required = false) String signature,
+            @RequestHeader(value = PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, required = false) String timestamp) {
+        if (!PaymentEventHttpSignature.matchesTimed(body, timestamp, signature, paymentEventSecret)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.failure("PAYMENT_EVENT_UNAUTHORIZED", "支付事件签名校验失败"));
         }
