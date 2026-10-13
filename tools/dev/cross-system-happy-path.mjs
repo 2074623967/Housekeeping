@@ -39,6 +39,10 @@ export function normalizeIdentifier(value) {
   return typeof value === "string" ? value.trim() : value;
 }
 
+export function buildLocalOrderNo(suffix, specialCharacters = false) {
+  return `LOCAL-HAPPY-${suffix}${specialCharacters ? '"\\' : ""}`;
+}
+
 export function refundCallbackHeaders(refundOrderId, body, secret = process.env.HSP_REFUND_CALLBACK_HTTP_SECRET) {
   if (!secret || !secret.trim()) {
     throw new Error("HSP_REFUND_CALLBACK_HTTP_SECRET is required for the local refund callback");
@@ -89,7 +93,7 @@ const CASHIER_CHANNELS = new Set(["微信支付", "支付宝", "银行卡"]);
 const TERMINAL_PAYMENT_ATTEMPT_STATUSES = new Set(["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]);
 
 const suffix = `${Date.now()}-${process.pid}`;
-const orderNo = `LOCAL-HAPPY-${suffix}`;
+const orderNo = buildLocalOrderNo(suffix, process.env.HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO === "true");
 
 function assert(condition, message) {
   if (!condition) {

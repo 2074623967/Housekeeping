@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   api,
   assertLocalDemoBaseUrl,
+  buildLocalOrderNo,
   assertAccountingEvent,
   assertAccountingLedger,
   assertAccountingLedgerAmount,
@@ -77,6 +78,11 @@ import {
   normalizeIdentifier,
   verifyLocalDemoTargets
 } from "./cross-system-happy-path.mjs";
+
+test("keeps special-order coverage opt-in for the isolated payment chain", () => {
+  assert.equal(buildLocalOrderNo("123-456"), "LOCAL-HAPPY-123-456");
+  assert.equal(buildLocalOrderNo("123-456", true), 'LOCAL-HAPPY-123-456"\\');
+});
 
 test("signs local refund callbacks with the exact order id and body", () => {
   const body = '{"result":"SUCCESS"}';

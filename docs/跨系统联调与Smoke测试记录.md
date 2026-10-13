@@ -626,3 +626,7 @@ payment-core 不再将下游清分、账务、对账和退款中心投影的 HTT
 ## 81. 2026-10-14 清分与结算事件留痕修复后双路径复验
 
 在 `c6661b4e` 基线隔离执行 `verify payment-chain` 和 `verify payment-query-chain`：支付单 `PAY179191401260902cb4f5c` 经 `CALLBACK`、`PAY1791914192261aacfb1de` 经本机受控 `GATEWAY_QUERY` 收口，两轮九服务 HTTP 冒烟及跨系统 happy-path 均 `[PASS]`、退出码 `0`。支付、清分、结算、支付/清分/退款三类账务、退款及七项对账事实读回，对账均为 `COMPLETED/4/4`、本地 `financialCloseable=true`。状态复核九后端均 `DOWN`，查询桩 18190 无监听。这里验证普通本机 H2/demo HTTP 链路没有回归；特殊字符的生产投递、真实 RabbitMQ、目标 MySQL 8 多实例、可信身份审批与实际资金另需验收。
+
+## 82. 2026-10-14 特殊订单号九服务回调与主动查单双路径
+
+设置 `HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO=true`，分别隔离执行 `verify payment-chain` 与 `verify payment-query-chain`，为虚构订单号附加引号和末尾反斜杠。支付记录筛选修复前回调链在成功支付后的列表查询得到 `0/0`；修复后支付单 `PAY1791915500949982c7a5f` 经 `CALLBACK`、`PAY1791915687114bfd9f706` 经本机受控 `GATEWAY_QUERY` 收口。两轮九服务 HTTP 冒烟、happy-path 均 `[PASS]`、退出码 `0`，读回支付、清分、结算、支付/清分/退款账务、退款和七项对账事实，对账均 `COMPLETED/4/4`、本地 `financialCloseable=true`。退出后九服务均 `DOWN`、查单桩停服。仅证明 H2/demo 的特殊订单号本机 HTTP 链路，不能替代正式渠道、RabbitMQ、目标 MySQL 8、多实例、可信身份与实际资金验收。
