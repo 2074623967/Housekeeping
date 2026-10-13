@@ -1,5 +1,9 @@
 # payment-core 自测与联调记录
 
+## 2026-10-13 正式网关支付提交正反双服务 HTTP
+
+在固定 H2/demo 与 H2/local-payment-chain 身份下，本机两个 Spring Boot 服务通过真实 HTTP 串联支付预付、支付提交、网关治理代理和受控假渠道：匹配支付单/预付单/订单/幂等键的受理回执绑定 `LOCAL-TX-1` 并保持 `WAIT_CALLBACK`；第二个预付单收到另一轮幂等键的受理形态回执后返回 `PAYMENT-1048`，原尝试记为“结果未知，待查单”、渠道流水不绑定，网关 `PAYMENT_SUBMIT` 审计 `UNKNOWN`，同键重复提交不再调用上游。脚本 `1/1`、环境隔离测试 `5/5`、`node --check` 与 `git diff --check` 通过；只调整临时 H2 证书日期，服务停止且临时文件清理。本轮关闭本地两服务提交协议缺口，仍不证明可信渠道、目标 MySQL 8、多实例、真实资金及发布。
+
 ## 2026-10-13 支付提交跨轮回执拒绝
 
 正式网关支付提交受理结果增加 `paymentOrderId / prepayOrderNo / orderNo / idempotencyKey` 双端原样回显校验；payment-core 对缺身份或跨轮成功形态回执返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，不绑定渠道号或原生终端支付参数，按既有结果待确认路径先查单。gateway-access 上游错配审计 `UNKNOWN`。网关 H2 全量 `88/88`，payment-core H2/demo 全量 `2082/2082`，零失败/错误/跳过；新增网关真 HTTP 回环用例验证错幂等键拒绝。`git diff --check` 通过。尚未执行本轮两服务支付提交 HTTP 联调；旧版上游协议、真实资金、目标 MySQL 8、多实例及生产发布未验收。

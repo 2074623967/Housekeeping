@@ -36,8 +36,9 @@ test("allows only the explicit query race variant on the query smoke", () => {
   }
 });
 
-test("both gateway smoke entry points refuse overrides before starting services", () => {
-  for (const script of ["payment-core-gateway-query-smoke.mjs", "payment-core-gateway-refund-smoke.mjs"]) {
+test("gateway smoke entry points refuse overrides before starting services", () => {
+  for (const script of ["payment-core-gateway-query-smoke.mjs", "payment-core-gateway-refund-smoke.mjs",
+    "payment-core-gateway-submit-smoke.mjs"]) {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url))], {
       env: { PATH: process.env.PATH, SPRING_DATASOURCE_URL: "jdbc:mysql://example.invalid/unsafe" },
       encoding: "utf8",
@@ -49,9 +50,10 @@ test("both gateway smoke entry points refuse overrides before starting services"
   }
 });
 
-test("a misspelled query mode and a refund-only race mode fail before startup", () => {
+test("unsupported query race modes fail before startup", () => {
   for (const [script, mode] of [["payment-core-gateway-query-smoke.mjs", "conflict"],
-    ["payment-core-gateway-refund-smoke.mjs", "conflicting"]]) {
+    ["payment-core-gateway-refund-smoke.mjs", "conflicting"],
+    ["payment-core-gateway-submit-smoke.mjs", "conflicting"]]) {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url))], {
       env: { PATH: process.env.PATH, HSP_QUERY_RACE_MODE: mode },
       encoding: "utf8",
