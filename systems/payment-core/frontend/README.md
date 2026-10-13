@@ -89,6 +89,8 @@ frontend
 
 从仓库根目录先确认 `18081`、`5174`—`5177` 端口空闲，且没有数据库或 Spring 环境覆盖；在一个终端运行 `bash tools/dev/local-stack.sh up payment-core`，另一个终端运行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo`。可选 `--pending-demo` 验证待回调查单入口，或 `--refund-demo --refund-success-demo` / `--refund-demo --refund-fail-demo` 验证退款进度。结束后在服务终端按 Ctrl-C，并核对 `bash tools/dev/local-stack.sh status payment-core` 均为 `DOWN`。
 
+退款终态模式在页面检查前，还将当前同源 HTTP 详情送入 App/H5/PC 共用、小程序、管理端和 API 客户端的读侧校验器，要求有最新渠道尝试且归属一致；这里不运行小程序或管理端页面。
+
 浏览器脚本会在创建虚构预付单前检查 `/api/demo/identity`。该身份接口只在内置固定的 H2 内存库 URL 与 `demo` profile 同时满足时开放；不要自定义 `HSP_DEMO_DB_URL`，否则即使仍是 H2，身份接口也会返回 404，脚本会安全停止。此验证只针对 localhost 模拟事实，不涉及真实渠道或生产资金。
 
 用户页卸载竞态可从仓库根目录分别运行 `node tools/dev/payment-terminal-unmount-smoke.mjs`、`node tools/dev/payment-terminal-unmount-smoke.mjs h5` 和 `node tools/dev/payment-terminal-unmount-smoke.mjs pc`。每次只在随机本机回环端口启动对应端 Vite、假支付/退款详情 API 和无界面 Chrome，不依赖 payment-core 后端或写入真实订单；退款页延迟第二次自动详情回包、通过按钮完成 SPA 导航，再确认旧页不再轮询。收银台和结果页各延迟首次详情回包、保持原 URL 直接卸载 Vue 根组件，确认迟到响应不会创建倒计时或自动刷新定时器。默认使用系统 Chrome；其他路径可设置 `HSP_CHROME_BIN`。这三端的受控浏览器竞态验证不替代真实后端、用户身份、正式渠道或资金验收。

@@ -175,6 +175,8 @@ tools/dev/local-stack.sh up payment-core
 
 如需核验退款失败终态，改为追加 `--refund-fail-demo`（同样必须与 `--demo --refund-demo` 一起使用，不能与 `--refund-success-demo` 同时使用）；脚本基于本轮渠道尝试和受理号模拟失败回调，并分别检查处理态和失败态的 App/H5/PC 页面。只覆盖 payment-core 同源虚构退款，不证明独立退款中心查询、可信用户归属或真实渠道失败处理。
 
+两种退款终态模式还会重新读取本轮退款的真实 HTTP 详情，分别调用 App/H5/PC 共用、小程序、管理端和 API 客户端的校验器，拒绝缺少最新尝试或终态与渠道归属矛盾的响应；小程序和管理端在此仅验证客户端响应契约，不运行其页面。
+
 运行日志位于 `.runtime/local-stack/logs/`，PID 文件位于 `.runtime/local-stack/pids/`。
 
 ### 本地入口

@@ -7,6 +7,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeRefundDetailResult as normalizeUserRefundDetail }
+  from "../../systems/payment-core/frontend/app-web/src/api/client.js";
+import { normalizeRefundDetailResult as normalizeAdminRefundDetail }
+  from "../../systems/payment-core/frontend/admin-web/src/api/client.js";
+import miniProgramClient from "../../systems/payment-core/frontend/mini-program/utils/request.js";
+import { validateCommandResponse }
+  from "../../systems/payment-core/frontend/api-client/payment-api.mjs";
 
 const paymentBaseUrl = "http://localhost:18081";
 const chromeBinary = process.env.HSP_CHROME_BIN
@@ -36,6 +43,19 @@ export function assertDemoRefund(response, prepay, expectedStatus = "PROCESSING"
     throw new Error("本地退款详情缺少匹配的退款单、原支付单或预期状态");
   }
   return refund;
+}
+
+export function assertDemoTerminalRefundDetail(response, prepay, refund, expectedStatus) {
+  const detail = assertDemoRefund(response, prepay, expectedStatus);
+  if (response.code !== "0" || detail.refundOrderId !== refund.refundOrderId
+      || !Array.isArray(detail.attempts) || detail.attempts.length === 0) {
+    throw new Error("本地退款终态详情缺少匹配的退款单或最新渠道尝试");
+  }
+  normalizeUserRefundDetail(detail, refund.refundOrderId, "HOME_CLEAN");
+  miniProgramClient.normalizeRefundDetailResult(detail, refund.refundOrderId, "HOME_CLEAN");
+  normalizeAdminRefundDetail(detail, refund.refundOrderId);
+  validateCommandResponse("refund-detail", { "refund-order-id": refund.refundOrderId }, response);
+  return detail;
 }
 
 export function assertDemoRepeatedSubmit(prepay, paid, repeated) {
@@ -202,7 +222,13 @@ async function finalizeDemoRefund(prepay, refund, terminalStatus) {
     channelRefundNo: detail.channelRefundNo,
     refundStatus: terminalStatus
   });
-  return assertDemoRefund({ data: completed }, prepay, terminalStatus);
+  if (completed.status !== terminalStatus) {
+    throw new Error("本地模拟退款回调未进入预期终态");
+  }
+  const terminalResponse = await fetch(`${paymentBaseUrl}/api/refunds/${refund.refundOrderId}`,
+    { redirect: "error", signal: AbortSignal.timeout(10000) });
+  if (!terminalResponse.ok) throw new Error("本地退款终态详情请求失败");
+  return assertDemoTerminalRefundDetail(await terminalResponse.json(), prepay, refund, terminalStatus);
 }
 
 async function runBrowser(prepay, refund = null, pending = null) {

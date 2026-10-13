@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   assertDemoBackend, assertDemoPendingSubmit, assertDemoPrepay, assertDemoRefund, assertDemoRepeatedSubmit,
-  browserCases, createDemoPrepay, demoRequest, matchesDetailResponse
+  assertDemoTerminalRefundDetail, browserCases, createDemoPrepay, demoRequest, matchesDetailResponse
 } from "./payment-terminal-browser-smoke.mjs";
 
 const prepay = {
@@ -68,6 +68,39 @@ test("requires repeated submit to reuse complete successful payment facts", () =
   ]) {
     assert.throws(() => assertDemoRepeatedSubmit(prepay, paid, invalid), /未复用匹配的支付成功事实/);
   }
+});
+
+test("checks terminal refund HTTP facts against every payment-core client", () => {
+  const attempt = {
+    refundAttemptNo: "ATT-1", channelCode: "WX_H5", channelRefundNo: "CH-REF-1",
+    attemptStatus: "SUCCESS", attemptStatusType: "success",
+    createdAt: "2026-10-14 10:00:01", submittedAt: "2026-10-14 10:00:30",
+    completedAt: "2026-10-14 10:01:00"
+  };
+  const detail = {
+    refundOrderId: "REF-1", paymentOrderId: "PAY-1", businessChainId: "CHAIN-PAY-1",
+    orderNo: "LOCAL-ORDER", payScene: "HOME_CLEAN", paidAmount: "88.00", refundAmount: "18.00",
+    refundMethod: "原路退款", refundReason: "本地测试", status: "SUCCESS", statusType: "success",
+    channelCode: "WX_H5", channelRefundNo: "CH-REF-1",
+    appliedAt: "2026-10-14 10:00:00", channelSubmittedAt: "2026-10-14 10:00:30",
+    successAt: "2026-10-14 10:01:00", terminalAt: "2026-10-14 10:01:01",
+    attempts: [attempt], operationLogs: []
+  };
+  const refund = { refundOrderId: "REF-1" };
+  assert.deepEqual(assertDemoTerminalRefundDetail({ code: "0", data: detail }, prepay, refund, "SUCCESS"), detail);
+  for (const invalid of [
+    { ...detail, refundOrderId: "REF-OTHER" },
+    { ...detail, attempts: [] },
+    { ...detail, attempts: [{ ...attempt, channelRefundNo: "CH-OTHER" }] },
+    { ...detail, attempts: [{ ...attempt, attemptStatus: "PENDING", attemptStatusType: "warn", completedAt: "-" }] }
+  ]) {
+    assert.throws(() => assertDemoTerminalRefundDetail({ code: "0", data: invalid }, prepay, refund, "SUCCESS"));
+  }
+  const failed = {
+    ...detail, status: "FAIL", statusType: "danger", successAt: "-",
+    attempts: [{ ...attempt, attemptStatus: "FAIL", attemptStatusType: "danger" }]
+  };
+  assert.deepEqual(assertDemoTerminalRefundDetail({ code: "0", data: failed }, prepay, refund, "FAIL"), failed);
 });
 
 test("demo writes refuse redirects before sending to another destination", async () => {
