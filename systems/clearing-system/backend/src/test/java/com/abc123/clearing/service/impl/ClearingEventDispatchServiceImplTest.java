@@ -193,6 +193,33 @@ class ClearingEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldEscapeReconciliationFactMetadataInSignedRequest() throws Exception {
+        ClearingOrderEntity clearingOrder = stubClearingOutbox();
+        String payScene = "HOME\\CLEAN\"SPECIAL";
+        clearingOrder.setPayScene(payScene);
+        when(restTemplate.postForEntity(eq("http://settlement"), any(), eq(Map.class)))
+                .thenReturn(eventResponse("CHAIN-PAY-001", "CLR-001"));
+        when(restTemplate.postForEntity(eq("http://accounting"), any(), eq(Map.class)))
+                .thenReturn(eventResponse("CHAIN-PAY-001", "CLR-001"));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(Map.class)))
+                .thenReturn(reconciliationResponse(clearingOrder));
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore, "http://settlement", "http://accounting", "ACT10002", restTemplate);
+        setField(dispatchService, "clearingGeneratedHttpSecret", "local-clearing-http-test-secret");
+        setField(dispatchService, "reconciliationFactUrl", "http://reconciliation/facts");
+        setField(dispatchService, "reconciliationFactSecret", "local-clearing-fact-secret");
+
+        assertTrue(dispatchService.publishClearingGenerated("PAY-001"));
+
+        ArgumentCaptor<Object> request = ArgumentCaptor.forClass(Object.class);
+        verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), request.capture(), eq(Map.class));
+        com.fasterxml.jackson.databind.JsonNode metadata = new ObjectMapper().readTree(
+                signedBody(request.getValue()).get("payload").asText());
+        assertEquals("CLR-001", metadata.get("clearingNo").asText());
+        assertEquals(payScene, metadata.get("payScene").asText());
+    }
+
+    @Test
     void shouldKeepClearingOutboxRetryableWhenReconciliationFactFails() {
         ClearingOrderEntity clearingOrder = clearingOrder();
         when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));

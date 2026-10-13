@@ -303,8 +303,15 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         payload.put("payScene", clearingOrder.getPayScene());
         payload.put("factStatus", "SUCCESS");
         payload.put("amount", clearingOrder.getOrderAmount());
-        payload.put("payload", "{\"clearingNo\":\"" + clearingOrder.getClearingNo()
-                + "\",\"payScene\":\"" + (clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene()) + "\"}");
+        Map<String, String> metadata = new LinkedHashMap<>();
+        metadata.put("clearingNo", clearingOrder.getClearingNo());
+        metadata.put("payScene", clearingOrder.getPayScene() == null ? "" : clearingOrder.getPayScene());
+        try {
+            payload.put("payload", (objectMapper == null ? new ObjectMapper() : objectMapper)
+                    .writeValueAsString(metadata));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("清分对账事实载荷序列化失败", exception);
+        }
         Map<?, ?> snapshot = postForSuccess(reconciliationFactUrl, signedReconciliationFact(payload));
         if (!Objects.equals(payload.get("businessChainId"), snapshot.get("businessChainId"))
                 || !(snapshot.get("facts") instanceof List)) {
