@@ -32,9 +32,9 @@
         <where>
             <if test="query.keyword != null and query.keyword != ''">
                 (
-                    gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR gateway_name LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR endpoint LIKE CONCAT('%', #{query.keyword}, '%')
+                    gateway_code LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                    OR gateway_name LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                    OR endpoint LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
                 )
             </if>
             <if test="query.channelType != null and query.channelType != '' and query.channelType != '全部'">

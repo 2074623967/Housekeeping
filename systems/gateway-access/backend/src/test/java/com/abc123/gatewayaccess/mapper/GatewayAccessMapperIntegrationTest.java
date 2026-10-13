@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.entity.GatewayAuditLogEntity;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -26,6 +28,9 @@ class GatewayAccessMapperIntegrationTest {
 
     @Autowired
     private GatewayAccessMapper mapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void shouldReadGovernanceRecordsWithH2CompatibleDateColumns() {
@@ -80,6 +85,35 @@ class GatewayAccessMapperIntegrationTest {
             query.setKeyword(keyword);
             assertEquals(Arrays.asList(auditLog.getRequestId()), mapper.findAuditLogs(query).stream()
                     .map(GatewayAuditLogDTO::getRequestId).collect(Collectors.toList()), keyword);
+            assertEquals(keyword, query.getKeyword());
+        }
+    }
+
+    @Test
+    void shouldSearchGatewayCodeNameAndEndpointAsLiteralSubstrings() {
+        String suffix = "_%!\\\"-" + UUID.randomUUID();
+        String gatewayCode = "GW-" + suffix;
+        String gatewayName = "网关" + suffix;
+        String endpoint = "https://gateway.invalid/" + suffix;
+        jdbcTemplate.update("INSERT INTO t_gateway_channel "
+                        + "(gateway_code, gateway_name, channel_type, protocol_type, sign_algorithm, "
+                        + "endpoint, status, status_type, updated_at) "
+                        + "VALUES (?, ?, '支付渠道', 'HTTP+JSON', 'HMAC-SHA256', ?, 'DISABLED', "
+                        + "'danger', CURRENT_TIMESTAMP)",
+                gatewayCode, gatewayName, endpoint);
+        jdbcTemplate.update("INSERT INTO t_gateway_channel "
+                        + "(gateway_code, gateway_name, channel_type, protocol_type, sign_algorithm, "
+                        + "endpoint, status, status_type, updated_at) "
+                        + "VALUES (?, '普通对照渠道', '支付渠道', 'HTTP+JSON', 'HMAC-SHA256', "
+                        + "'https://gateway.invalid/ordinary', 'DISABLED', 'danger', CURRENT_TIMESTAMP)",
+                "GW-A-" + UUID.randomUUID());
+
+        for (String keyword : Arrays.asList("%", "GW-_", "!", "\\", "\"", gatewayCode,
+                gatewayName, endpoint)) {
+            GatewayChannelQueryDTO query = new GatewayChannelQueryDTO();
+            query.setKeyword(keyword);
+            assertEquals(Arrays.asList(gatewayCode), mapper.findGateways(query).stream()
+                    .map(GatewayChannelDTO::getGatewayCode).collect(Collectors.toList()), keyword);
             assertEquals(keyword, query.getKeyword());
         }
     }

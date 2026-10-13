@@ -19,6 +19,8 @@
 ### `GET /api/gateway-access/gateways`
 ### `POST /api/gateway-access/gateways/toggle`
 
+渠道列表的 `keyword` 对网关编码、名称和接入地址按字面量子串匹配；`%`、`_`、`!`、反斜杠与引号不会被当作 SQL 模式语法，服务端对绑定的 LIKE 参数编码并显式使用 `ESCAPE '!'`。渠道类型和状态继续按精确条件筛选；此查询不调用上游，也不改变渠道启停操作的授权与运行态门禁。
+
 ## 4. 证书管理
 
 ### `GET /api/gateway-access/certificates`

@@ -14,4 +14,8 @@ public class GatewayChannelQueryDTO {
     private String channelType = "全部";
     /** 状态。 */
     private String status = "全部";
+
+    public String getKeywordLikePattern() {
+        return LikePattern.escape(keyword);
+    }
 }
