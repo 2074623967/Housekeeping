@@ -90,3 +90,5 @@ frontend
 从仓库根目录先确认 `18081`、`5174`—`5177` 端口空闲，且没有数据库或 Spring 环境覆盖；在一个终端运行 `bash tools/dev/local-stack.sh up payment-core`，另一个终端运行 `node tools/dev/payment-terminal-browser-smoke.mjs --demo`。可选 `--pending-demo` 验证待回调查单入口，或 `--refund-demo --refund-success-demo` / `--refund-demo --refund-fail-demo` 验证退款进度。结束后在服务终端按 Ctrl-C，并核对 `bash tools/dev/local-stack.sh status payment-core` 均为 `DOWN`。
 
 浏览器脚本会在创建虚构预付单前检查 `/api/demo/identity`。该身份接口只在内置固定的 H2 内存库 URL 与 `demo` profile 同时满足时开放；不要自定义 `HSP_DEMO_DB_URL`，否则即使仍是 H2，身份接口也会返回 404，脚本会安全停止。此验证只针对 localhost 模拟事实，不涉及真实渠道或生产资金。
+
+退款进度页卸载竞态可从仓库根目录单独运行 `node tools/dev/payment-terminal-unmount-smoke.mjs`。脚本在随机本机回环端口启动 App Vite、假退款详情 API 和无界面 Chrome，不依赖 payment-core 后端或写入真实订单；它延迟第二次自动详情回包，点击“返回支付入口”完成 SPA 导航，再确认旧页不会发起第三次轮询。默认使用系统 Chrome；其他路径可设置 `HSP_CHROME_BIN`。仅覆盖 App 的退款进度页离页竞态，收银台、支付结果及 H5/PC 真浏览器仍待专项验证。
