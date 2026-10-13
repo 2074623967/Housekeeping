@@ -76,12 +76,74 @@ class PaymentDemoProfileIntegrationTest {
                 verifyPcAlipaySubmit(context.getBean(PaymentService.class));
                 verifyMiniProgramWechatSubmit(context.getBean(PaymentService.class), context.getBean(JdbcTemplate.class));
                 verifyApiAlipaySubmit(context.getBean(PaymentService.class), context.getBean(JdbcTemplate.class));
+                verifyNewStandardOrderPayment(context);
                 verifyStandardOrderSettlement(context, dispatchService, queryService);
             }
         } finally {
             rootLogger.setLevel(originalRootLevel);
             transactionLogger.setLevel(originalTransactionLevel);
         }
+    }
+
+    private void verifyNewStandardOrderPayment(ConfigurableApplicationContext context) {
+        JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+        PaymentService paymentService = context.getBean(PaymentService.class);
+        OrderService orderService = context.getBean(OrderService.class);
+        BillService billService = context.getBean(BillService.class);
+        String orderNo = "DEMO-INTEGRATION-STANDARD-001";
+        assertEquals(1, jdbcTemplate.update("INSERT INTO t_order (order_no, customer_name, service_type, "
+                + "worker_name, order_amount, paid_amount, order_status, order_status_type, "
+                + "fulfillment_status, fulfillment_status_type, created_at) "
+                + "VALUES (?, 'demo standard customer', '深度保洁', 'demo worker', 88.00, 0.00, "
+                + "'待支付', 'warn', '待确认', 'warn', CURRENT_TIMESTAMP)", orderNo));
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo(orderNo);
+        request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("demo standard customer");
+        request.setAmount(new BigDecimal("88.00"));
+        request.setCashierTitle("standard order payment");
+        PrepayOrderDTO prepay = paymentService.prepay(request);
+        assertEquals("STANDARD_ORDER", prepay.getSourceKind());
+        assertEquals(prepay.getPrepayOrderNo(), paymentService.prepay(request).getPrepayOrderNo());
+        assertEquals("¥0.00", orderService.detail(orderNo).getPaidAmount());
+        assertEquals(orderNo, billService.detail(prepay.getBillNo()).getStandardOrderNo());
+
+        PaymentSubmitRequestDTO submitRequest = new PaymentSubmitRequestDTO();
+        submitRequest.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        submitRequest.setPaymentMethod("微信支付");
+        submitRequest.setChannelCode("wx_h5");
+        submitRequest.setSourceAppId("housekeeping-h5-web");
+        submitRequest.setMerchantNo("MCH_WX_10001");
+        submitRequest.setAccessToken("token-housekeeping-h5-web");
+        submitRequest.setTerminal("H5");
+        submitRequest.setClientIp("127.0.0.1");
+        submitRequest.setClientDeviceId("demo-standard-integration");
+        submitRequest.setPayerPhone("13800000000");
+        submitRequest.setIdempotencyKey(orderNo);
+        PrepayOrderDTO submitted = paymentService.submit(submitRequest);
+        assertEquals("WAIT_CALLBACK", paymentService.detail(submitted.getPaymentOrderId()).getStatus());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId(submitted.getPaymentOrderId());
+        callback.setChannelTransactionNo(submitted.getChannelTransactionNo());
+        callback.setTradeStatus("SUCCESS");
+        assertEquals("SUCCESS", paymentService.callback("wx_h5", callback).getStatus());
+        assertEquals("SUCCESS", paymentService.callback("wx_h5", callback).getStatus());
+
+        OrderDetailDTO order = orderService.detail(orderNo);
+        BillDetailDTO bill = billService.detail(prepay.getBillNo());
+        assertEquals("¥88.00", order.getPaidAmount());
+        assertEquals("¥0.00", order.getOutstandingAmount());
+        assertEquals("待履约", order.getOrderStatus());
+        assertEquals(submitted.getPaymentOrderId(), order.getLatestPaymentOrderId());
+        assertEquals("¥88.00", bill.getPaidAmount());
+        assertEquals("¥0.00", bill.getUnpaidAmount());
+        assertEquals("已结清", bill.getBillStatus());
+        assertEquals(Integer.valueOf(1), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
+                        + "AND event_type = 'PAYMENT_SUCCESS'",
+                Integer.class, submitted.getPaymentOrderId()));
     }
 
     private void verifyStandardOrderSettlement(
