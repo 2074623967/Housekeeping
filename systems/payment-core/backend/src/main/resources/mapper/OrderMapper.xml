@@ -110,7 +110,7 @@
                 )
         <where>
             <if test="query.orderNo != null and query.orderNo != ''">
-                o.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                o.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
                 AND o.service_type = #{query.serviceType}
@@ -128,7 +128,7 @@
         FROM t_order o
         <where>
             <if test="query.orderNo != null and query.orderNo != ''">
-                o.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                o.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
                 AND o.service_type = #{query.serviceType}
@@ -183,7 +183,7 @@
                 )
         <where>
             <if test="query.orderNo != null and query.orderNo != ''">
-                o.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                o.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
                 AND o.service_type = #{query.serviceType}

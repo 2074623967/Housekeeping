@@ -19,6 +19,10 @@ public class OrderQueryDTO {
     /** 每页条数，最大 100。 */
     private int pageSize = 20;
 
+    public String getOrderNoLikePattern() {
+        return LikePattern.escape(orderNo);
+    }
+
     public int getPageNo() {
         return PageQueryBounds.normalizePageNo(pageNo);
     }

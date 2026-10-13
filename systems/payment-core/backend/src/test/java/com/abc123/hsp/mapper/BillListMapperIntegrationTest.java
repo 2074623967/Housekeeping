@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.BillDetailDTO;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -51,6 +52,42 @@ class BillListMapperIntegrationTest {
         }
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
         createFixture();
+    }
+
+    @Test
+    void shouldSearchBillListCountExportAndOverviewByLiteralSubstrings() throws Exception {
+        String billNo = "BILL-LITERAL-%_!\\";
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement update = session.getConnection().prepareStatement(
+                     "UPDATE t_bill SET bill_no = ?, order_no = ?, customer_name = ? "
+                             + "WHERE bill_no = 'BILL-STABLE-003'")) {
+            update.setString(1, billNo);
+            update.setString(2, "ORDER-LITERAL-%_!\\");
+            update.setString(3, "客户%_!\\");
+            update.executeUpdate();
+            BillMapper mapper = session.getMapper(BillMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", "%_!\\")) {
+                BillQueryDTO query = new BillQueryDTO();
+                query.setBillNo(fragment);
+                assertOnlyLiteralBill(mapper, query, billNo);
+                assertEquals(fragment, query.getBillNo());
+
+                query = new BillQueryDTO();
+                query.setOrderNo(fragment);
+                assertOnlyLiteralBill(mapper, query, billNo);
+
+                query = new BillQueryDTO();
+                query.setCustomerName(fragment);
+                assertOnlyLiteralBill(mapper, query, billNo);
+            }
+        }
+    }
+
+    private void assertOnlyLiteralBill(BillMapper mapper, BillQueryDTO query, String billNo) {
+        assertEquals(1L, mapper.count(query));
+        assertEquals(Arrays.asList(billNo), billNos(mapper.findAll(query)));
+        assertEquals(Arrays.asList(billNo), billNos(mapper.findAllForExport(query)));
+        assertEquals(1L, mapper.findOverview(query).getTotalBillCount());
     }
 
     @Test

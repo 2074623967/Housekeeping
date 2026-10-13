@@ -99,13 +99,13 @@
     <sql id="billWhere">
         <where>
             <if test="query.billNo != null and query.billNo != ''">
-                t_bill.bill_no LIKE CONCAT('%', #{query.billNo}, '%')
+                t_bill.bill_no LIKE CONCAT('%', #{query.billNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
-                AND t_bill.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                AND t_bill.order_no LIKE CONCAT('%', #{query.orderNoLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.customerName != null and query.customerName != ''">
-                AND t_bill.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
+                AND t_bill.customer_name LIKE CONCAT('%', #{query.customerNameLikePattern}, '%') ESCAPE '!'
             </if>
             <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
                 AND t_bill.bill_status = #{query.billStatus}

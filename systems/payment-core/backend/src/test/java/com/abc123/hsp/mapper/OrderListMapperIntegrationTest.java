@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.dto.OrderDetailDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import java.io.InputStream;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
@@ -75,6 +76,26 @@ class OrderListMapperIntegrationTest {
             assertEquals(3L, mapper.count(query));
             assertEquals(Arrays.asList("ORDER-STABLE-003", "ORDER-STABLE-002", "ORDER-STABLE-001"),
                     orderNos(mapper.findForExport(query)));
+        }
+    }
+
+    @Test
+    void shouldSearchOrderListCountAndExportByLiteralSubstring() throws Exception {
+        String orderNo = "ORDER-LITERAL-%_!\\";
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement update = session.getConnection().prepareStatement(
+                     "UPDATE t_order SET order_no = ? WHERE order_no = 'ORDER-STABLE-003'")) {
+            update.setString(1, orderNo);
+            update.executeUpdate();
+            OrderMapper mapper = session.getMapper(OrderMapper.class);
+            for (String fragment : Arrays.asList("%", "_", "!", "\\", "%_!\\")) {
+                OrderQueryDTO query = new OrderQueryDTO();
+                query.setOrderNo(fragment);
+                assertEquals(1L, mapper.count(query));
+                assertEquals(Arrays.asList(orderNo), orderNos(mapper.findAll(query)));
+                assertEquals(Arrays.asList(orderNo), orderNos(mapper.findForExport(query)));
+                assertEquals(fragment, query.getOrderNo());
+            }
         }
     }
 
