@@ -1,6 +1,8 @@
 package com.abc123.clearing.controller;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.argThat;
 
 import com.abc123.clearing.common.PaymentEventHttpSignature;
@@ -50,13 +52,26 @@ class ClearingEventControllerTest {
     @Test
     void shouldReplayDueFailedEvents() {
         ClearingEventController controller = controller();
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
 
-        controller.replayDueFailedEvents();
+        controller.replayDueFailedEvents(PaymentEventHttpSignature.signTimed(
+                "POST /api/clearing/events/replay-failed", timestamp, TEST_SECRET), timestamp);
 
         verify(clearingEventService).replayDueFailedEvents();
     }
 
+    @Test
+    void shouldRejectReplayWhenSecretIsNotConfigured() {
+        ClearingEventController controller = new ClearingEventController(clearingEventService, new ObjectMapper(),
+                TEST_SECRET, "");
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+
+        assertEquals(403, controller.replayDueFailedEvents(PaymentEventHttpSignature.signTimed(
+                "POST /api/clearing/events/replay-failed", timestamp, TEST_SECRET), timestamp).getStatusCodeValue());
+        verify(clearingEventService, never()).replayDueFailedEvents();
+    }
+
     private ClearingEventController controller() {
-        return new ClearingEventController(clearingEventService, new ObjectMapper(), TEST_SECRET);
+        return new ClearingEventController(clearingEventService, new ObjectMapper(), TEST_SECRET, TEST_SECRET);
     }
 }

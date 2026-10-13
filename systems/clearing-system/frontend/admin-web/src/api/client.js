@@ -229,30 +229,12 @@ export function normalizeClearingOrderDetailResult(data, expectedClearingNo) {
   return normalizeOrderDetail(data);
 }
 
-export function normalizeClearingEventResult(data, expectedPaymentOrderId = "") {
-  if (!data || typeof data !== "object" || typeof data.eventNo !== "string"
-      || !data.eventNo.trim() || typeof data.bizNo !== "string" || !data.bizNo.trim()
-      || (expectedPaymentOrderId && data.bizNo !== expectedPaymentOrderId)) {
-    throw invalidClearingResult("清分事件响应未确认当前业务事件");
-  }
-  return data;
-}
-
 export function normalizeClearingEventListPage(data) {
   const normalized = normalizePagePayload(data);
   if (normalized.items.some((item) => !isValidClearingEvent(item))) {
     throw invalidClearingResult("清分事件列表返回了无法确认的链路状态事实");
   }
   return normalized;
-}
-
-export function normalizeClearingReplayResult(data) {
-  if (!data || typeof data !== "object"
-      || !Number.isInteger(data.attemptedCount) || data.attemptedCount < 0
-      || typeof data.message !== "string" || !data.message.trim()) {
-    throw invalidClearingResult("清分事件重放响应未确认执行结果");
-  }
-  return data;
 }
 
 function isValidClearingEvent(item) {
@@ -328,9 +310,5 @@ export const eventApi = {
   getList: ({ eventType = "", bizNo = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ eventType, bizNo, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/events?${params.toString()}`).then(normalizeClearingEventListPage);
-  },
-  consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload)
-    .then((data) => normalizeClearingEventResult(data, payload?.paymentOrderId)),
-  replayFailed: () => postJson("/api/clearing/events/replay-failed", {})
-    .then(normalizeClearingReplayResult)
+  }
 };

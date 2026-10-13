@@ -27,15 +27,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/clearing/events")
 public class ClearingEventController {
 
+    private static final String REPLAY_SIGNING_PAYLOAD = "POST /api/clearing/events/replay-failed";
+
     private final ClearingEventService clearingEventService;
     private final ObjectMapper objectMapper;
     private final String paymentEventSecret;
+    private final String replaySecret;
 
     public ClearingEventController(ClearingEventService clearingEventService, ObjectMapper objectMapper,
-            @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret) {
+            @Value("${HSP_PAYMENT_SUCCESS_HTTP_SECRET:}") String paymentEventSecret,
+            @Value("${HSP_CLEARING_REPLAY_HTTP_SECRET:}") String replaySecret) {
         this.clearingEventService = clearingEventService;
         this.objectMapper = objectMapper;
         this.paymentEventSecret = paymentEventSecret;
+        this.replaySecret = replaySecret;
     }
 
     @GetMapping
@@ -65,7 +70,13 @@ public class ClearingEventController {
     }
 
     @PostMapping("/replay-failed")
-    public ApiResponse<ClearingReplayResultDTO> replayDueFailedEvents() {
-        return ApiResponse.success(clearingEventService.replayDueFailedEvents());
+    public ResponseEntity<ApiResponse<ClearingReplayResultDTO>> replayDueFailedEvents(
+            @RequestHeader(value = "X-HSP-Clearing-Replay-Signature", required = false) String signature,
+            @RequestHeader(value = "X-HSP-Clearing-Replay-Timestamp", required = false) String timestamp) {
+        if (!PaymentEventHttpSignature.matchesTimed(REPLAY_SIGNING_PAYLOAD, timestamp, signature, replaySecret)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.failure("CLEARING_REPLAY_UNAUTHORIZED", "清分事件重放签名校验失败"));
+        }
+        return ResponseEntity.ok(ApiResponse.success(clearingEventService.replayDueFailedEvents()));
     }
 }

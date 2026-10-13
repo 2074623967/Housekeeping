@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   batchApi,
+  eventApi,
   feeApi,
   normalizeClearingBatchResult,
-  normalizeClearingEventResult,
   normalizeClearingEventListPage,
   normalizeClearingOrderDetailResult,
-  normalizeClearingReplayResult,
   normalizeClearingRuleResult,
   normalizeFeeRuleResult,
   normalizePagePayload,
@@ -15,6 +14,10 @@ import {
   ruleApi,
   shareApi
 } from "./client.js";
+
+test("exposes clearing events to the admin page as read-only", () => {
+  assert.deepEqual(Object.keys(eventApi), ["getList"]);
+});
 
 test("requires clearing business keys on detail and mutation responses", () => {
   assert.equal(normalizeClearingBatchResult({ batchNo: "CLB-001" }, "CLB-001").batchNo, "CLB-001");
@@ -28,13 +31,11 @@ test("requires clearing business keys on detail and mutation responses", () => {
     clearingStatus: "清分成功", clearingStatusType: "success", createdAt: "2026-09-30 10:00:00"
   };
   assert.equal(normalizeClearingOrderDetailResult({ order: validOrder }, "CLO-001").order.clearingNo, "CLO-001");
-  assert.equal(normalizeClearingEventResult({ eventNo: "EVT-001", bizNo: "PAY-001" }, "PAY-001").eventNo, "EVT-001");
   for (const invalidResult of [
     () => normalizeClearingBatchResult({ batchNo: "CLB-002" }, "CLB-001"),
     () => normalizeClearingRuleResult({ ruleNo: "RULE-002" }, "RULE-001"),
     () => normalizeFeeRuleResult({ feeRuleNo: "FEE-002" }, "FEE-001"),
-    () => normalizeClearingOrderDetailResult({ order: { ...validOrder, clearingNo: "CLO-002" } }, "CLO-001"),
-    () => normalizeClearingEventResult({ eventNo: "EVT-001", bizNo: "PAY-002" }, "PAY-001")
+    () => normalizeClearingOrderDetailResult({ order: { ...validOrder, clearingNo: "CLO-002" } }, "CLO-001")
   ]) {
     assert.throws(invalidResult, (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT");
   }
@@ -72,23 +73,6 @@ test("rejects clearing event rows without lifecycle and retry facts", () => {
   ]) {
     assert.throws(
       () => normalizeClearingEventListPage({ items: [invalidEvent], total: 1 }),
-      (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
-    );
-  }
-});
-
-test("requires a bounded clearing replay action result", () => {
-  assert.equal(
-    normalizeClearingReplayResult({ attemptedCount: 2, message: "已重放" }).attemptedCount,
-    2
-  );
-  for (const invalidResult of [
-    { attemptedCount: -1, message: "已重放" },
-    { attemptedCount: 1.5, message: "已重放" },
-    { attemptedCount: 1, message: "" }
-  ]) {
-    assert.throws(
-      () => normalizeClearingReplayResult(invalidResult),
       (error) => error.code === "CLEARING-CLIENT-INVALID-BUSINESS-RESULT"
     );
   }

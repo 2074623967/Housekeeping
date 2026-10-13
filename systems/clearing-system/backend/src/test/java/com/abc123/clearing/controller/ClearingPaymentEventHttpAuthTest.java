@@ -22,11 +22,14 @@ import org.springframework.test.context.TestPropertySource;
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "HSP_PAYMENT_SUCCESS_HTTP_SECRET=local-clearing-http-test-secret",
+        "HSP_CLEARING_REPLAY_HTTP_SECRET=local-clearing-replay-test-secret",
         "spring.datasource.url=jdbc:h2:mem:clearing_http_auth;MODE=MySQL;DATABASE_TO_LOWER=TRUE"
 })
 class ClearingPaymentEventHttpAuthTest {
 
     private static final String SECRET = "local-clearing-http-test-secret";
+    private static final String REPLAY_SECRET = "local-clearing-replay-test-secret";
+    private static final String REPLAY_PAYLOAD = "POST /api/clearing/events/replay-failed";
     private static final String BODY = "{\"paymentOrderId\":\"PAY-001\",\"orderNo\":\"ORD-001\",\"amount\":20.00}";
 
     @Autowired
@@ -100,6 +103,47 @@ class ClearingPaymentEventHttpAuthTest {
                 .header(PaymentEventHttpSignature.TIMESTAMP_HEADER_NAME, timestamp)
                 .header(PaymentEventHttpSignature.HEADER_NAME, signature)
                 .content(BODY))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectUnsignedAndWronglySignedReplayBeforeDispatch() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        mockMvc.perform(post("/api/clearing/events/replay-failed"))
+                .andExpect(status().isForbidden());
+        rejectReplay(timestamp, PaymentEventHttpSignature.signTimed(REPLAY_PAYLOAD, timestamp, SECRET));
+        rejectReplay(timestamp, PaymentEventHttpSignature.signTimed("POST /api/clearing/events/payments/success",
+                timestamp, REPLAY_SECRET));
+        verify(clearingEventService, never()).replayDueFailedEvents();
+    }
+
+    @Test
+    void shouldRejectStaleFutureAndModifiedReplayTimestamps() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        String expired = Long.toString(Instant.now().getEpochSecond() - 3600);
+        String future = Long.toString(Instant.now().getEpochSecond() + 3600);
+        rejectReplay(expired, PaymentEventHttpSignature.signTimed(REPLAY_PAYLOAD, expired, REPLAY_SECRET));
+        rejectReplay(future, PaymentEventHttpSignature.signTimed(REPLAY_PAYLOAD, future, REPLAY_SECRET));
+        rejectReplay(Long.toString(Long.parseLong(timestamp) + 1),
+                PaymentEventHttpSignature.signTimed(REPLAY_PAYLOAD, timestamp, REPLAY_SECRET));
+        verify(clearingEventService, never()).replayDueFailedEvents();
+    }
+
+    @Test
+    void shouldAcceptSignedReplay() throws Exception {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        mockMvc.perform(post("/api/clearing/events/replay-failed")
+                .header("X-HSP-Clearing-Replay-Timestamp", timestamp)
+                .header("X-HSP-Clearing-Replay-Signature",
+                        PaymentEventHttpSignature.signTimed(REPLAY_PAYLOAD, timestamp, REPLAY_SECRET)))
+                .andExpect(status().isOk());
+        verify(clearingEventService).replayDueFailedEvents();
+    }
+
+    private void rejectReplay(String timestamp, String signature) throws Exception {
+        mockMvc.perform(post("/api/clearing/events/replay-failed")
+                .header("X-HSP-Clearing-Replay-Timestamp", timestamp)
+                .header("X-HSP-Clearing-Replay-Signature", signature))
                 .andExpect(status().isForbidden());
     }
 }

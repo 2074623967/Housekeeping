@@ -8,21 +8,10 @@ const selectedEvent = ref(null);
 const selectedOrderDetail = ref(null);
 const message = ref("");
 const loading = ref(false);
-const actionLoading = ref(false);
 const relatedLoading = ref(false);
 const detailLoading = ref(false);
 const relatedMessage = ref("");
-const replayMessage = ref("");
 const filters = ref({ eventType: "", bizNo: "" });
-const form = ref({
-  paymentOrderId: "PAY202607200188",
-  orderNo: "ORD202607200188",
-  batchDate: "2026-07-20",
-  customerName: "孙女士",
-  merchantName: "徐汇门店",
-  workerName: "陈阿姨",
-  amount: 188
-});
 
 async function loadRows() {
   loading.value = true;
@@ -75,59 +64,6 @@ async function loadOrderDetail(clearingNo) {
   }
 }
 
-async function consumeEvent() {
-  actionLoading.value = true;
-  message.value = "";
-  try {
-    const createdEvent = await eventApi.consumePaymentSuccess(form.value);
-    await loadRows();
-    await loadRelatedOrders(createdEvent);
-    message.value = `支付成功事件 ${createdEvent.bizNo} 已消费，并生成清分结果`;
-  } catch (error) {
-    message.value = error.message;
-  } finally {
-    actionLoading.value = false;
-  }
-}
-
-async function replayFailedEvents() {
-  actionLoading.value = true;
-  replayMessage.value = "";
-  try {
-    const result = await eventApi.replayFailed();
-    replayMessage.value = `${result.message}（本次重放 ${result.attemptedCount} 条）`;
-    await loadRows();
-  } catch (error) {
-    replayMessage.value = error.message;
-  } finally {
-    actionLoading.value = false;
-  }
-}
-
-function useHousekeepingOrderCase() {
-  form.value = {
-    paymentOrderId: "PAY202607280688",
-    orderNo: "ORD202607280688",
-    batchDate: "2026-07-28",
-    customerName: "刘女士",
-    merchantName: "闵行门店",
-    workerName: "张阿姨",
-    amount: 268
-  };
-}
-
-function useDeepCleanCase() {
-  form.value = {
-    paymentOrderId: "PAY202607281188",
-    orderNo: "ORD202607281188",
-    batchDate: "2026-07-28",
-    customerName: "周先生",
-    merchantName: "浦东保洁中心",
-    workerName: "陈阿姨",
-    amount: 388
-  };
-}
-
 function resetFilters() {
   filters.value = { eventType: "", bizNo: "" };
   loadRows();
@@ -141,7 +77,7 @@ onMounted(loadRows);
     <div class="topbar">
       <div>
         <h2>清分事件</h2>
-        <p>消费支付成功事件并联动查看清分结果、分账明细和费用拆解</p>
+        <p>核对支付成功事件及关联清分结果、分账明细和费用拆解</p>
       </div>
     </div>
     <section class="panel">
@@ -150,30 +86,14 @@ onMounted(loadRows);
         <div class="field"><label>业务单号</label><input v-model="filters.bizNo" placeholder="请输入支付单号" /></div>
         <div class="summary-box">
           <strong>链路说明</strong>
-          <span>事件消费后，需在同页确认是否生成清分结果，以及各收款方分账金额是否正确。</span>
+          <span>此页只读核对；支付事件由可信服务发送，失败派发由后台自动重试或经服务端授权重放。</span>
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="loadRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
-      <div class="toolbar event-form-grid">
-        <div class="field"><label>支付单号</label><input v-model="form.paymentOrderId" /></div>
-        <div class="field"><label>订单号</label><input v-model="form.orderNo" /></div>
-        <div class="field"><label>批次日期</label><input v-model="form.batchDate" /></div>
-        <div class="field"><label>客户姓名</label><input v-model="form.customerName" /></div>
-        <div class="field"><label>商家名称</label><input v-model="form.merchantName" /></div>
-        <div class="field"><label>服务者名称</label><input v-model="form.workerName" /></div>
-        <div class="field"><label>订单金额</label><input v-model="form.amount" /></div>
-        <div class="toolbar-actions">
-          <button class="button secondary" :disabled="actionLoading" @click="useHousekeepingOrderCase">日常保洁示例</button>
-          <button class="button secondary" :disabled="actionLoading" @click="useDeepCleanCase">深度保洁示例</button>
-          <button class="button warn" :disabled="actionLoading" @click="consumeEvent">模拟支付成功事件</button>
-          <button class="button secondary" :disabled="actionLoading" @click="replayFailedEvents">重放失败派发</button>
-        </div>
-      </div>
       <div v-if="message" class="state-box">{{ message }}</div>
-      <div v-if="replayMessage" class="state-box">{{ replayMessage }}</div>
       <div v-else-if="loading" class="state-box">清分事件加载中...</div>
       <div v-else class="table-wrap">
         <table>
@@ -307,10 +227,6 @@ onMounted(loadRows);
   border-radius: 12px;
   background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
   color: #1e3a8a;
-}
-
-.event-form-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .topbar-inner {
