@@ -149,9 +149,7 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 "CLEARING_GENERATED",
                 request.getClearingOrderNo(),
                 StringUtils.hasText(request.getSummary()) ? request.getSummary() : "消费清分生成事件",
-                "{\"bizNo\":\"" + request.getBizNo()
-                        + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene())
-                        + "\",\"amount\":" + request.getAmount() + "}",
+                businessEventPayload("bizNo", request.getBizNo(), request.getPayScene(), request.getAmount()),
                 resolveBusinessChainId(request.getBusinessChainId(), request.getClearingOrderNo())));
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "CLEARING_GENERATED_EVENT", request.getClearingOrderNo())) {
             accountingMemoryStore.credit(
@@ -188,9 +186,8 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 "REFUND_SUCCESS",
                 request.getRefundOrderId(),
                 summary,
-                "{\"paymentOrderId\":\"" + request.getPaymentOrderId()
-                        + "\",\"payScene\":\"" + (request.getPayScene() == null ? "" : request.getPayScene())
-                        + "\",\"amount\":" + request.getAmount() + "}",
+                businessEventPayload("paymentOrderId", request.getPaymentOrderId(),
+                        request.getPayScene(), request.getAmount()),
                 resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
         if (!accountingMemoryStore.hasLedger(
                 request.getAccountNo(), "REFUND_SUCCESS_EVENT", request.getRefundOrderId())) {
@@ -344,6 +341,18 @@ public class AccountingEventServiceImpl implements AccountingEventService {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("支付成功事件载荷无效", exception);
+        }
+    }
+
+    private String businessEventPayload(String identityKey, String identity, String payScene, BigDecimal amount) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put(identityKey, String.valueOf(identity));
+        payload.put("payScene", payScene == null ? "" : payScene);
+        payload.put("amount", amount);
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("账务事件载荷无效", exception);
         }
     }
 

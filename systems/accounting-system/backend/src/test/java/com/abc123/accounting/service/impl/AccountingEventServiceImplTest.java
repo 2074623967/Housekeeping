@@ -210,6 +210,26 @@ class AccountingEventServiceImplTest {
     }
 
     @Test
+    void shouldKeepRefundSuccessPayloadValidForSpecialCharactersAndReplay() throws Exception {
+        RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
+        request.setAccountNo("ACT10003");
+        request.setRefundOrderId("REF-QUOTED-IDENTITY");
+        request.setPaymentOrderId("PAY-\"QUOTED\\IDENTITY");
+        request.setPayScene("HOME_\"CLEAN\nNEXT");
+        request.setAmount(new BigDecimal("5.00"));
+
+        AccountEventDTO first = eventService.consumeRefundSuccess(request);
+        AccountEventDTO replay = eventService.consumeRefundSuccess(request);
+
+        assertEquals(first.getEventNo(), replay.getEventNo());
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(first.getPayload());
+        assertEquals(request.getPaymentOrderId(), payload.get("paymentOrderId").asText());
+        assertEquals(request.getPayScene(), payload.get("payScene").asText());
+        assertEquals("¥7.00", balanceService.detail("ACT10003").getAvailableAmount());
+    }
+
+    @Test
     void shouldRejectRefundSuccessReplayForDifferentAccount() {
         RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
         request.setAccountNo("ACT10003");
@@ -265,6 +285,26 @@ class AccountingEventServiceImplTest {
         assertEquals("HOME_CLEAN", accountingMemoryStore.ledgers().stream()
                 .filter(item -> "CLR202607200301".equals(item.getBizNo()))
                 .findFirst().map(item -> item.getPayScene()).orElse(null));
+    }
+
+    @Test
+    void shouldKeepClearingPayloadValidForSpecialCharactersAndReplay() throws Exception {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setClearingOrderNo("CLR-QUOTED-IDENTITY");
+        request.setBizNo("PAY-\"QUOTED\\IDENTITY");
+        request.setPayScene("HOME_\"CLEAN\nNEXT");
+        request.setAmount(new BigDecimal("20.00"));
+
+        AccountEventDTO first = eventService.consumeClearingGenerated(request);
+        AccountEventDTO replay = eventService.consumeClearingGenerated(request);
+
+        assertEquals(first.getEventNo(), replay.getEventNo());
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(first.getPayload());
+        assertEquals(request.getBizNo(), payload.get("bizNo").asText());
+        assertEquals(request.getPayScene(), payload.get("payScene").asText());
+        assertEquals("¥140.00", balanceService.detail("ACT10002").getAvailableAmount());
     }
 
     @Test
