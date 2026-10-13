@@ -164,15 +164,18 @@ async function main() {
   let failListOnce = false;
   let holdEventRepublish = false;
   let releaseEventRepublish;
+  let succeedEventRepublish = false;
   let refundStatus = "REVIEWING";
   let failDetailOnce = false;
   let failRefundListOnce = false;
   let holdRefundApproval = false;
   let releaseRefundApproval;
+  let succeedRefundApproval = false;
   let paymentStatus = "PREPAY_CREATED";
   let paymentScenario = "close";
   let holdPaymentAction = false;
   let releasePaymentAction;
+  let succeedPaymentAction = false;
   let querySubmissionUnaccepted = false;
   let recordSubmissionUnaccepted = true;
   let failPaymentReadbackOnce = false;
@@ -185,6 +188,7 @@ async function main() {
   let isolateIssueActions = false;
   let holdIssueAction = false;
   let releaseIssueAction;
+  let succeedIssueAction = false;
   let failIssueListReadbackOnce = false;
   let failIssueSummaryReadbackOnce = false;
   const issueActionRequests = [];
@@ -207,8 +211,17 @@ async function main() {
         if (holdEventRepublish) {
           await new Promise((resolve) => { releaseEventRepublish = resolve; });
         }
-        response.statusCode = 400;
-        response.end(JSON.stringify({ code: "PAYMENT-400", message: "投递结果待核查" }));
+        if (succeedEventRepublish) {
+          response.end(JSON.stringify({ code: "0", data: { items: [{
+            ...initialEvent, publishStatus: "UNKNOWN", publishStatusType: "warn",
+            nextRetryAt: null, retryCount: 2,
+            lastRepublishOperator: "local-operator", lastRepublishedAt: "2026-10-09 10:00:03",
+            lastPublishedAt: "2026-10-09 10:00:03"
+          }], total: 1 } }));
+        } else {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ code: "PAYMENT-400", message: "投递结果待核查" }));
+        }
       } else if (request.method === "GET" && pathname === "/api/payment-events/overview") {
         response.end(JSON.stringify({ code: "0", data: overview(status) }));
       } else if (request.method === "GET" && pathname === "/api/payment-events") {
@@ -239,8 +252,14 @@ async function main() {
         if (holdRefundApproval) {
           await new Promise((resolve) => { releaseRefundApproval = resolve; });
         }
-        response.statusCode = 400;
-        response.end(JSON.stringify({ code: "PAYMENT-400", message: "渠道受理状态待核查" }));
+        if (succeedRefundApproval) {
+          response.end(JSON.stringify({ code: "0", data: {
+            ...initialRefund, status: "PROCESSING", statusType: "warn"
+          } }));
+        } else {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ code: "PAYMENT-400", message: "渠道受理状态待核查" }));
+        }
       } else if (request.method === "POST" && pathname === "/api/refunds/apply") {
         const body = await new Promise((resolve) => {
           let input = "";
@@ -297,8 +316,14 @@ async function main() {
         if (holdPaymentAction) {
           await new Promise((resolve) => { releasePaymentAction = resolve; });
         }
-        response.statusCode = 400;
-        response.end(JSON.stringify({ code: "PAYMENT-400", message: "关闭响应丢失" }));
+        if (succeedPaymentAction) {
+          response.end(JSON.stringify({ code: "0", data: {
+            ...initialPayment, status: "CLOSED", statusType: "danger"
+          } }));
+        } else {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ code: "PAYMENT-400", message: "关闭响应丢失" }));
+        }
       } else if (request.method === "POST" && pathname === "/api/payments/admin/query") {
         const body = await new Promise((resolve) => {
           let input = "";
@@ -311,8 +336,15 @@ async function main() {
         if (holdPaymentAction) {
           await new Promise((resolve) => { releasePaymentAction = resolve; });
         }
-        response.statusCode = 400;
-        response.end(JSON.stringify({ code: "PAYMENT-400", message: "查单响应丢失" }));
+        if (succeedPaymentAction) {
+          response.end(JSON.stringify({ code: "0", data: {
+            ...initialQueryPayment, status: "FAIL", statusType: "danger",
+            latestAttemptStatus: "失败", latestAttemptStatusType: "danger"
+          } }));
+        } else {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ code: "PAYMENT-400", message: "查单响应丢失" }));
+        }
       } else if (request.method === "GET" && (pathname === "/api/payments"
         || pathname === `/api/payments/${paymentOrderId}`
         || pathname === `/api/payments/${queryPaymentOrderId}`)) {
@@ -402,7 +434,7 @@ async function main() {
         if (holdIssueAction) {
           await new Promise((resolve) => { releaseIssueAction = resolve; });
         }
-        if (issueActionRequests.length === 1) {
+        if (issueActionRequests.length === 1 && !succeedIssueAction) {
           response.statusCode = 400;
           response.end(JSON.stringify({ code: "PAYMENT-400", message: "批量响应丢失" }));
         } else {
@@ -546,30 +578,50 @@ async function main() {
       assert.ok(requests.slice(start).every((item) => item.method === "GET"
         || item.method === "POST" && item.pathname === "/api/payment-events/republish"));
     }
+    for (const succeedAction of [false, true]) {
+      status = "FAILED";
+      failListOnce = false;
+      succeedEventRepublish = succeedAction;
+      const eventRouteStart = requests.length;
+      await send("Page.navigate", { url: `${baseUrl}/payment-events` });
+      await waitFor(async () => (await evaluate(eventState))?.status === "FAILED", "筛选切换前支付事件");
+      await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+        document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+      holdEventRepublish = true;
+      await evaluate(`${eventButton}.click()`);
+      await waitFor(() => Boolean(releaseEventRepublish), "待返回的事件重发");
+      await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-events?publishStatus=SUCCESS')");
+      await waitFor(() => evaluate("location.search === '?publishStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的支付事件')"),
+        "路由切换后的成功事件空列表");
+      releaseEventRepublish();
+      holdEventRepublish = false;
+      releaseEventRepublish = null;
+      await waitFor(() => requests.slice(eventRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "SUCCESS").length >= 2,
+      "事件重发完成后当前筛选再次读回");
+      assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付事件')"), true);
+      assert.equal(await evaluate("document.body.innerText.includes('已重新投递')"), false,
+        "原筛选的事件动作提示不得留在新路由");
+      assert.equal(requests.slice(eventRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "全部").length, 1,
+      "旧事件筛选不得回流");
+    }
     status = "FAILED";
-    failListOnce = false;
-    const eventRouteStart = requests.length;
+    const successfulEventStart = requests.length;
     await send("Page.navigate", { url: `${baseUrl}/payment-events` });
-    await waitFor(async () => (await evaluate(eventState))?.status === "FAILED", "筛选切换前支付事件");
+    await waitFor(async () => (await evaluate(eventState))?.status === "FAILED", "成功重发前的失败事件");
     await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
       document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
-    holdEventRepublish = true;
     await evaluate(`${eventButton}.click()`);
-    await waitFor(() => Boolean(releaseEventRepublish), "待返回的事件重发");
-    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-events?publishStatus=SUCCESS')");
-    await waitFor(() => evaluate("location.search === '?publishStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的支付事件')"),
-      "路由切换后的成功事件空列表");
-    releaseEventRepublish();
-    holdEventRepublish = false;
-    releaseEventRepublish = null;
-    await waitFor(() => requests.slice(eventRouteStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "SUCCESS").length >= 2,
-    "事件重发完成后当前筛选再次读回");
-    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付事件')"), true);
-    assert.equal(requests.slice(eventRouteStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/payment-events" && new URLSearchParams(item.search).get("publishStatus") === "全部").length, 1,
-    "旧事件筛选不得回流");
-    console.log("[PASS] 管理端浏览器：事件重发期间切换筛选，旧事件不回流");
+    await waitFor(async () => (await evaluate(eventState))?.status === "UNKNOWN"
+      && await evaluate("document.body.innerText.includes('已重新投递，请继续核对下游消费')"),
+    "当前路由成功重发的事件与提示");
+    await waitFor(() => requests.slice(successfulEventStart).filter((item) => item.method === "GET"
+      && item.pathname === "/api/payment-events/overview").length >= 2,
+    "成功重发后的总览读回");
+    assert.equal(requests.slice(successfulEventStart).filter((item) => item.method === "POST").length, 1);
+    succeedEventRepublish = false;
+    console.log("[PASS] 管理端浏览器：事件重发成功/失败路由竞态及当前路由成功读回");
     const actionButton = `(Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent.trim() === '审核通过'))`;
     const refundState = `(() => { const button = ${actionButton}; return button && {
@@ -646,30 +698,34 @@ async function main() {
       assert.ok(requests.slice(start).every((item) => item.method === "GET"
         || item.method === "POST" && item.pathname === "/api/refunds/approve"));
     }
-    refundStatus = "REVIEWING";
-    const routeChangeStart = requests.length;
-    await send("Page.navigate", { url: `${baseUrl}/refunds` });
-    await waitFor(async () => (await evaluate(listState))?.status === "REVIEWING", "路由切换前退款列表");
-    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
-      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
-    holdRefundApproval = true;
-    await evaluate(`${listButton}.click()`);
-    await waitFor(() => Boolean(releaseRefundApproval), "待返回的退款审核");
-    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/refunds?refundStatus=SUCCESS')");
-    await waitFor(async () => await evaluate("location.search === '?refundStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的退款单数据')"),
-      "路由切换后的成功退款空列表");
-    releaseRefundApproval();
-    holdRefundApproval = false;
-    releaseRefundApproval = null;
-    await waitFor(() => requests.slice(routeChangeStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "SUCCESS").length >= 2,
-    "审核完成后当前筛选再次读回");
-    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的退款单数据')"), true,
-      "旧退款审核响应不得覆盖新路由快照");
-    assert.equal(requests.slice(routeChangeStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "全部").length, 1,
-    "旧审核响应不得在新路由上重新查询原筛选");
-    console.log("[PASS] 管理端浏览器：退款动作期间切换路由，旧筛选不回流且新筛选重新读回");
+    for (const succeedAction of [false, true]) {
+      refundStatus = "REVIEWING";
+      succeedRefundApproval = succeedAction;
+      const routeChangeStart = requests.length;
+      await send("Page.navigate", { url: `${baseUrl}/refunds` });
+      await waitFor(async () => (await evaluate(listState))?.status === "REVIEWING", "路由切换前退款列表");
+      await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+        document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+      holdRefundApproval = true;
+      await evaluate(`${listButton}.click()`);
+      await waitFor(() => Boolean(releaseRefundApproval), "待返回的退款审核");
+      await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/refunds?refundStatus=SUCCESS')");
+      await waitFor(async () => await evaluate("location.search === '?refundStatus=SUCCESS' && document.body.innerText.includes('当前暂无符合条件的退款单数据')"),
+        "路由切换后的成功退款空列表");
+      releaseRefundApproval();
+      holdRefundApproval = false;
+      releaseRefundApproval = null;
+      await waitFor(() => requests.slice(routeChangeStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "SUCCESS").length >= 2,
+      "审核完成后当前筛选再次读回");
+      assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的退款单数据')"), true,
+        "旧退款审核响应不得覆盖新路由快照");
+      assert.equal(requests.slice(routeChangeStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/refunds" && new URLSearchParams(item.search).get("refundStatus") === "全部").length, 1,
+      "旧审核响应不得在新路由上重新查询原筛选");
+    }
+    succeedRefundApproval = false;
+    console.log("[PASS] 管理端浏览器：退款审核成功/失败时切换路由，旧筛选不回流");
     failRefundListOnce = false;
     const start = requests.length;
     await send("Page.navigate", { url: `${baseUrl}/refunds` });
@@ -759,9 +815,12 @@ async function main() {
       )?.querySelector('.badge')?.textContent.trim(),
       disabled: button.disabled
     }; })()`;
-    for (const scenario of ["close", "query"]) {
+    for (const [scenario, succeedAction] of [
+      ["close", false], ["query", false], ["close", true], ["query", true]
+    ]) {
       paymentScenario = scenario;
       paymentStatus = scenario === "query" ? "WAIT_CALLBACK" : "PREPAY_CREATED";
+      succeedPaymentAction = succeedAction;
       querySubmissionUnaccepted = false;
       const paymentRouteStart = requests.length;
       await send("Page.navigate", { url: `${baseUrl}/payments` });
@@ -789,7 +848,8 @@ async function main() {
         && item.pathname === "/api/payments" && new URLSearchParams(item.search).get("status") === "全部").length, 1,
       "旧支付动作不得在新路由上重新查询原筛选");
     }
-    console.log("[PASS] 管理端浏览器：支付查单/关闭期间切换路由，旧筛选不回流且新筛选重新读回");
+    succeedPaymentAction = false;
+    console.log("[PASS] 管理端浏览器：支付查单/关闭成功与失败期间切换路由，旧筛选不回流");
     for (const detail of [false, true]) {
       for (const failReadback of [false, true]) {
         paymentScenario = "close";
@@ -1013,33 +1073,43 @@ async function main() {
         status: row.querySelector('td:nth-child(15)')?.textContent.trim(),
         selected: checkbox?.checked, disabled: checkbox?.disabled, actionDisabled: button?.disabled
       }; })()`;
-    issueHandled = false;
-    issueActionRequests.length = 0;
-    const issueRouteStart = requests.length;
-    await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
-    await waitFor(async () => (await evaluate(issueState))?.status === "待分派", "筛选切换前异常列表");
-    await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
-    await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
-      document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
-    holdIssueAction = true;
-    await evaluate(`${issueActionButton}.click()`);
-    await waitFor(() => Boolean(releaseIssueAction), "待返回的异常批量动作");
-    await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-issues?severity=P2')");
-    await waitFor(() => evaluate("location.search === '?severity=P2' && document.body.innerText.includes('当前暂无符合条件的支付交易异常')"),
-      "异常列表切换后的空筛选");
-    releaseIssueAction();
-    holdIssueAction = false;
-    releaseIssueAction = null;
-    await waitFor(() => requests.slice(issueRouteStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "P2").length >= 2,
-    "异常批量动作完成后当前筛选再次读回");
-    assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付交易异常')"), true);
-    assert.equal(requests.slice(issueRouteStart).filter((item) => item.method === "GET"
-      && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "全部").length, 1,
-    "旧异常筛选不得回流");
-    await evaluate(`Object.keys(sessionStorage).filter((key) => key.startsWith('payment-issue-action-attempt:v1'))
-      .forEach((key) => sessionStorage.removeItem(key))`);
-    console.log("[PASS] 管理端浏览器：异常批量动作期间切换筛选，旧列表不回流");
+    for (const succeedAction of [false, true]) {
+      issueHandled = false;
+      issueActionRequests.length = 0;
+      succeedIssueAction = succeedAction;
+      const issueRouteStart = requests.length;
+      await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
+      await waitFor(async () => (await evaluate(issueState))?.status === "待分派", "筛选切换前异常列表");
+      await evaluate(`${issueRow}.querySelector('input[type="checkbox"]').click()`);
+      await evaluate(`document.querySelector('input[placeholder="请输入操作人"]').value = 'local-operator';
+        document.querySelector('input[placeholder="请输入操作人"]').dispatchEvent(new Event('input', { bubbles: true }));`);
+      holdIssueAction = true;
+      await evaluate(`${issueActionButton}.click()`);
+      await waitFor(() => Boolean(releaseIssueAction), "待返回的异常批量动作");
+      await evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$router.push('/payment-issues?severity=P2')");
+      await waitFor(() => evaluate("location.search === '?severity=P2' && document.body.innerText.includes('当前暂无符合条件的支付交易异常')"),
+        "异常列表切换后的空筛选");
+      releaseIssueAction();
+      holdIssueAction = false;
+      releaseIssueAction = null;
+      await waitFor(() => requests.slice(issueRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "P2").length >= 2,
+      "异常批量动作完成后当前筛选再次读回");
+      assert.equal(await evaluate("document.body.innerText.includes('当前暂无符合条件的支付交易异常')"), true);
+      assert.equal(requests.slice(issueRouteStart).filter((item) => item.method === "GET"
+        && item.pathname === "/api/payment-issues" && new URLSearchParams(item.search).get("severity") === "全部").length, 1,
+      "旧异常筛选不得回流");
+      if (succeedAction) {
+        await waitFor(() => evaluate(`Object.keys(sessionStorage).every(
+          (key) => !key.startsWith('payment-issue-action-attempt:v1'))`),
+        "已受理异常批量动作的幂等键清理");
+        assert.equal(await evaluate("document.body.innerText.includes('已记录 1 条异常的批量处理动作')"), false);
+      }
+      await evaluate(`Object.keys(sessionStorage).filter((key) => key.startsWith('payment-issue-action-attempt:v1'))
+        .forEach((key) => sessionStorage.removeItem(key))`);
+    }
+    succeedIssueAction = false;
+    console.log("[PASS] 管理端浏览器：异常批量动作成功/失败时切换筛选，旧列表不回流且已受理键清理");
     issueHandled = false;
     issueActionRequests.length = 0;
     await send("Page.navigate", { url: `${baseUrl}/payment-issues` });
