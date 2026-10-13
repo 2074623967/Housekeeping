@@ -6854,8 +6854,10 @@ test("trims business identifiers before admin detail requests", async (context) 
     [paymentIssueApi.getAlertDetail, ["  ALERT-001  "], "/api/payment-issues/alerts/ALERT-001"],
     [paymentDayEndApi.getDetail, ["  BATCH-001  "], "/api/payment-day-end/batches/BATCH-001"],
     [paymentTaskCenterApi.getTaskRunDetail, ["  RUN-001  "], "/api/payment-task-center/task-runs/RUN-001"],
-    [orderApi.getDetail, ["  ORD-001  "], "/api/orders/ORD-001"],
-    [billApi.getDetail, ["  BILL-001  "], "/api/bills/BILL-001"],
+    [orderApi.getDetail, ["  ORD-001  "], "/api/orders/by-no?orderNo=ORD-001"],
+    [billApi.getDetail, ["  BILL-001  "], "/api/bills/by-no?billNo=BILL-001"],
+    [orderApi.getDetail, ['  ORD-%_!\\"  '], "/api/orders/by-no?orderNo=ORD-%25_%21%5C%22"],
+    [billApi.getDetail, ['  BILL-%_!\\"  '], "/api/bills/by-no?billNo=BILL-%25_%21%5C%22"],
     [paymentFlowApi.getDetail, [" PAYMENT_ATTEMPT ", " FLOW-001 "], "/api/payment-flows/PAYMENT_ATTEMPT/FLOW-001"],
     [paymentRouteApi.getDetail, ["  ROUTE-001  "], "/api/payment-routes/ROUTE-001"],
     [paymentEventApi.getDetail, ["  EVENT-001  "], "/api/payment-events/EVENT-001"],
@@ -6871,6 +6873,37 @@ test("trims business identifiers before admin detail requests", async (context) 
     await assert.rejects(requestDetail(...args));
     assert.equal(requests.at(-1), expectedUrl);
   }
+});
+
+test("reads special-character order and bill details through query endpoints", async (context) => {
+  const orderNo = 'ORD-%_!\\"';
+  const billNo = 'BILL-%_!\\"';
+  const requests = [];
+  context.mock.method(globalThis, "fetch", async (url) => {
+    requests.push(url);
+    const data = url.startsWith("/api/orders/") ? {
+      orderNo, customerName: "客户甲", serviceType: "深度保洁", workerName: "服务者甲",
+      orderAmount: "¥88.00", paidAmount: "¥0.00", outstandingAmount: "¥88.00",
+      orderStatus: "待支付", orderStatusType: "warn", fulfillmentStatus: "待履约",
+      fulfillmentStatusType: "info", latestPaymentStatus: null, latestPaymentStatusType: null,
+      latestPayScene: null, latestCashierStatus: null, latestCashierStatusType: null,
+      createdAt: "2026-10-14 10:00:00"
+    } : {
+      billNo, orderNo, billAmount: "¥88.00", paidAmount: "¥0.00", unpaidAmount: "¥88.00",
+      billStatus: "待支付", billStatusType: "warn", latestPaymentStatus: null,
+      latestPaymentStatusType: null, latestPayScene: null, latestCashierStatus: null,
+      latestCashierStatusType: null, dueAt: "2026-10-15 10:00:00",
+      createdAt: "2026-10-14 10:00:00"
+    };
+    return { ok: true, json: async () => ({ code: "0", data }) };
+  });
+
+  assert.equal((await orderApi.getDetail(` ${orderNo} `)).orderNo, orderNo);
+  assert.equal((await billApi.getDetail(` ${billNo} `)).billNo, billNo);
+  assert.deepEqual(requests, [
+    "/api/orders/by-no?orderNo=ORD-%25_%21%5C%22",
+    "/api/bills/by-no?billNo=BILL-%25_%21%5C%22"
+  ]);
 });
 
 test("trims payment issue identifiers before admin query requests", async (context) => {

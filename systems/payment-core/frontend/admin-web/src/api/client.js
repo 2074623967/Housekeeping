@@ -4790,7 +4790,7 @@ export const orderApi = {
   },
   getDetail: (orderNo) => {
     const normalizedOrderNo = normalizeBusinessIdentifier(orderNo);
-    return request(`/api/orders/${encodeURIComponent(normalizedOrderNo)}`)
+    return request(`/api/orders/by-no?${new URLSearchParams({ orderNo: normalizedOrderNo })}`)
       .then((data) => normalizeOrderDetailResult(data, normalizedOrderNo));
   }
 };
@@ -4858,7 +4858,7 @@ export const billApi = {
   },
   getDetail: (billNo) => {
     const normalizedBillNo = normalizeBusinessIdentifier(billNo);
-    return request(`/api/bills/${encodeURIComponent(normalizedBillNo)}`)
+    return request(`/api/bills/by-no?${new URLSearchParams({ billNo: normalizedBillNo })}`)
       .then((data) => normalizeBillDetailResult(data, normalizedBillNo));
   }
 };
