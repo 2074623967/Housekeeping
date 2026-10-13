@@ -85,9 +85,9 @@
         <where>
             <if test="query.keyword != null and query.keyword != ''">
                 (
-                    request_id LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR app_code LIKE CONCAT('%', #{query.keyword}, '%')
-                    OR gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
+                    request_id LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                    OR app_code LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
+                    OR gateway_code LIKE CONCAT('%', #{query.keywordLikePattern}, '%') ESCAPE '!'
                 )
             </if>
             <if test="query.appCode != null and query.appCode != '' and query.appCode != '全部'">

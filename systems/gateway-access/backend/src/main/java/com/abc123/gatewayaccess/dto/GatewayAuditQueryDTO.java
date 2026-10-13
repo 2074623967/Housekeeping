@@ -14,4 +14,8 @@ public class GatewayAuditQueryDTO {
     private String appCode = "全部";
     /** 结果状态。 */
     private String resultStatus = "全部";
+
+    public String getKeywordLikePattern() {
+        return LikePattern.escape(keyword);
+    }
 }

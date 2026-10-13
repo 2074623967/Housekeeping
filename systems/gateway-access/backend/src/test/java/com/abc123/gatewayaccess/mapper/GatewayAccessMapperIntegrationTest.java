@@ -5,9 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.entity.GatewayAuditLogEntity;
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -53,5 +57,30 @@ class GatewayAccessMapperIntegrationTest {
         auditLog.setRiskHint("INTEGRATION_TEST");
 
         assertEquals(1, mapper.insertAuditLog(auditLog));
+    }
+
+    @Test
+    void shouldSearchAuditIdentifiersAsLiteralSubstrings() {
+        String suffix = "_%!\\\"-" + UUID.randomUUID();
+        GatewayAuditLogEntity auditLog = new GatewayAuditLogEntity();
+        auditLog.setRequestId("REQ-" + suffix);
+        auditLog.setAppCode("APP-" + suffix);
+        auditLog.setGatewayCode("GW-" + suffix);
+        auditLog.setOperationType("PAYMENT_SUBMIT");
+        auditLog.setSignType("HMAC-SHA256");
+        auditLog.setClientIp("127.0.0.1");
+        auditLog.setResultStatus("SUCCESS");
+        auditLog.setResultStatusType("success");
+        auditLog.setRiskHint("ISOLATED_SEARCH_TEST");
+        assertEquals(1, mapper.insertAuditLog(auditLog));
+
+        for (String keyword : Arrays.asList("%", "REQ-_", "!", "\\", "\"", auditLog.getRequestId(),
+                auditLog.getAppCode(), auditLog.getGatewayCode())) {
+            GatewayAuditQueryDTO query = new GatewayAuditQueryDTO();
+            query.setKeyword(keyword);
+            assertEquals(Arrays.asList(auditLog.getRequestId()), mapper.findAuditLogs(query).stream()
+                    .map(GatewayAuditLogDTO::getRequestId).collect(Collectors.toList()), keyword);
+            assertEquals(keyword, query.getKeyword());
+        }
     }
 }
