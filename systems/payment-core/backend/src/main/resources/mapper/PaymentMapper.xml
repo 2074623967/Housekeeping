@@ -588,6 +588,14 @@
           AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
     </select>
 
+    <select id="countPayableStandardOrder" resultType="int">
+        SELECT COUNT(*) FROM t_order WHERE order_no = #{orderNo}
+          AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
+          AND CAST(order_no AS BINARY(256)) = CAST(#{orderNo} AS BINARY(256))
+          AND order_status = '待支付'
+          AND order_status_type = 'warn'
+    </select>
+
     <select id="findCustomerNameByOrderNo" resultType="string">
         SELECT customer_name FROM t_order WHERE order_no = #{orderNo}
           AND CHAR_LENGTH(order_no) = CHAR_LENGTH(#{orderNo})
@@ -1478,6 +1486,8 @@
           AND order_amount = #{paidAmount}
           AND paid_amount = #{expectedPaidAmount}
           AND customer_name = #{expectedCustomerName}
+          AND order_status = '待支付'
+          AND order_status_type = 'warn'
     </update>
 
     <update id="updateBillAfterPayment">

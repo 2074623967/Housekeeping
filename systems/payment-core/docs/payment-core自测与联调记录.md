@@ -28953,3 +28953,9 @@ App/H5/PC 共用收银台、支付结果和退款进度页原卸载时仅停止�
 ### 10.1146 2026-10-14 支付成功收口账单状态条件更新
 
 此前 `updateBillAfterPayment` 只校验账单归属与金额；H2/demo 红测将待结清的部分支付账单改成“待支付”，回调仍覆盖账单并将订单结清；Mapper 红测也确认状态漂移后条件更新返回一行。现在按结算前已付额校验账单状态：零元为“待支付”，正数为“部分支付”，样式均须 `warn`。漂移时回调和受控主动查单均报账单结清零行，支付/订单写入事务回滚，支付单仍待回调、原账单不被覆盖、无成功事件且尝试未完成；恢复账单后原回调可成功。Mapper 定向 `6/6` 与 H2/demo 集成测试通过，本机回环 JDK 8 离线 Maven 全量 `2105/2105`、零失败/错误/跳过。另复跑隔离九服务 `verify payment-standard-partial-query-chain`，支付单 `PAY1791939756353a67a8c2a` 经 `GATEWAY_QUERY` 收口、七条对账事实 `COMPLETED/4/4`、退出码 `0`，九服务与上游桩停服。真实渠道已扣款时须另行核对资金与异常，不得根据本地回滚盲目重发；目标 MySQL 8、多实例和生产渠道未验收。详见接口文档 14.620。
+
+### 10.1147 2026-10-14 标准订单可支付状态全链门禁
+
+隔离 H2/demo 红测将仍有未付余额的标准订单改为“已取消”/`danger`：原实现预付仍创建支付单、已有预付仍可提交，回调还能覆盖取消状态；Mapper 定向红测也确认原子更新未核对状态。现在标准订单创建/复用预付及首次提交在同一订单号的预付创建锁内检查“待支付”/`warn`，取消或状态样式漂移返回 `PAYMENT_PREPAY_REQUEST_CONFLICT`、不创建新支付单或渠道尝试；成功回调及可信主动查单的订单条件更新也要求该状态，零行则事务回滚、不覆盖取消事实。恢复订单状态后原流程可继续。定向 `PaymentDemoProfileIntegrationTest,PaymentOrderSettlementMapperIntegrationTest,PaymentPrepayCreationConcurrencyIntegrationTest,PaymentServiceImplTest` 转绿，本机回环 JDK 8 离线 Maven 全量 `2105/2105`、零失败/错误/跳过。真实渠道已扣款而本地订单取消时必须另行调查资金与退款，不能盲目重发；外部订单写入方锁协议、目标 MySQL 8 与生产渠道仍待验收，详见接口文档 14.621。
+
+变更后隔离九服务 `verify payment-standard-partial-chain` 以支付单 `PAY1791940773965a37c5b4b` 经回调成功收口，HTTP 冒烟和 happy-path `[PASS]`、对账 `COMPLETED/4/4` 且本地可关账，退出码 `0`，九服务自动停服。该正向证据不代表取消订单时的真实渠道资金处理已验收。

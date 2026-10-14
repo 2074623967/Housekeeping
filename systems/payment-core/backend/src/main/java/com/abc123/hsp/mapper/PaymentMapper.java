@@ -89,6 +89,8 @@ public interface PaymentMapper {
      */
     BigDecimal findPaidAmount(@Param("orderNo") String orderNo);
 
+    int countPayableStandardOrder(@Param("orderNo") String orderNo);
+
     /**
      * 查询订单客户名称。
      */

@@ -86,6 +86,9 @@ class PaymentServiceImplTest {
     @BeforeEach
     void defaultPrepayStatusUpdate() {
         org.mockito.Mockito.lenient()
+                .when(paymentMapper.countPayableStandardOrder(anyString()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
                 .when(paymentMapper.countMatchingStandardBill(
                         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),

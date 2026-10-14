@@ -75,6 +75,11 @@ class PaymentOrderSettlementMapperIntegrationTest {
         assertEquals(new BigDecimal("2000.00"), paidAmount());
 
         update("UPDATE t_order SET customer_name='张女士' WHERE order_no='ORD-001'");
+        update("UPDATE t_order SET order_status='已取消', order_status_type='danger' WHERE order_no='ORD-001'");
+        assertEquals(0, settle());
+        update("UPDATE t_order SET order_status='待支付' WHERE order_no='ORD-001'");
+        assertEquals(0, settle());
+        update("UPDATE t_order SET order_status_type='warn' WHERE order_no='ORD-001'");
         assertEquals(1, settle());
         assertEquals(new BigDecimal("8800.00"), paidAmount());
     }

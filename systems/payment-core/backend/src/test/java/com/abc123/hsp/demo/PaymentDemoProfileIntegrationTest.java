@@ -123,6 +123,14 @@ class PaymentDemoProfileIntegrationTest {
         request.setCustomerName("demo standard customer");
         request.setAmount(new BigDecimal("88.00"));
         request.setCashierTitle("standard order payment");
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '已取消', "
+                + "order_status_type = 'danger' WHERE order_no = ?", orderNo));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_order WHERE order_no = ?", Integer.class, orderNo));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '待支付', "
+                + "order_status_type = 'warn' WHERE order_no = ?", orderNo));
         PrepayOrderDTO prepay = paymentService.prepay(request);
         assertEquals("STANDARD_ORDER", prepay.getSourceKind());
         assertEquals(prepay.getPrepayOrderNo(), paymentService.prepay(request).getPrepayOrderNo());
@@ -153,6 +161,17 @@ class PaymentDemoProfileIntegrationTest {
         submitRequest.setClientDeviceId("demo-standard-integration");
         submitRequest.setPayerPhone("13800000000");
         submitRequest.setIdempotencyKey(orderNo);
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '已取消', "
+                + "order_status_type = 'danger' WHERE order_no = ?", orderNo));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.submit(submitRequest)).getCode());
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                Integer.class, prepay.getPaymentOrderId()));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '待支付', "
+                + "order_status_type = 'warn' WHERE order_no = ?", orderNo));
         assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_amount = 89.00 WHERE bill_no = ?",
                 prepay.getBillNo()));
         assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
@@ -331,6 +350,21 @@ class PaymentDemoProfileIntegrationTest {
                         + "AND completed_at IS NOT NULL", Integer.class, "PAY202607190002"));
         assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '部分支付' "
                 + "WHERE bill_no = 'BILL202607190002'"));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '已取消', "
+                + "order_status_type = 'danger' WHERE order_no = 'ORD202607190002'"));
+        assertEquals("payment order settlement was not applied atomically",
+                assertThrows(IllegalStateException.class,
+                        () -> paymentService.callback("alipay_h5", callback)).getMessage());
+        assertEquals("WAIT_CALLBACK", paymentService.detail("PAY202607190002").getStatus());
+        assertEquals("已取消", jdbcTemplate.queryForObject(
+                "SELECT order_status FROM t_order WHERE order_no = 'ORD202607190002'", String.class));
+        assertEquals(new BigDecimal("2000.00"), jdbcTemplate.queryForObject(
+                "SELECT paid_amount FROM t_bill WHERE bill_no = 'BILL202607190002'", BigDecimal.class));
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
+                        + "AND event_type = 'PAYMENT_SUCCESS'", Integer.class, "PAY202607190002"));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_order SET order_status = '待支付', "
+                + "order_status_type = 'warn' WHERE order_no = 'ORD202607190002'"));
         PaymentDetailDTO paid = paymentService.callback("alipay_h5", callback);
         assertEquals("SUCCESS", paid.getStatus());
         assertEquals("¥6,800.00", paid.getAmount());

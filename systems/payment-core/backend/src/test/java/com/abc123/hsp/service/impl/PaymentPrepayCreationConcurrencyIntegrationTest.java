@@ -1040,7 +1040,9 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
             statement.execute("CREATE TABLE t_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE, "
                     + "customer_name VARCHAR(128) NOT NULL, order_amount DECIMAL(18,2) NOT NULL, "
-                    + "paid_amount DECIMAL(18,2) NOT NULL)");
+                    + "paid_amount DECIMAL(18,2) NOT NULL, "
+                    + "order_status VARCHAR(32) NOT NULL DEFAULT '待支付', "
+                    + "order_status_type VARCHAR(32) NOT NULL DEFAULT 'warn')");
             statement.execute("CREATE TABLE t_payment_prepay_creation_lock ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL UNIQUE, "
                     + "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)");

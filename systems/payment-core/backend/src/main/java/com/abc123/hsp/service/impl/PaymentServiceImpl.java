@@ -407,6 +407,7 @@ public class PaymentServiceImpl implements PaymentService {
             if (!StringUtils.hasText(customerName)) {
                 throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单客户数据不完整");
             }
+            requirePayableStandardOrder(request.getOrderNo());
             validateStandardPrepayRequest(request, customerName, remainAmount);
         }
         PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
@@ -608,6 +609,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED, "订单已结清或已超额支付");
         }
+        requirePayableStandardOrder(orderNo);
         validateActivePrepayOrderFacts(currentPrepay, customerName, remainAmount);
         requireStandardBillFacts(currentPrepay.getBillNo(), orderNo, customerName, orderAmount, paidAmount);
     }
@@ -2581,6 +2583,12 @@ public class PaymentServiceImpl implements PaymentService {
         if (!StringUtils.hasText(billNo) || paymentMapper.countMatchingStandardBill(
                 billNo, orderNo, customerName, orderAmount, paidAmount) != 1) {
             throw prepayRequestConflict("账单与订单当前金额或客户不一致");
+        }
+    }
+
+    private void requirePayableStandardOrder(String orderNo) {
+        if (paymentMapper.countPayableStandardOrder(orderNo) != 1) {
+            throw prepayRequestConflict("订单当前状态不是待支付，无法继续支付");
         }
     }
 
