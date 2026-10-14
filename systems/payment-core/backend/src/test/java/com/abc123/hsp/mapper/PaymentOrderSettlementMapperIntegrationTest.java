@@ -53,7 +53,7 @@ class PaymentOrderSettlementMapperIntegrationTest {
             statement.executeUpdate("INSERT INTO t_order VALUES "
                     + "('ORD-001', 8800.00, 2000.00, '张女士', '李阿姨', '待支付', 'warn')");
             statement.executeUpdate("INSERT INTO t_bill VALUES "
-                    + "('BILL-001', 'ORD-001', '张女士', 8800.00, 2000.00, '待支付', 'warn')");
+                    + "('BILL-001', 'ORD-001', '张女士', 8800.00, 2000.00, '部分支付', 'warn')");
             session.commit();
         }
     }
@@ -141,6 +141,11 @@ class PaymentOrderSettlementMapperIntegrationTest {
         assertEquals(0, settleBill());
 
         update("UPDATE t_bill SET order_no='ORD-001' WHERE bill_no='BILL-001'");
+        update("UPDATE t_bill SET bill_status='待支付' WHERE bill_no='BILL-001'");
+        assertEquals(0, settleBill());
+        update("UPDATE t_bill SET bill_status='部分支付', bill_status_type='success' WHERE bill_no='BILL-001'");
+        assertEquals(0, settleBill());
+        update("UPDATE t_bill SET bill_status_type='warn' WHERE bill_no='BILL-001'");
         assertEquals(1, settleBill());
         assertEquals(new BigDecimal("8800.00"), billPaidAmount());
     }

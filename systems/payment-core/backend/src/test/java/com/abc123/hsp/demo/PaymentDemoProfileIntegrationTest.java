@@ -311,6 +311,26 @@ class PaymentDemoProfileIntegrationTest {
                         + "AND event_type = 'PAYMENT_SUCCESS'", Integer.class, "PAY202607190002"));
         assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET paid_amount = 2000.00 "
                 + "WHERE bill_no = 'BILL202607190002'"));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '待支付' "
+                + "WHERE bill_no = 'BILL202607190002'"));
+        assertEquals("payment bill settlement was not applied atomically",
+                assertThrows(IllegalStateException.class,
+                        () -> paymentService.callback("alipay_h5", callback)).getMessage());
+        assertEquals("payment bill settlement was not applied atomically",
+                assertThrows(IllegalStateException.class, () -> paymentService.query(queryRequest)).getMessage());
+        assertEquals("WAIT_CALLBACK", paymentService.detail("PAY202607190002").getStatus());
+        assertEquals(new BigDecimal("2000.00"), jdbcTemplate.queryForObject(
+                "SELECT paid_amount FROM t_order WHERE order_no = 'ORD202607190002'", BigDecimal.class));
+        assertEquals("待支付", jdbcTemplate.queryForObject(
+                "SELECT bill_status FROM t_bill WHERE bill_no = 'BILL202607190002'", String.class));
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_event WHERE payment_order_id = ? "
+                        + "AND event_type = 'PAYMENT_SUCCESS'", Integer.class, "PAY202607190002"));
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ? "
+                        + "AND completed_at IS NOT NULL", Integer.class, "PAY202607190002"));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '部分支付' "
+                + "WHERE bill_no = 'BILL202607190002'"));
         PaymentDetailDTO paid = paymentService.callback("alipay_h5", callback);
         assertEquals("SUCCESS", paid.getStatus());
         assertEquals("¥6,800.00", paid.getAmount());

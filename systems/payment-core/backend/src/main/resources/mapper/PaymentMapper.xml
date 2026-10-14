@@ -1494,6 +1494,8 @@
           AND customer_name = #{customerName}
           AND bill_amount = #{paidAmount}
           AND paid_amount = #{expectedPaidAmount}
+          AND bill_status = CASE WHEN #{expectedPaidAmount} > 0 THEN '部分支付' ELSE '待支付' END
+          AND bill_status_type = 'warn'
     </update>
 
     <insert id="insertNotifyLog">
