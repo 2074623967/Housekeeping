@@ -93,9 +93,11 @@ const CASHIER_CHANNELS = new Set(["微信支付", "支付宝", "银行卡"]);
 const TERMINAL_PAYMENT_ATTEMPT_STATUSES = new Set(["成功", "支付成功", "失败", "支付失败", "SUCCESS", "FAIL", "FAILED"]);
 
 const suffix = `${Date.now()}-${process.pid}`;
-const standardOrderMode = process.env.HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED === "true";
+const partialStandardOrderMode = process.env.HSP_LOCAL_PAYMENT_STANDARD_PARTIAL_SCOPED === "true";
+const standardOrderMode = partialStandardOrderMode
+  || process.env.HSP_LOCAL_PAYMENT_STANDARD_ORDER_SCOPED === "true";
 const orderNo = standardOrderMode
-  ? "LOCAL-HAPPY-STANDARD"
+  ? (partialStandardOrderMode ? "LOCAL-HAPPY-STANDARD-PARTIAL" : "LOCAL-HAPPY-STANDARD")
   : buildLocalOrderNo(suffix, process.env.HSP_LOCAL_PAYMENT_CHAIN_SPECIAL_ORDER_NO === "true");
 
 function assert(condition, message) {
@@ -332,7 +334,7 @@ export function assertBillPaymentFacts(
   bill, expectedBillNo, expectedOrderNo, expectedPrepayOrderNo,
   expectedPaymentOrderId, expectedPayScene, expectedAmount,
   expectedPaidAmount, expectedUnpaidAmount, expectedBillStatus,
-  expectedBillStatusType, expectedPaymentStatus
+  expectedBillStatusType, expectedPaymentStatus, expectedBillAmount = expectedAmount
 ) {
   assert(matchesIdentifier(bill?.billNo, expectedBillNo)
     && matchesIdentifier(bill?.orderNo, expectedOrderNo)
@@ -341,7 +343,7 @@ export function assertBillPaymentFacts(
     && matchesIdentifier(bill?.latestPaymentOrderId, expectedPaymentOrderId)
     && matchesIdentifier(bill?.latestPayScene, expectedPayScene),
   "bill detail did not preserve payment identity or scene");
-  assertPaymentAmount({ amount: bill.billAmount }, expectedAmount);
+  assertPaymentAmount({ amount: bill.billAmount }, expectedBillAmount);
   assertPaymentAmount({ amount: bill.latestPrepayAmount }, expectedAmount);
   assertPaymentAmount({ amount: bill.latestPaymentAmount }, expectedAmount);
   assertPaymentAmount({ amount: bill.paidAmount }, expectedPaidAmount);
@@ -2012,12 +2014,15 @@ async function main() {
   }
   const queryMode = process.env.HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED === "true";
   const expectedPayScene = "HOME_CLEAN";
+  const paymentAmount = partialStandardOrderMode ? "68.00" : "88.00";
+  const initialPaidAmount = partialStandardOrderMode ? "20.00" : "0.00";
   if (standardOrderMode) {
     const initialOrder = await api(`${paymentBaseUrl}/api/orders/${encodeURIComponent(orderNo)}`);
     assert(matchesIdentifier(initialOrder.orderNo, orderNo) && initialOrder.orderStatus === "待支付",
       "standard order fixture is not a pending business order");
     assertPaymentAmount({ amount: initialOrder.orderAmount }, "88.00");
-    assertPaymentAmount({ amount: initialOrder.paidAmount }, "0.00");
+    assertPaymentAmount({ amount: initialOrder.paidAmount }, initialPaidAmount);
+    assertPaymentAmount({ amount: initialOrder.outstandingAmount }, paymentAmount);
     const initialBills = await api(`${paymentBaseUrl}/api/bills?${new URLSearchParams({ orderNo })}`);
     assert(initialBills?.total === 0, "standard order fixture unexpectedly has an existing bill");
   }
@@ -2027,13 +2032,13 @@ async function main() {
       orderNo,
       payScene: expectedPayScene,
       customerName: "local happy path",
-      amount: 88,
+      amount: Number(paymentAmount),
       cashierTitle: "home service payment"
     })
-  }), orderNo, "88.00", expectedPayScene);
-  normalizePrepayResult(prepay, orderNo, "88.00", "local happy path", expectedPayScene);
-  miniProgramPayment.normalizePrepayResult(prepay, orderNo, "88.00", "local happy path", expectedPayScene);
-  validateCommandResponse("prepay", { "order-no": orderNo, amount: "88.00" }, { data: prepay });
+  }), orderNo, paymentAmount, expectedPayScene);
+  normalizePrepayResult(prepay, orderNo, paymentAmount, "local happy path", expectedPayScene);
+  miniProgramPayment.normalizePrepayResult(prepay, orderNo, paymentAmount, "local happy path", expectedPayScene);
+  validateCommandResponse("prepay", { "order-no": orderNo, amount: paymentAmount }, { data: prepay });
   assertPaymentBusinessFacts(prepay, null, "local happy path", "prepay response");
   assert(typeof prepay.billNo === "string" && prepay.billNo.trim(),
     "prepay response did not contain a usable bill number");
@@ -2043,11 +2048,12 @@ async function main() {
   assertBillPaymentFacts(
     await api(`${paymentBaseUrl}/api/bills/${encodeURIComponent(normalizeIdentifier(billNo))}`),
     billNo, orderNo, prepay.prepayOrderNo, prepay.paymentOrderId, expectedPayScene,
-    "88.00", "0.00", "88.00", "待支付", "warn", "PREPAY_CREATED"
+    paymentAmount, initialPaidAmount, paymentAmount,
+    partialStandardOrderMode ? "部分支付" : "待支付", "warn", "PREPAY_CREATED", "88.00"
   );
 
   const cashier = assertCashierPage(await api(`${paymentBaseUrl}/api/payments/cashier/${encodeURIComponent(normalizeIdentifier(prepay.prepayOrderNo))}?terminal=H5_WEB`),
-    prepay.prepayOrderNo, prepay.paymentOrderId, orderNo, "88.00", prepay.expiresAt, expectedPayScene);
+    prepay.prepayOrderNo, prepay.paymentOrderId, orderNo, paymentAmount, prepay.expiresAt, expectedPayScene);
   normalizeCashierPageResult(cashier, prepay.prepayOrderNo, expectedPayScene);
   miniProgramPayment.normalizeCashierPageResult(cashier, prepay.prepayOrderNo, expectedPayScene);
   validateCommandResponse("cashier", { "prepay-order-no": prepay.prepayOrderNo }, { data: cashier });
@@ -2068,7 +2074,7 @@ async function main() {
   const submitResult = assertPaymentSubmission(await api(`${paymentBaseUrl}/api/payments/submit`, {
     method: "POST",
     body: JSON.stringify(submitPayload)
-  }), prepay.paymentOrderId, prepay.prepayOrderNo, orderNo, "88.00", prepay.expiresAt,
+  }), prepay.paymentOrderId, prepay.prepayOrderNo, orderNo, paymentAmount, prepay.expiresAt,
     paymentBusinessChainId, submitPayload.paymentMethod, submitPayload.channelCode, expectedPayScene);
   normalizePaymentSubmitResult(
     submitResult, prepay.prepayOrderNo, submitPayload.paymentMethod, submitPayload.channelCode,
@@ -2092,7 +2098,7 @@ async function main() {
     prepay.paymentOrderId,
     prepay.prepayOrderNo,
     orderNo,
-    "88.00",
+    paymentAmount,
     prepay.expiresAt,
     submitPayload.paymentMethod,
     submitPayload.channelCode,
@@ -2123,7 +2129,7 @@ async function main() {
 
   const waitingCashier = assertBoundCashierPage(
     await api(`${paymentBaseUrl}/api/payments/cashier/${encodeURIComponent(normalizeIdentifier(prepay.prepayOrderNo))}?terminal=H5_WEB`),
-    submitted, "WAIT_CALLBACK", "88.00"
+    submitted, "WAIT_CALLBACK", paymentAmount
   );
   normalizeCashierPageResult(waitingCashier, prepay.prepayOrderNo, expectedPayScene);
   miniProgramPayment.normalizeCashierPageResult(waitingCashier, prepay.prepayOrderNo, expectedPayScene);
@@ -2160,10 +2166,11 @@ async function main() {
     const rejectedBill = await api(`${paymentBaseUrl}/api/bills/${encodeURIComponent(normalizeIdentifier(billNo))}`);
     assert(matchesIdentifier(rejectedBill.billNo, billNo)
       && matchesIdentifier(rejectedBill.latestPaymentOrderId, prepay.paymentOrderId)
-      && rejectedBill.latestPaymentStatus === "WAIT_CALLBACK" && rejectedBill.billStatus === "待支付",
+      && rejectedBill.latestPaymentStatus === "WAIT_CALLBACK"
+      && rejectedBill.billStatus === (partialStandardOrderMode ? "部分支付" : "待支付"),
     "rejected query changed the bound bill state");
-    assertPaymentAmount({ amount: rejectedBill.paidAmount }, "0.00");
-    assertPaymentAmount({ amount: rejectedBill.unpaidAmount }, "88.00");
+    assertPaymentAmount({ amount: rejectedBill.paidAmount }, initialPaidAmount);
+    assertPaymentAmount({ amount: rejectedBill.unpaidAmount }, paymentAmount);
     paid = assertPaymentIdentity(await api(`${paymentBaseUrl}/api/payments/admin/query`, {
       method: "POST", body: JSON.stringify(queryRequest)
     }), prepay.paymentOrderId, prepay.prepayOrderNo, orderNo, paymentBusinessChainId, expectedPayScene);
@@ -2203,7 +2210,7 @@ async function main() {
       prepay.paymentOrderId,
       prepay.prepayOrderNo,
       orderNo,
-      "88.00",
+      paymentAmount,
       submitPayload.paymentMethod,
       submitPayload.channelCode,
       expectedPayScene
@@ -2212,14 +2219,14 @@ async function main() {
   assertPaymentBusinessFacts(paid, billNo, "local happy path", queryMode ? "payment query" : "payment callback");
   assert(paid.status === "SUCCESS" && paid.statusType === "success",
     `unexpected payment terminal display state: ${paid.status}/${paid.statusType}`);
-  assertPaymentAmount(paid, "88.00");
+  assertPaymentAmount(paid, paymentAmount);
   const paidDetail = assertPaymentSuccessDetail(
     paid,
     await api(`${paymentBaseUrl}/api/payments/${encodeURIComponent(normalizeIdentifier(prepay.paymentOrderId))}`),
     prepay.paymentOrderId,
     prepay.prepayOrderNo,
     orderNo,
-    "88.00",
+    paymentAmount,
     expectedPayScene
   );
   const paymentListFilter = new URLSearchParams({ paymentOrderId: prepay.paymentOrderId, orderNo });
@@ -2240,7 +2247,7 @@ async function main() {
   assertBillPaymentFacts(
     await api(`${paymentBaseUrl}/api/bills/${encodeURIComponent(normalizeIdentifier(billNo))}`),
     billNo, orderNo, prepay.prepayOrderNo, prepay.paymentOrderId, expectedPayScene,
-    "88.00", "88.00", "0.00", "已结清", "success", "SUCCESS"
+    paymentAmount, "88.00", "0.00", "已结清", "success", "SUCCESS", "88.00"
   );
   const orderList = await api(`${paymentBaseUrl}/api/orders?${new URLSearchParams({ orderNo })}`);
   const billFilter = new URLSearchParams({ billNo, orderNo });
@@ -2276,7 +2283,7 @@ async function main() {
 
   const paidCashier = assertBoundCashierPage(
     await api(`${paymentBaseUrl}/api/payments/cashier/${encodeURIComponent(normalizeIdentifier(prepay.prepayOrderNo))}?terminal=H5_WEB`),
-    paidDetail, "SUCCESS", "88.00"
+    paidDetail, "SUCCESS", paymentAmount
   );
   normalizeCashierPageResult(paidCashier, prepay.prepayOrderNo, expectedPayScene);
   miniProgramPayment.normalizeCashierPageResult(paidCashier, prepay.prepayOrderNo, expectedPayScene);
@@ -2306,7 +2313,7 @@ async function main() {
       await api(`${paymentBaseUrl}/api/payment-records/${encodeURIComponent(normalizeIdentifier(prepay.paymentOrderId))}`),
       prepay.paymentOrderId
     ),
-    prepay.paymentOrderId, orderNo, expectedPayScene, "88.00", paidDetail.channelReturnCode,
+    prepay.paymentOrderId, orderNo, expectedPayScene, paymentAmount, paidDetail.channelReturnCode,
     prepay.expiresAt, paidDetail.channelTransactionNo
   );
   const unrelatedCustomerRecordQuery = new URLSearchParams(paymentRecordQuery);
@@ -2437,7 +2444,7 @@ async function main() {
     null,
     expectedPayScene
   );
-  assertAmountFlow(clearingOrder, settlementOrder, "¥88.00");
+  assertAmountFlow(clearingOrder, settlementOrder, paymentAmount);
 
   const auditedSettlement = assertSettlementApproved(await api(
     `${settlementBaseUrl}/api/settlements/orders/${encodeURIComponent(normalizeIdentifier(settlementOrder.settlementNo))}/audit`,
@@ -2584,7 +2591,7 @@ async function main() {
     prepay.paymentOrderId,
     "PAYMENT_SUCCESS_EVENT",
     "贷方",
-    "88.00",
+    paymentAmount,
     accountingPaymentEvent.createdAt,
     expectedPayScene
   );
@@ -2793,10 +2800,10 @@ async function main() {
   ), paymentBusinessChainId);
   assertReconciliationCompletion(reconciliationChain);
   const requiredReconciliationFacts = [
-    ["payment-core", "PAYMENT_SUCCESS", prepay.paymentOrderId, "88.00", orderNo, paymentEvent.createdAt],
-    ["clearing-system", "CLEARING_GENERATED", clearingOrder.clearingNo, "88.00", prepay.paymentOrderId, clearingOrder.createdAt],
+    ["payment-core", "PAYMENT_SUCCESS", prepay.paymentOrderId, paymentAmount, orderNo, paymentEvent.createdAt],
+    ["clearing-system", "CLEARING_GENERATED", clearingOrder.clearingNo, paymentAmount, prepay.paymentOrderId, clearingOrder.createdAt],
     ["settlement-system", "SETTLEMENT_CREATED", settlementOrder.settlementNo, settlementOrder.netSettleAmount, prepay.paymentOrderId, settlementOrder.createdAt],
-    ["accounting-system", "ACCOUNTING_POSTED", accountingPaymentEvent.eventNo, "88.00", prepay.paymentOrderId, accountingPaymentEvent.createdAt],
+    ["accounting-system", "ACCOUNTING_POSTED", accountingPaymentEvent.eventNo, paymentAmount, prepay.paymentOrderId, accountingPaymentEvent.createdAt],
     ["accounting-system", "ACCOUNTING_POSTED", accountingClearingEvent.eventNo, clearingOrder.workerAmount, clearingOrder.clearingNo, accountingClearingEvent.createdAt],
     ["accounting-system", "ACCOUNTING_POSTED", accountingRefundEvent.eventNo, "18.00", prepay.paymentOrderId, accountingRefundEvent.createdAt],
     ["refund-center", "REFUND_SUCCESS", refundOutbox.eventId, "18.00", refund.refundOrderId, refundOutboxSource.createdAt]

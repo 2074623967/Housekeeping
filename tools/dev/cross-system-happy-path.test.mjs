@@ -560,6 +560,36 @@ test("checks the same bill before submission and after successful completion", (
   assert.throws(() => checkPending(paidBill), /amount did not match expected amount/);
 });
 
+test("keeps the full bill receivable separate from a partial standard-order payment", () => {
+  const partialBill = {
+    billNo: "BILL-PARTIAL", orderNo: "ORDER-PARTIAL",
+    latestPrepayOrderNo: "PRE-PARTIAL", latestPaymentPrepayOrderNo: "PRE-PARTIAL",
+    latestPaymentOrderId: "PAY-PARTIAL", latestPayScene: "HOME_CLEAN",
+    billAmount: "¥88.00", latestPrepayAmount: "¥68.00", latestPaymentAmount: "¥68.00",
+    paidAmount: "¥20.00", unpaidAmount: "¥68.00", billStatus: "部分支付",
+    billStatusType: "warn", latestPaymentStatus: "PREPAY_CREATED",
+    latestPaymentStatusType: "info", latestCashierStatus: "待支付", latestCashierStatusType: "warn"
+  };
+  const checkPartial = (bill) => assertBillPaymentFacts(
+    bill, "BILL-PARTIAL", "ORDER-PARTIAL", "PRE-PARTIAL", "PAY-PARTIAL", "HOME_CLEAN",
+    "68.00", "20.00", "68.00", "部分支付", "warn", "PREPAY_CREATED", "88.00"
+  );
+  assert.equal(checkPartial(partialBill).billNo, "BILL-PARTIAL");
+  assert.throws(() => checkPartial({ ...partialBill, billAmount: "¥68.00" }), /amount did not match/);
+  assert.throws(() => checkPartial({ ...partialBill, latestPaymentAmount: "¥88.00" }), /amount did not match/);
+  assert.throws(() => checkPartial({ ...partialBill, paidAmount: "¥0.00" }), /amount did not match/);
+  assert.throws(() => checkPartial({ ...partialBill, billStatus: "待支付" }), /bill detail state/);
+  const settledBill = {
+    ...partialBill, paidAmount: "¥88.00", unpaidAmount: "¥0.00", billStatus: "已结清",
+    billStatusType: "success", latestPaymentStatus: "SUCCESS",
+    latestPaymentStatusType: "success", latestCashierStatus: "支付成功", latestCashierStatusType: "success"
+  };
+  assert.equal(assertBillPaymentFacts(
+    settledBill, "BILL-PARTIAL", "ORDER-PARTIAL", "PRE-PARTIAL", "PAY-PARTIAL", "HOME_CLEAN",
+    "68.00", "88.00", "0.00", "已结清", "success", "SUCCESS", "88.00"
+  ).billStatus, "已结清");
+});
+
 test("query-chain replaces only payment completion and verifies the gateway audit", () => {
   const source = readFileSync(new URL("./cross-system-happy-path.mjs", import.meta.url), "utf8");
   const mainSource = source.slice(source.indexOf("async function main() {"));
