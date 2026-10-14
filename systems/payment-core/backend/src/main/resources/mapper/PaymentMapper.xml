@@ -619,6 +619,8 @@
           AND CAST(customer_name AS BINARY(256)) = CAST(#{customerName} AS BINARY(256))
           AND bill_amount = #{orderAmount}
           AND paid_amount = #{paidAmount}
+          AND bill_status = CASE WHEN #{paidAmount} > 0 THEN '部分支付' ELSE '待支付' END
+          AND bill_status_type = 'warn'
     </select>
 
     <insert id="insertBill">

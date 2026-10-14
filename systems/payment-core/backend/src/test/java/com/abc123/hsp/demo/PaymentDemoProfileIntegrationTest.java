@@ -132,6 +132,12 @@ class PaymentDemoProfileIntegrationTest {
                 assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
         assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET paid_amount = 0.00 WHERE bill_no = ?",
                 prepay.getBillNo()));
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '部分支付' WHERE bill_no = ?",
+                prepay.getBillNo()));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '待支付' WHERE bill_no = ?",
+                prepay.getBillNo()));
         assertEquals("¥0.00", orderService.detail(orderNo).getPaidAmount());
         assertEquals(orderNo, billService.detail(prepay.getBillNo()).getStandardOrderNo());
 
@@ -206,6 +212,39 @@ class PaymentDemoProfileIntegrationTest {
         billQuery.setOrderNo(orderNo);
         assertEquals(Long.valueOf(1), context.getBean(BillService.class).overview(billQuery).getPartialPaidBillCount());
         assertEquals(Long.valueOf(0), context.getBean(BillService.class).overview(billQuery).getUnpaidBillCount());
+
+        PaymentService paymentService = context.getBean(PaymentService.class);
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '待支付' WHERE bill_no = ?",
+                prepay.getBillNo()));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+
+        PaymentSubmitRequestDTO submitRequest = new PaymentSubmitRequestDTO();
+        submitRequest.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        submitRequest.setPaymentMethod("微信支付");
+        submitRequest.setChannelCode("wx_h5");
+        submitRequest.setSourceAppId("housekeeping-h5-web");
+        submitRequest.setMerchantNo("MCH_WX_10001");
+        submitRequest.setAccessToken("token-housekeeping-h5-web");
+        submitRequest.setTerminal("H5");
+        submitRequest.setClientIp("127.0.0.1");
+        submitRequest.setClientDeviceId("demo-partial-integration");
+        submitRequest.setPayerPhone("13800000000");
+        submitRequest.setIdempotencyKey(orderNo);
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.submit(submitRequest)).getCode());
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_payment_attempt WHERE payment_order_id = ?",
+                Integer.class, prepay.getPaymentOrderId()));
+
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status = '部分支付', "
+                + "bill_status_type = 'success' WHERE bill_no = ?", prepay.getBillNo()));
+        assertEquals(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                assertThrows(BusinessException.class, () -> paymentService.prepay(request)).getCode());
+        assertEquals(1, jdbcTemplate.update("UPDATE t_bill SET bill_status_type = 'warn' WHERE bill_no = ?",
+                prepay.getBillNo()));
+        assertEquals(prepay.getPrepayOrderNo(), paymentService.prepay(request).getPrepayOrderNo());
+        assertEquals("WAIT_CALLBACK", paymentService.submit(submitRequest).getPaymentStatus());
     }
 
     private void verifyStandardOrderSettlement(
