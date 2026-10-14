@@ -183,6 +183,7 @@ scope:
   payment-standard-chain  隔离运行标准订单支付到九服务对账的变体
   payment-standard-partial-chain  隔离运行部分已付标准订单补尾款到九服务对账
   payment-standard-query-chain  隔离运行标准订单经网关主动查单到九服务对账的变体
+  payment-standard-partial-query-chain  隔离运行部分已付标准订单经网关主动查单补尾款
   risk-review    仅启动支付核心与风控中心，验证本地人工复核回环
 EOF
 }
@@ -199,12 +200,14 @@ is_payment_chain_system() {
 }
 
 is_query_chain_scope() {
-  [[ "$1" == "payment-query-chain" || "$1" == "payment-standard-query-chain" ]]
+  [[ "$1" == "payment-query-chain" || "$1" == "payment-standard-query-chain" \
+    || "$1" == "payment-standard-partial-query-chain" ]]
 }
 
 is_standard_chain_scope() {
   [[ "$1" == "payment-standard-chain" || "$1" == "payment-standard-query-chain" \
-    || "$1" == "payment-standard-partial-chain" ]]
+    || "$1" == "payment-standard-partial-chain" \
+    || "$1" == "payment-standard-partial-query-chain" ]]
 }
 
 is_selected() {
@@ -310,7 +313,8 @@ start_backend() {
   fi
   if is_standard_chain_scope "$verification_mode" && [[ "$name" == "payment-core" ]]; then
     local standard_order_sql="payment-standard-chain-order.sql"
-    if [[ "$verification_mode" == "payment-standard-partial-chain" ]]; then
+    if [[ "$verification_mode" == "payment-standard-partial-chain" \
+      || "$verification_mode" == "payment-standard-partial-query-chain" ]]; then
       standard_order_sql="payment-standard-partial-chain-order.sql"
     fi
     payment_bootstrap_env+=(SPRING_SQL_INIT_DATA_LOCATIONS="classpath:data.sql,file:$ROOT_DIR/tools/dev/$standard_order_sql")
@@ -774,8 +778,9 @@ run_verify() {
   if [[ "$scope" != "all" && "$scope" != "payment-chain" \
     && "$scope" != "payment-query-chain" && "$scope" != "payment-standard-chain" \
     && "$scope" != "payment-standard-query-chain" && "$scope" != "payment-standard-partial-chain" \
+    && "$scope" != "payment-standard-partial-query-chain" \
     && "$scope" != "risk-review" ]]; then
-    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain、payment-standard-chain、payment-standard-query-chain、payment-standard-partial-chain 或 risk-review" >&2
+    echo "[FAIL] verify 只支持 all、payment-chain、payment-query-chain、payment-standard-chain、payment-standard-query-chain、payment-standard-partial-chain、payment-standard-partial-query-chain 或 risk-review" >&2
     return 2
   fi
   if [[ "$scope" != "risk-review" ]]; then
@@ -840,6 +845,11 @@ run_verify() {
   if [[ "$result" -eq 0 ]]; then
     if [[ "$scope" == "risk-review" ]]; then
       HSP_LOCAL_RISK_REVIEW_SCOPED=true node "$ROOT_DIR/tools/dev/cross-system-risk-review.mjs" || result=$?
+    elif [[ "$scope" == "payment-standard-partial-query-chain" ]]; then
+      HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
+        HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
+        HSP_LOCAL_PAYMENT_STANDARD_PARTIAL_SCOPED=true \
+        node "$ROOT_DIR/tools/dev/cross-system-happy-path.mjs" || result=$?
     elif [[ "$scope" == "payment-standard-query-chain" ]]; then
       HSP_REFUND_CALLBACK_HTTP_SECRET="$REFUND_CALLBACK_SECRET" \
         HSP_LOCAL_PAYMENT_CHAIN_SCOPED=true HSP_LOCAL_PAYMENT_QUERY_CHAIN_SCOPED=true \
